@@ -24,7 +24,7 @@ LOG_TAG = 'BaseQuantizeModule'
 
 
 class BaseQuantizeModule(nn.Module):
-    """Base class of calibration modules, with V2 quant param export/load.
+    """Base class of calibration modules with quant param export and load.
 
     Subclasses declare which of their attributes are quant params by listing
     them in ``_quant_param_keys``; the generic export/load/dump plumbing here
@@ -36,12 +36,12 @@ class BaseQuantizeModule(nn.Module):
     # tensors, JSON-serializable scalars, or None (skipped when exporting).
     _quant_param_keys = ()
 
-    # Whether this algorithm implements V2 quant result export. Deriving from
+    # Whether this algorithm implements quant result export. Deriving from
     # BaseQuantizeModule is not enough: a subclass must also declare its
     # _quant_param_keys AND dump at its own finalization point, otherwise its
     # unit would never be written and the manifest would stay pending forever.
-    # quantize() checks this before creating the result directory, so an
-    # unsupported algorithm fails up front instead of producing an empty dir.
+    # quantize() checks this before writing to the result directory, so an
+    # unsupported algorithm fails up front and leaves the directory empty.
     _supports_quant_result_export = False
 
     def __init__(self, ori_module, layer_name, quant_config):
@@ -68,7 +68,7 @@ class BaseQuantizeModule(nn.Module):
 
     @classmethod
     def supports_quant_result_export(cls):
-        """Whether this quantize op can produce a complete V2 result unit."""
+        """Whether this quantize op can produce a complete result unit."""
         return bool(cls._supports_quant_result_export)
 
     @classmethod

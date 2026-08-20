@@ -45,9 +45,9 @@ def quantize(model, config=None, quant_result_dir=None):
     Function: Modify user's model for quantization
     Parameter: model: user mode instance of Torch.nn.Module
                config: simply config dict from user to set
-               quant_result_dir: optional path of a new directory to persist the
-                   quant result artifact into. None (default) keeps the model
-                   in-memory only and writes nothing.
+               quant_result_dir: optional path of an existing empty directory to
+                   persist the quant result artifact into. None (default) keeps
+                   the model in-memory only and writes nothing.
     Return: None
     """
     if config is None:
@@ -73,13 +73,13 @@ def quantize(model, config=None, quant_result_dir=None):
 
 
 def _check_algorithms_support_export(layer_config):
-    """Reject algorithms that cannot complete a V2 result unit.
+    """Reject algorithms that cannot complete a quant result unit.
 
     Deriving from BaseQuantizeModule is not sufficient: a quantize op also has
     to declare its ``_quant_param_keys`` and dump at its own finalization point.
     An op that does neither would return from quantize() normally and then leave
     an empty directory whose manifest never publishes, so refuse up front --
-    before the directory exists -- and name the algorithm at fault.
+    before anything is written -- and name the algorithm at fault.
     """
     unsupported = {}
     for layer_name, cfg in layer_config.items():

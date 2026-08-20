@@ -119,6 +119,7 @@ def _inputs(batch=8, width=64):
 
 def _calibrate(model, config, out_dir, batches=2, width=64):
     """Run a full calibrate-and-dump cycle, returning the published directory."""
+    os.mkdir(out_dir)
     quantize(model, config, quant_result_dir=str(out_dir))
     for _ in range(batches):
         model(_inputs(width=width))
@@ -493,6 +494,7 @@ class TestMxfp4Gptq:
         base = _NoBiasModel().to(torch.bfloat16)
         dumped = copy.deepcopy(base)
         out_dir = str(tmp_path / 'mxfp4')
+        os.mkdir(out_dir)
         quantize(dumped, MXFP4_GPTQ_CFG, quant_result_dir=out_dir)
         dumped(_inputs())
         assert dumped.fc1.scale_w is None
@@ -515,6 +517,7 @@ class TestMxfp4Gptq:
         probe = _inputs()
         dumped = copy.deepcopy(base)
         out_dir = str(tmp_path / 'mxfp4_eq')
+        os.mkdir(out_dir)
         quantize(dumped, MXFP4_GPTQ_CFG, quant_result_dir=out_dir)
         dumped(probe)
         direct_out = dumped(probe)
@@ -773,6 +776,7 @@ class TestConvertFromQuantResult:
         # B: publish an artifact from a second copy, same batches.
         dumped = copy.deepcopy(base)
         out_dir = str(tmp_path / ('art_' + name))
+        os.mkdir(out_dir)
         quantize(dumped, config, quant_result_dir=out_dir)
         for batch in batches:
             dumped(batch)
@@ -847,6 +851,7 @@ class TestReloadOnNpu:
         source = _model().npu()
         dumped = copy.deepcopy(source)
         out_dir = str(tmp_path / 'npu')
+        os.mkdir(out_dir)
         quantize(dumped, MINMAX_CFG, quant_result_dir=out_dir)
         dumped(_inputs().npu())
 
@@ -866,6 +871,7 @@ class TestReloadOnNpu:
 
         dumped = copy.deepcopy(base)
         out_dir = str(tmp_path / 'npu_eq')
+        os.mkdir(out_dir)
         quantize(dumped, MINMAX_CFG, quant_result_dir=out_dir)
         for batch in batches:
             dumped(batch)
@@ -902,6 +908,7 @@ class TestDeployForwardOnNpu:
 
         dumped = copy.deepcopy(base)
         out_dir = str(tmp_path / ('npu_' + name))
+        os.mkdir(out_dir)
         quantize(dumped, config, quant_result_dir=out_dir)
         for batch in batches:
             dumped(batch)

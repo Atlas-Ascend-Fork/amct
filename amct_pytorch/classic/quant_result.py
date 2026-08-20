@@ -14,9 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-"""V2 quantization result artifact: writer, integrity digests and manifest.
+"""Quantization result artifact: writer, integrity digests and manifest.
 
-Implements the frozen V2 wire format (see docs/quantize_results_dump_v2.md).
+Implements the fixed quant result wire format.
 Directory protocol produced by a successful run::
 
     quant_result_dir/
@@ -45,7 +45,6 @@ __all__ = [
     'QuantResultWriter',
     'canonical_json',
     'compute_model_fingerprint',
-    'create_quant_result_dir',
     'load_quant_manifest',
     'read_quant_unit',
     'reload_quant_params',
@@ -77,7 +76,7 @@ from safetensors.torch import save_file
 from amct_pytorch.common.utils.log import LOGGER
 
 MANIFEST_NAME = 'quant_manifest.json'
-# Frozen V2 constants. MANIFEST_FORMAT/PARAM_FORMAT identify the two artifacts;
+# Frozen schema constants. MANIFEST_FORMAT/PARAM_FORMAT identify the two artifacts;
 # SCHEMA_VERSION is an int in the manifest and its str form in the header.
 MANIFEST_FORMAT = 'amct-quant-result-manifest'
 PARAM_FORMAT = 'amct-quant-param'
@@ -87,9 +86,8 @@ LIBRARY = 'amct_pytorch'
 LOG_TAG = 'QuantResultWriter'
 DIGEST_PREFIX = 'sha256:'
 
-# 640 for files, 750 for the artifact directory, matching amct_log conventions.
+# 640 for files, matching amct_log conventions.
 _FILE_MODE = stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP
-_DIR_MODE = stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP
 
 _UNSAFE_NAME_CHARS = re.compile(r'[^0-9a-zA-Z_]')
 _HASH_CHUNK_SIZE = 1024 * 1024
@@ -151,13 +149,13 @@ def update_hash_with_tensor(hasher, tensor, chunk_elems=_HASH_CHUNK_SIZE):
 
 
 def dtype_name(dtype):
-    """V2 dtype spelling: ``float32``, not ``torch.float32``."""
+    """Artifact dtype spelling: ``float32``, not ``torch.float32``."""
     text = str(dtype)
     return text[len('torch.') :] if text.startswith('torch.') else text
 
 
 def tensor_schema_list(tensors):
-    """V2 tensor schema: a key-sorted list of ``{key, dtype, shape}``."""
+    """Tensor schema: a key-sorted list of ``{key, dtype, shape}``."""
     return [
         {
             'key': key,
@@ -171,7 +169,7 @@ def tensor_schema_list(tensors):
 def to_jsonable(value, path='quant_config'):
     """Strictly coerce a value for the manifest, or raise.
 
-    Only the types the V2 contract admits are converted: str/bool/int/float,
+    Only the types the artifact contract admits are converted: str/bool/int/float,
     None, ``torch.dtype``, and list/tuple/set/dict of those. Anything else --
     a module, a tensor, an arbitrary object -- is rejected rather than
     stringified, because a stringified object cannot reconstruct a module on
@@ -336,11 +334,11 @@ def resolve_unit_path(result_dir, file_name):
 
 
 def validate_quant_result_dir(quant_result_dir):
-    """Validate a quant_result_dir path without creating anything.
+    """Validate a caller-created directory before writing quant results.
 
     Only ``None`` means "do not persist". Everything else must be a usable,
-    brand-new directory path: empty strings, existing files or directories and
-    unwritable/missing parents are all errors, and an existing result is never
+    existing empty directory. Files, missing paths, non-empty directories and
+    inaccessible directories are rejected, so an existing result is never
     overwritten or resumed.
     """
     if not isinstance(quant_result_dir, str):
@@ -356,35 +354,28 @@ def validate_quant_result_dir(quant_result_dir):
         )
 
     target = os.path.abspath(os.path.expanduser(quant_result_dir))
-    if os.path.lexists(target):
+    if not os.path.exists(target):
         raise ValueError(
-            "quant_result_dir '{}' already exists; AMCT never overwrites or "
-            "resumes an existing quant result. Choose a new path.".format(target)
+            "quant_result_dir '{}' must be an existing directory; create it "
+            "before calling quantize().".format(target)
         )
-
-    parent = os.path.dirname(target) or os.curdir
-    if not os.path.isdir(parent):
+    if not os.path.isdir(target):
         raise ValueError(
-            "parent directory '{}' of quant_result_dir '{}' does not exist.".format(
-                parent, target
+            "quant_result_dir '{}' must be an existing directory, not a file.".format(
+                target
             )
         )
-    if not os.access(parent, os.W_OK | os.X_OK):
+    if not os.access(target, os.R_OK | os.W_OK | os.X_OK):
         raise ValueError(
-            "parent directory '{}' of quant_result_dir '{}' is not writable.".format(
-                parent, target
+            "quant_result_dir '{}' must be readable, writable, and searchable.".format(
+                target
             )
         )
-    return target
-
-
-def create_quant_result_dir(quant_result_dir):
-    """Validate then create an empty quant result directory (mode 750)."""
-    target = validate_quant_result_dir(quant_result_dir)
-    os.mkdir(target)
-    # mkdir is subject to umask; set the intended mode explicitly.
-    os.chmod(target, _DIR_MODE)
-    LOGGER.logd("Created quant result directory '{}'".format(target), LOG_TAG)
+    if os.listdir(target):
+        raise ValueError(
+            "quant_result_dir '{}' must be empty; AMCT never overwrites or "
+            "resumes an existing quant result.".format(target)
+        )
     return target
 
 
@@ -479,7 +470,7 @@ def _model_structure_config(model):
 
 
 def _source_model_type(model):
-    """V2 ``source_model.model_type``: the HF model_type, else the class name."""
+    """Artifact ``source_model.model_type``: HF model_type, else class name."""
     config = getattr(model, 'config', None)
     model_type = getattr(config, 'model_type', None)
     if isinstance(model_type, str) and model_type:
@@ -527,7 +518,7 @@ def _state_dict_digest(model):
 
 
 def compute_model_fingerprint(model):
-    """V2 ``source_model`` block, taken before any quant module is inserted.
+    """Build the source_model block before any quant module is inserted.
 
     Uses the HuggingFace config when present, and otherwise a structural config
     derived from the model class and submodule types, so plain ``nn.Module``
@@ -551,7 +542,7 @@ def _library_version():
 
 
 def unit_header(artifact_id, layer_name, entry_digest):
-    """The minimal V2 safetensors header: five ``str -> str`` fields.
+    """The minimal safetensors header: five ``str -> str`` fields.
 
     Deliberately excludes quant_module_type/ori_module_type/quant_config/
     non_tensor_params/tensor schema/file digests -- the manifest is their only
@@ -567,7 +558,7 @@ def unit_header(artifact_id, layer_name, entry_digest):
 
 
 class QuantResultWriter:
-    """Collects per-layer quant params and publishes a V2 result artifact.
+    """Collects per-layer quant params and publishes a quant result artifact.
 
     Lifecycle: one ``write_unit()`` per expected layer at that layer's own
     finalization point, then ``publish_if_complete()``. The manifest appears
@@ -613,9 +604,9 @@ class QuantResultWriter:
 
     @classmethod
     def create(cls, quant_result_dir, expected_units, source_model):
-        """Validate inputs, create the directory, return a ready writer."""
+        """Validate inputs and return a writer for a caller-created directory."""
         units = cls._check_expected_units(expected_units)
-        result_dir = create_quant_result_dir(quant_result_dir)
+        result_dir = validate_quant_result_dir(quant_result_dir)
         return cls(result_dir, units, source_model)
 
     @property
@@ -872,7 +863,7 @@ class QuantResultWriter:
         if unexpected:
             raise RuntimeError(
                 "quant result directory '{}' contains file(s) not listed in the "
-                "manifest: {}. Refusing to publish, since V2 requires the "
+                "manifest: {}. Refusing to publish, since the artifact requires the "
                 "directory to hold exactly the manifest and its units.".format(
                     self._result_dir, unexpected
                 )
@@ -1061,7 +1052,7 @@ def _check_required(mapping, fields, what):
 
 
 def _validate_unit_fields(entry):
-    """Type-check one unit entry against the frozen V2 schema.
+    """Type-check one unit entry against the frozen artifact schema.
 
     Every field reload depends on is checked here rather than where it is used, so
     a malformed manifest cannot get as far as touching the model.
@@ -1159,8 +1150,7 @@ def _validate_units(units, result_dir):
 def validate_result_directory(quant_result_dir, manifest):
     """The directory must hold exactly the manifest and its listed units.
 
-    Enforces V2 rule 2: no ``.safetensors`` outside the manifest, hidden files
-    included.
+    No ``.safetensors`` may exist outside the manifest, including hidden files.
     """
     result_dir = os.path.abspath(os.path.expanduser(quant_result_dir))
     expected = {entry['file'] for entry in manifest['units']} | {MANIFEST_NAME}

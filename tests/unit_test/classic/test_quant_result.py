@@ -39,7 +39,6 @@ from amct_pytorch.classic.quant_result import (
     QuantResultWriter,
     canonical_json,
     compute_model_fingerprint,
-    create_quant_result_dir,
     load_quant_manifest,
     read_quant_unit,
     resolve_unit_path,
@@ -58,8 +57,10 @@ SOURCE_MODEL = {
 
 
 def _writer(tmp_path, units=('fc1', 'fc2'), name='out'):
-    """Writer over a fresh result dir under tmp_path."""
-    return QuantResultWriter.create(str(tmp_path / name), units, SOURCE_MODEL)
+    """Writer over a caller-created empty result dir under tmp_path."""
+    result_dir = tmp_path / name
+    result_dir.mkdir()
+    return QuantResultWriter.create(str(result_dir), units, SOURCE_MODEL)
 
 
 def _write(writer, layer, tensors=None, **kwargs):
@@ -178,15 +179,11 @@ class TestUnitFileName:
 class TestResultDirValidation:
     """Only None disables persistence; every other input must be usable."""
 
-    def test_accepts_new_path_without_creating_it(self, tmp_path):
-        target = tmp_path / 'fresh'
+    def test_accepts_existing_empty_directory(self, tmp_path):
+        target = tmp_path / 'empty'
+        target.mkdir()
         assert validate_quant_result_dir(str(target)) == str(target)
-        assert not target.exists()
-
-    def test_create_makes_dir_with_restricted_mode(self, tmp_path):
-        target = create_quant_result_dir(str(tmp_path / 'made'))
-        assert os.path.isdir(target)
-        assert os.stat(target).st_mode & 0o777 == 0o750
+        assert list(target.iterdir()) == []
 
     @pytest.mark.parametrize('bad', ['', '   '])
     def test_rejects_empty_path(self, bad):
@@ -198,39 +195,45 @@ class TestResultDirValidation:
         with pytest.raises(TypeError):
             validate_quant_result_dir(bad)
 
-    def test_rejects_existing_dir(self, tmp_path):
-        existing = tmp_path / 'already'
+    def test_rejects_missing_directory(self, tmp_path):
+        missing = tmp_path / 'missing'
+        with pytest.raises(ValueError, match='must be an existing directory'):
+            validate_quant_result_dir(str(missing))
+
+    def test_rejects_non_empty_directory(self, tmp_path):
+        existing = tmp_path / 'not_empty'
         existing.mkdir()
-        with pytest.raises(ValueError, match='already exists'):
+        (existing / 'old.safetensors').write_bytes(b'old')
+        with pytest.raises(ValueError, match='must be empty'):
             validate_quant_result_dir(str(existing))
 
     def test_rejects_existing_file(self, tmp_path):
         existing = tmp_path / 'a_file'
         existing.write_text('x', encoding='utf-8')
-        with pytest.raises(ValueError, match='already exists'):
+        with pytest.raises(ValueError, match='not a file'):
             validate_quant_result_dir(str(existing))
 
     def test_rejects_dangling_symlink(self, tmp_path):
         link = tmp_path / 'link'
         link.symlink_to(tmp_path / 'nowhere')
-        with pytest.raises(ValueError, match='already exists'):
+        with pytest.raises(ValueError, match='must be an existing directory'):
             validate_quant_result_dir(str(link))
 
-    def test_rejects_missing_parent(self, tmp_path):
-        with pytest.raises(ValueError, match='does not exist'):
+    def test_rejects_missing_parent_and_directory(self, tmp_path):
+        with pytest.raises(ValueError, match='must be an existing directory'):
             validate_quant_result_dir(str(tmp_path / 'no' / 'such' / 'parent'))
 
-    def test_rejects_unwritable_parent(self, tmp_path):
-        parent = tmp_path / 'ro'
-        parent.mkdir()
-        os.chmod(parent, 0o500)
+    def test_rejects_unwritable_directory(self, tmp_path):
+        target = tmp_path / 'ro'
+        target.mkdir()
+        os.chmod(target, 0o500)
         try:
-            if os.access(parent, os.W_OK):
+            if os.access(target, os.W_OK):
                 pytest.skip('running as a user that bypasses write permissions')
-            with pytest.raises(ValueError, match='not writable'):
-                validate_quant_result_dir(str(parent / 'out'))
+            with pytest.raises(ValueError, match='must be readable'):
+                validate_quant_result_dir(str(target))
         finally:
-            os.chmod(parent, 0o700)
+            os.chmod(target, 0o700)
 
 
 class TestWriterUnitWrites:

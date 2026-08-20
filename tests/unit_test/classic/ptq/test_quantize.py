@@ -244,41 +244,51 @@ def test_quantize_rejects_empty_result_dir():
         quantize(_tiny_model(), WEIGHT_ONLY_CFG, quant_result_dir="")
 
 
-def test_quantize_rejects_existing_result_dir(tmp_path):
-    existing = tmp_path / "already"
+def test_quantize_rejects_missing_result_dir(tmp_path):
+    missing = tmp_path / "missing"
+    with pytest.raises(ValueError, match="must be an existing directory"):
+        quantize(_tiny_model(), WEIGHT_ONLY_CFG, quant_result_dir=str(missing))
+
+
+def test_quantize_rejects_non_empty_result_dir(tmp_path):
+    existing = tmp_path / "not_empty"
     existing.mkdir()
-    with pytest.raises(ValueError, match="already exists"):
+    (existing / "old.safetensors").write_bytes(b"old")
+    with pytest.raises(ValueError, match="must be empty"):
         quantize(_tiny_model(), WEIGHT_ONLY_CFG, quant_result_dir=str(existing))
 
 
 def test_quantize_rejects_result_dir_that_is_a_file(tmp_path):
     path = tmp_path / "a_file"
     path.write_text("x", encoding="utf-8")
-    with pytest.raises(ValueError, match="already exists"):
+    with pytest.raises(ValueError, match="not a file"):
         quantize(_tiny_model(), WEIGHT_ONLY_CFG, quant_result_dir=str(path))
 
 
 def test_quantize_rejects_result_dir_when_no_layer_is_quantizable(tmp_path):
     out = tmp_path / "out"
+    out.mkdir()
     # float32 weights are not accepted by int8 minmax, so nothing matches.
     with pytest.raises(ValueError, match="no quantizable layer"):
         quantize(_TinyModel(), WEIGHT_ONLY_CFG, quant_result_dir=str(out))
-    assert not out.exists()
+    assert list(out.iterdir()) == []
 
 
 def test_quantize_rejects_result_dir_when_the_root_is_the_quant_layer(tmp_path):
     out = tmp_path / "out"
+    out.mkdir()
     # parse_config names the root layer '', and module replacement is keyed by
     # name, so the root is never actually replaced: its unit could never be
     # dumped and the manifest would stay unpublished forever.
     root_linear = nn.Linear(64, 32).to(torch.bfloat16)
     with pytest.raises(ValueError, match="itself a quantizable layer"):
         quantize(root_linear, WEIGHT_ONLY_CFG, quant_result_dir=str(out))
-    assert not out.exists()
+    assert list(out.iterdir()) == []
 
 
 def test_weight_only_publishes_without_any_forward(tmp_path):
     out = tmp_path / "wo"
+    out.mkdir()
     model = _tiny_model()
     quantize(model, WEIGHT_ONLY_CFG, quant_result_dir=str(out))
 
@@ -304,6 +314,7 @@ def test_weight_only_publishes_without_any_forward(tmp_path):
 
 def test_activation_publishes_only_after_the_last_calibration_batch(tmp_path):
     out = tmp_path / "act"
+    out.mkdir()
     model = _tiny_model()
     quantize(model, ACTIVATION_CFG, quant_result_dir=str(out))
     manifest_path = out / MANIFEST_NAME
@@ -327,6 +338,7 @@ def test_activation_publishes_only_after_the_last_calibration_batch(tmp_path):
 
 def test_publish_hook_is_removed_after_publishing(tmp_path):
     out = tmp_path / "hook"
+    out.mkdir()
     model = _tiny_model()
     quantize(model, ACTIVATION_CFG, quant_result_dir=str(out))
     assert model._forward_hooks, "a publish hook must be armed while incomplete"
@@ -343,6 +355,7 @@ def test_publish_hook_is_removed_after_publishing(tmp_path):
 
 def test_failed_calibration_forward_leaves_no_manifest(tmp_path):
     out = tmp_path / "failed"
+    out.mkdir()
     model = _tiny_model()
     quantize(model, ACTIVATION_CFG, quant_result_dir=str(out))
     with pytest.raises(RuntimeError):
@@ -352,6 +365,7 @@ def test_failed_calibration_forward_leaves_no_manifest(tmp_path):
 
 def test_one_failed_unit_write_leaves_no_manifest(tmp_path):
     out = tmp_path / "partial"
+    out.mkdir()
     model = _tiny_model()
     real_save = QUANT_RESULT_MODULE.save_file
     calls = {"n": 0}
@@ -375,6 +389,7 @@ def test_one_failed_unit_write_leaves_no_manifest(tmp_path):
 
 def test_quantize_records_source_model_fingerprint(tmp_path):
     out = tmp_path / "fp"
+    out.mkdir()
     model = _tiny_model()
     expected = compute_model_fingerprint(_tiny_model_like(model))
     quantize(model, WEIGHT_ONLY_CFG, quant_result_dir=str(out))
@@ -432,7 +447,7 @@ class _LinearShapedModel(nn.Module):
 
 
 def test_quantize_rejects_an_algorithm_without_export_support(tmp_path):
-    """An algorithm that cannot dump must fail before the directory exists.
+    """An algorithm that cannot dump must fail before writing any result.
 
     Regression guard: every quantize module inherits BaseQuantizeModule, so a
     mere isinstance or hasattr check lets an unwired algorithm through.
@@ -442,11 +457,12 @@ def test_quantize_rejects_an_algorithm_without_export_support(tmp_path):
     GPTQ are.
     """
     out = tmp_path / "smoothquant"
+    out.mkdir()
     model = _LinearShapedModel().to(torch.bfloat16)
     with pytest.raises(ValueError, match="not supported yet for algorithm"):
         quantize(model, SMOOTHQUANT_CFG, quant_result_dir=str(out))
 
-    assert not out.exists(), "no directory may be created for a rejected algorithm"
+    assert list(out.iterdir()) == [], "a rejected algorithm must write nothing"
     assert type(model.fc1).__name__ == "Linear", "the model must be left untouched"
 
 
@@ -460,6 +476,7 @@ def test_the_same_unsupported_algorithm_still_works_without_a_result_dir(tmp_pat
 def test_awq_is_now_accepted_for_export(tmp_path):
     """AWQ is wired in Week 4: it must publish a real artifact."""
     out = tmp_path / "awq_ok"
+    out.mkdir()
     model = _LinearShapedModel().to(torch.bfloat16)
     quantize(model, AWQ_CFG, quant_result_dir=str(out))
     model(torch.randn(8, 64).to(torch.bfloat16))
@@ -475,6 +492,7 @@ def test_artifact_is_consumable_by_the_v2_reload_contract(tmp_path):
     the artifact was produced.
     """
     out = tmp_path / "consume"
+    out.mkdir()
     model = _tiny_model()
     reference = _tiny_model_like(model)
     quantize(model, ACTIVATION_CFG, quant_result_dir=str(out))
@@ -523,6 +541,7 @@ def test_npu_round_trip_restores_params_to_the_device(tmp_path):
         pytest.skip("no Ascend NPU available")
 
     out = tmp_path / "npu"
+    out.mkdir()
     model = _tiny_model().npu()
     reference = _tiny_model_like(model).npu()
     quantize(model, ACTIVATION_CFG, quant_result_dir=str(out))
