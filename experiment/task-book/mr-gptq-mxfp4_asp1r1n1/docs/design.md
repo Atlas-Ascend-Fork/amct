@@ -30,7 +30,7 @@
 - **绝对精度门**：`delta ≤ 0.4`（相对原始 BF16 网络）；
 - **量化覆盖门**：被量化的 `torch.nn.Linear` 占比 ≥ 70%；
 - **相对收益（进阶项要求"精度优化"）**：在相同 MXFP4 配置下，MR-GPTQ 的 PPL 明显优于仓内已有的 **GPTQ-MXFP4** baseline；
-- **可复现**：提供独立评测脚本与完整日志（实施中未走 AMCT 标准 CLI，偏差原因见 §4.5）。
+- **可复现**：提供独立评测脚本与完整日志（不走 AMCT 标准 CLI，理由见 §4.5）。
 
 ### 1.3 非目标
 
@@ -47,10 +47,10 @@ AMCT 仓已具备接入 MR-GPTQ 所需的大部分积木，本方案是"改造 +
 | 已有能力       | 位置                                                                                                            | 在本方案中的角色                                                                                                                                     |
 | -------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 算法注册框架   | `amct_pytorch/algorithms/quant/__init__.py` 的 `register_algorithms()` + `registry_factory.ALGO_REGISTRY` | MR-GPTQ 按同样方式注册为`--algos mr_gptq`                                                                                                          |
-| 算法接入范本   | `amct_pytorch/algorithms/quant/flatquant.py`                                                                  | 复用其`_kronecker_matmul` / `_random_orthogonal`（→ 改为 Hadamard），及 `forward/trainable_params/export_ptq_params/load_ptq_params` 接口契约 |
+| 算法接入范本   | `amct_pytorch/classic/quantize_op/gptq_module.py`                                                             | **本设计直接子类化该类**（MR-GPTQ 是 GPTQ 变体）。`algorithms/quant/flatquant.py` 属另一套注册系统（可学习结构变换），本设计不走该通路，见 §2.1 |
 | GPTQ 误差补偿  | `amct_pytorch/classic/quantize_op/gptq_module.py`（已支持 MXFP4，见算法矩阵）                                 | 作为 baseline**对照组**，并提供误差补偿实现参考                                                                                                |
 | MXFP4 数据类型 | `amct_pytorch/quantization/dtypes/mxfp.py` / `mxfp_impl.py`                                                 | 提供 MXFP4 的 fake-quant / cast                                                                                                                      |
-| 全链路 CLI     | `amct_pytorch.eval / extract_ptq_data / ptq / deploy`                                                         | 直接复用，样例见`examples/models/qwen3.6/Qwen3.6-Moe.md`                                                                                           |
+| 全链路 CLI     | `amct_pytorch.eval / extract_ptq_data / ptq / deploy`                                                         | **本设计不使用**（运行时注册的算法不在 CLI 白名单内，且 W4A4 需按增量开关做消融），改提供独立脚本，理由见 §4.5 |
 | 模型适配       | `common/models/llm/qwen/`（qwen3、qwen3_6_moe 已注册）                                                        | 两个测试模型均已适配，无需新写 adapter                                                                                                               |
 
 **算法支持矩阵佐证**（`docs/zh/algorithm_brief.md`）：GPTQ 已支持 MXFP4 权重量化 → baseline 对照组现成可用；这是本方案"证明有精度提升"的关键前提。
@@ -66,14 +66,14 @@ AMCT 仓已具备接入 MR-GPTQ 所需的大部分积木，本方案是"改造 +
 - **两套注册系统（关键架构认知）**：
   - `AlgorithmRegistry`（`algorithms/__init__.py`）= **算子级权重量化算法**（minmax/awq/**gptq**/mxquant/ofmr/...），签名 `register(name, module_type, quant_module, deploy_module)`。GPTQ 在此：`register('gptq','Linear',GPTQuant,NpuWeightQuantizedLinear)`。
   - `ALGO_REGISTRY`（`algorithms/quant/`）= **可学习结构变换**（flatquant/lwc/lac/omniquant/autoround）。
-  - **MR-GPTQ 属前者**（GPTQ 变体），不走 flatquant 那套注册（v0.1 曾误置于此，v0.2 修正）。
+  - **MR-GPTQ 属前者**（GPTQ 变体），不走 flatquant 那套注册。
 - **本地不可执行确认**：`gptq_module.py:132` 硬 `import torch_npu` → 数值实验必须在昇腾 NPU 环境完成。
 
 ---
 
 ## 3. 算法原理
 
-MR-GPTQ = GPTQ 骨架 + 三个专为 FP4 微缩格式设计的增量（论文 §4.1，**全文已读，本节据论文校正**）。
+MR-GPTQ = GPTQ 骨架 + 三个专为 FP4 微缩格式设计的增量（论文 §4.1）。本设计采用其中 ① 与 ③，不采用 ②。
 
 ### 3.1 MXFP4 格式与难点
 
@@ -91,9 +91,9 @@ MR-GPTQ = GPTQ 骨架 + 三个专为 FP4 微缩格式设计的增量（论文 §
 对线性层 `Y = XWᵀ`，用 **block 对角 Hadamard** `H_k`（k×k 分块，k 为 2 的幂）：`Q(WH_k)·Q(XH_k)ᵀ`。
 - 原理（论文 §3 证明）：Laplace 重尾经 Hadamard 后趋于 Normal，把块内 outlier 能量摊到整个 block → 旋转后 MXFP4 的 RTN 误差更小。
 - **与 QuaRot/FlatQuant 的"全 hidden 大旋转"不同**：大旋转会把 outlier 跨 32-block 扩散、反破坏微缩块结构，故用 **micro（块内）** 旋转，k 对齐 block size。
-- **k 取值有讲究**：主表用 Had32（对齐 block），但论文 Platinum bench（更低噪）显示 **MXFP4 上 Had128 明显优于 Had32**（跨 4 个 block 的更大块旋转）。→ 我们 8B 上 32 和 128 都要扫。
+- **论文的 k 取值**：主表用 Had32（对齐 block），Platinum bench（更低噪）显示 MXFP4 上 Had128 明显优于 Had32（跨 4 个 block 的更大块旋转）。
 - **fuse 方式**：`WH_k` **离线**融进权重；`XH_k` **在线**（见 §4.3 我们的处理，精度评测无需快核）。
-- **⚠️ 实测修正（本项目结论与上条"micro 优于大旋转"相反）**：我们在 8B 上把 k 从 128 一路加到 4096
+- **本设计的取值：全宽旋转**（与论文取小 k 不同，理由如下）。在 8B 上把 k 从 128 一路加到 4096
   （= 全 hidden 宽），再把 `down_proj` 补到 12288（全宽）。**「k=128 → 全宽」的整步效应量
   为 0.147（已确证）：k=128 下 W4A4 delta 达 0.4993、不达标，全宽下 0.3519、达标。**
   论文取小 k 的真实约束是**在线旋转算子的推理开销**，而非"大旋转破坏微缩块结构"。
@@ -105,15 +105,24 @@ MR-GPTQ = GPTQ 骨架 + 三个专为 FP4 微缩格式设计的增量（论文 §
   其可行性取决于**快速 Hadamard 变换（FWHT，O(k log k)，开销 < 1%）**是否可用。
   中间的细分（如"全宽 vs k=4096"的 0.0305）低于本实验测量分辨率，不单独归因。
 
-**② 静态激活重排（Static Activation Reordering, Ingredient 2）**
-GPTQ 原生 dynamic act-order（按 Hessian 对角降序重排）精度好但推理要动态 reshuffle（慢 10-20%）。MR-GPTQ 改**静态**：先按原始列序定 scale/grid，再 shuffle 列跑 GPTQ，跑完 shuffle 回去，保持微缩 group 结构。**同等精度、零推理开销**，实现也简单。
+**② 静态激活重排（Static Activation Reordering, Ingredient 2）—— 本设计不采用**
+
+> **口径统一**：论文三项增量中，本设计实现 ① 与 ③，**不实现 ②**。理由见本条末尾。
+> （GPTQ 父类自带的 dynamic act-order 始终启用，与本条所述的"静态"重排是两件事。）
+
+论文的做法：GPTQ 原生 dynamic act-order（按 Hessian 对角降序重排）精度好但推理要动态 reshuffle（慢 10-20%）。MR-GPTQ 改**静态**：先按原始列序定 scale/grid，再 shuffle 列跑 GPTQ，跑完 shuffle 回去，保持微缩 group 结构。**同等精度、零推理开销**。
+
+**不采用的理由**：该增量的作用是"让同量级的通道共享一个 32 块"，以缓解块内幅度悬殊。
+而本设计已对每层施加**全宽 Hadamard 旋转**（§3.3①）——旋转后各通道近似同分布、可交换，
+按幅度分组已无物可分，与 SmoothQuant 式的难度迁移被旋转吸收同理。
+故本设计有意不实现该项，并在自验证报告 §5 给出说明。
 
 **③ MXFP scale fitting（Ingredient 1 / 附录 H）—— 需与 Hadamard 配合，不能单独用于 GPTQ**
 针对 3.1 的 PoT scale 误差，把 E8M0 的 256 个码位从 [2⁻¹²⁷,2¹²⁸] 重映射到数据实际范围，记作 **MXFP4†**。**确切公式（附录 H 式(1)(2)(3)）**：
 - 标准 E8M0（含 4/3 去偏）：`s_E8M0 = (4/3)·2^clamp(round(log₂s),−128,127)`（式1）。
 - 拟合网格：码位 `q = clamp(round(255·(log₂s − log₂s_min)/(log₂s_max − log₂s_min)), 0, 255)`；拟合后 `s_fit = 2^(α·q + β)`，其中 **α = (log₂s_max − log₂s_min)/255**（斜率 <1 → 次幂次、比幂次细）、**β = log₂s_min**（式2/3）。`s_min/s_max` 取该张量所有块 scale 的最小/最大值。
 - 效果（论文表 11）：RTN 下 Qwen3-8B **93.7→96.3**、Llama3-8B 87.8→94.3；MR-GPTQ 下 Qwen3-8B **95.2→98.5**。
-- **⚠️ 关键修正（原 v0.3 判断错误）**：scale fitting **不是**"单独最先做"。论文表 11 GPTQ 行：**Qwen3-8B 94.1→92.3（−1.8，变差）**；只有叠在 **Hadamard 之上**（MR-GPTQ）才发力（95.2→98.5）。RTN 下才单独有效。**我们实测复现了这点**：GPTQ-mxfp4 10.13 → 加 scale fitting 10.26（变差）。故 scale fitting 须与 Hadamard 配合、排在其后。
+- **⚠️ 顺序约束（本设计据此排序）**：scale fitting **不能单独用于 GPTQ**。论文表 11 GPTQ 行：**Qwen3-8B 94.1→92.3（−1.8，变差）**；只有叠在 **Hadamard 之上**（MR-GPTQ）才发力（95.2→98.5）。RTN 下才单独有效。**本项目实测复现了这点**：GPTQ-mxfp4 10.13 → 单加 scale fitting 10.26（变差）。故本设计中 scale fitting 必须叠加在 Hadamard 之上。
 
 > 校准设置：论文用 1024 条 FineWeb 序列、λ=1e-2，与仓内 GPTQ 默认基本一致。
 > **论文自证我们的靶子成立**：Qwen3-8B 上 MXFP4 MR-GPTQ(95.2%) > GPTQ(94.1%) > RTN(93.7%)（表10）——"相比 baseline 有提升"在测试模型上已被原作者验证，我们是在 AMCT 里复现这个已知正结果。
@@ -143,24 +152,35 @@ AlgorithmRegistry.register('mr_gptq', 'Linear', MRGPTQuant, NpuWeightQuantizedLi
 # 若最终走 W4A4 全量化(激活也 mxfp)，改用 NpuMXQuantizationLinear，实施时按导出验证选定。
 ```
 
-### 4.3 MRGPTQuant 实现要点（复用父类 GPTQuant，增量分步落地）
+### 4.3 MRGPTQuant 实现要点（复用父类 GPTQuant）
 
-父类 `GPTQuant` 已提供：Hessian 累积（`update_hessian`）、求逆（`cal_hessian_inverse`，Cholesky）、贪心量化+误差补偿主循环（`get_opt_weight_and_quant_factor`）、MXFP4 分支（`cal_scale_offset_static` 返回 `None,None`）、fake-quant 缓存。
+父类 `GPTQuant` 已提供：Hessian 累积（`update_hessian`）、求逆（`cal_hessian_inverse`，Cholesky）、贪心量化 + 误差补偿主循环（`get_opt_weight_and_quant_factor`）、MXFP4 分支（`cal_scale_offset_static` 返回 `None,None`）、fake-quant 缓存。本设计在其上 override 三个方法：
 
-按论文各增量分步实现（**实现顺序 = 投入产出比排序**；第三项静态激活重排最终有意未采用，理由见 §3.3 与 §4.4）：
+| override 的方法 | 加入的处理 |
+|---|---|
+| `update_hessian` | 先对输入施加块对角 Hadamard `x·R`，使 `H_r = RᵀHR` 与旋转后的权重一致（转输入比转 Hessian 便宜）；W4A4 且开启联合补偿时，在此处先量化激活再累积 Hessian |
+| `get_opt_weight_and_quant_factor` | 旋转权重 `W·R` → 预计算每块 scale（scale fitting，§3.3③）→ 逐列量化并补偿；全程 CPU float32 |
+| `fake_quant_forward` | 对输入同样施加 `x·R`；W4A4 时再对旋转后的激活做逐 token、逐 32 通道块的动态 MXFP4 |
 
-> **顺序修正（v0.4，基于实测 + 论文表 11）**：原计划"scale fitting 先做/单独用"是错的——它单独会让 GPTQ 在 Qwen3-8B 变差（实测 10.13→10.26，与论文表 11 的 −1.8 一致）。MXFP4 的头号杠杆是 **Hadamard**（论文标题即此），scale fitting 须叠在其上才发力。故新顺序：
+**两项增量的实现与依赖关系**：
 
-1. **【先做】Block-Hadamard 微旋转（§3.3①）**：`override get_opt_weight_and_quant_factor()`，进 GPTQ 列循环前 `W' = W·H_k`（H_k 确定性 Sylvester-Hadamard，k∈{32,128} 可配，论文示 MXFP4 上 Had128 更优），补偿在 `W'` 上做。weight-only 下激活侧只需前向乘一次 `H_kᵀ`（数值精确、无需快核）。
-2. **【再做】MXFP scale fitting（§3.3③）**：叠在 Hadamard 之上，override MXFP4 的 per-block scale，用式(2)/(3) 重映射 E8M0 网格。落点：`cal_scale_offset_static` 的 MXFP4 分支 / `quant_util.py` 的 mxfp4 量化路径。
-3. **【后做】静态激活重排（§3.3②）**：先定 scale/grid，再按 Hessian 对角序 shuffle 列跑 GPTQ、跑完 shuffle 回，保持 32-group 结构。
+1. **Block-wise Hadamard 微旋转（§3.3①）**：进 GPTQ 列循环前 `W' = W·R`，补偿在 `W'` 上做。
+   `R` 为块对角 Hadamard，块大小取满 `in_features`（全宽）；2 的幂走 Sylvester 递归构造，
+   `down_proj` 的 12288 走 `12×1024` 的 Paley H₁₂ ⊗ Sylvester H₁₀₂₄。旋转矩阵按 `(k, device)`
+   全局缓存，同一 k 只构造一次。
+2. **MXFP scale fitting（§3.3③）**：叠加在 Hadamard 之上，替换 MXFP4 的 per-block scale，
+   用式(2)/(3) 把 E8M0 幂次网格重映射为 256 级次幂次细网格。
+   **顺序不可颠倒**——单独用于 GPTQ 会变差（§3.3③）。
 
-**关于激活侧旋转 `X·H_k`（原头号难点，现已明确）**：
-- 本任务目标是**精度（PPL）**，不是推理速度 → **无需实现 QuTLASS 那种 fused NPU 快核**。精度评测阶段，`X·H_k` 直接在 fake-quant 前向里用 **朴素 PyTorch `matmul` 块对角 Hadamard** 实现即可（慢但数值正确）。落点：量化模块 forward 里、激活量化之前插一步旋转。
-- 若最终做 **weight-only（W4A16，见 §4.4）**：激活是 FP16，`X·H_k` 无量化误差，仅需在前向乘一次（或 fuse 进相邻层），复杂度进一步降低。
-- QuTLASS 快核 = 论文的**推理加速**贡献，是本任务的**可选加分**，不阻塞精度达标。
+**激活侧旋转 `X·R` 的落点**：本任务目标是精度（PPL），不涉及推理加速，故 `X·R` 直接在
+fake-quant 前向里用朴素 PyTorch 块对角 `matmul` 实现（数值正确即可）。旋转的 matmul 在
+fp32 下做再回原 dtype——k 较大时 fp16 累加会引入可观误差、污染消融。
 
-**校准型、无梯度训练**：与 GPTQ 一样只需 `extract_ptq_data` + 一遍前向求解，`ptq` 不跑训练循环——相对 BATQuant（可学习）在 100h 算力预算上的核心优势。
+> ⚠️ 该实现形态的代价：朴素矩阵乘下全宽旋转的在线开销约 +104%（§3.3①），
+> 真实部署需快速 Hadamard 变换（FWHT）。本任务不实现该算子，属落地前置工作。
+
+**校准型、无梯度训练**：与 GPTQ 一样只需一遍校准前向求解，不跑训练循环——
+这是相对 BATQuant（可学习）在算力预算上的核心优势。
 
 ### 4.4 目标位宽决策：W4A16 为主线，W4A4 按两轮评审要求补齐（8B / 35B 均已达标）
 
@@ -206,7 +226,7 @@ AlgorithmRegistry.register('mr_gptq', 'Linear', MRGPTQuant, NpuWeightQuantizedLi
 | 联合补偿 | `--increments joint_comp` | `update_hessian` 中先对（旋转后）激活做 MXFP4 量化再累积 Hessian。GPTQ 补偿的最优性依赖 Hessian 与推理期输入分布一致；W4A4 下推理输入是量化激活，用 bf16 输入建的 Hessian 会系统性失配 |
 | 混合精度保护 | `--act_protect <子串...>` | 按层名子串把指定层的激活保留高精度（权重仍全程 MXFP4）。默认候选为 `down_proj`（输入 = 门控后中间激活）与 `o_proj`（输入 = 注意力输出）——两处离群值最重。需同时报告"仍跑真 4-bit 激活的层占比"，避免用保护面换数字。**8B 上实测不可省**（去掉则 0.3519 → 0.5761，效应量 0.224）；**35B 上必须弃用**（会把占比压到 57.1%）——`report_act_coverage` 同时打印两个分母（已量化模块 / 全部 nn.Linear），后者为任务书口径 |
 | **全宽旋转** | `--hadamard_full` | 每层旋转块取满 `in_features`。`down_proj` 的 in=12288 在 k=4096 下只能切 3 个对角块，是全网**唯一未获全宽旋转**的层、而它最大。12288 非 2 的幂，且 `3×4096` 不可行（3 阶 Hadamard 不存在），走 `12×1024`：Paley H₁₂ ⊗ Sylvester H₁₀₂₄——正交矩阵的 Kronecker 积仍正交。**「k=128 → 全宽」整步效应量 0.147（确证，k=128 达 0.4993 不达标）**；其中"全宽 vs k=4096"的细分（0.0305）低于测量分辨率，不单独归因 |
-| ~~GPTQ 阻尼系数~~ | `--perc_damp` | `damp = perc_damp × mean(diag(H))`。原设计假设：`down_proj` 的样本/维度比仅约 1.1:1、Hessian 近奇异，加大阻尼可压制噪声主导的补偿方向。**经三 seed 配对复测已证伪**——0.2 vs 0.4 在 2/3 的校准集上变差、均值亦变差、效应方向随数据变号。开关保留（交付配置固化为 0.2），但**不再作为一项精度手段**。详见报告 §4.3 ③(c) |
+| GPTQ 阻尼系数（**经复测证伪，非精度手段**） | `--perc_damp` | `damp = perc_damp × mean(diag(H))`。原设计假设：`down_proj` 的样本/维度比仅约 1.1:1、Hessian 近奇异，加大阻尼可压制噪声主导的补偿方向。**经三 seed 配对复测已证伪**——0.2 vs 0.4 在 2/3 的校准集上变差、均值亦变差、效应方向随数据变号。开关保留（交付配置固化为 0.2），但**不再作为一项精度手段**。详见报告 §4.3 ③(c) |
 
 另实现并消融了 **5 项未采纳的手段**（激活 scale 裁剪搜索、加大校准集、权重 scale 裁剪、
 增加保护层、randomized Hadamard），开关默认关闭、代码保留作消融记录。
@@ -237,8 +257,8 @@ AlgorithmRegistry.register('mr_gptq', 'Linear', MRGPTQuant, NpuWeightQuantizedLi
 
 ### 4.5 全链路调用（实际实现：独立评测脚本）
 
-**与设计初稿的偏差及原因**：初稿计划复用 AMCT 标准 CLI（`eval / extract_ptq_data / ptq / deploy`）。
-实施中改为提供独立脚本 `src/run_eval.py`，原因有二：① MR-GPTQ 采用**运行时注册**（`import` 即注册、
+**为何不走 AMCT 标准 CLI**：本设计提供独立脚本 `src/run_eval.py` 而非复用
+`eval / extract_ptq_data / ptq / deploy`，原因有二：① MR-GPTQ 采用**运行时注册**（`import` 即注册、
 零改 amct 源码），标准 CLI 的算法白名单在包内，不改源码则无法识别 `mr_gptq`；② W4A4 的激活量化需
 在 `fake_quant_forward` 内介入，且需按增量开关做消融，标准 CLI 无对应参数面。
 **量化本身仍完全走 amct 的 `amct.quantize()` 与 `GPTQuant` 状态机，未绕过工具链。**
@@ -296,11 +316,16 @@ python3 -u run_eval.py --model_path <35B> --mode mr_gptq --seq_len 4096 \
 
 ### 6.1 对照实验矩阵
 
-| 实验 | 配置            | 目的                          |
-| ---- | --------------- | ----------------------------- |
-| E0   | BF16 baseline   | 得`ppl_bf16`（精度门分母）  |
-| E1   | GPTQ-MXFP4 直转 | baseline 对照，得`ppl_gptq` |
-| E2   | MR-GPTQ MXFP4   | 主方案，得`ppl_mrgptq`      |
+| 实验 | 配置 | 目的 | 实测（Qwen3-8B, seq_len=2048 全量 146 块） |
+| --- | --- | --- | --- |
+| E0 | BF16 baseline | 得 `ppl_bf16`（精度门分母） | 9.7154 |
+| E1 | GPTQ-MXFP4 直转 | baseline 对照，得 `ppl_gptq` | 10.1332（delta +0.418，**不达标**） |
+| E2 | MR-GPTQ MXFP4（+Hadamard） | 主方案 | 10.0747（delta +0.359 ✅） |
+| E3 | MR-GPTQ MXFP4（+Hadamard +scale fitting） | 主方案（完整） | 10.0499（delta +0.3345 ✅） |
+
+> 交叉验证：E1 的 10.1332 与 amct 自带 GPTQ-MXFP4 的 10.1369 相差 0.004，
+> 佐证本实现的正确性。**纯 GPTQ 不达标、增量使其达标**，即进阶项要求的"相对提升"。
+> 交付数值另按 §6.2 的口径在 `seq_len=4096` 下产出，见自验证报告 §4。
 
 **判定**：
 
@@ -308,45 +333,45 @@ python3 -u run_eval.py --model_path <35B> --mode mr_gptq --seq_len 4096 \
 - 相对提升（进阶项）：`ppl_mrgptq < ppl_gptq`（越低越好）
 - 覆盖达标：Linear 占比 ≥ 70%（脚本统计并写入报告）
 
-### 6.2 分阶段计划（对齐 100h NPU 预算）—— 已执行
+### 6.2 评测口径
 
-1. **P1 — Qwen3-8B 打通**：调通 MR-GPTQ 实现、跑齐 E0/E1/E2，确认相对提升成立 ✅
-2. **P2 — Qwen3.6-35B-A3B（含 MoE）**：另需处理融合路由专家（非 nn.Linear）才能达显存指标 ✅
-3. **P3 — 自验证报告 + README** ✅；按评审意见追加 **P4 — W4A4 补齐与优化** ✅（见 §4.4）
+统一口径：`seq_len=4096`、block 粒度、WikiText2 **全量分块**评测（8B 73 块 / 35B 72 块），
+默认 `--calib_seed 42`。所有交付数值均按本口径产出，可按 §4.5 的命令逐位复现。
 
-统一口径：`seq_len=4096`、block 粒度、WikiText2、全量分块评测。
+**不作定量依据的两类数据**（详见自验证报告 §4.3 ⑤）：
 
-> **测量口径的自我修正**：项目中期曾以测试集前 20 块做快速筛选，后经两组同配置对照发现该子集的
-> 偏移随配置摆动达 0.053、大于多数待测增量，**连排序都不可靠**。此后所有定量结论均基于全量评测，
-> 详见自验证报告 §4.3 ⑤。
+- **测试集子集**：以前 20 块做快速筛选时，其相对全量的偏移随配置摆动达 0.053、大于多数待测
+  增量，**连排序都不可靠**；
+- **低于测量分辨率的差异**：同配置换校准语料抽样，8B W4A4 的 delta 极差达 0.111；同一校准集下
+  阻尼响应面相邻点摆动约 0.06。故**效应量小于约 0.06 的差异不作归因**。
 
 ### 6.3 性能数据
 
 由评测脚本直接统计并打印：量化层覆盖率（`[coverage]` / `[actual-coverage]`）、权重显存降低
 （`[memory]` Linear 口径 / `[memory-full]` 全模型口径）、校准与补偿耗时、PPL 评测耗时，
-连同原始日志写入自验证报告 §6。（初稿设想用 `cann-perf` 采集算子级耗时；因本任务验收指标为
-精度与显存、且量化为 fake-quant，脚本内建统计已足够，未引入额外采集工具。）
+连同原始日志写入自验证报告 §6。本任务验收指标为精度与显存、且量化为 fake-quant，
+脚本内建统计已足够，未引入算子级采集工具；补偿循环的性能归因另附微基准
+`src/bench_compensate.py`。
 
 ---
 
 ## 7. 风险与规避
 
-| 风险                                     | 影响                           | 规避                                                                                                                                                                                                                                                                                                                                                 |
-| ---------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ~~MoE expert 量化敏感，35B 掉点超 0.4~~ **（已消解）**      | 覆盖达标但精度不达标           | **实测未发生**：35B W4A16 delta 0.0671、W4A4 delta 0.3241，均达标。原因是 32B 融合专家承担算力大头却仍走 fp16 激活，扰动被稀释。真正的风险转移到了**覆盖率口径**——见下一行                                                                                                                                                                                                                                                   |
-| **35B 覆盖率余量仅 1.4 个百分点**（250/350 = 71.4% vs 门槛 70%）      | 任一配置变动使 5 层掉出即不达标           | 100 个 `nn.Linear` 因 in/out 维不整除 32 结构性无法量化、却始终占分母，**已无冗余**。故 35B 上禁用混合精度保护（会压到 57.1%）；`report_act_coverage` 同时打印两个分母以防误判                                                                                                                                                                                                                                                   |
-| baseline GPTQ-MXFP4 跑不通               | "有提升"无对照                 | P1 第一步即验证 GPTQ-MXFP4 能产出有效数；跑不通则改用直转 RTN-MXFP4 作对照并说明                                                                                                                                                                                                                                                                     |
-| ~~激活侧旋转落点（原头号难点）~~ **已降级** | 曾担心等价性/快核 | 全文已明确：`WH_k` 离线 fuse、`XH_k` 在线。**本任务只要精度→用朴素 PyTorch matmul 做块 Hadamard 即可，不需 QuTLASS 快核**；再叠加 W4A16（激活 FP16）进一步免除激活量化。快核仅为加分。仍需在 8B 上先验证旋转前后 `bits=16` 数学等价 |
-| MXFP scale fitting 是否吃到增益 | 拿不到论文 +5pt | 论文式(2)明确、实现简单，**最先做且单测**（对同一层比 E8M0-default vs fitted 的块重构 MSE）；先只做 scale-fitting 看 delta，再叠旋转 |
-| 100h 算力不足                            | 35B 跑不完                     | MR-GPTQ 校准型（无训练循环）成本可控；35B 用多卡脚本`examples/ptq_multi_npu.sh`；优先保 8B 完整 + 35B 关键场景                                                                                                                                                                                                                                     |
-| 官方设计文档模板不同                     | 评审格式返工                   | 已向组织者确认模板（用户侧）；本文结构可平移                                                                                                                                                                                                                                                                                                         |
+以下为交付时点的风险状态（历史风险项的处置记录见附录 B）：
+
+| 风险 | 影响 | 现状与规避 |
+|---|---|---|
+| **35B 覆盖率余量仅 1.4 个百分点**（250/350 = 71.4% vs 门槛 70%） | 任一配置变动使 5 层掉出即不达标 | 100 个 `nn.Linear` 因 in/out 维不整除 32 **结构性**无法量化、却始终占分母，已无冗余。故 35B 上禁用混合精度保护（会压到 57.1%）；`report_act_coverage` 同时打印两个分母以防误判 |
+| **8B 的 W4A4 对校准语料抽样敏感** | 换一批校准语料可能越过门槛（三 seed 实测 0.3131 / 0.3897 / 0.4241） | 交付件锁定默认 `--calib_seed 42`，按 §4.5 命令可逐位复现；已实测"加大校准集""调整阻尼"两个方向均无法改善最差值，边界在报告 §4.3 ① 如实披露。W4A16 主线（极差 0.0350）与 35B W4A4（极差 0.0399）无此问题 |
+| **全宽旋转的在线开销** | 精度达标配置在朴素实现下约 +104% 在线算力，`k=128` 虽仅 +1.6% 但不达标 | 本任务为 fake-quant 精度评估，不计推理成本；真实落地需实现 FWHT（O(k log k)，开销 < 1%），属部署前置工作，已在报告 §4.3 ③(a) 与 §7 标注 |
+| **压缩率为解析推算而非实测** | 与"实际显存下降"不等价 | fake-quant 下张量仍以 fp16 承载；兑现压缩率需打包存储格式与配套反量化算子，属 `deploy` 环节。口径已在 README 与报告 §4 显式声明 |
+| **提速的机制未经分离验证** | "10×"由三项改动打包取得，且 kernel 启动这一机制为推断 | 端到端墙钟为实测且含主机-设备传输；已附微基准 `src/bench_compensate.py` 供确证，口径见报告 §6 |
 
 ---
 
 ## 8. 交付件
 
-> 以下为**实际交付位置**（初稿设想把算法落进 `amct_pytorch/` 并改 `algorithms/__init__.py` 注册；
-> 最终改为**运行时注册、零改 amct 源码**，故代码全部位于交付目录内）。
+> 算法以**运行时注册**方式接入、**零改 amct 源码**，故代码全部位于交付目录内。
 > 交付目录：`experiment/task-book/mr-gptq-mxfp4_asp1r1n1/`
 
 | 交付件     | 位置                                                          |
@@ -371,3 +396,28 @@ python3 -u run_eval.py --model_path <35B> --mode mr_gptq --seq_len 4096 \
 - BATQuant（备选路线）: arXiv:2603.16590
 - AMCT 算法矩阵: `docs/zh/algorithm_brief.md`
 - Qwen3.6-MoE 量化样例: `examples/models/qwen3.6/Qwen3.6-Moe.md`
+
+---
+
+## 附录 B：设计演进记录（历史，非最终设计）
+
+> 本附录仅记录设计过程中被修正或废弃的判断，供追溯。**最终设计以正文为准**，
+> 二者若有出入，以正文为准。
+
+| # | 初期判断 | 最终结论 | 修正依据 |
+|---|---|---|---|
+| 1 | MR-GPTQ 按 `ALGO_REGISTRY`（flatquant 那套可学习结构变换）注册 | 改走 `AlgorithmRegistry`（算子级权重量化算法），子类化 `GPTQuant` | MR-GPTQ 是 GPTQ 变体，非可学习变换；见 §2.1 |
+| 2 | scale fitting 收益最大，应最先做、可单独用 | 必须叠加在 Hadamard 之上；单独用于 GPTQ 会变差 | 论文表 11 GPTQ 行 Qwen3-8B 94.1→92.3；本项目实测 10.13→10.26 |
+| 3 | 实现论文三项增量（含静态激活重排） | **不实现静态激活重排**——已施加全宽旋转，旋转后按幅度分组已无物可分 | §3.3② |
+| 4 | 沿用论文的小 k（32/128）微旋转 | 取满 `in_features` 的全宽旋转 | 「k=128 → 全宽」效应量 0.147；k=128 下 W4A4 不达标（§3.3①） |
+| 5 | 复用 AMCT 标准 CLI 全链路 | 提供独立评测脚本 | 运行时注册的算法不在 CLI 白名单；W4A4 需按增量开关做消融（§4.5） |
+| 6 | 算法代码落进 `amct_pytorch/` 并改注册文件 | 运行时注册、零改 amct 源码，代码全部在交付目录内 | §4.2 |
+| 7 | 加大 GPTQ 阻尼是达标关键手段（单项 −0.0261） | **证伪**——三 seed 配对下 2/3 变差、效应方向随数据变号 | 报告 §4.3 ③(c) |
+| 8 | 全宽旋转单项贡献 −0.0305 | 该细分低于测量分辨率，不单独归因；仅「k=128 → 全宽」整步可归因 | 报告 §4.3 ⑤ |
+| 9 | 以测试集前 20 块做快速筛选 | 全部定量结论改用全量评测 | 该子集偏移随配置摆动达 0.053，连排序都不可靠 |
+| 10 | 35B 的 MoE expert 量化敏感、可能掉点超 0.4 | 实测未发生（W4A16 delta 0.0671 / W4A4 delta 0.3241）；真实风险转移到覆盖率口径 | §7 |
+| 11 | 用 `cann-perf` 采集算子级耗时 | 未引入；脚本内建统计已足够，性能归因另附 `bench_compensate.py` | §6.3 |
+
+**分阶段执行记录**：P1 Qwen3-8B 打通 → P2 Qwen3.6-35B-A3B（含融合专家）→
+P3 自验证报告与 README → P4（按第一轮评审）W4A4 补齐与优化 →
+P5（按第二轮评审）35B 的 W4A4 与测量分辨率复测。全部已完成。
