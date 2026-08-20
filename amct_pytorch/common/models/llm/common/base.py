@@ -64,11 +64,16 @@ class BaseModel(metaclass=ABCMeta):
         self.position_embeddings = None
         self.input_ids = None
         self.model_path = self.args.model
+        self.trust_remote_code = getattr(self.args, "trust_remote_code", None)
+        if not isinstance(self.trust_remote_code, bool):
+            raise ValueError(
+                "trust_remote_code must be explicitly set to True or False."
+            )
         self.config = AutoConfig.from_pretrained(
-            self.model_path, trust_remote_code=True
+            self.model_path, trust_remote_code=self.trust_remote_code
         )
         self.tokenizer = AutoTokenizer.from_pretrained(
-            self.model_path, trust_remote_code=True
+            self.model_path, trust_remote_code=self.trust_remote_code
         )
         self.ptq_param_handler = PtqParamHandler()
         self.ptq_param_store = PtqParamStore(
@@ -94,14 +99,18 @@ class BaseModel(metaclass=ABCMeta):
 
     def float_model(self):
         model = AutoModelForCausalLM.from_pretrained(
-            self.model_path, trust_remote_code=True, torch_dtype=torch.bfloat16
+            self.model_path,
+            trust_remote_code=self.trust_remote_code,
+            torch_dtype=torch.bfloat16,
         )
         return model
 
     def empty_weights_model(self):
         with init_empty_weights():
             model = AutoModelForCausalLM.from_config(
-                self.config, trust_remote_code=True, torch_dtype=torch.bfloat16
+                self.config,
+                trust_remote_code=self.trust_remote_code,
+                torch_dtype=torch.bfloat16,
             )
         return model
 

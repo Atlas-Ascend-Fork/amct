@@ -18,7 +18,7 @@
 
 import json
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 import torch
@@ -55,6 +55,8 @@ class _StubModel(BaseModel):
             args.quant_target = list(quant_target)
         if not hasattr(args, 'quant_dtype'):
             args.quant_dtype = 'int8'
+        if not hasattr(args, 'trust_remote_code'):
+            args.trust_remote_code = True
 
         with (
             patch(
@@ -67,6 +69,70 @@ class _StubModel(BaseModel):
             ),
         ):
             super().__init__(args)
+
+
+def test_huggingface_loaders_use_trust_remote_code_from_args():
+    args = SimpleNamespace(
+        model="/fake/path",
+        quant_target=[],
+        quant_dtype="int8",
+        trust_remote_code=False,
+    )
+    config = SimpleNamespace(tie_word_embeddings=False)
+
+    with (
+        patch(
+            "amct_pytorch.common.models.llm.common.base.AutoConfig.from_pretrained",
+            return_value=config,
+        ) as config_loader,
+        patch(
+            "amct_pytorch.common.models.llm.common.base.AutoTokenizer.from_pretrained"
+        ) as tokenizer_loader,
+    ):
+        model = BaseModel(args)
+
+    assert config_loader.call_args.kwargs["trust_remote_code"] is False
+    assert tokenizer_loader.call_args.kwargs["trust_remote_code"] is False
+
+    with patch(
+        "amct_pytorch.common.models.llm.common.base.AutoModelForCausalLM.from_pretrained"
+    ) as float_model_loader:
+        model.float_model()
+    assert float_model_loader.call_args.kwargs["trust_remote_code"] is False
+
+    with (
+        patch(
+            "amct_pytorch.common.models.llm.common.base.init_empty_weights",
+            return_value=MagicMock(
+                __enter__=lambda _: None,
+                __exit__=lambda *_: None,
+            ),
+        ),
+        patch(
+            "amct_pytorch.common.models.llm.common.base.AutoModelForCausalLM.from_config"
+        ) as empty_model_loader,
+    ):
+        model.empty_weights_model()
+    assert empty_model_loader.call_args.kwargs["trust_remote_code"] is False
+
+
+@pytest.mark.parametrize("trust_remote_code", [None, "True", 1])
+def test_base_model_rejects_missing_or_non_boolean_trust_remote_code(
+    trust_remote_code,
+):
+    args = SimpleNamespace(
+        model="/fake/path",
+        quant_target=[],
+        quant_dtype="int8",
+    )
+    if trust_remote_code is not None:
+        args.trust_remote_code = trust_remote_code
+
+    with pytest.raises(
+        ValueError,
+        match="trust_remote_code must be explicitly set to True or False",
+    ):
+        BaseModel(args)
 
 
 # ---- get_embed_load_specs ---------------------------
@@ -833,6 +899,7 @@ def test_load_layer_weight_reads_safetensors_from_disk(monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
+        trust_remote_code=True,
         quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir="/tmp/fake",
@@ -865,6 +932,7 @@ def test_block_creates_layer_with_weights(monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
+        trust_remote_code=True,
         quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir="/tmp/fake",
@@ -896,6 +964,7 @@ def test_load_embed_state_dict_loads_embed_weights(monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
+        trust_remote_code=True,
         quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir="/tmp/fake",
@@ -937,6 +1006,7 @@ def test_do_embedding_forward_runs_full_model_forward(tmp_path, monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
+        trust_remote_code=True,
         quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir=str(tmp_path),
@@ -981,6 +1051,7 @@ def test_do_embedding_forward_saves_position_info(tmp_path, monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
+        trust_remote_code=True,
         quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir=str(tmp_path),
@@ -1038,6 +1109,7 @@ def test_do_block_forward_runs_layer_forward_pass(monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
+        trust_remote_code=True,
         quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir="/tmp/fake",
@@ -1081,6 +1153,7 @@ def test_do_block_forward_with_hook_enables_act_stat_collection(monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
+        trust_remote_code=True,
         quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir="/tmp/fake",
@@ -1135,6 +1208,7 @@ def test_do_embedding_forward_saves_kwargs_when_hook_name_set(tmp_path, monkeypa
 
     args = SimpleNamespace(
         model=str(model_dir),
+        trust_remote_code=True,
         quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir=str(tmp_path),
@@ -1188,6 +1262,7 @@ def test_do_block_forward_with_quant_block_sets_quant_state(monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
+        trust_remote_code=True,
         quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir="/tmp/fake",
@@ -1238,6 +1313,7 @@ def test_do_block_forward_quant_eval_mode(monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
+        trust_remote_code=True,
         quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir="/tmp/fake",
@@ -1312,6 +1388,7 @@ def test_do_block_forward_with_hook_removal(monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
+        trust_remote_code=True,
         quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir="/tmp/fake",
@@ -1376,6 +1453,7 @@ def test_do_head_forward_runs_norm_and_lm_head(monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
+        trust_remote_code=True,
         quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir="/tmp/fake",

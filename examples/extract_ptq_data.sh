@@ -17,6 +17,7 @@
 
 #!/bin/bash
 python -m amct_pytorch.extract_ptq_data \
+  --trust_remote_code True \
   --model /path/to/model \
   --model_name qwen3_5 \
   --device npu:0 \

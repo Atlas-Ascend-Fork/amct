@@ -20,6 +20,7 @@ export ASCEND_RT_VISIBLE_DEVICES=0
 
 # bf16 inference
 python -m amct_pytorch.eval \
+  --trust_remote_code True \
   --model /path/to/model \
   --model_name qwen3_5 \
   --device npu:0 \
@@ -30,6 +31,7 @@ python -m amct_pytorch.eval \
 
 # replace quant module but turn off quant flag, bf16 inference
 python -m amct_pytorch.eval \
+  --trust_remote_code True \
   --model /path/to/model \
   --model_name qwen3_5 \
   --device npu:0 \

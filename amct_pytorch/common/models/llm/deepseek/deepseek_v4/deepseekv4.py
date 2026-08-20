@@ -217,7 +217,7 @@ class DeepseekV4(BaseModel):
         with init_empty_weights(include_buffers=True):
             model = AutoModelForCausalLM.from_config(
                 self.config,
-                trust_remote_code=True,
+                trust_remote_code=self.trust_remote_code,
                 torch_dtype=torch.bfloat16,
             )
         from amct_pytorch.common.models.llm.deepseek.deepseek_v4.modeling.modeling_deepseek_v4 import (

@@ -18,6 +18,7 @@
 
 from contextlib import nullcontext
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 import torch
@@ -34,6 +35,20 @@ def _make_model(model_path, weight_map):
     model.model_path = str(model_path)
     model._weight_map = weight_map
     return model
+
+
+def test_empty_weights_model_uses_trust_remote_code_from_args(monkeypatch):
+    from amct_pytorch.common.models.llm.deepseek.deepseek_v4 import deepseekv4
+
+    model = DeepseekV4.__new__(DeepseekV4)
+    model.config = SimpleNamespace()
+    model.trust_remote_code = False
+    monkeypatch.setattr(deepseekv4, "init_empty_weights", lambda **_: nullcontext())
+
+    with patch.object(deepseekv4.AutoModelForCausalLM, "from_config") as loader:
+        model.empty_weights_model()
+
+    assert loader.call_args.kwargs["trust_remote_code"] is False
 
 
 def test_block_sharded_rejects_shard_outside_model_directory(tmp_path, monkeypatch):

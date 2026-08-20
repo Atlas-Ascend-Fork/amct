@@ -16,8 +16,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import argparse
+import os
+import warnings
 
 from amct_pytorch.quantization.bit_policy import BitPolicy
 
@@ -47,6 +48,12 @@ def parser_gen(command=None):
         type=str,
         default='deepseek-ai/DeepSeek-V4-Flash',
         help='Model to load.',
+    )
+    parser.add_argument(
+        '--trust_remote_code',
+        choices=('True', 'False'),
+        default=None,
+        help='Whether to allow HuggingFace model repositories to execute custom code.',
     )
     parser.add_argument('--device', type=str, default='npu:0', help='Device to use.')
     parser.add_argument(
@@ -146,6 +153,20 @@ def parser_gen(command=None):
     parser.add_argument('--wikitext_final_out', default="")
 
     args = parser.parse_args()
+
+    if args.trust_remote_code is None:
+        parser.error(
+            "trust_remote_code is required and must be True or False. "
+            "We recommend setting it to True."
+        )
+    args.trust_remote_code = args.trust_remote_code == 'True'
+    if not args.trust_remote_code:
+        warnings.warn(
+            "Setting trust_remote_code to False may cause some models to fail "
+            "to load. We recommend setting it to True.",
+            UserWarning,
+            stacklevel=2,
+        )
 
     if args.bit_config:
         args.bit_policy = BitPolicy.from_yaml(args.bit_config)

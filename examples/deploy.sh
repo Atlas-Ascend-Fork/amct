@@ -17,6 +17,7 @@
 
 #!/bin/bash
 python amct_pytorch/cli/llm/deploy.py \
+  --trust_remote_code True \
   --model /path/to/model \
   --model_name qwen3_5 \
   --device npu:0 \

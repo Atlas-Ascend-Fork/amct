@@ -289,6 +289,7 @@ _FROM_PRETRAINED = "from_pretrained"
 def _make_mock_args(model_path="/tmp/fake_model", quant_target=("moe",), **extra):
     base = {
         "model": model_path,
+        "trust_remote_code": True,
         "quant_target": list(quant_target),
         "device": "cpu",
         "data_dir": "/tmp/fake_data",

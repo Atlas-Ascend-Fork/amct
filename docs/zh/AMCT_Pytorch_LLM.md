@@ -67,6 +67,7 @@
 
 ```bash
 python -m amct_pytorch.eval \
+  --trust_remote_code True \
   --model /path/to/model \
   --model_name qwen3 \
   --device npu:0 \
@@ -83,6 +84,7 @@ python -m amct_pytorch.eval \
 
 ```bash
 python -m amct_pytorch.eval \
+  --trust_remote_code True \
   --model /path/to/model \
   --model_name qwen3 \
   --device npu:0 \
@@ -101,6 +103,7 @@ python -m amct_pytorch.eval \
 
 ```bash
 python -m amct_pytorch.eval \
+  --trust_remote_code True \
   --model /path/to/model \
   --model_name qwen3 \
   --device npu:0 \
@@ -143,6 +146,7 @@ python -m amct_pytorch.eval \
 
 ```bash
 python -m amct_pytorch.extract_ptq_data \
+  --trust_remote_code True \
   --model /path/to/model \
   --model_name qwen3 \
   --device npu:0 \
@@ -180,6 +184,7 @@ python -m amct_pytorch.extract_ptq_data \
 
 ```bash
 python -m amct_pytorch.ptq \
+  --trust_remote_code True \
   --model /path/to/model \
   --model_name qwen3 \
   --device npu:0 \
@@ -227,6 +232,7 @@ python -m amct_pytorch.ptq \
 
 ```bash
 python -m amct_pytorch.deploy \
+  --trust_remote_code True \
   --model /path/to/model \
   --model_name qwen3 \
   --granularity block \
@@ -247,6 +253,7 @@ python -m amct_pytorch.deploy \
 |------|------|------|
 | `--model` | `deepseek-ai/DeepSeek-V4-Pro` | 模型权重路径或模型标识，部署导出时应为本地模型目录。 |
 | `--model_name` | `deepseek-ai/DeepSeek-V4-Pro` | AMCT 内部模型适配器名称，需匹配已注册模型，如 `qwen3`、`deepseek_v4`。 |
+| `--trust_remote_code` | 无，必须显式传入 | 是否允许 HuggingFace 模型仓执行自定义代码，可选值为 `True` 或 `False`。建议设置为 `True`；设置为 `False` 可能导致部分模型加载失败。 |
 | `--device` | `npu:0` | 指定运行设备。建议选择NPU/GPU，以加速计算。 |
 | `--granularity` | `model` | 工作粒度，即量化或处理的单位，常用选项：<br> `block`：按模块块处理（更细粒度，可能效果更好但耗时）。<br> `model`：整个模型统一处理（粗粒度，速度快），部分流程不支持。 |
 | `--seed` | `0` | 随机种子，用于控制实验中随机行为的一致性（如数据采样、初始化等），设置为固定值可保证结果可复现。 |
