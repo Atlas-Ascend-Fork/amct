@@ -28,17 +28,22 @@ class InsertQuantizeModulePass(BaseModuleFusionPass):
     APIs: match_pattern, do_pass
     """
 
-    def __init__(self, quant_config):
+    def __init__(self, quant_config, quant_result_writer=None):
         """
         Function: init object of insert quantize op quant pass
         Parameter:
             quant_config: dict, config
+            quant_result_writer: optional QuantResultWriter injected into every
+                inserted quantize module so it can dump its quant params at its
+                own finalization point. None means quant results are not
+                persisted.
         Return: None
         """
         super().__init__()
         self.config = quant_config
         self.quant_layers = list(quant_config.keys())
         self.quantize_ops = dict()
+        self.quant_result_writer = quant_result_writer
 
     def match_pattern(self, module, name):
         """
@@ -80,7 +85,31 @@ class InsertQuantizeModulePass(BaseModuleFusionPass):
 
         helper = ModuleHelper(model)
         helper.replace_module_by_name(model, object_name, new_module)
+        self._attach_quant_result_writer(new_module, object_name)
         LOGGER.logd(
             "Insert quantize op module to '{}' success!".format(object_name),
             'InsertQuantizeModulePass',
         )
+
+    def _attach_quant_result_writer(self, new_module, object_name):
+        """Inject the result writer into a freshly inserted quantize module.
+
+        Done after the replacement so that a module dumping straight away (pure
+        weight-only) is already part of the model. A quantize op that cannot
+        take the writer could never complete its unit, which would leave the
+        manifest unpublishable, so that is a hard error rather than a warning.
+        """
+        if self.quant_result_writer is None:
+            return
+        attach = getattr(new_module, 'attach_quant_result_writer', None)
+        supports = getattr(new_module, 'supports_quant_result_export', None)
+        if not callable(attach) or not (callable(supports) and supports()):
+            # quantize() screens algorithms before creating the directory, so
+            # reaching here means the pass was driven directly with a writer.
+            raise TypeError(
+                "quantize op {} of layer '{}' does not support quant result "
+                "export; it must derive from BaseQuantizeModule and declare "
+                "_supports_quant_result_export to be used with "
+                "quant_result_dir.".format(type(new_module).__name__, object_name)
+            )
+        attach(self.quant_result_writer)
