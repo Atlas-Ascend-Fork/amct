@@ -571,12 +571,12 @@ class QuantResultWriter:
         self,
         result_dir,
         expected_units,
-        source_model,
+        model_fingerprint,
         artifact_id=None,
     ):
         self._result_dir = os.path.abspath(result_dir)
         self._expected_units = self._check_expected_units(expected_units)
-        self._source_model = source_model
+        self._model_fingerprint = model_fingerprint
         self._artifact_id = artifact_id or str(uuid.uuid4())
         self._library_version = _library_version()
         self._entries = {}
@@ -603,11 +603,11 @@ class QuantResultWriter:
         return tuple(units)
 
     @classmethod
-    def create(cls, quant_result_dir, expected_units, source_model):
+    def create(cls, quant_result_dir, expected_units, model_fingerprint):
         """Validate inputs and return a writer for a caller-created directory."""
         units = cls._check_expected_units(expected_units)
         result_dir = validate_quant_result_dir(quant_result_dir)
-        return cls(result_dir, units, source_model)
+        return cls(result_dir, units, model_fingerprint)
 
     @property
     def result_dir(self):
@@ -829,7 +829,7 @@ class QuantResultWriter:
                 'library': LIBRARY,
                 'library_version': self._library_version,
             },
-            'source_model': self._source_model,
+            'source_model': self._model_fingerprint,
             'units': [self._entries[unit] for unit in self._expected_units],
         }
         _write_text_atomically(self.manifest_path, canonical_json(manifest) + '\n')

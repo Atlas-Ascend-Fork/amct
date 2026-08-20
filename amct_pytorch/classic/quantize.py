@@ -130,9 +130,9 @@ def _create_quant_result_writer(model, layer_config, quant_result_dir):
             "submodule. Wrap it in a parent nn.Module.".format(type(model).__name__)
         )
     _check_algorithms_support_export(layer_config)
-    source_model = compute_model_fingerprint(model)
+    model_fingerprint = compute_model_fingerprint(model)
     return QuantResultWriter.create(
-        quant_result_dir, tuple(layer_config.keys()), source_model
+        quant_result_dir, tuple(layer_config.keys()), model_fingerprint
     )
 
 
