@@ -38,6 +38,13 @@ class GPTQuant(BaseQuantizeModule):
     APIs: forward.
     """
 
+    _supports_quant_result_export = True
+    # ``weight`` must be persisted, unlike AWQ: GPTQ rewrites it with the
+    # Hessian-corrected result, which cannot be recomputed from the original
+    # weight and the scales. Dropping it would silently deploy the un-optimized
+    # weight after a reload.
+    _quant_param_keys = ('scale_w', 'offset_w', 'weight')
+
     def __init__(self, ori_module, layer_name, quant_config):
         """
         Function: init objective.
@@ -97,6 +104,9 @@ class GPTQuant(BaseQuantizeModule):
                 ),
                 'GPTQuant',
             )
+            # Dumped only after the optimized weight is in place, so the unit
+            # holds the corrected weight and not the incoming one.
+            self.maybe_dump_quant_params()
         if self.cur_batch > self.quant_config.get('batch_num'):
             return self.fake_quant_forward(inputs)
         return F.linear(inputs, self.weight, self.bias)
@@ -113,6 +123,29 @@ class GPTQuant(BaseQuantizeModule):
             )
             self.fake_quant_cache_ready = True
         return F.linear(inputs, self.cached_dq_w, self.bias)
+
+    def _on_quant_params_loaded(self):
+        """Reloaded params are final: skip Hessian accumulation and GPTQ.
+
+        ``cur_batch`` is pushed past ``batch_num`` so ``forward`` goes straight to
+        fake-quant, and the Hessian state is released because it is only an
+        accumulator for the optimization that already happened.
+        """
+        # The constructor already put the *original* weight here, so absence in
+        # the unit must be caught explicitly instead of falling back to it.
+        self.require_loaded_quant_params('weight')
+        # MXFP4 quantizes per-group at deploy time and legitimately leaves
+        # scale_w as None (see cal_scale_offset_static), so it is only required
+        # for the dtypes that actually produce it.
+        if self.wts_type not in (MXFP4_E2M1,):
+            self.require_loaded_quant_params('scale_w')
+            if self.quant_config.get('weights_cfg').get('symmetric') is False:
+                self.require_loaded_quant_params('offset_w')
+        self.cur_batch = self.quant_config.get('batch_num') + 1
+        self.hessian = None
+        self.nsamples = 0
+        self.fake_quant_cache_ready = False
+        self.cached_dq_w = None
 
     def get_opt_weight_and_quant_factor(self):
         """
