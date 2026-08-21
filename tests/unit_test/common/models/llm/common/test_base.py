@@ -74,6 +74,7 @@ class _StubModel(BaseModel):
 def test_huggingface_loaders_use_trust_remote_code_from_args():
     args = SimpleNamespace(
         model="/fake/path",
+        model_name="qwen3",
         quant_target=[],
         quant_dtype="int8",
         trust_remote_code=False,
@@ -81,6 +82,10 @@ def test_huggingface_loaders_use_trust_remote_code_from_args():
     config = SimpleNamespace(tie_word_embeddings=False)
 
     with (
+        pytest.warns(
+            UserWarning,
+            match="qwen3.*recommend passing --trust_remote_code",
+        ),
         patch(
             "amct_pytorch.common.models.llm.common.base.AutoConfig.from_pretrained",
             return_value=config,
@@ -116,23 +121,28 @@ def test_huggingface_loaders_use_trust_remote_code_from_args():
     assert empty_model_loader.call_args.kwargs["trust_remote_code"] is False
 
 
-@pytest.mark.parametrize("trust_remote_code", [None, "True", 1])
-def test_base_model_rejects_missing_or_non_boolean_trust_remote_code(
-    trust_remote_code,
-):
+def test_base_model_defaults_missing_trust_remote_code_to_false():
     args = SimpleNamespace(
         model="/fake/path",
+        model_name="qwen3",
         quant_target=[],
         quant_dtype="int8",
     )
-    if trust_remote_code is not None:
-        args.trust_remote_code = trust_remote_code
+    config = SimpleNamespace(tie_word_embeddings=False)
 
-    with pytest.raises(
-        ValueError,
-        match="trust_remote_code must be explicitly set to True or False",
+    with (
+        pytest.warns(UserWarning, match="qwen3.*--trust_remote_code"),
+        patch(
+            "amct_pytorch.common.models.llm.common.base.AutoConfig.from_pretrained",
+            return_value=config,
+        ),
+        patch(
+            "amct_pytorch.common.models.llm.common.base.AutoTokenizer.from_pretrained"
+        ),
     ):
-        BaseModel(args)
+        model = BaseModel(args)
+
+    assert model.trust_remote_code is False
 
 
 # ---- get_embed_load_specs ---------------------------

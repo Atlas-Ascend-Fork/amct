@@ -66,6 +66,12 @@ class DeepseekV4(BaseModel):
     ffn_norm_name = "ffn_norm"
 
     def __init__(self, args):
+        if not getattr(args, "trust_remote_code", False):
+            model_name = getattr(args, "model_name", "deepseek_v4")
+            raise ValueError(
+                f"{model_name} requires --trust_remote_code. "
+                "Please rerun the command with --trust_remote_code."
+            )
         super().__init__(args)
         if not isinstance(self.config, DeepseekV4Config):
             self.config = DeepseekV4Config(**self.config.to_dict())

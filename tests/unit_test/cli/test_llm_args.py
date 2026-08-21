@@ -23,54 +23,26 @@ import pytest
 from amct_pytorch.cli.llm.args import parser_gen
 
 
-def test_trust_remote_code_is_required(capsys):
-    with patch.object(sys, "argv", ["amct"]), pytest.raises(SystemExit) as exc_info:
-        parser_gen()
+def test_trust_remote_code_defaults_to_false():
+    with patch.object(sys, "argv", ["amct"]):
+        args = parser_gen()
 
-    assert exc_info.value.code == 2
-    error = capsys.readouterr().err
-    assert "trust_remote_code is required" in error
-    assert "must be True or False" in error
-    assert "recommend setting it to True" in error
+    assert args.trust_remote_code is False
 
 
-@pytest.mark.parametrize(
-    "command_line_value,expected",
-    [("True", True), ("False", False)],
-)
-def test_trust_remote_code_accepts_boolean_values(command_line_value, expected):
-    with patch.object(sys, "argv", ["amct", "--trust_remote_code", command_line_value]):
-        if expected:
-            args = parser_gen()
-        else:
-            with pytest.warns(UserWarning):
-                args = parser_gen()
+def test_trust_remote_code_flag_sets_true():
+    with patch.object(sys, "argv", ["amct", "--trust_remote_code"]):
+        args = parser_gen()
 
-    assert args.trust_remote_code is expected
+    assert args.trust_remote_code is True
 
 
-def test_trust_remote_code_false_warns_user():
+@pytest.mark.parametrize("value", ["True", "False", "yes"])
+def test_trust_remote_code_rejects_explicit_value(value):
     with (
-        patch.object(sys, "argv", ["amct", "--trust_remote_code", "False"]),
-        pytest.warns(
-            UserWarning,
-            match=(
-                "may cause some models to fail to load.*recommend setting it to True"
-            ),
-        ),
-    ):
-        parser_gen()
-
-
-def test_trust_remote_code_rejects_non_boolean_value(capsys):
-    with (
-        patch.object(sys, "argv", ["amct", "--trust_remote_code", "yes"]),
+        patch.object(sys, "argv", ["amct", "--trust_remote_code", value]),
         pytest.raises(SystemExit) as exc_info,
     ):
         parser_gen()
 
     assert exc_info.value.code == 2
-    error = capsys.readouterr().err
-    assert "invalid choice: 'yes'" in error
-    assert "True" in error
-    assert "False" in error

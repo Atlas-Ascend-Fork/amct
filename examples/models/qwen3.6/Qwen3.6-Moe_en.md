@@ -55,7 +55,7 @@ The one-stop platform has pre-configured deployment runtime environment. When us
 
   ```shell
 python -m amct_pytorch.eval \
-     --trust_remote_code True \
+     --trust_remote_code \
      --model /data/models/Qwen3.6-35B-A3B \
      --model_name qwen3_6_moe \
      --seq_len 4096 \
@@ -79,7 +79,7 @@ For more detailed parameter explanation, please refer to [Parameter Description]
 According to YAML bit configuration, perform direct conversion quantization accuracy test, evaluate the gap with baseline accuracy. Current solution defaults to full A8W4 int quantization on `quant-target`:
   ```shell
 python -m amct_pytorch.eval \
-    --trust_remote_code True \
+    --trust_remote_code \
     --model /data/models/Qwen3.6-35B-A3B \
     --model_name qwen3_6_moe \
     --seq_len 4096 \
@@ -103,7 +103,7 @@ For more detailed parameter explanation, please refer to [Parameter Description]
 Extract corresponding PTQ calibration dataset according to different quantization objects `quant_target`:
   ```shell
 python -m amct_pytorch.extract_ptq_data \
-    --trust_remote_code True \
+    --trust_remote_code \
     --model /data/models/Qwen3.6-35B-A3B \
     --model_name qwen3_6_moe \
     --seq_len 4096 \
@@ -122,7 +122,7 @@ Introduce quantization algorithm to optimize the quantization process to reduce 
 #### Single-Card Environment
   ```shell
 python -m amct_pytorch.ptq \
-    --trust_remote_code True \
+    --trust_remote_code \
     --model /data/models/Qwen3.6-35B-A3B \
     --model_name qwen3_6_moe \
     --seq_len 4096 \
@@ -153,7 +153,7 @@ For more detailed parameter explanation, please refer to [Parameter Description]
 After completing PTQ, add quantization algorithm in direct conversion quantization accuracy evaluation, compare with baseline test and direct conversion quantization accuracy without quantization algorithm, verify quantization algorithm effectiveness:
   ```shell
 python -m amct_pytorch.eval \
-  --trust_remote_code True \
+  --trust_remote_code \
   --model /data/models/Qwen3.6-35B-A3B \
   --model_name qwen3_6_moe \
   --seq_len 4096 \
@@ -173,7 +173,7 @@ Required parameter explanation:
 After all the preceding steps are complete, export the quantized weights for loading. The weight_map corresponding to the weights is consistent with that on the huggingface official website.
   ```shell
 python -m amct_pytorch.deploy \
-  --trust_remote_code True \
+  --trust_remote_code \
   --model /data/models/Qwen3.6-35B-A3B \
   --model_name qwen3_6_moe \
   --granularity block \

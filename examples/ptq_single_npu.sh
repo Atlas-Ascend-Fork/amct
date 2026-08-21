@@ -17,7 +17,7 @@
 
 #!/bin/bash
 python -m amct_pytorch.ptq \
-  --trust_remote_code True \
+  --trust_remote_code \
   --model /path/to/model \
   --model_name qwen3_5 \
   --device npu:0 \
