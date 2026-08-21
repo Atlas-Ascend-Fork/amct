@@ -17,7 +17,28 @@ def read_dataset_file(path):
     """Read one registered dataset file into a pandas DataFrame."""
     if path.endswith(".jsonl"):
         return pd.read_json(path, lines=True)
-    return pd.read_parquet(path, engine="fastparquet")
+    df = pd.read_parquet(path, engine="fastparquet")
+    return _restore_dotted_columns(df)
+
+
+def _restore_dotted_columns(df):
+    """Restore flattened parquet struct columns like choices.text -> choices."""
+    dotted = [col for col in df.columns if "." in col]
+    if not dotted:
+        return df
+    groups = {}
+    for col in dotted:
+        prefix, suffix = col.split(".", 1)
+        if prefix in df.columns:
+            continue
+        groups.setdefault(prefix, []).append((suffix, col))
+    for prefix, items in groups.items():
+        df[prefix] = [
+            {suffix: row[col] for suffix, col in items}
+            for _, row in df.iterrows()
+        ]
+        df = df.drop(columns=[col for _, col in items])
+    return df
 
 
 def local_dataset_files(task, registry, mapping, split="test", existing_only=True):

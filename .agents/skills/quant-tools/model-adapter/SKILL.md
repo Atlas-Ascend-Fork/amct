@@ -74,6 +74,8 @@ description: 在 amct 中适配新模型族（注册模型 / 定义 PTQ unit / �
 1. 先按当前框架真实目标做最小化实现。
    - 当前默认目标是 `blockwise` 路径上的 BF16 / PPL / PTQ / deploy。
    - 不是完整生成态推理。
+   - 但如果用户明确要求生成式 benchmark / `generate` / KV cache，或现有下游 skill
+     依赖量化 attention 生成评测，就把 KV-cache 分支视为当前真实目标的一部分。
 2. 不要为了适配通路，强行保留并不参与当前路径的复杂步骤。
    - 例如 `past_key_values`
    - 例如 decode-only cache 分支
@@ -83,6 +85,26 @@ description: 在 amct 中适配新模型族（注册模型 / 定义 PTQ unit / �
    - 只保留当前路径真正需要的参数和步骤
 4. attention wrapper 的实现目标是“足够正确且尽量简单”，不是“最大程度复刻上游源码的所有枝杈”。
 5. 同系列模型如果 attention 结构和当前任务口径一致，优先共用实现。
+6. `attn-linear` 量化本身不应破坏 KV cache；它只改变 q/k/v/o 投影数值，不改变
+   `past_key_values` 协议。不要因为开启 `attn-linear` 就默认关闭 `use_cache`。
+7. KV cache 逻辑属于模型 attention wrapper，不属于 `QuantLinear` / `QuantizedMatmul`
+   这类通用量化 module。补 cache 时优先镜像 HF 原始 attention 的生成态签名：
+   `attention_mask`、`past_key_values`、`cache_position`、`**kwargs`。
+8. 不要在未检查当前源码的情况下默认修改 wrapper。先读当前模型 attention wrapper 和
+   HF 原始 attention 的 `forward`；只有用户明确要求实现 KV cache，或当前任务必须依赖
+   该能力且用户确认后，才修改源码。若当前 wrapper 已接通 KV cache，只做验证，不重复改。
+9. 补 KV cache 的最小正确路径：
+   - 在 RoPE 后、attention matmul 前调用 `past_key_values.update(...)`。
+   - 传递 HF 原始实现需要的 `cache_kwargs`；不同模型可能只要 `layer_idx`，也可能需要
+     `sin/cos/cache_position`。
+   - 不要固定 `attn_mask=None, is_causal=True`。decode 阶段常见
+     `query_len=1, key_len=past+1`，普通 `tril` mask 会错；要复用 `attention_mask`
+     或实现 cache-aware causal mask。
+   - 保持返回值语义与 HF attention 一致，至少不能让生成链路拿不到更新后的 cache。
+10. 验证 KV cache 时必须同时覆盖：
+   - 关闭量化、`use_cache=False`：wrapper 与原始 float attention 等价。
+   - 关闭量化、`use_cache=True`：prefill + 至少一步 decode 与原始 float attention 等价。
+   - 开启 `attn-linear` 后至少跑一次 `generate` 冒烟，确认没有退化为全上下文重算。
 
 ## Wrapper 合并原则
 

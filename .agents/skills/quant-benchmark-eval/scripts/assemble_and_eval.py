@@ -113,8 +113,7 @@ def assemble_quant_model(model, model_name, param_dir, bit_cfg, seq_len,
     from amct_pytorch.algorithms.quant import register_algorithms
     from amct_pytorch.common.models import MODEL_REGISTRY
     from amct_pytorch.quantization.modules.quant_linear import QuantLinear
-    from amct_pytorch.common.models.llm.common.quant_apply import (
-        set_model_act_quant_state, set_model_weight_quant_state)
+    from amct_pytorch.common.models.llm.common.quant_apply import set_model_to_observe
     register_llm_models()
     register_dtype()
     register_algorithms()
@@ -143,8 +142,7 @@ def assemble_quant_model(model, model_name, param_dir, bit_cfg, seq_len,
         old_hook = getattr(layers[i], "_hf_hook", None)
         qblock = pipe.build_quant_block(i)
         pipe.load_selected_layer_ptq_params(i, qblock, strict=False)
-        set_model_weight_quant_state(qblock, True)
-        set_model_act_quant_state(qblock, True)
+        set_model_to_observe(qblock, False)
         for mod in qblock.modules():
             if isinstance(mod, QuantLinear):
                 mod.eval_mode = True
@@ -178,7 +176,12 @@ def main():
     ap.add_argument("--seq_len", type=int, default=2048)
     ap.add_argument("--device_map", default="", help="'auto' for multi-card (35B); empty=single npu:0 (8B)")
     ap.add_argument("--task", default="mmlu_pro")
-    ap.add_argument("--limit", type=int, default=10, help="per-category question cap")
+    ap.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="sample cap; omit for full benchmark",
+    )
     ap.add_argument("--max_gen_toks", type=int, default=512)
     ap.add_argument("--bf16", action="store_true", help="baseline: original model, no quant")
     ap.add_argument("--allow_attn_quant", action="store_true",

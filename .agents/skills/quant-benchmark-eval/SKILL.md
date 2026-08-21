@@ -2,10 +2,10 @@
 name: quant-benchmark-eval
 description: >-
   在 Ascend NPU 上,使用 lm-eval-harness/LiveCodeBench 官方 runner 对 amct 伪量化模型运行生成式下游
-  benchmark (MMLU-Pro、MATH500、LiveCodeBench hidden-tests pass@1),并与 bf16 基线对比精度损失。本 skill 只做评测,不做量化,
+  benchmark (低资源 ARC-Challenge/ARC-Easy/BoolQ/COPA/PIQA/SciQ,高资源 MMLU-Pro、MATH500、LiveCodeBench hidden-tests pass@1),并与 bf16 基线对比精度损失。本 skill 只做评测,不做量化,
   需要事先准备好 ptq 量化参数。当需要验证量化模型在下游任务上的准确率、对比量化与
   bf16 的差距,或获取 WikiText2 PPL 之外的下游精度指标时使用。Validate amct
-  fake-quant model accuracy on MMLU-Pro vs bf16 on Ascend NPU.
+  fake-quant model accuracy on low/high cost benchmarks vs bf16 on Ascend NPU.
 ---
 
 # 量化 Benchmark 评测 (amct + NPU + lm-eval-harness)
@@ -16,6 +16,7 @@ description: >-
 
 ## 何时使用
 - 需要跑 MMLU-Pro / MATH500 / LiveCodeBench 等下游 benchmark 来验证量化后的精度
+- 资源有限,需要优先跑 ARC-Challenge / ARC-Easy / BoolQ / COPA / PIQA / SciQ 等低成本任务
 - 需要对比 W8A8 与 bf16 在 MMLU-Pro 上的精度损失
 - amct 目前只能测 WikiText2 PPL,而你需要下游任务的准确率
 
@@ -37,20 +38,59 @@ description: >-
 | 35B MoE 双卡 W8A8 + 长 prompt 评测 | ⚠️ npu:0 OOM(见约束 8,属显存调优) |
 | MATH500, lm-eval `hendrycks_math500`/别名 `math500` | ✅ 已接入(需按机器实测耗时) |
 | LiveCodeBench code-generation-lite,官方 custom_evaluator hidden-tests pass@1 | ⚠️ 已接入生成官方 custom 输出;评分需安装并调用 lcb_runner |
+| ARC-Challenge / ARC-Easy / BoolQ / COPA / PIQA / SciQ | ⚠️ 已登记为低资源候选;需在目标机器预下载并跑小样本确认 |
+
+## 任务选择与资源成本
+
+不要默认替用户决定 benchmark。先按用户资源、时间预算、能力覆盖需求推荐候选,让用户选择:
+
+| 成本档 | 任务 | 默认主指标 | 适用场景 | 注意 |
+|---|---|---|---|---|
+| 低 | `arc_challenge` | `acc_norm` | 首选轻量下游回归;科学/常识推理,比 ARC-Easy 更敏感 | 同时保留 `acc`;适合先跑 `--limit` 冒烟 |
+| 低 | `arc_easy` | `acc_norm` | 更便宜的科学问答补充 | 难度低,大模型区分度有限 |
+| 低 | `boolq` | `acc` | 阅读理解 yes/no 回归 | 二分类,随机基线高,小样本波动大 |
+| 低 | `copa` | `acc` | 常识因果二选一 smoke | 样本少,只能作补充,不要单独下结论 |
+| 低 | `piqa` | `acc_norm` | 物理常识/日常操作推理 | 比 COPA 更稳,适合作为低成本补充 |
+| 低 | `sciq` | `acc_norm` | 科学知识多选补充 | 与 ARC 能力有重叠,难度较低 |
+| 高 | `mmlu_pro` | `exact_match,none` | 覆盖面更广的通用知识/推理 | 题量大,建议先 `--limit` |
+| 高 | `math500` | `exact_match,none` | 数学推理 | 长生成,需要更大 `--max_gen_toks`,耗时高 |
+| 高 | `livecodebench` / `livecodebench_release_v6` | `pass@1` | 代码生成 hidden-tests pass@1 | 最耗时之一,评分还依赖 `lcb_runner` |
+
+低资源任务默认汇总指标固定为:
+`arc_challenge=acc_norm`、`arc_easy=acc_norm`、`boolq=acc`、`copa=acc`、
+`piqa=acc_norm`、`sciq=acc_norm`。做 bf16 vs quant 对比时必须同任务同指标对比;
+不要把 `acc` 与 `acc_norm` 混用。可在明细里同时保留其它指标。
+
+资源有限时优先建议: `WikiText2 PPL + arc_challenge`,有余量再加 `piqa` / `boolq` /
+`sciq` / `arc_easy` / `copa`。需要综合结论时再升级到 `mmlu_pro`;需要数学或代码能力时
+再跑 `math500` / `livecodebench`。使用 `--limit` 的结果只能称为小样本回归/冒烟,不能称为
+官方分数。
 
 ## 关键约束(踩坑换来的 — 运行前必读)
 
-1. **量化后的 attention 不支持 KV cache。** amct 的 `QuantQwen3Attn.forward` 签名为
-   `(hidden_states, position_embeddings, **kwargs)`,会忽略 `past_key_value` 并返回
-   `(attn_output, None)`。因此一旦量化了 attn,`generate` 就只能用 `use_cache=False`,
-   每步计算量退化为 O(n²),约 7 分钟/题,基本不可用。**所以生成式评测只量化 MLP**:
-   attn 保持 bf16,KV cache 正常工作,约 6 秒/题。
+1. **attention 量化与 KV cache 要按 wrapper 现状判断。** `attn-linear` 量化本身
+   不应破坏 KV cache；它只量化 q/k/v/o 投影，不改变 HF `past_key_values` 机制。
+   但当前部分 amct Qwen attention wrapper 曾只面向 blockwise/PPL 最小路径实现，
+   会忽略 `past_key_values` 并返回 `(attn_output, None)`。这种 wrapper 一旦量化
+   attention，`generate` 只能用 `use_cache=False`，每步全上下文重算，速度会退化。
+
+   若目标模型的量化 attention wrapper 已正确接通 KV cache（RoPE 后
+   `past_key_values.update(...)`、cache-aware mask、返回语义与 HF 一致），允许
+   `attn-linear` 与 `use_cache=True` 同时用于生成式评测。否则默认仍只量化 MLP：
+   attn 保持 bf16，KV cache 正常工作。
+
+   运行前必须按当前源码重新判断，不要沿用历史结论：先检查目标模型 wrapper 是否已经
+   支持 `past_key_values` / `cache_position` / `attention_mask`。若未接通 KV cache，
+   本 skill 不默认修改源码；只有用户明确要求实现该能力，或用户确认当前 benchmark
+   必须先补 wrapper 后，才进入源码修改。
 
    ⚠️ **当用户提供的量化参数里含有 attn-linear 时,必须先向用户说明、征得同意,才能
    继续。** 不要擅自跳过 attn-linear 的加载——这等于把用户量化过的 attn 降级回 bf16,
    会改变被评测的对象、让结果不再代表完整的 W8A8 模型。要向用户讲清这个取舍:
-   (a) 只量化 MLP、attn 保持 bf16 → 评测可行(约 6 秒/题),但**不是完整 W8A8**;
-   (b) 连 attn 一起量化 → 是完整 W8A8,但受 KV-cache 限制,约 7 分钟/题、基本跑不完。
+   (a) 只量化 MLP、attn 保持 bf16 → 评测可行,但**不是完整 W8A8**;
+   (b) 连 attn 一起量化且 wrapper 未接 KV cache → 是完整 W8A8,但会极慢;
+   (c) 连 attn 一起量化且 wrapper 已接 KV cache → 可评完整 attention 量化对象,
+   但必须先做 `generate` 冒烟和小样本限量评测确认速度/显存。
    由用户选择走哪条,不要默认替用户决定。
 
 2. **数据必须离线加载,且用 fastparquet 引擎。** 直接用 HF `datasets` 会有两个问题:
@@ -105,7 +145,8 @@ description: >-
   - `BENCH_ASSETS` — 本地数据集缓存根目录。
   - `HF_ENDPOINT`  — prefetch 用的 HF 镜像。
 - **数据集注册表**采用数据驱动,集中在 `scripts/datasets.json`(prefetch 与离线 shim
-  共用)。MMLU-Pro / MATH500 走 lm-eval;LiveCodeBench 走本 skill 自带
+  共用)。ARC-Challenge / ARC-Easy / BoolQ / COPA / PIQA / SciQ / MMLU-Pro / MATH500
+  走 lm-eval;LiveCodeBench 走本 skill 自带
   `scripts/livecodebench_eval.py` 生成官方 custom 输出,再用 `lcb_runner` 评分。
 - **模型与量化参数**始终通过 CLI 参数传入(`--model`、`--model_name`、`--param_dir`)。
 
@@ -133,6 +174,12 @@ torch_npu、transformers、py3.12.9。原机器:2× Ascend 910(64GB)。8B 单卡
 1. **预下载数据**(一次):
    - 轻量自检:`python scripts/self_check.py`
    - 环境检查:`python scripts/check_env.py`
+   - ARC-Challenge:`python scripts/prefetch_data.py --task arc_challenge`
+   - ARC-Easy:`python scripts/prefetch_data.py --task arc_easy`
+   - BoolQ:`python scripts/prefetch_data.py --task boolq`
+   - COPA:`python scripts/prefetch_data.py --task copa`
+   - PIQA:`python scripts/prefetch_data.py --task piqa`
+   - SciQ:`python scripts/prefetch_data.py --task sciq`
    - MMLU-Pro:`python scripts/prefetch_data.py --task mmlu_pro`
    - MATH500:`python scripts/prefetch_data.py --task math500`
    - LiveCodeBench v6 单 release:`python scripts/prefetch_data.py --task livecodebench`
@@ -155,6 +202,11 @@ torch_npu、transformers、py3.12.9。原机器:2× Ascend 910(64GB)。8B 单卡
         --param_dir <ptq_params/mlp> --task math500 --limit 50 --max_gen_toks 1024`
      其中 `--task math500` 是别名,实际映射到 lm-eval 的 `hendrycks_math500`。也可以
      直接传 `--task hendrycks_math500` 或 `--task minerva_math500` 做不同 prompt 口径。
+   - 低资源 lm-eval 任务:
+     `python scripts/assemble_and_eval.py --model <path> --model_name qwen3 \
+        --param_dir <ptq_params/mlp> --task arc_challenge --limit 100 --max_gen_toks 64`
+     同类可选任务:`arc_easy` / `boolq` / `copa` / `piqa` / `sciq`。运行前先确认
+     对应数据已通过 `prefetch_data.py --task <task>` 命中 split 文件。
    - 装配流程:先用 `_load_float()`(支持 device_map)加载模型,再逐层执行
      `build_quant_block`(KV-safe 目标:dense 用 mlp,MoE 用 moe)、
      `load_selected_layer_ptq_params`、开启量化、置 `eval_mode=True`,最后把量化块
@@ -165,7 +217,9 @@ torch_npu、transformers、py3.12.9。原机器:2× Ascend 910(64GB)。8B 单卡
    - 加 `--device_map auto` 走多卡,省略则单卡 npu:0。输入会经 `input_device()`
      路由到 embedding 所在的卡。
    - 默认禁止 `--quant_target attn-linear` / `attn-cache`;若已确认要评完整 attention
-     量化对象,必须显式加 `--allow_attn_quant`。脚本会关闭 KV cache,速度会显著变慢。
+     量化对象,必须显式加 `--allow_attn_quant`。若目标 wrapper 未接通 KV cache,脚本
+     会关闭 KV cache,速度会显著变慢；若 wrapper 已接通 KV cache,应保持 `use_cache=True`
+     并先跑小样本冒烟确认没有退化为全上下文重算。
 
 3. **LiveCodeBench 官方 hidden-tests pass@1**:
    `python scripts/livecodebench_eval.py --model <path> --model_name qwen3 \
@@ -191,8 +245,10 @@ torch_npu、transformers、py3.12.9。原机器:2× Ascend 910(64GB)。8B 单卡
    严格对齐,还要确认 prompt 模板、release_version、样本全集、max_gen_toks、是否
    thinking 模式等设置与目标口径一致。
 
-4. **报告结果**:对比量化模型与 bf16 的 exact_match / 官方 hidden-tests pass@1。报告时
-   要写明样本量和 release_version。若使用 `--limit` 小样本冒烟,不能称为官方分数;差异
+4. **报告结果**:对比量化模型与 bf16 的主指标。低资源任务按上表默认主指标汇总:
+   `arc_challenge/arc_easy/piqa/sciq` 看 `acc_norm`, `boolq/copa` 看 `acc`;
+   MMLU-Pro / MATH500 看 `exact_match,none`;LiveCodeBench 看官方 hidden-tests `pass@1`。
+   报告时要写明样本量和 release_version。若使用 `--limit` 小样本冒烟,不能称为官方分数;差异
    落在统计噪声范围内应表述为"无可见损失",而不是"量化更好"。
    可用 `python scripts/compare_results.py --bf16 <bf16.log> --quant <quant.log> \
    --metric exact_match,none --sample_len <N> --limited` 汇总差值。
