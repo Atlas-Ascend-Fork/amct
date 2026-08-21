@@ -312,7 +312,9 @@ class DeepseekV4(BaseModel):
             file_to_keys.setdefault(file_name, []).append((full_name, local_name))
 
         for file_name, keys in file_to_keys.items():
-            full_path = resolve_safetensors_path(self.model_path, file_name)
+            full_path = resolve_safetensors_path(
+                self.model_path, file_name, self.get_safetensors_files()
+            )
             with safe_open(str(full_path), framework="pt", device="cpu") as f:
                 for full_name, local_name in keys:
                     tensor = f.get_tensor(full_name)
@@ -396,7 +398,9 @@ class DeepseekV4(BaseModel):
                     name,
                 )
                 continue
-            file_path = resolve_safetensors_path(self.model_path, weight_map[key])
+            file_path = resolve_safetensors_path(
+                self.model_path, weight_map[key], self.get_safetensors_files()
+            )
             with safe_open(str(file_path), framework="pt", device="cpu") as f:
                 tensor = f.get_tensor(key)
             setattr(self.model, name, nn.Parameter(tensor.to(torch.float32)))

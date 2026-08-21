@@ -45,6 +45,7 @@ from amct_pytorch.common.models.llm.common.ptq_units import (
     make_ptq_unit,
 )
 from amct_pytorch.common.models.llm.common.weight_path_validation import (
+    collect_safetensors_files,
     resolve_safetensors_path,
 )
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
@@ -65,6 +66,7 @@ class BaseModel(metaclass=ABCMeta):
         self.position_embeddings = None
         self.input_ids = None
         self.model_path = self.args.model
+        self.safetensors_file = None
         self.model_name = getattr(self.args, "model_name", self.__class__.__name__)
         self.trust_remote_code = getattr(self.args, "trust_remote_code", False)
         if not self.trust_remote_code:
@@ -164,7 +166,9 @@ class BaseModel(metaclass=ABCMeta):
                 file_list.add(file_name)
         state_dict = {}
         for file_path in file_list:
-            full_path = resolve_safetensors_path(self.model_path, file_path)
+            full_path = resolve_safetensors_path(
+                self.model_path, file_path, self.get_safetensors_files()
+            )
             with safe_open(str(full_path), framework="pt", device="cpu") as f:
                 for key in f.keys():
                     if key.startswith(prefix):
@@ -172,6 +176,11 @@ class BaseModel(metaclass=ABCMeta):
                         state_dict[new_key] = f.get_tensor(key)
         state_dict.pop('self_attn.rotary_emb.inv_freq', None)
         return state_dict
+
+    def get_safetensors_files(self):
+        if self.safetensors_file is None:
+            self.safetensors_file = collect_safetensors_files(self.model_path)
+        return self.safetensors_file
 
     def block(self, layer_idx):
         decoder_layer = self.cls(self.config, layer_idx)

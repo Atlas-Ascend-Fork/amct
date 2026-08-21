@@ -21,6 +21,7 @@ from safetensors.torch import load_file
 
 from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
 from amct_pytorch.common.models.llm.common.weight_path_validation import (
+    collect_safetensors_files,
     resolve_safetensors_path,
 )
 from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
@@ -156,13 +157,19 @@ def export_block_deploy(pipeline, layer_idx: int, quant_ignore_layers: list):
     return deploy_tensors, tensor_routes
 
 
-def _load_scales(names, original_weight_map, model_dir, loaded_files):
+def _load_scales(
+    names, original_weight_map, model_dir, loaded_files, safetensors_files=None
+):
     """Load scale tensors by name, loading their shards on demand."""
     scales = []
     for name in names:
         file_name = original_weight_map[name]
         if file_name not in loaded_files:
-            file_path = resolve_safetensors_path(model_dir, file_name)
+            if safetensors_files is None:
+                safetensors_files = collect_safetensors_files(model_dir)
+            file_path = resolve_safetensors_path(
+                model_dir, file_name, safetensors_files
+            )
             loaded_files[file_name] = load_file(str(file_path), device="cpu")
         scales.append(loaded_files[file_name][name])
     return scales
@@ -176,6 +183,7 @@ def convert_state_dict(
     model_dir,
     loaded_files,
     block_size,
+    safetensors_files=None,
 ):
     if weight.element_size() != 1:
         return weight
@@ -185,11 +193,19 @@ def convert_state_dict(
             from amct_pytorch.common.utils.nvfp4_format import nvfp4_weight_dequant
 
             scale, scale_2 = _load_scales(
-                scale_inv_name, original_weight_map, model_dir, loaded_files
+                scale_inv_name,
+                original_weight_map,
+                model_dir,
+                loaded_files,
+                safetensors_files,
             )
             return nvfp4_weight_dequant(weight, scale, scale_2)
         scale_inv = _load_scales(
-            (scale_inv_name,), original_weight_map, model_dir, loaded_files
+            (scale_inv_name,),
+            original_weight_map,
+            model_dir,
+            loaded_files,
+            safetensors_files,
         )[0]
 
         # HiF4
