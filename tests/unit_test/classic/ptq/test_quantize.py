@@ -531,6 +531,24 @@ def test_artifact_is_consumable_by_the_reload_contract(tmp_path):
     assert torch.allclose(reference(inputs), expected)
 
 
+def _npu_available():
+    """Return whether torch exposes a usable, non-mocked NPU backend."""
+    if not hasattr(torch, "npu"):
+        return False
+    try:
+        if torch.npu.is_available() is not True:
+            return False
+        torch.zeros(1).npu()
+    except Exception:
+        return False
+    return True
+
+
+def test_npu_available_rejects_mocked_backend():
+    with patch.object(torch, "npu", MagicMock(), create=True):
+        assert not _npu_available()
+
+
 @pytest.mark.npu
 def test_npu_round_trip_restores_params_to_the_device(tmp_path):
     """On real NPU hardware, units persist as CPU tensors and reload to npu.
@@ -539,7 +557,7 @@ def test_npu_round_trip_restores_params_to_the_device(tmp_path):
     this is the check that ``_quant_param_device()`` puts them back on the
     module's device rather than leaving a CPU tensor in an NPU module.
     """
-    if not (hasattr(torch, "npu") and torch.npu.is_available()):
+    if not _npu_available():
         pytest.skip("no Ascend NPU available")
 
     out = tmp_path / "npu"
