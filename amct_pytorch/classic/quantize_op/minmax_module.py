@@ -45,6 +45,23 @@ class MinMaxQuant(BaseQuantizeModule):
     APIs: forward.
     """
 
+    # MinMax dumps at both of its finalization points (see
+    # _on_quant_result_writer_attached and forward), so it can complete a
+    # quant result unit.
+    _supports_quant_result_export = True
+
+    # Quant params this algorithm produces. scale_w/offset_w are final right
+    # after __init__; scale_d/offset_d only exist once activation calibration
+    # completes; scale_w1/scale_w2 replace scale_w on the fp8/fp4 path.
+    _quant_param_keys = (
+        'scale_w',
+        'offset_w',
+        'scale_d',
+        'offset_d',
+        'scale_w1',
+        'scale_w2',
+    )
+
     def __init__(self, ori_module, layer_name, quant_config):
         """
         Function: init objective.
@@ -147,7 +164,41 @@ class MinMaxQuant(BaseQuantizeModule):
                 ),
                 'MinMaxQuant',
             )
+            # Activation params are final only here, so this is this layer's
+            # single dump point on the activation path.
+            self.maybe_dump_quant_params()
         return fp_out
+
+    def _on_quant_result_writer_attached(self):
+        """Weight-only MinMax is already final at construction: dump now.
+
+        With activation quantization enabled, scale_d/offset_d are still
+        missing, so the dump waits for the batch_num-th calibration forward.
+        """
+        if self.weight_compress_only:
+            self.maybe_dump_quant_params()
+
+    def _on_quant_params_loaded(self):
+        """Drop fake-quant caches and mark calibration as already complete."""
+        if self.scale_w1 is not None or self.scale_w2 is not None:
+            self.require_loaded_quant_params('scale_w1', 'scale_w2')
+        else:
+            self.require_loaded_quant_params('scale_w')
+            if self.wts_symmetric is False:
+                self.require_loaded_quant_params('offset_w')
+
+        if not self.weight_compress_only:
+            self.require_loaded_quant_params('scale_d')
+            if self.act_symmetric is False:
+                self.require_loaded_quant_params('offset_d')
+
+        self.fake_quant_cache_ready = False
+        self.cached_dq_w = None
+        self.cached_bias = None
+        if self.scale_d is not None and self.batch_num is not None:
+            # Calibration is done; the next forward must fake-quant instead of
+            # re-collecting min/max.
+            self.cur_batch = self.batch_num
 
     @torch.no_grad()
     def fake_quant_forward(self, inputs):
