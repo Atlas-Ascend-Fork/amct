@@ -31,6 +31,8 @@ extern "C" void run_hifx_kernel_bf16(
 namespace {
 constexpr int HIF4_MANT_BIT = 3; // hifx4: S1P2 element format, man_bits = 3
 constexpr uint32_t HIF4_BLOCK_DIM = 40;
+// Quant reduction block along qdim; must match SEG_ELEMS in hifloat4_cast_kernel.cpp.
+constexpr int64_t HIF4_QUANT_BLOCK = 64;
 } // namespace
 
 namespace AscendKernel {
@@ -90,7 +92,8 @@ at::Tensor Hifloat4CastTorch(const at::Tensor &input, int64_t qdim) {
 
     int64_t n = xp.size(-1);
     TORCH_CHECK(n > 0, "hifloat4_fake_quant: input must have a non-empty last dim");
-    TORCH_CHECK(n % 64 == 0, "hifloat4_fake_quant: quant dim length must be a multiple of 64, got ", n);
+    TORCH_CHECK(n % HIF4_QUANT_BLOCK == 0, "hifloat4_fake_quant: quant dim length must be a multiple of ",
+        HIF4_QUANT_BLOCK, ", got ", n);
     bool need_slice = false;
     at::Tensor xin = PadLastDim(xp, n, need_slice);
     int64_t m = xin.numel() / xin.size(-1);
