@@ -903,7 +903,7 @@ class TestCheckGraph(unittest.TestCase):
         self.assertFalse(GraphChecker.check_rnn_limit(mod_type, mod_name, mod))
 
 
-class TestCheckInt4WeightPackSupported(unittest.TestCase):
+class TestIsInt4WeightPackAxisEven(unittest.TestCase):
     """INT4 support is determined by the final Deploy ONNX pack axis."""
 
     _QOI = (
@@ -921,7 +921,7 @@ class TestCheckInt4WeightPackSupported(unittest.TestCase):
         node.type = 'Relu'
         with mock.patch(self._QOI) as m_qoi:
             m_qoi.get_weight_node.return_value = None
-            ret = GraphQuerier.check_int4_weight_pack_supported(
+            ret = GraphQuerier.is_int4_weight_pack_axis_even(
                 self._graph_with(node), 'relu'
             )
         self.assertTrue(ret)
@@ -934,7 +934,7 @@ class TestCheckInt4WeightPackSupported(unittest.TestCase):
             m_qoi.get_weight_node.return_value = wnode
             m_qoi.get_recurrence_weight_node.return_value = None
             m_qoi.get_node_tensor.return_value.dims = [8, 1, 3, 2]
-            ret = GraphQuerier.check_int4_weight_pack_supported(
+            ret = GraphQuerier.is_int4_weight_pack_axis_even(
                 self._graph_with(node), 'conv'
             )
         self.assertTrue(ret)
@@ -953,7 +953,7 @@ class TestCheckInt4WeightPackSupported(unittest.TestCase):
             m_qoi.get_weight_node.return_value = wnode
             m_qoi.get_recurrence_weight_node.return_value = None
             m_qoi.get_node_tensor.return_value.dims = [8, 4, 3, 3]
-            ret = GraphQuerier.check_int4_weight_pack_supported(
+            ret = GraphQuerier.is_int4_weight_pack_axis_even(
                 self._graph_with(node), 'conv'
             )
         self.assertFalse(ret)
@@ -967,7 +967,7 @@ class TestCheckInt4WeightPackSupported(unittest.TestCase):
             m_qoi.get_weight_node.return_value = wnode
             m_qoi.get_recurrence_weight_node.return_value = None
             m_qoi.get_node_tensor.return_value.dims = [8, 3, 3, 2]
-            ret = GraphQuerier.check_int4_weight_pack_supported(
+            ret = GraphQuerier.is_int4_weight_pack_axis_even(
                 self._graph_with(node), 'conv'
             )
         self.assertTrue(ret)
@@ -991,13 +991,13 @@ class TestCheckInt4WeightPackSupported(unittest.TestCase):
             m_qoi.get_recurrence_weight_node.return_value = None
             m_qoi.get_node_tensor.return_value.dims = [6, 3]
             self.assertTrue(
-                GraphQuerier.check_int4_weight_pack_supported(
+                GraphQuerier.is_int4_weight_pack_axis_even(
                     self._graph_with(node), 'gemm'
                 )
             )
             m_qoi.get_node_tensor.return_value.dims = [5, 4]
             self.assertFalse(
-                GraphQuerier.check_int4_weight_pack_supported(
+                GraphQuerier.is_int4_weight_pack_axis_even(
                     self._graph_with(node), 'gemm'
                 )
             )
@@ -1022,13 +1022,13 @@ class TestCheckInt4WeightPackSupported(unittest.TestCase):
                 node.type = node_type
                 m_qoi.get_node_tensor.return_value.dims = [3, 6]
                 self.assertTrue(
-                    GraphQuerier.check_int4_weight_pack_supported(
+                    GraphQuerier.is_int4_weight_pack_axis_even(
                         self._graph_with(node), node_type.lower()
                     )
                 )
                 m_qoi.get_node_tensor.return_value.dims = [4, 5]
                 self.assertFalse(
-                    GraphQuerier.check_int4_weight_pack_supported(
+                    GraphQuerier.is_int4_weight_pack_axis_even(
                         self._graph_with(node), node_type.lower()
                     )
                 )

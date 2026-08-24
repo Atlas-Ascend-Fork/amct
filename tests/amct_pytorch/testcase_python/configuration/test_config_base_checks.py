@@ -125,9 +125,7 @@ class TestConfigBaseChecks(unittest.TestCase):
         obj, q = _cfg()
         q.get_support_quant_layers.return_value = ['l1', 'l2']
         q.get_name_type_dict.return_value = {'l1': 'Conv2d', 'l2': 'Conv2d'}
-        q.check_int4_weight_pack_supported.side_effect = lambda graph, layer: (
-            layer == 'l2'
-        )
+        q.is_int4_weight_pack_axis_even.side_effect = lambda graph, layer: layer == 'l2'
         obj.set_param_pool(['l1', 'l2'], GRAPH)
         supported_layers = ['l1', 'l2']
         config = {
@@ -149,7 +147,7 @@ class TestConfigBaseChecks(unittest.TestCase):
 
         obj.check_int4_weight_quant_axis(GRAPH, config, ['l1'])
 
-        q.check_int4_weight_pack_supported.assert_not_called()
+        q.is_int4_weight_pack_axis_even.assert_not_called()
         self.assertTrue(config['l1']['quant_enable'])
 
     def test_parse_config_file_applies_int4_pack_axis_filter(self):

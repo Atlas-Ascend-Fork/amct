@@ -125,7 +125,7 @@ class TestRetrainConfigBase(unittest.TestCase):
 class TestSkipInt4UnpackableLayers(unittest.TestCase):
     def test_skip_unpackable_int4_layer_without_int8_downgrade(self):
         obj, querier, _ = _make()
-        querier.check_int4_weight_pack_supported.side_effect = lambda graph, layer: (
+        querier.is_int4_weight_pack_axis_even.side_effect = lambda graph, layer: (
             layer != 'conv1'
         )
         config = {
@@ -149,7 +149,7 @@ class TestSkipInt4UnpackableLayers(unittest.TestCase):
 
     def test_non_int4_layer_untouched(self):
         obj, querier, _ = _make()
-        querier.check_int4_weight_pack_supported.return_value = False
+        querier.is_int4_weight_pack_axis_even.return_value = False
         config = {
             'fc': {
                 'retrain_enable': True,

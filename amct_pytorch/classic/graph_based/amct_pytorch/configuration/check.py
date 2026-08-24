@@ -325,7 +325,7 @@ class GraphQuerier:
         return layers
 
     @staticmethod
-    def check_int4_weight_pack_supported(graph, layer_name):
+    def is_int4_weight_pack_axis_even(graph, layer_name):
         """Return whether all weights have an even final Deploy pack axis."""
         node = graph.get_node_by_name(layer_name)
         if node.type not in (

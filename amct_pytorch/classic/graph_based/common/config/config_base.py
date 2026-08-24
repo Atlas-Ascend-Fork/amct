@@ -323,7 +323,7 @@ class ConfigBase:
             )
             if not is_int4:
                 continue
-            if self.graph_querier.check_int4_weight_pack_supported(graph, layer):
+            if self.graph_querier.is_int4_weight_pack_axis_even(graph, layer):
                 continue
             layer_cfg['quant_enable'] = False
             if wts_retrain is not None:

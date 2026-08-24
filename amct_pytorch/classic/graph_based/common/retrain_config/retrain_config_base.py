@@ -235,7 +235,7 @@ class RetrainConfigBase:
 
     def skip_int4_unpackable_layers(self, graph, ordered_config):
         '''Keep INT4 layers with an odd final Deploy pack axis in floating point.'''
-        if not hasattr(self.graph_querier, 'check_int4_weight_pack_supported'):
+        if not hasattr(self.graph_querier, 'is_int4_weight_pack_axis_even'):
             return
         for layer, layer_cfg in ordered_config.items():
             if not isinstance(layer_cfg, dict):
@@ -243,7 +243,7 @@ class RetrainConfigBase:
             wts = layer_cfg.get('retrain_weight_config')
             if wts is None or wts.get('dst_type') != 'INT4':
                 continue
-            if not self.graph_querier.check_int4_weight_pack_supported(graph, layer):
+            if not self.graph_querier.is_int4_weight_pack_axis_even(graph, layer):
                 layer_cfg[RETRAIN_ENABLE] = False
                 LOGGER.logw(
                     "Layer '{}' is kept in floating point because its final "
