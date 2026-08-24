@@ -38,6 +38,13 @@ if(NOT PROJECT_SOURCE_DIR)
         if(NOT cann-cmake_POPULATED)
             FetchContent_Populate(cann-cmake)
         endif()
+        # overlay: master-049 protobuf.cmake 缓存复用缺少工具链兼容性检查,
+        # 不兼容缓存(如 gcc-15 产物被 gcc-7.3 消费)会导致链接失败,
+        # 用仓库内兼容改造版覆盖; 上游 cann-cmake 修复后可移除。
+        if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/protobuf_compat.cmake")
+            configure_file("${CMAKE_CURRENT_LIST_DIR}/protobuf_compat.cmake"
+                "${cann-cmake_SOURCE_DIR}/third_party/protobuf.cmake" COPYONLY)
+        endif()
         include("${cann-cmake_SOURCE_DIR}/function/prepare.cmake")
     endif()
 endif()
