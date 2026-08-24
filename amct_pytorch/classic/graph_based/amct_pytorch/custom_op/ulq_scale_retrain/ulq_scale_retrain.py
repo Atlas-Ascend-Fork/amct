@@ -27,7 +27,7 @@ from ....amct_pytorch.custom_op.utils import check_group_param
 from ....amct_pytorch.custom_op.utils import process_tensor_shape
 from ....amct_pytorch.utils.vars import TRANSPOSE
 from ....amct_pytorch.utils.weight_quant_api import adjust_axis_for_group_wise
-from ....amct_pytorch.custom_op.qdq_symbolic import add_qdq
+from ....amct_pytorch.custom_op.qdq_symbolic import _check_int4_export, add_qdq
 
 
 MODULE_TYPE = 'module_type'
@@ -133,37 +133,41 @@ class UlqScaleRetrainFuncQAT(UlqScaleRetrainFunction):
         Args:
             g (Graph): graph to write the ONNX representation into.
         """
-        module_type = inputs[3].get(MODULE_TYPE)
-        channel_axis = 1 if inputs[3].get('channel_wise', False) else None
+        wts_param = inputs[3]
+        module_type = wts_param.get(MODULE_TYPE)
+        num_bits = wts_param.get('num_bits', 8)
+        if num_bits == 4:
+            _check_int4_export(wts_param)
+        channel_axis = 1 if wts_param.get('channel_wise', False) else None
         if module_type in ["ConvTranspose1d", "ConvTranspose2d"]:
             out_node = add_qdq(
-                g, inputs[0], inputs[1], inputs[5], inputs[3], channel_axis
+                g, inputs[0], inputs[1], inputs[5], num_bits, channel_axis
             )
         elif module_type == 'Conv1d':
             transpose = g.op(TRANSPOSE, inputs[0], perm_i=list([1, 0, 2]))
             dequant = add_qdq(
-                g, transpose, inputs[1], inputs[5], inputs[3], channel_axis
+                g, transpose, inputs[1], inputs[5], num_bits, channel_axis
             )
             out_node = g.op(TRANSPOSE, dequant, perm_i=list([1, 0, 2]))
         elif module_type == 'Conv2d':
             transpose = g.op(TRANSPOSE, inputs[0], perm_i=list([1, 0, 2, 3]))
             dequant = add_qdq(
-                g, transpose, inputs[1], inputs[5], inputs[3], channel_axis
+                g, transpose, inputs[1], inputs[5], num_bits, channel_axis
             )
             out_node = g.op(TRANSPOSE, dequant, perm_i=list([1, 0, 2, 3]))
         elif module_type == 'Conv3d':
             transpose = g.op(TRANSPOSE, inputs[0], perm_i=list([1, 0, 2, 3, 4]))
             dequant = add_qdq(
-                g, transpose, inputs[1], inputs[5], inputs[3], channel_axis
+                g, transpose, inputs[1], inputs[5], num_bits, channel_axis
             )
             out_node = g.op(TRANSPOSE, dequant, perm_i=list([1, 0, 2, 3, 4]))
         elif module_type == 'Linear':
             if channel_axis is None:
-                out_node = add_qdq(g, inputs[0], inputs[1], inputs[5], inputs[3])
+                out_node = add_qdq(g, inputs[0], inputs[1], inputs[5], num_bits)
             else:
                 transpose = g.op(TRANSPOSE, inputs[0], perm_i=[1, 0])
                 dequant = add_qdq(
-                    g, transpose, inputs[1], inputs[5], inputs[3], channel_axis
+                    g, transpose, inputs[1], inputs[5], num_bits, channel_axis
                 )
                 out_node = g.op(TRANSPOSE, dequant, perm_i=[1, 0])
         elif module_type in RNN_TENSOR_NUM:
@@ -180,9 +184,7 @@ class UlqScaleRetrainFuncQAT(UlqScaleRetrainFunction):
                 ),
             )
             reshape = g.op('Reshape', inputs[0], shape)
-            out_node = add_qdq(
-                g, reshape, inputs[1], inputs[5], inputs[3], channel_axis
-            )
+            out_node = add_qdq(g, reshape, inputs[1], inputs[5], num_bits, channel_axis)
         LOGGER.logi(
             "Convert ULQ scale op to onnx QuantizeLinear and DequantizeLinear op successfully."
         )

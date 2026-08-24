@@ -40,14 +40,13 @@ def _check_int4_export(wts_param):
         )
 
 
-def add_qdq(g, tensor, scale, zero_point, wts_param, axis=None):
+def add_qdq(g, tensor, scale, zero_point, num_bits, axis=None):
     """Add standard ONNX Q/DQ nodes for an AMCT QAT weight tensor."""
     attributes = {}
     if axis is not None:
         attributes['axis_i'] = axis
 
-    if wts_param.get('num_bits', 8) == 4:
-        _check_int4_export(wts_param)
+    if num_bits == 4:
         quant = g.op(
             QUANTIZE_LINEAR,
             tensor,
