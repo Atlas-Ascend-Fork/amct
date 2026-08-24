@@ -23,6 +23,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import torch
 import torch.nn as nn
+from loguru import logger
 from safetensors.torch import save_file
 
 from amct_pytorch.common.models.llm.common.base import BaseModel
@@ -82,10 +83,6 @@ def test_huggingface_loaders_use_trust_remote_code_from_args():
     config = SimpleNamespace(tie_word_embeddings=False)
 
     with (
-        pytest.warns(
-            UserWarning,
-            match="qwen3.*recommend passing --trust_remote_code",
-        ),
         patch(
             "amct_pytorch.common.models.llm.common.base.AutoConfig.from_pretrained",
             return_value=config,
@@ -131,7 +128,6 @@ def test_base_model_defaults_missing_trust_remote_code_to_false():
     config = SimpleNamespace(tie_word_embeddings=False)
 
     with (
-        pytest.warns(UserWarning, match="qwen3.*--trust_remote_code"),
         patch(
             "amct_pytorch.common.models.llm.common.base.AutoConfig.from_pretrained",
             return_value=config,
@@ -143,6 +139,38 @@ def test_base_model_defaults_missing_trust_remote_code_to_false():
         model = BaseModel(args)
 
     assert model.trust_remote_code is False
+
+
+def test_base_model_logs_trust_remote_code_scope_without_recommendation():
+    args = SimpleNamespace(
+        model="/fake/path",
+        model_name="qwen3",
+        quant_target=[],
+        quant_dtype="int8",
+        trust_remote_code=False,
+    )
+    config = SimpleNamespace(tie_word_embeddings=False)
+    messages = []
+    sink_id = logger.add(
+        lambda message: messages.append(str(message)), format="{message}"
+    )
+    try:
+        with (
+            patch(
+                "amct_pytorch.common.models.llm.common.base.AutoConfig.from_pretrained",
+                return_value=config,
+            ),
+            patch(
+                "amct_pytorch.common.models.llm.common.base.AutoTokenizer.from_pretrained"
+            ),
+        ):
+            BaseModel(args)
+    finally:
+        logger.remove(sink_id)
+
+    assert len(messages) == 1
+    assert "Some models may require --trust_remote_code" in messages[0]
+    assert "recommend" not in messages[0].lower()
 
 
 # ---- get_embed_load_specs ---------------------------

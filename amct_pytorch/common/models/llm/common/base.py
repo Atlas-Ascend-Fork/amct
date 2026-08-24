@@ -17,7 +17,6 @@
 
 from abc import ABCMeta
 import gc
-import warnings
 import torch
 from accelerate import init_empty_weights
 from compressed_tensors.utils.safetensors_load import get_weight_mappings
@@ -70,12 +69,9 @@ class BaseModel(metaclass=ABCMeta):
         self.model_name = getattr(self.args, "model_name", self.__class__.__name__)
         self.trust_remote_code = getattr(self.args, "trust_remote_code", False)
         if not self.trust_remote_code:
-            warnings.warn(
+            logger.warning(
                 f"{self.model_name} is running without --trust_remote_code. "
-                "Some models may fail to load; we recommend passing "
-                "--trust_remote_code.",
-                UserWarning,
-                stacklevel=2,
+                "Some models may require --trust_remote_code to load custom model code."
             )
         self.config = AutoConfig.from_pretrained(
             self.model_path, trust_remote_code=self.trust_remote_code
