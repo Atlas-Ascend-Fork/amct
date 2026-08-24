@@ -19,12 +19,15 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 from .....amct_pytorch.nn.module.quantization.qat_base import QATBase
+from .....amct_pytorch.common.utils.vars_util import INT4, INT8
+from .....amct_pytorch.utils.vars import DST_TYPE
 
 SUPPORTED_DATA_DIMS = 4
 
 
 class Conv2dQAT(nn.Conv2d, QATBase):
     _float_module = nn.Conv2d
+    _supported_weight_dst_types = (INT8, INT4)
     _required_params = (
         "in_channels",
         "out_channels",
@@ -71,6 +74,15 @@ class Conv2dQAT(nn.Conv2d, QATBase):
         if self.retrain_enable and self.padding_mode != 'zeros':
             raise ValueError(
                 f'Do not support Conv2d with padding mode {self.padding_mode}'
+            )
+        if (
+            self.retrain_weight_config.get(DST_TYPE, INT8) == INT4
+            and self.weight.shape[-1] % 2 == 1
+        ):
+            raise ValueError(
+                'Conv2d INT4 weight shape {} has pack axis W (size {}) that is odd.'.format(
+                    list(self.weight.shape), self.weight.shape[-1]
+                )
             )
 
     def forward(self, inputs):

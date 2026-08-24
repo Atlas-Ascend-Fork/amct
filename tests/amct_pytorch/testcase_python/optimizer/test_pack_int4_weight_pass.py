@@ -19,40 +19,11 @@ import unittest
 from unittest import mock
 
 import numpy as np
+from onnx import TensorProto
 
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.pack_int4_weight_pass import (
     PackInt4WeightPass,
-    pack_along_axis,
 )
-
-
-class TestPackAlongAxis(unittest.TestCase):
-    def test_pack_along_last_axis_even(self):
-        # [2, 4] pack along axis 1 -> [2, 2]
-        vals = np.arange(8, dtype=np.int8).reshape(2, 4)
-        packed, new_dims = pack_along_axis(vals, [2, 4], 1)
-        self.assertEqual(new_dims, [2, 2])
-        self.assertEqual(packed.size, 4)
-
-    def test_pack_along_axis0(self):
-        # Conv-like: [16, 4, 3, 3] pack along Cin axis 1 -> [16, 2, 3, 3]
-        vals = np.arange(16 * 4 * 3 * 3, dtype=np.int8) % 15 - 7
-        packed, new_dims = pack_along_axis(vals, [16, 4, 3, 3], 1)
-        self.assertEqual(new_dims, [16, 2, 3, 3])
-        self.assertEqual(packed.size, 16 * 2 * 3 * 3)
-
-    def test_pack_nibble_layout(self):
-        # low nibble = first value, high nibble = second value
-        vals = np.array([1, 2], dtype=np.int8)
-        packed, _ = pack_along_axis(vals, [2], 0)
-        self.assertEqual(int(packed[0]) & 0x0F, 1)
-        self.assertEqual((int(packed[0]) >> 4) & 0x0F, 2)
-
-    def test_pack_odd_axis_raises(self):
-        # odd pack axis should be rejected at config stage; defensive raise here
-        vals = np.arange(3, dtype=np.int8)
-        with self.assertRaises(RuntimeError):
-            pack_along_axis(vals, [3], 0)
 
 
 class TestPackInt4Weight(unittest.TestCase):
@@ -77,34 +48,43 @@ class TestPackInt4Weight(unittest.TestCase):
         'amct_pytorch.classic.graph_based.amct_pytorch.optimizer.'
         'pack_int4_weight_pass.QuantOpInfo'
     )
-    _HELPER = (
-        'amct_pytorch.classic.graph_based.amct_pytorch.optimizer.'
-        'pack_int4_weight_pass.TensorProtoHelper'
-    )
 
-    def test_do_pass_conv_packs_weight_only(self):
-        # 通过公有入口 do_pass 覆盖 pack_int4_weight_node：Conv 无 recurrence
-        # (recurrence_weight_node=None 走 no-op 分支)，主权重写回 INT8。
+    def test_do_pass_writes_native_int4_with_original_shape(self):
         node = mock.MagicMock()
         node.type = 'Conv'
         node.name = 'conv'
         weight_node = mock.MagicMock()
         weight_node.model_path = ''
-        helper = mock.MagicMock()
-        helper.get_data.return_value = np.arange(8, dtype=np.int8).reshape(2, 4)
-        helper.tensor.dims = [2, 4]
-        with (
-            mock.patch(self._QOI) as m_qoi,
-            mock.patch(self._HELPER, return_value=helper),
-        ):
-            m_qoi.get_cin_axis.return_value = 1
+        weight_node.proto = TensorProto()
+        weight_node.proto.data_type = TensorProto.INT8
+        weight_node.proto.dims.extend([2, 4])
+        values = np.array([[-3, 5, -8, -1], [1, 2, 3, 4]], dtype=np.int8)
+        weight_node.proto.raw_data = values.tobytes()
+
+        with mock.patch(self._QOI) as m_qoi:
             m_qoi.get_weight_node.return_value = weight_node
             m_qoi.get_recurrence_weight_node.return_value = None
             self.passer.do_pass(None, node)
-        helper.clear_data.assert_called_once()
-        args, kwargs = helper.set_data.call_args
-        self.assertEqual(args[1], 'INT8')
-        self.assertEqual(kwargs.get('dims'), [2, 2])
+
+        self.assertEqual(weight_node.proto.data_type, TensorProto.INT4)
+        self.assertEqual(list(weight_node.proto.dims), [2, 4])
+        self.assertEqual(weight_node.proto.raw_data, bytes([0x5D, 0xF8, 0x21, 0x43]))
+
+    def test_do_pass_rejects_odd_last_axis_even_when_total_size_is_even(self):
+        node = mock.MagicMock()
+        node.name = 'conv'
+        weight_node = mock.MagicMock()
+        weight_node.model_path = ''
+        weight_node.proto = TensorProto()
+        weight_node.proto.data_type = TensorProto.INT8
+        weight_node.proto.dims.extend([2, 3])
+        weight_node.proto.raw_data = np.arange(6, dtype=np.int8).tobytes()
+
+        with mock.patch(self._QOI) as m_qoi:
+            m_qoi.get_weight_node.return_value = weight_node
+            m_qoi.get_recurrence_weight_node.return_value = None
+            with self.assertRaisesRegex(RuntimeError, r'last axis.*odd'):
+                self.passer.do_pass(None, node)
 
     def test_do_pass_rnn_packs_weight_and_recurrence(self):
         # RNN：主权重 + recurrence_weight 都被打包(两次 set_data)
@@ -118,9 +98,12 @@ class TestPackInt4Weight(unittest.TestCase):
         helper.tensor.dims = [1, 4, 2]
         with (
             mock.patch(self._QOI) as m_qoi,
-            mock.patch(self._HELPER, return_value=helper),
+            mock.patch(
+                'amct_pytorch.classic.graph_based.amct_pytorch.optimizer.'
+                'pack_int4_weight_pass.TensorProtoHelper',
+                return_value=helper,
+            ),
         ):
-            m_qoi.get_cin_axis.return_value = 2
             m_qoi.get_weight_node.return_value = wnode
             m_qoi.get_recurrence_weight_node.return_value = wnode
             self.passer.do_pass(None, node)

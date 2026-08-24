@@ -15,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import numpy as np
+from onnx import TensorProto
 
 from ...amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
 from ...amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
@@ -23,47 +23,28 @@ from ...amct_pytorch.utils.quant_node import QuantOpInfo
 from ...amct_pytorch.utils.log import LOGGER
 
 
-def pack_along_axis(int4_vals, dims, axis):
+def pack_int4_weight_node(weight_node):
     """
-    Pack every two INT4 into one INT8 along `axis`, leaving other axes
-    unchanged (axis -> axis/2). The quant axis is guaranteed even here: odd
-    quant-axis INT4 layers are already rejected at config stage
-    (check_int4_weight_quant_axis). Returns (flat_packed_int8, new_dims).
-    """
-    arr = np.asarray(int4_vals).reshape(dims).astype(np.int8)
-    # 把量化轴移到最后，沿它两两配对，再移回原位
-    moved = np.moveaxis(arr, axis, -1)
-    last = moved.shape[-1]
-    if last % 2 == 1:
-        # 配置阶段已拦截奇数量化轴，走到这里说明校验有漏，暴露而非静默补零
-        raise RuntimeError(
-            'INT4 quant-axis length {} is odd; should have been rejected '
-            'at config stage'.format(last)
-        )
-    low = moved[..., 0::2] & 0x0F
-    high = moved[..., 1::2] & 0x0F
-    packed_moved = (low | (high << 4)).astype(np.uint8).astype(np.int8)
-    packed = np.moveaxis(packed_moved, -1, axis)
-    return packed.reshape(-1), list(packed.shape)
+    Store a quantized weight as native ONNX INT4 without changing its shape.
 
-
-def pack_int4_weight_node(weight_node, cin_axis):
-    """
-    Read INT4 values from a weight tensor node and write them back packed
-    two-per-byte along the Cin axis. No-op when weight_node is None (e.g.
-    non-RNN ops have no recurrence_weight).
+    TensorProtoHelper applies the ONNX nibble layout to flattened rows. The
+    last axis is checked here so adjacent rows are never packed together.
     """
     if weight_node is None:
         return
     helper = TensorProtoHelper(weight_node.proto, weight_node.model_path)
-    int4_vals = np.asarray(helper.get_data())
     orig_dims = list(helper.tensor.dims)
-    # 沿 Cin 维 nibble-pack：该轴每两个 INT4 合成一个 INT8，其余轴不变
-    # （Cin -> Cin/2）。deploy 为 AMCT 专有格式，实际字节由 op_data_type
-    # 标记为 INT4-packed。Cin 奇数已在配置阶段拦截，不会走到这里。
-    packed, new_dims = pack_along_axis(int4_vals, orig_dims, cin_axis)
+    if not orig_dims or orig_dims[-1] % 2:
+        raise RuntimeError(
+            'INT4 weight last axis is odd for shape {}; the layer should have '
+            'been skipped during configuration.'.format(orig_dims)
+        )
+    if not hasattr(TensorProto, 'INT4'):
+        raise RuntimeError('INT4 deploy export requires native ONNX TensorProto.INT4.')
+
+    int4_vals = helper.get_data()
     helper.clear_data()
-    helper.set_data(packed, 'INT8', dims=new_dims)
+    helper.set_data(int4_vals, 'INT4', dims=orig_dims)
 
 
 class PackInt4WeightPass(BaseFusionPass):
@@ -93,12 +74,10 @@ class PackInt4WeightPass(BaseFusionPass):
 
     def do_pass(self, graph, object_node, model=None):
         """Pack the INT4 weight (and recurrence_weight for RNN) of object_node."""
-        axis = QuantOpInfo.get_cin_axis(object_node)
         weight_node = QuantOpInfo.get_weight_node(object_node)
-        pack_int4_weight_node(weight_node, axis)
-        # recurrence_weight 仅 RNN 有，其 Cin(hidden) 同样在 onnx 张量的轴 2
+        pack_int4_weight_node(weight_node)
         recurrence_weight_node = QuantOpInfo.get_recurrence_weight_node(object_node)
-        pack_int4_weight_node(recurrence_weight_node, axis)
+        pack_int4_weight_node(recurrence_weight_node)
         LOGGER.logd(
             "Pack INT4 weight (deploy) for layer '{}'".format(object_node.name),
             "PackInt4WeightPass",

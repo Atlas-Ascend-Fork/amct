@@ -25,10 +25,9 @@ from ....amct_pytorch.custom_op import arq_retrain_backward_pytorch
 from ....amct_pytorch.custom_op.utils import check_quant_data
 from ....amct_pytorch.custom_op.utils import check_group_param
 from ....amct_pytorch.custom_op.utils import process_tensor_shape
-from ....amct_pytorch.utils.vars import QUANTIZE_LINEAR
-from ....amct_pytorch.utils.vars import DEQUANTIZE_LINEAR
 from ....amct_pytorch.utils.vars import TRANSPOSE
 from ....amct_pytorch.utils.weight_quant_api import adjust_axis_for_group_wise
+from ....amct_pytorch.custom_op.qdq_symbolic import add_qdq
 
 
 class ArqRetrainFunction(Function):
@@ -102,27 +101,38 @@ class ArqRetrainFuncQAT(ArqRetrainFunction):
             g (Graph): graph to write the ONNX representation into.
         """
         module_type = inputs[3].get('module_type')
+        channel_axis = 1 if inputs[3].get('channel_wise', False) else None
         if module_type in ["ConvTranspose1d", "ConvTranspose2d"]:
-            quant = g.op(QUANTIZE_LINEAR, inputs[0], inputs[1], inputs[4])
-            out_node = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[4])
+            out_node = add_qdq(
+                g, inputs[0], inputs[1], inputs[4], inputs[3], channel_axis
+            )
         elif module_type == 'Conv1d':
             transpose = g.op(TRANSPOSE, inputs[0], perm_i=list([1, 0, 2]))
-            quant = g.op(QUANTIZE_LINEAR, transpose, inputs[1], inputs[4])
-            dequant = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[4])
+            dequant = add_qdq(
+                g, transpose, inputs[1], inputs[4], inputs[3], channel_axis
+            )
             out_node = g.op(TRANSPOSE, dequant, perm_i=list([1, 0, 2]))
         elif module_type == 'Conv2d':
             transpose = g.op(TRANSPOSE, inputs[0], perm_i=list([1, 0, 2, 3]))
-            quant = g.op(QUANTIZE_LINEAR, transpose, inputs[1], inputs[4])
-            dequant = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[4])
+            dequant = add_qdq(
+                g, transpose, inputs[1], inputs[4], inputs[3], channel_axis
+            )
             out_node = g.op(TRANSPOSE, dequant, perm_i=list([1, 0, 2, 3]))
         elif module_type == 'Conv3d':
             transpose = g.op(TRANSPOSE, inputs[0], perm_i=list([1, 0, 2, 3, 4]))
-            quant = g.op(QUANTIZE_LINEAR, transpose, inputs[1], inputs[4])
-            dequant = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[4])
+            dequant = add_qdq(
+                g, transpose, inputs[1], inputs[4], inputs[3], channel_axis
+            )
             out_node = g.op(TRANSPOSE, dequant, perm_i=list([1, 0, 2, 3, 4]))
         elif module_type == 'Linear':
-            quant = g.op(QUANTIZE_LINEAR, inputs[0], inputs[1], inputs[4])
-            out_node = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[4])
+            if channel_axis is None:
+                out_node = add_qdq(g, inputs[0], inputs[1], inputs[4], inputs[3])
+            else:
+                transpose = g.op(TRANSPOSE, inputs[0], perm_i=[1, 0])
+                dequant = add_qdq(
+                    g, transpose, inputs[1], inputs[4], inputs[3], channel_axis
+                )
+                out_node = g.op(TRANSPOSE, dequant, perm_i=[1, 0])
         elif module_type in RNN_TENSOR_NUM:
             shape = g.op(
                 "Constant",
@@ -137,8 +147,9 @@ class ArqRetrainFuncQAT(ArqRetrainFunction):
                 ),
             )
             reshape = g.op('Reshape', inputs[0], shape)
-            quant = g.op(QUANTIZE_LINEAR, reshape, inputs[1], inputs[4])
-            out_node = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[4])
+            out_node = add_qdq(
+                g, reshape, inputs[1], inputs[4], inputs[3], channel_axis
+            )
         LOGGER.logi(
             "Convert ARQ op to onnx QuantizeLinear and DequantizeLinear op successfully."
         )

@@ -325,30 +325,28 @@ class GraphQuerier:
         return layers
 
     @staticmethod
-    def check_int4_cin_pack_supported(graph, layer_name):
-        """
-        Whether the layer's weight can be INT4-packed along the Cin axis.
-        INT4 packs two values along Cin, so it is NOT supported when:
-        - the conv is grouped (groups > 1): the onnx weight Cin dim is Cin/groups
-          (1 for depthwise), which cannot be nibble-packed along Cin;
-        - the Cin axis length is odd (e.g. first conv with Cin=3).
-        RNN also checks its recurrence_weight Cin.
-        Returns True when packable, False otherwise.
-        """
-        # layer_name 预期能取到 node，取不到属于异常，交由 get_node_by_name 抛出
+    def check_int4_weight_pack_supported(graph, layer_name):
+        """Return whether all weights have an even final Deploy pack axis."""
         node = graph.get_node_by_name(layer_name)
-        cin_axis = QuantOpInfo.get_cin_axis(node)
-        if cin_axis is None:
-            # 非量化算子类型，不涉及 INT4 pack，视为无需拦截（可放行）
+        if node.type not in (
+            'Conv',
+            'ConvTranspose',
+            'Gemm',
+            'MatMul',
+            'LSTM',
+            'GRU',
+        ):
             return True
-        # group/depthwise conv: onnx weight Cin dim is Cin/groups, cannot pack
-        if node.type in ('Conv', 'ConvTranspose'):
+
+        pack_axis = -1
+        if node.type == 'Gemm':
             attr_helper = AttributeProtoHelper(node.proto)
             if (
-                attr_helper.has_attr('group')
-                and attr_helper.get_attr_value('group') > 1
+                attr_helper.has_attr('transB')
+                and attr_helper.get_attr_value('transB') == 1
             ):
-                return False
+                pack_axis = 0
+
         for wnode in (
             QuantOpInfo.get_weight_node(node),
             QuantOpInfo.get_recurrence_weight_node(node),
@@ -356,9 +354,22 @@ class GraphQuerier:
             if wnode is None:
                 continue
             dims = QuantOpInfo.get_node_tensor(wnode).dims
-            if cin_axis < len(dims) and dims[cin_axis] % 2 == 1:
+            if dims and dims[pack_axis] % 2 == 1:
+                actual_axis = pack_axis if pack_axis >= 0 else len(dims) + pack_axis
+                LOGGER.logw(
+                    "Skip A8W4 layer '{}': ONNX weight shape {} has odd Deploy "
+                    "pack axis {} (size {}).".format(
+                        layer_name, list(dims), actual_axis, dims[pack_axis]
+                    ),
+                    module_name='Configuration',
+                )
                 return False
         return True
+
+    @staticmethod
+    def check_int4_cin_pack_supported(graph, layer_name):
+        """Compatibility alias for the final Deploy pack-axis check."""
+        return GraphQuerier.check_int4_weight_pack_supported(graph, layer_name)
 
     @staticmethod
     def get_support_winograd_layer_types():

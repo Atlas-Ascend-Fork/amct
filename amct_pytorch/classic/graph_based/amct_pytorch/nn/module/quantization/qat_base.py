@@ -25,7 +25,7 @@ from torch.nn.parameter import Parameter
 
 from .....amct_pytorch.utils.log import LOGGER
 from .....amct_pytorch.common.utils.check_params import check_params
-from .....amct_pytorch.common.utils.vars_util import INT8, INT16
+from .....amct_pytorch.common.utils.vars_util import INT4, INT8, INT16
 from .....amct_pytorch.common.utils.vars_util import RNN_TENSOR_NUM
 from .....amct_pytorch.custom_op.ifmr.ifmr import IFMR
 from .....amct_pytorch.custom_op.utils import copy_tensor
@@ -66,6 +66,7 @@ class QATBase(metaclass=ABCMeta):
 
     _float_module = None
     _required_params = list()
+    _supported_weight_dst_types = (INT8,)
 
     @check_params(layer_type=str, device=(str, type(None)), config=(dict, type(None)))
     def __init__(self, layer_type, device, config=None):
@@ -466,6 +467,9 @@ class QATBase(metaclass=ABCMeta):
                 "but your input is {}".format(self.retrain_data_config.get(DST_TYPE))
             )
 
+        if self.retrain_data_config.get('channel_wise', False):
+            raise ValueError('Activation quantization only supports per-tensor.')
+
         batch_num = self.retrain_data_config.get(BATCH_NUM, 1)
         if not isinstance(batch_num, int) or batch_num <= 0:
             raise ValueError(
@@ -498,11 +502,21 @@ class QATBase(metaclass=ABCMeta):
             )
 
         # check params for weights
-        if self.retrain_weight_config.get(DST_TYPE, INT8) not in [INT8]:
+        if (
+            self.retrain_weight_config.get(DST_TYPE, INT8)
+            not in self._supported_weight_dst_types
+        ):
             raise ValueError(
-                "dst_type for weight should be in range ['INT8'], "
-                "but your input is {}".format(self.retrain_weight_config.get(DST_TYPE))
+                "dst_type for weight should be in range {}, but your input is {}".format(
+                    list(self._supported_weight_dst_types),
+                    self.retrain_weight_config.get(DST_TYPE),
+                )
             )
+        if (
+            self.retrain_weight_config.get(DST_TYPE, INT8) == INT4
+            and self.retrain_data_config.get(DST_TYPE, INT8) != INT8
+        ):
+            raise ValueError('INT4 weight quantization requires INT8 activation.')
 
         if self.retrain_weight_config.get('weight_retrain_algo', 'arq_retrain') not in [
             'arq_retrain',
