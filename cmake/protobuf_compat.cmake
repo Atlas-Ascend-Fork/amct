@@ -86,14 +86,20 @@ macro(protobuf_static_cache_compatible out_var cache_lib)
                 OUTPUT_VARIABLE _elf_hdr
                 RESULT_VARIABLE _re_rc
                 OUTPUT_STRIP_TRAILING_WHITESPACE)
-            # 取三元组机器段: aarch64 -> AARCH64; x86_64 -> X86(readelf 输出为 x86-64)
-            string(REGEX MATCH "^([^-]*)" _mach_seg "${CMAKE_LIBRARY_ARCHITECTURE}")
-            string(TOUPPER "${CMAKE_MATCH_1}" _mach_upper)
-            string(TOUPPER "${_elf_hdr}" _elf_hdr_upper)
-            if("${CMAKE_MATCH_1}" STREQUAL "x86" )
-                set(_mach_upper "X86")
+            # 归一化后匹配: CMAKE_LIBRARY_ARCHITECTURE 三元组首段 -> readelf Machine 名
+            #   aarch64-linux-gnu -> AARCH64   <=> readelf "AArch64"
+            #   x86_64-linux-gnu  -> X86_64     <=> readelf "Advanced Micro Devices X86-64"
+            # 统一把下划线转连字符再做大小写不敏感子串匹配; 架构变量为空时跳过检查
+            set(_mach_seg "")
+            if(CMAKE_LIBRARY_ARCHITECTURE)
+                string(REGEX MATCH "^([^-]*)" _mach_seg "${CMAKE_LIBRARY_ARCHITECTURE}")
+                set(_mach_seg "${CMAKE_MATCH_1}")
             endif()
-            if(NOT _re_rc EQUAL 0 OR NOT _elf_hdr_upper MATCHES "MACHINE:[ \t]+.*${_mach_upper}")
+            string(REPLACE "_" "-" _mach_norm "${_mach_seg}")
+            string(TOLOWER "${_mach_norm}" _mach_lower)
+            string(TOLOWER "${_elf_hdr}" _elf_hdr_lower)
+            if(NOT _re_rc EQUAL 0 OR _mach_seg STREQUAL ""
+                    OR NOT _elf_hdr_lower MATCHES "machine:[ \t]+.*${_mach_lower}")
                 message(WARNING "[Third-Party][protobuf] cache ${cache_lib} architecture mismatch "
                     "(toolchain: ${CMAKE_LIBRARY_ARCHITECTURE}), fallback to source build.")
                 set(${out_var} FALSE)
@@ -109,7 +115,9 @@ macro(protobuf_static_cache_compatible out_var cache_lib)
     unset(_re_rc)
     unset(_ex_rc)
     unset(_mach_seg)
-    unset(_mach_upper)
+    unset(_mach_norm)
+    unset(_mach_lower)
+    unset(_elf_hdr_lower)
 endmacro()
 
 # 缓存的可执行文件(protoc)换到更老的节点可能无法运行, 探测失败则回退源码构建
