@@ -21,7 +21,7 @@ from torch.onnx import _globals
 from ...amct_pytorch.utils.vars import DEQUANTIZE_LINEAR, QUANTIZE_LINEAR
 
 
-def _check_int4_export(wts_param):
+def check_int4_export(wts_param):
     if not hasattr(TensorProto, 'INT4'):
         raise RuntimeError('INT4 export requires ONNX native TensorProto.INT4.')
     if _globals.GLOBALS.export_onnx_opset_version != 21:

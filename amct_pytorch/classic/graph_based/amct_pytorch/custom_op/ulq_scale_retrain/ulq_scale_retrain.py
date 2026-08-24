@@ -27,7 +27,7 @@ from ....amct_pytorch.custom_op.utils import check_group_param
 from ....amct_pytorch.custom_op.utils import process_tensor_shape
 from ....amct_pytorch.utils.vars import TRANSPOSE
 from ....amct_pytorch.utils.weight_quant_api import adjust_axis_for_group_wise
-from ....amct_pytorch.custom_op.qdq_symbolic import _check_int4_export, add_qdq
+from ....amct_pytorch.custom_op.qdq_symbolic import add_qdq, check_int4_export
 
 
 MODULE_TYPE = 'module_type'
@@ -137,7 +137,7 @@ class UlqScaleRetrainFuncQAT(UlqScaleRetrainFunction):
         module_type = wts_param.get(MODULE_TYPE)
         num_bits = wts_param.get('num_bits', 8)
         if num_bits == 4:
-            _check_int4_export(wts_param)
+            check_int4_export(wts_param)
         channel_axis = 1 if wts_param.get('channel_wise', False) else None
         if module_type in ["ConvTranspose1d", "ConvTranspose2d"]:
             out_node = add_qdq(
