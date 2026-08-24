@@ -722,9 +722,7 @@ def _generate_model(graph, records, save_path):
     graph_copy = graph.deep_copy()
 
     # generate and save deploy model
-    # PackInt4WeightPass must run BEFORE ReplaceRNNPass to pack INT4 while RNN nodes are still present.
     deploy_optimizer = opt.GraphOptimizer()
-    deploy_optimizer.add_pass(opt.PackInt4WeightPass(records))
     deploy_optimizer.add_pass(opt.ReplaceRNNPass(records))
     deploy_optimizer.do_optimizer(graph)
     deploy_file = generate_onnx_file_name(save_dir, save_prefix, 'Deploy')
