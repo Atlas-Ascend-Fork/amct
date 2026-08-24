@@ -10,6 +10,15 @@ bash amct_ops/ops_build.sh hifloat8_cast
 PYTHONPATH=amct_ops/staging python3 -m unittest tests.amct_ops.test_hifloat8_cast
 ```
 
+SVDQuant tests need to build the `svd_quant` custom operator and Python package
+first, then run the test as a module:
+
+```bash
+bash amct_ops/ops_build.sh --soc ascend950 svd_quant
+
+PYTHONPATH=amct_ops/staging python3 -m unittest tests.amct_ops.test_svd_quant
+```
+
 ## Method 2: Install wheel then Run
 
 ```bash
@@ -19,11 +28,23 @@ pip install amct_ops/dist/amct_ops-*.whl
 python3 -m unittest tests.amct_ops.test_hifloat8_cast
 ```
 
+SVDQuant tests also need to build and install an `amct_ops` wheel that contains
+`svd_quant`:
+
+```bash
+bash amct_ops/ops_build.sh --soc ascend950 svd_quant
+pip install amct_ops/dist/amct_ops-*.whl
+
+python3 -m unittest tests.amct_ops.test_svd_quant
+```
+
 ## Environment Requirements
 
 - Have sourced CANN environment variables, such as `$ASCEND_HOME_PATH/set_env.sh`
 - Current environment has available `torch`, `torch_npu`
 - Current machine can access NPU, tests will call `torch.npu.set_device(0)`
+- `test_svd_quant` depends on a built or installed SVDQuant custom operator; the
+  current build script only builds this operator for the `ascend950` SOC
 
 ## HiFloat8 dtype smoke validation
 

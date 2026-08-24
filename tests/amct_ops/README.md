@@ -10,6 +10,14 @@ bash amct_ops/ops_build.sh hifloat8_cast
 PYTHONPATH=amct_ops/staging python3 -m unittest tests.amct_ops.test_hifloat8_cast
 ```
 
+SVDQuant 测试需要先构建 `svd_quant` 自定义算子和 Python 包，再使用模块方式运行：
+
+```bash
+bash amct_ops/ops_build.sh --soc ascend950 svd_quant
+
+PYTHONPATH=amct_ops/staging python3 -m unittest tests.amct_ops.test_svd_quant
+```
+
 ## 方式二：安装 wheel 后运行
 
 ```bash
@@ -19,11 +27,22 @@ pip install amct_ops/dist/amct_ops-*.whl
 python3 -m unittest tests.amct_ops.test_hifloat8_cast
 ```
 
+SVDQuant 测试同样需要先构建并安装包含 `svd_quant` 的 `amct_ops` wheel：
+
+```bash
+bash amct_ops/ops_build.sh --soc ascend950 svd_quant
+pip install amct_ops/dist/amct_ops-*.whl
+
+python3 -m unittest tests.amct_ops.test_svd_quant
+```
+
 ## 环境要求
 
 - 已 source CANN 环境变量，例如 `$ASCEND_HOME_PATH/set_env.sh`
 - 当前环境可用 `torch`、`torch_npu`
 - 当前机器可访问 NPU，测试会调用 `torch.npu.set_device(0)`
+- `test_svd_quant` 依赖已构建或已安装的 SVDQuant 自定义算子；当前构建脚本仅在
+  `ascend950` SOC 上构建该算子
 
 ## HiFloat8 dtype 冒烟验证
 
