@@ -367,11 +367,6 @@ class GraphQuerier:
         return True
 
     @staticmethod
-    def check_int4_cin_pack_supported(graph, layer_name):
-        """Compatibility alias for the final Deploy pack-axis check."""
-        return GraphQuerier.check_int4_weight_pack_supported(graph, layer_name)
-
-    @staticmethod
     def get_support_winograd_layer_types():
         """get layer types support int6 int7 quant"""
         return ['Conv2d']
