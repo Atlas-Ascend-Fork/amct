@@ -5,18 +5,39 @@
 ## 方式一：使用 staging 运行（推荐开发使用）
 
 ```bash
-bash amct_ops/ops_build.sh hifloat8_cast
+bash amct_ops/ops_build.sh <op_name>
 
-PYTHONPATH=amct_ops/staging python3 -m unittest tests.amct_ops.test_hifloat8_cast
+PYTHONPATH=amct_ops/staging python3 -m unittest <test_module>
+```
+
+其中 `<op_name>` 为 `amct_ops` 下的算子目录名，`<test_module>` 为
+`tests.amct_ops` 下的 unittest 模块名，例如 `tests.amct_ops.test_hifloat8_cast`。
+
+如果算子需要特定 SOC 或其他构建参数，按算子 README 或 `ops_build.sh --help`
+补充对应参数。例如 SVDQuant 当前仅在 `ascend950` SOC 上构建，运行方式为：
+
+```bash
+bash amct_ops/ops_build.sh --soc ascend950 svd_quant
+
+PYTHONPATH=amct_ops/staging python3 -m unittest tests.amct_ops.test_svd_quant
 ```
 
 ## 方式二：安装 wheel 后运行
 
 ```bash
-bash amct_ops/ops_build.sh hifloat8_cast
+bash amct_ops/ops_build.sh <op_name>
 pip install amct_ops/dist/amct_ops-*.whl
 
-python3 -m unittest tests.amct_ops.test_hifloat8_cast
+python3 -m unittest <test_module>
+```
+
+SVDQuant 的 wheel 安装运行示例：
+
+```bash
+bash amct_ops/ops_build.sh --soc ascend950 svd_quant
+pip install amct_ops/dist/amct_ops-*.whl
+
+python3 -m unittest tests.amct_ops.test_svd_quant
 ```
 
 ## 环境要求
@@ -24,6 +45,8 @@ python3 -m unittest tests.amct_ops.test_hifloat8_cast
 - 已 source CANN 环境变量，例如 `$ASCEND_HOME_PATH/set_env.sh`
 - 当前环境可用 `torch`、`torch_npu`
 - 当前机器可访问 NPU，测试会调用 `torch.npu.set_device(0)`
+- 特定算子可能有额外依赖或平台约束；例如 `test_svd_quant` 依赖已构建或已安装的
+  SVDQuant 自定义算子，当前构建脚本仅在 `ascend950` SOC 上构建该算子
 
 ## HiFloat8 dtype 冒烟验证
 
