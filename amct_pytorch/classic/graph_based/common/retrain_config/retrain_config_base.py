@@ -235,8 +235,6 @@ class RetrainConfigBase:
 
     def skip_int4_unpackable_layers(self, graph, ordered_config):
         '''Keep INT4 layers with an odd final Deploy pack axis in floating point.'''
-        if not hasattr(self.graph_querier, 'is_int4_weight_pack_axis_even'):
-            return
         for layer, layer_cfg in ordered_config.items():
             if not isinstance(layer_cfg, dict):
                 continue
@@ -251,10 +249,6 @@ class RetrainConfigBase:
                     "A8W8.".format(layer),
                     module_name=_MODULE_NAME,
                 )
-
-    def downgrade_int4_unpackable_layers(self, graph, ordered_config):
-        '''Compatibility wrapper for the former INT8 downgrade helper.'''
-        self.skip_int4_unpackable_layers(graph, ordered_config)
 
     def get_support_layers(self, graph):
         """

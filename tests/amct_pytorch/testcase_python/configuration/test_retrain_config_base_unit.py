@@ -160,14 +160,6 @@ class TestSkipInt4UnpackableLayers(unittest.TestCase):
         self.assertEqual(config['fc']['retrain_weight_config']['dst_type'], 'INT8')
         self.assertTrue(config['fc']['retrain_enable'])
 
-    def test_no_querier_method_is_noop(self):
-        obj, _, _ = _make()
-        # graph_querier without the new helper remains compatible.
-        obj.graph_querier = object()
-        config = {'conv': {'retrain_weight_config': {'dst_type': 'INT4'}}}
-        obj.skip_int4_unpackable_layers(None, config)
-        self.assertEqual(config['conv']['retrain_weight_config']['dst_type'], 'INT4')
-
     def test_parse_config_file_applies_int4_pack_axis_filter(self):
         obj, _, checker = _make()
         obj.get_supported_layers = MagicMock(return_value={'conv': 'Conv2d'})
