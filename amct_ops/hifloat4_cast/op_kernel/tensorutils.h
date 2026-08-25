@@ -88,6 +88,9 @@ private:
 
 /* ------------- Double Buffer ------------- */
 
+// Ping-pong depth shared by DBuff / DEvent (index % DOUBLE_BUFFER selects bank).
+static constexpr int DOUBLE_BUFFER = 2;
+
 template <typename T, pos_t pos>
 class DBuff {};
 
@@ -104,7 +107,7 @@ public:
         tsr2 = buf2.template Get<T>();
     }
     aifunc Tensor<T, PUB> get(int i) {
-        if (i % 2 == 0) {
+        if (i % DOUBLE_BUFFER == 0) {
             return Tensor<T, PUB>(tsr1);
         } else {
             return Tensor<T, PUB>(tsr2);
@@ -128,7 +131,7 @@ public:
         id2 = (event_t)e_id2;
     }
     aifunc void wait() {
-        if (wait_cnt % 2 == 0) {
+        if (wait_cnt % DOUBLE_BUFFER == 0) {
             wait_flag(p1, p2, id1);
         } else {
             wait_flag(p1, p2, id2);
@@ -136,7 +139,7 @@ public:
         wait_cnt++;
     }
     aifunc void set() {
-        if (set_cnt % 2 == 0) {
+        if (set_cnt % DOUBLE_BUFFER == 0) {
             set_flag(p1, p2, id1);
         } else {
             set_flag(p1, p2, id2);
