@@ -1,520 +1,0 @@
-nohup: ignoring input
-/opt/buildtools/Python-3.11.4/lib/python3.11/site-packages/torch_npu/utils/_path_manager.py:66: UserWarning: Permission mismatch: The owner of /opt/buildtools/Python-3.11.4/lib/python3.11/site-packages/torch_npu/lib/libop_plugin_atb.so does not match.
-  warnings.warn(f"Permission mismatch: The owner of {path} does not match.")
-Loading model: /mnt/workspace/models/Qwen3-8B (seqlen=2048, dtype=torch.float16)
-Skipping import of cpp extensions due to incompatible torch version. Please upgrade to torch >= 2.11.0 (found 2.7.1+cpu).
-Loading weights:   0%|          | 0/399 [00:00<?, ?it/s]Loading weights:   0%|          | 1/399 [00:14<1:37:52, 14.75s/it]Loading weights:   9%|▊         | 34/399 [00:14<01:53,  3.23it/s] Loading weights:  16%|█▌        | 62/399 [00:19<01:20,  4.20it/s]Loading weights:  19%|█▊        | 74/399 [00:21<01:11,  4.56it/s]Loading weights:  20%|██        | 81/399 [00:22<01:06,  4.80it/s]Loading weights:  22%|██▏       | 86/399 [00:23<01:03,  4.92it/s]Loading weights:  23%|██▎       | 92/399 [00:24<01:00,  5.06it/s]Loading weights:  25%|██▍       | 98/399 [00:25<00:56,  5.29it/s]Loading weights:  26%|██▌       | 103/399 [00:26<00:56,  5.22it/s]Loading weights:  29%|██▊       | 114/399 [00:27<00:44,  6.47it/s]Loading weights:  29%|██▉       | 116/399 [00:28<00:51,  5.48it/s]Loading weights:  31%|███▏      | 125/399 [00:29<00:43,  6.28it/s]Loading weights:  34%|███▍      | 136/399 [00:31<00:43,  6.02it/s]Loading weights:  36%|███▌      | 144/399 [00:32<00:39,  6.52it/s]Loading weights:  37%|███▋      | 147/399 [00:33<00:44,  5.65it/s]Loading weights:  40%|███▉      | 158/399 [00:34<00:34,  6.92it/s]Loading weights:  42%|████▏     | 166/399 [00:35<00:32,  7.21it/s]Loading weights:  42%|████▏     | 169/399 [00:36<00:37,  6.14it/s]Loading weights:  45%|████▍     | 178/399 [00:37<00:31,  6.94it/s]Loading weights:  45%|████▌     | 180/399 [00:38<00:39,  5.56it/s]Loading weights:  47%|████▋     | 189/399 [00:39<00:32,  6.56it/s]Loading weights:  50%|████▉     | 199/399 [00:40<00:27,  7.38it/s]Loading weights:  51%|█████     | 202/399 [00:41<00:31,  6.23it/s]Loading weights:  53%|█████▎    | 210/399 [00:42<00:28,  6.74it/s]Loading weights:  54%|█████▎    | 214/399 [00:43<00:30,  5.99it/s]Loading weights:  54%|█████▍    | 215/399 [00:43<00:29,  6.15it/s]Loading weights:  56%|█████▌    | 224/399 [00:44<00:24,  7.26it/s]Loading weights:  58%|█████▊    | 232/399 [00:45<00:21,  7.63it/s]Loading weights:  59%|█████▉    | 235/399 [00:46<00:27,  6.05it/s]Loading weights:  61%|██████    | 243/399 [00:47<00:23,  6.63it/s]Loading weights:  62%|██████▏   | 246/399 [00:48<00:27,  5.64it/s]Loading weights:  64%|██████▎   | 254/399 [00:49<00:22,  6.34it/s]Loading weights:  65%|██████▍   | 259/399 [00:50<00:23,  5.93it/s]Loading weights:  67%|██████▋   | 268/399 [00:51<00:19,  6.85it/s]Loading weights:  70%|██████▉   | 279/399 [00:53<00:19,  6.26it/s]Loading weights:  73%|███████▎  | 290/399 [00:54<00:15,  7.25it/s]Loading weights:  73%|███████▎  | 292/399 [00:55<00:17,  6.07it/s]Loading weights:  75%|███████▌  | 301/399 [00:56<00:14,  6.81it/s]Loading weights:  78%|███████▊  | 312/399 [00:58<00:13,  6.26it/s]Loading weights:  81%|████████  | 323/399 [01:00<00:12,  5.99it/s]Loading weights:  84%|████████▎ | 334/399 [01:01<00:09,  7.00it/s]Loading weights:  86%|████████▋ | 345/399 [01:03<00:08,  6.49it/s]Loading weights:  88%|████████▊ | 353/399 [01:04<00:06,  6.79it/s]Loading weights:  90%|████████▉ | 358/399 [01:04<00:05,  8.07it/s]Loading weights:  91%|█████████ | 362/399 [01:05<00:05,  7.06it/s]Loading weights:  92%|█████████▏| 367/399 [01:06<00:05,  6.38it/s]Loading weights:  95%|█████████▍| 378/399 [01:08<00:03,  6.03it/s]Loading weights:  97%|█████████▋| 387/399 [01:09<00:01,  6.78it/s]Loading weights:  98%|█████████▊| 391/399 [01:10<00:01,  6.05it/s]Loading weights: 100%|██████████| 399/399 [01:10<00:00,  5.64it/s]
-[MR-GPTQ] increments = {'hadamard': True, 'scale_fitting': True, 'act_reorder': False}
-2026-07-14 21:51:07,808 - INFO - [AMCT]:[Optimizer]: Do <class 'amct_pytorch.classic.optimizer.insert_quantize_op_pass.InsertQuantizeModulePass'>
-[calib] shape=(27, 512)
-[MR-GPTQ] layer #  1  model.layers.0.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 5.2s
-[MR-GPTQ] layer #  2  model.layers.0.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 3.8s
-[MR-GPTQ] layer #  3  model.layers.0.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 3.6s
-[MR-GPTQ] layer #  4  model.layers.0.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 5.1s
-[MR-GPTQ] layer #  5  model.layers.0.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 9.8s
-[MR-GPTQ] layer #  6  model.layers.0.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 9.8s
-[MR-GPTQ] layer #  7  model.layers.0.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 17.8s
-[MR-GPTQ] layer #  8  model.layers.1.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer #  9  model.layers.1.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer # 10  model.layers.1.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer # 11  model.layers.1.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.2s
-[MR-GPTQ] layer # 12  model.layers.1.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.8s
-[MR-GPTQ] layer # 13  model.layers.1.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.8s
-[MR-GPTQ] layer # 14  model.layers.1.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.8s
-[MR-GPTQ] layer # 15  model.layers.2.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.2s
-[MR-GPTQ] layer # 16  model.layers.2.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer # 17  model.layers.2.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.7s
-[MR-GPTQ] layer # 18  model.layers.2.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer # 19  model.layers.2.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.8s
-[MR-GPTQ] layer # 20  model.layers.2.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.8s
-[MR-GPTQ] layer # 21  model.layers.2.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.6s
-[MR-GPTQ] layer # 22  model.layers.3.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer # 23  model.layers.3.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 3.0s
-[MR-GPTQ] layer # 24  model.layers.3.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer # 25  model.layers.3.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.2s
-[MR-GPTQ] layer # 26  model.layers.3.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer # 27  model.layers.3.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer # 28  model.layers.3.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.7s
-[MR-GPTQ] layer # 29  model.layers.4.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer # 30  model.layers.4.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer # 31  model.layers.4.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer # 32  model.layers.4.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer # 33  model.layers.4.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 8.1s
-[MR-GPTQ] layer # 34  model.layers.4.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.8s
-[MR-GPTQ] layer # 35  model.layers.4.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.6s
-[MR-GPTQ] layer # 36  model.layers.5.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer # 37  model.layers.5.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer # 38  model.layers.5.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer # 39  model.layers.5.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer # 40  model.layers.5.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer # 41  model.layers.5.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer # 42  model.layers.5.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 15.2s
-[MR-GPTQ] layer # 43  model.layers.6.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer # 44  model.layers.6.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.7s
-[MR-GPTQ] layer # 45  model.layers.6.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer # 46  model.layers.6.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer # 47  model.layers.6.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer # 48  model.layers.6.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer # 49  model.layers.6.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.6s
-[MR-GPTQ] layer # 50  model.layers.7.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.4s
-[MR-GPTQ] layer # 51  model.layers.7.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.9s
-[MR-GPTQ] layer # 52  model.layers.7.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer # 53  model.layers.7.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer # 54  model.layers.7.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.8s
-[MR-GPTQ] layer # 55  model.layers.7.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer # 56  model.layers.7.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.6s
-[MR-GPTQ] layer # 57  model.layers.8.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer # 58  model.layers.8.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer # 59  model.layers.8.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer # 60  model.layers.8.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer # 61  model.layers.8.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 8.1s
-[MR-GPTQ] layer # 62  model.layers.8.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.8s
-[MR-GPTQ] layer # 63  model.layers.8.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.6s
-[MR-GPTQ] layer # 64  model.layers.9.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.2s
-[MR-GPTQ] layer # 65  model.layers.9.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer # 66  model.layers.9.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer # 67  model.layers.9.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.2s
-[MR-GPTQ] layer # 68  model.layers.9.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.7s
-[MR-GPTQ] layer # 69  model.layers.9.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.8s
-[MR-GPTQ] layer # 70  model.layers.9.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.9s
-[MR-GPTQ] layer # 71  model.layers.10.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer # 72  model.layers.10.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.7s
-[MR-GPTQ] layer # 73  model.layers.10.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer # 74  model.layers.10.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer # 75  model.layers.10.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer # 76  model.layers.10.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer # 77  model.layers.10.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.8s
-[MR-GPTQ] layer # 78  model.layers.11.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.5s
-[MR-GPTQ] layer # 79  model.layers.11.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer # 80  model.layers.11.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer # 81  model.layers.11.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.2s
-[MR-GPTQ] layer # 82  model.layers.11.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer # 83  model.layers.11.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer # 84  model.layers.11.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.6s
-[MR-GPTQ] layer # 85  model.layers.12.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer # 86  model.layers.12.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer # 87  model.layers.12.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer # 88  model.layers.12.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer # 89  model.layers.12.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 8.2s
-[MR-GPTQ] layer # 90  model.layers.12.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer # 91  model.layers.12.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.6s
-[MR-GPTQ] layer # 92  model.layers.13.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer # 93  model.layers.13.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer # 94  model.layers.13.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer # 95  model.layers.13.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer # 96  model.layers.13.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.8s
-[MR-GPTQ] layer # 97  model.layers.13.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer # 98  model.layers.13.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.9s
-[MR-GPTQ] layer # 99  model.layers.14.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer #100  model.layers.14.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #101  model.layers.14.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.9s
-[MR-GPTQ] layer #102  model.layers.14.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.2s
-[MR-GPTQ] layer #103  model.layers.14.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer #104  model.layers.14.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer #105  model.layers.14.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.7s
-[MR-GPTQ] layer #106  model.layers.15.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.5s
-[MR-GPTQ] layer #107  model.layers.15.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #108  model.layers.15.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #109  model.layers.15.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.2s
-[MR-GPTQ] layer #110  model.layers.15.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.8s
-[MR-GPTQ] layer #111  model.layers.15.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 8.0s
-[MR-GPTQ] layer #112  model.layers.15.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.6s
-[MR-GPTQ] layer #113  model.layers.16.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer #114  model.layers.16.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.7s
-[MR-GPTQ] layer #115  model.layers.16.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #116  model.layers.16.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.4s
-[MR-GPTQ] layer #117  model.layers.16.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer #118  model.layers.16.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.8s
-[MR-GPTQ] layer #119  model.layers.16.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.7s
-[MR-GPTQ] layer #120  model.layers.17.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.2s
-[MR-GPTQ] layer #121  model.layers.17.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.7s
-[MR-GPTQ] layer #122  model.layers.17.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #123  model.layers.17.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer #124  model.layers.17.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer #125  model.layers.17.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 8.1s
-[MR-GPTQ] layer #126  model.layers.17.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.9s
-[MR-GPTQ] layer #127  model.layers.18.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer #128  model.layers.18.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #129  model.layers.18.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #130  model.layers.18.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.2s
-[MR-GPTQ] layer #131  model.layers.18.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.8s
-[MR-GPTQ] layer #132  model.layers.18.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer #133  model.layers.18.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.8s
-[MR-GPTQ] layer #134  model.layers.19.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.4s
-[MR-GPTQ] layer #135  model.layers.19.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #136  model.layers.19.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #137  model.layers.19.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer #138  model.layers.19.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.8s
-[MR-GPTQ] layer #139  model.layers.19.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer #140  model.layers.19.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.8s
-[MR-GPTQ] layer #141  model.layers.20.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.2s
-[MR-GPTQ] layer #142  model.layers.20.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #143  model.layers.20.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.9s
-[MR-GPTQ] layer #144  model.layers.20.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.4s
-[MR-GPTQ] layer #145  model.layers.20.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 8.0s
-[MR-GPTQ] layer #146  model.layers.20.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.8s
-[MR-GPTQ] layer #147  model.layers.20.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.7s
-[MR-GPTQ] layer #148  model.layers.21.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer #149  model.layers.21.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #150  model.layers.21.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #151  model.layers.21.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer #152  model.layers.21.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.8s
-[MR-GPTQ] layer #153  model.layers.21.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 8.1s
-[MR-GPTQ] layer #154  model.layers.21.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.6s
-[MR-GPTQ] layer #155  model.layers.22.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer #156  model.layers.22.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #157  model.layers.22.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #158  model.layers.22.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer #159  model.layers.22.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer #160  model.layers.22.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.8s
-[MR-GPTQ] layer #161  model.layers.22.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.9s
-[MR-GPTQ] layer #162  model.layers.23.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.2s
-[MR-GPTQ] layer #163  model.layers.23.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #164  model.layers.23.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #165  model.layers.23.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer #166  model.layers.23.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer #167  model.layers.23.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer #168  model.layers.23.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.6s
-[MR-GPTQ] layer #169  model.layers.24.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer #170  model.layers.24.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.9s
-[MR-GPTQ] layer #171  model.layers.24.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #172  model.layers.24.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.5s
-[MR-GPTQ] layer #173  model.layers.24.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer #174  model.layers.24.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.8s
-[MR-GPTQ] layer #175  model.layers.24.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.7s
-[MR-GPTQ] layer #176  model.layers.25.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.2s
-[MR-GPTQ] layer #177  model.layers.25.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.9s
-[MR-GPTQ] layer #178  model.layers.25.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #179  model.layers.25.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer #180  model.layers.25.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer #181  model.layers.25.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 8.3s
-[MR-GPTQ] layer #182  model.layers.25.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.7s
-[MR-GPTQ] layer #183  model.layers.26.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer #184  model.layers.26.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #185  model.layers.26.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #186  model.layers.26.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer #187  model.layers.26.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.8s
-[MR-GPTQ] layer #188  model.layers.26.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer #189  model.layers.26.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.8s
-[MR-GPTQ] layer #190  model.layers.27.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer #191  model.layers.27.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #192  model.layers.27.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.7s
-[MR-GPTQ] layer #193  model.layers.27.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.2s
-[MR-GPTQ] layer #194  model.layers.27.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer #195  model.layers.27.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer #196  model.layers.27.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.6s
-[MR-GPTQ] layer #197  model.layers.28.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.2s
-[MR-GPTQ] layer #198  model.layers.28.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #199  model.layers.28.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.9s
-[MR-GPTQ] layer #200  model.layers.28.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.4s
-[MR-GPTQ] layer #201  model.layers.28.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.8s
-[MR-GPTQ] layer #202  model.layers.28.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.8s
-[MR-GPTQ] layer #203  model.layers.28.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.6s
-[MR-GPTQ] layer #204  model.layers.29.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer #205  model.layers.29.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #206  model.layers.29.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #207  model.layers.29.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer #208  model.layers.29.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer #209  model.layers.29.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 8.1s
-[MR-GPTQ] layer #210  model.layers.29.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.6s
-[MR-GPTQ] layer #211  model.layers.30.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer #212  model.layers.30.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.7s
-[MR-GPTQ] layer #213  model.layers.30.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.9s
-[MR-GPTQ] layer #214  model.layers.30.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.2s
-[MR-GPTQ] layer #215  model.layers.30.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer #216  model.layers.30.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer #217  model.layers.30.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.8s
-[MR-GPTQ] layer #218  model.layers.31.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer #219  model.layers.31.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #220  model.layers.31.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #221  model.layers.31.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.2s
-[MR-GPTQ] layer #222  model.layers.31.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer #223  model.layers.31.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer #224  model.layers.31.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.7s
-[MR-GPTQ] layer #225  model.layers.32.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer #226  model.layers.32.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.9s
-[MR-GPTQ] layer #227  model.layers.32.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 3.0s
-[MR-GPTQ] layer #228  model.layers.32.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.4s
-[MR-GPTQ] layer #229  model.layers.32.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer #230  model.layers.32.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer #231  model.layers.32.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.8s
-[MR-GPTQ] layer #232  model.layers.33.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer #233  model.layers.33.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #234  model.layers.33.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #235  model.layers.33.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer #236  model.layers.33.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer #237  model.layers.33.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 8.0s
-[MR-GPTQ] layer #238  model.layers.33.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.5s
-[MR-GPTQ] layer #239  model.layers.34.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer #240  model.layers.34.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #241  model.layers.34.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #242  model.layers.34.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.3s
-[MR-GPTQ] layer #243  model.layers.34.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.8s
-[MR-GPTQ] layer #244  model.layers.34.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.8s
-[MR-GPTQ] layer #245  model.layers.34.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.9s
-[MR-GPTQ] layer #246  model.layers.35.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.2s
-[MR-GPTQ] layer #247  model.layers.35.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #248  model.layers.35.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 2.8s
-[MR-GPTQ] layer #249  model.layers.35.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 4.2s
-[MR-GPTQ] layer #250  model.layers.35.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer #251  model.layers.35.mlp.up_proj  (in=4096, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 7.9s
-[MR-GPTQ] layer #252  model.layers.35.mlp.down_proj  (in=12288, had=True, scale_fit=True)
-[MR-GPTQ]   ↳ done in 14.7s
-[calib] done in 1645.3s
-Fetching 3 files:   0%|          | 0/3 [00:00<?, ?it/s]Fetching 3 files: 100%|██████████| 3/3 [00:00<00:00, 1067.62it/s]
-[transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (299078 > 131072). Running this sequence through the model will result in indexing errors
-evaluating...:   0%|          | 0/146 [00:00<?, ?it/s]evaluating...:   1%|          | 1/146 [00:00<00:34,  4.24it/s]evaluating...:   1%|▏         | 2/146 [00:00<00:33,  4.29it/s]evaluating...:   2%|▏         | 3/146 [00:00<00:33,  4.25it/s]evaluating...:   3%|▎         | 4/146 [00:00<00:33,  4.22it/s]evaluating...:   3%|▎         | 5/146 [00:01<00:33,  4.20it/s]evaluating...:   4%|▍         | 6/146 [00:01<00:33,  4.19it/s]evaluating...:   5%|▍         | 7/146 [00:01<00:33,  4.19it/s]evaluating...:   5%|▌         | 8/146 [00:01<00:32,  4.19it/s]evaluating...:   6%|▌         | 9/146 [00:02<00:32,  4.18it/s]evaluating...:   7%|▋         | 10/146 [00:02<00:32,  4.18it/s]evaluating...:   8%|▊         | 11/146 [00:02<00:32,  4.18it/s]evaluating...:   8%|▊         | 12/146 [00:02<00:32,  4.18it/s]evaluating...:   9%|▉         | 13/146 [00:03<00:31,  4.18it/s]evaluating...:  10%|▉         | 14/146 [00:03<00:31,  4.18it/s]evaluating...:  10%|█         | 15/146 [00:03<00:31,  4.18it/s]evaluating...:  11%|█         | 16/146 [00:03<00:31,  4.18it/s]evaluating...:  12%|█▏        | 17/146 [00:04<00:30,  4.18it/s]evaluating...:  12%|█▏        | 18/146 [00:04<00:30,  4.14it/s]evaluating...:  13%|█▎        | 19/146 [00:04<00:30,  4.11it/s]evaluating...:  14%|█▎        | 20/146 [00:04<00:30,  4.09it/s]evaluating...:  14%|█▍        | 21/146 [00:05<00:30,  4.08it/s]evaluating...:  15%|█▌        | 22/146 [00:05<00:30,  4.07it/s]evaluating...:  16%|█▌        | 23/146 [00:05<00:30,  4.07it/s]evaluating...:  16%|█▋        | 24/146 [00:05<00:29,  4.07it/s]evaluating...:  17%|█▋        | 25/146 [00:06<00:29,  4.07it/s]evaluating...:  18%|█▊        | 26/146 [00:06<00:29,  4.07it/s]evaluating...:  18%|█▊        | 27/146 [00:06<00:29,  4.07it/s]evaluating...:  19%|█▉        | 28/146 [00:06<00:29,  4.07it/s]evaluating...:  20%|█▉        | 29/146 [00:07<00:28,  4.07it/s]evaluating...:  21%|██        | 30/146 [00:07<00:28,  4.07it/s]evaluating...:  21%|██        | 31/146 [00:07<00:28,  4.07it/s]evaluating...:  22%|██▏       | 32/146 [00:07<00:28,  4.07it/s]evaluating...:  23%|██▎       | 33/146 [00:07<00:27,  4.07it/s]evaluating...:  23%|██▎       | 34/146 [00:08<00:27,  4.07it/s]evaluating...:  24%|██▍       | 35/146 [00:08<00:27,  4.07it/s]evaluating...:  25%|██▍       | 36/146 [00:08<00:27,  4.07it/s]evaluating...:  25%|██▌       | 37/146 [00:08<00:26,  4.07it/s]evaluating...:  26%|██▌       | 38/146 [00:09<00:26,  4.08it/s]evaluating...:  27%|██▋       | 39/146 [00:09<00:26,  4.08it/s]evaluating...:  27%|██▋       | 40/146 [00:09<00:25,  4.08it/s]evaluating...:  28%|██▊       | 41/146 [00:09<00:25,  4.08it/s]evaluating...:  29%|██▉       | 42/146 [00:10<00:25,  4.08it/s]evaluating...:  29%|██▉       | 43/146 [00:10<00:25,  4.08it/s]evaluating...:  30%|███       | 44/146 [00:10<00:24,  4.08it/s]evaluating...:  31%|███       | 45/146 [00:10<00:24,  4.08it/s]evaluating...:  32%|███▏      | 46/146 [00:11<00:24,  4.08it/s]evaluating...:  32%|███▏      | 47/146 [00:11<00:24,  4.08it/s]evaluating...:  33%|███▎      | 48/146 [00:11<00:24,  4.08it/s]evaluating...:  34%|███▎      | 49/146 [00:11<00:23,  4.08it/s]evaluating...:  34%|███▍      | 50/146 [00:12<00:23,  4.08it/s]evaluating...:  35%|███▍      | 51/146 [00:12<00:23,  4.08it/s]evaluating...:  36%|███▌      | 52/146 [00:12<00:23,  4.09it/s]evaluating...:  36%|███▋      | 53/146 [00:12<00:22,  4.09it/s]evaluating...:  37%|███▋      | 54/146 [00:13<00:22,  4.09it/s]evaluating...:  38%|███▊      | 55/146 [00:13<00:22,  4.09it/s]evaluating...:  38%|███▊      | 56/146 [00:13<00:22,  4.09it/s]evaluating...:  39%|███▉      | 57/146 [00:13<00:21,  4.09it/s]evaluating...:  40%|███▉      | 58/146 [00:14<00:21,  4.09it/s]evaluating...:  40%|████      | 59/146 [00:14<00:21,  4.09it/s]evaluating...:  41%|████      | 60/146 [00:14<00:21,  4.09it/s]evaluating...:  42%|████▏     | 61/146 [00:14<00:20,  4.09it/s]evaluating...:  42%|████▏     | 62/146 [00:15<00:20,  4.08it/s]evaluating...:  43%|████▎     | 63/146 [00:15<00:20,  4.08it/s]evaluating...:  44%|████▍     | 64/146 [00:15<00:20,  4.07it/s]evaluating...:  45%|████▍     | 65/146 [00:15<00:19,  4.07it/s]evaluating...:  45%|████▌     | 66/146 [00:16<00:19,  4.07it/s]evaluating...:  46%|████▌     | 67/146 [00:16<00:19,  4.07it/s]evaluating...:  47%|████▋     | 68/146 [00:16<00:19,  4.07it/s]evaluating...:  47%|████▋     | 69/146 [00:16<00:18,  4.07it/s]evaluating...:  48%|████▊     | 70/146 [00:17<00:18,  4.07it/s]evaluating...:  49%|████▊     | 71/146 [00:17<00:18,  4.07it/s]evaluating...:  49%|████▉     | 72/146 [00:17<00:18,  4.07it/s]evaluating...:  50%|█████     | 73/146 [00:17<00:17,  4.07it/s]evaluating...:  51%|█████     | 74/146 [00:18<00:17,  4.07it/s]evaluating...:  51%|█████▏    | 75/146 [00:18<00:17,  4.07it/s]evaluating...:  52%|█████▏    | 76/146 [00:18<00:17,  4.07it/s]evaluating...:  53%|█████▎    | 77/146 [00:18<00:16,  4.07it/s]evaluating...:  53%|█████▎    | 78/146 [00:19<00:16,  4.11it/s]evaluating...:  54%|█████▍    | 79/146 [00:19<00:16,  4.13it/s]evaluating...:  55%|█████▍    | 80/146 [00:19<00:15,  4.14it/s]evaluating...:  55%|█████▌    | 81/146 [00:19<00:15,  4.16it/s]evaluating...:  56%|█████▌    | 82/146 [00:19<00:15,  4.12it/s]evaluating...:  57%|█████▋    | 83/146 [00:20<00:15,  4.09it/s]evaluating...:  58%|█████▊    | 84/146 [00:20<00:15,  4.07it/s]evaluating...:  58%|█████▊    | 85/146 [00:20<00:15,  4.06it/s]evaluating...:  59%|█████▉    | 86/146 [00:20<00:14,  4.05it/s]evaluating...:  60%|█████▉    | 87/146 [00:21<00:14,  4.05it/s]evaluating...:  60%|██████    | 88/146 [00:21<00:14,  4.05it/s]evaluating...:  61%|██████    | 89/146 [00:21<00:14,  4.04it/s]evaluating...:  62%|██████▏   | 90/146 [00:21<00:13,  4.04it/s]evaluating...:  62%|██████▏   | 91/146 [00:22<00:13,  4.08it/s]evaluating...:  63%|██████▎   | 92/146 [00:22<00:13,  4.11it/s]evaluating...:  64%|██████▎   | 93/146 [00:22<00:12,  4.12it/s]evaluating...:  64%|██████▍   | 94/146 [00:22<00:12,  4.14it/s]evaluating...:  65%|██████▌   | 95/146 [00:23<00:12,  4.15it/s]evaluating...:  66%|██████▌   | 96/146 [00:23<00:12,  4.16it/s]evaluating...:  66%|██████▋   | 97/146 [00:23<00:11,  4.16it/s]evaluating...:  67%|██████▋   | 98/146 [00:23<00:11,  4.16it/s]evaluating...:  68%|██████▊   | 99/146 [00:24<00:11,  4.17it/s]evaluating...:  68%|██████▊   | 100/146 [00:24<00:11,  4.17it/s]evaluating...:  69%|██████▉   | 101/146 [00:24<00:10,  4.17it/s]evaluating...:  70%|██████▉   | 102/146 [00:24<00:10,  4.17it/s]evaluating...:  71%|███████   | 103/146 [00:25<00:10,  4.16it/s]evaluating...:  71%|███████   | 104/146 [00:25<00:10,  4.12it/s]evaluating...:  72%|███████▏  | 105/146 [00:25<00:10,  4.10it/s]evaluating...:  73%|███████▎  | 106/146 [00:25<00:09,  4.08it/s]evaluating...:  73%|███████▎  | 107/146 [00:26<00:09,  4.07it/s]evaluating...:  74%|███████▍  | 108/146 [00:26<00:09,  4.06it/s]evaluating...:  75%|███████▍  | 109/146 [00:26<00:09,  4.06it/s]evaluating...:  75%|███████▌  | 110/146 [00:26<00:08,  4.05it/s]evaluating...:  76%|███████▌  | 111/146 [00:27<00:08,  4.05it/s]evaluating...:  77%|███████▋  | 112/146 [00:27<00:08,  4.05it/s]evaluating...:  77%|███████▋  | 113/146 [00:27<00:08,  4.04it/s]evaluating...:  78%|███████▊  | 114/146 [00:27<00:07,  4.04it/s]evaluating...:  79%|███████▉  | 115/146 [00:28<00:07,  4.04it/s]evaluating...:  79%|███████▉  | 116/146 [00:28<00:07,  4.04it/s]evaluating...:  80%|████████  | 117/146 [00:28<00:07,  4.05it/s]evaluating...:  81%|████████  | 118/146 [00:28<00:06,  4.06it/s]evaluating...:  82%|████████▏ | 119/146 [00:29<00:06,  4.08it/s]evaluating...:  82%|████████▏ | 120/146 [00:29<00:06,  4.09it/s]evaluating...:  83%|████████▎ | 121/146 [00:29<00:06,  4.10it/s]evaluating...:  84%|████████▎ | 122/146 [00:29<00:05,  4.10it/s]evaluating...:  84%|████████▍ | 123/146 [00:30<00:05,  4.10it/s]evaluating...:  85%|████████▍ | 124/146 [00:30<00:05,  4.09it/s]evaluating...:  86%|████████▌ | 125/146 [00:30<00:05,  4.07it/s]evaluating...:  86%|████████▋ | 126/146 [00:30<00:04,  4.07it/s]evaluating...:  87%|████████▋ | 127/146 [00:31<00:04,  4.06it/s]evaluating...:  88%|████████▊ | 128/146 [00:31<00:04,  4.06it/s]evaluating...:  88%|████████▊ | 129/146 [00:31<00:04,  4.05it/s]evaluating...:  89%|████████▉ | 130/146 [00:31<00:03,  4.05it/s]evaluating...:  90%|████████▉ | 131/146 [00:31<00:03,  4.04it/s]evaluating...:  90%|█████████ | 132/146 [00:32<00:03,  4.05it/s]evaluating...:  91%|█████████ | 133/146 [00:32<00:03,  4.04it/s]evaluating...:  92%|█████████▏| 134/146 [00:32<00:02,  4.05it/s]evaluating...:  92%|█████████▏| 135/146 [00:32<00:02,  4.05it/s]evaluating...:  93%|█████████▎| 136/146 [00:33<00:02,  4.05it/s]evaluating...:  94%|█████████▍| 137/146 [00:33<00:02,  4.05it/s]evaluating...:  95%|█████████▍| 138/146 [00:33<00:01,  4.05it/s]evaluating...:  95%|█████████▌| 139/146 [00:33<00:01,  4.05it/s]evaluating...:  96%|█████████▌| 140/146 [00:34<00:01,  4.05it/s]evaluating...:  97%|█████████▋| 141/146 [00:34<00:01,  4.05it/s]evaluating...:  97%|█████████▋| 142/146 [00:34<00:00,  4.05it/s]evaluating...:  98%|█████████▊| 143/146 [00:34<00:00,  4.05it/s]evaluating...:  99%|█████████▊| 144/146 [00:35<00:00,  4.05it/s]evaluating...:  99%|█████████▉| 145/146 [00:35<00:00,  4.05it/s]evaluating...: 100%|██████████| 146/146 [00:35<00:00,  4.05it/s]evaluating...: 100%|██████████| 146/146 [00:35<00:00,  4.09it/s]
-Test time: 0min 35.7s | nsamples=146
-Score: 10.049877166748047
-[RESULT] model=/mnt/workspace/models/Qwen3-8B mode=mr_gptq seq_len=2048 dtype=float16 PPL=10.0499

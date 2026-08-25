@@ -608,6 +608,7 @@ def quantize_fused_experts(model, scale_fitting=True, min_experts_numel=1_000_00
         if type(mod).__name__ != "Qwen3_5MoeExperts":
             continue
         n_mod += 1
+        done = []                      # 本模块内**实际**完成量化的参数名
         for pname in ("gate_up_proj", "down_proj"):
             W = getattr(mod, pname, None)
             if W is None or W.numel() < min_experts_numel:
@@ -626,8 +627,14 @@ def quantize_fused_experts(model, scale_fitting=True, min_experts_numel=1_000_00
             W.data = wq.to(dev)        # 再挪回原卡（此时峰值不超基线）
             del wq
             quant_param += W.numel()
+            done.append(pname)
+        # 显存口径的唯一凭据：只有真正走完上面这段的参数才记账。
+        # report_memory_full 读此标记，不再按模块类型名无条件计入
+        # （否则 min_experts_numel 跳过的、或本函数未被调用时，占比会虚高）。
+        mod._mrgptq_fused_quantized = tuple(done)
         _empty_cache()
-        print(f"[fused-experts] {name}  (scale_fit={scale_fitting}) 量化完成", flush=True)
+        print(f"[fused-experts] {name}  (scale_fit={scale_fitting}) 量化完成 "
+              f"[{', '.join(done) if done else '无'}]", flush=True)
     print(f"[fused-experts] 共 {n_mod} 个 Experts 模块，量化 {quant_param / 1e9:.2f}B 参数",
           flush=True)
     return n_mod, quant_param
