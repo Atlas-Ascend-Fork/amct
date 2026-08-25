@@ -55,6 +55,7 @@
 
   ```shell
 python -m amct_pytorch.eval \
+     --trust_remote_code \
      --model /data/models/Qwen3.6-35B-A3B \
      --model_name qwen3_6_moe \
      --seq_len 4096 \
@@ -78,6 +79,7 @@ python -m amct_pytorch.eval \
 根据YAML的bit配置，进行直转量化精度测试，评估与基准精度的差距，当前方案默认为对`quant-target`做全A8W4的int量化：
   ```shell
 python -m amct_pytorch.eval \
+    --trust_remote_code \
     --model /data/models/Qwen3.6-35B-A3B \
     --model_name qwen3_6_moe \
     --seq_len 4096 \
@@ -101,6 +103,7 @@ python -m amct_pytorch.eval \
 根据不同的量化对象`quant_target`提取相应的 PTQ 校准数据集：
   ```shell
 python -m amct_pytorch.extract_ptq_data \
+    --trust_remote_code \
     --model /data/models/Qwen3.6-35B-A3B \
     --model_name qwen3_6_moe \
     --seq_len 4096 \
@@ -119,6 +122,7 @@ python -m amct_pytorch.extract_ptq_data \
 #### 单卡环境
   ```shell
 python -m amct_pytorch.ptq \
+    --trust_remote_code \
     --model /data/models/Qwen3.6-35B-A3B \
     --model_name qwen3_6_moe \
     --seq_len 4096 \
@@ -149,6 +153,7 @@ python -m amct_pytorch.ptq \
 完成PTQ后，在直转量化精度评估中加入量化算法，与基准测试、无量化算法的直转量化精度比对，验证量化算法的效果：
   ```shell
 python -m amct_pytorch.eval \
+    --trust_remote_code \
     --model /data/models/Qwen3.6-35B-A3B \
     --model_name qwen3_6_moe \
     --seq_len 4096 \
@@ -168,6 +173,7 @@ python -m amct_pytorch.eval \
 完成上述所有步骤后，导出量化权重用于加载，权重对应的weight_map和huggingface官方对齐
   ```shell
 python -m amct_pytorch.deploy \
+    --trust_remote_code \
     --model /data/models/Qwen3.6-35B-A3B \
     --model_name qwen3_6_moe \
     --granularity block \

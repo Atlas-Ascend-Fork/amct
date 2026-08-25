@@ -15,41 +15,62 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+import os
 from pathlib import Path
 
 
-def resolve_safetensors_path(model_path, file_name):
-    """Resolve a safetensors shard that must be a file under model_path."""
+def collect_safetensors_files(model_path):
+    """Collect direct, regular safetensors files under model_path."""
+    model_root = Path(model_path).resolve()
+    if not model_root.is_dir():
+        raise NotADirectoryError(f"Model path is not a directory: {model_path}")
+
+    safetensors_files = set()
+    with os.scandir(model_root) as entries:
+        for entry in entries:
+            if not entry.is_file(follow_symlinks=False):
+                continue
+            if Path(entry.name).suffix != ".safetensors":
+                continue
+            safetensors_files.add(Path(entry.path).resolve())
+
+    if not safetensors_files:
+        raise FileNotFoundError(
+            f"No .safetensors files found in model directory: {model_path}"
+        )
+    return frozenset(safetensors_files)
+
+
+def resolve_safetensors_path(model_path, file_name, safetensors_files):
+    """Resolve a safetensors shard contained in the collected file allowlist."""
     if not isinstance(file_name, str) or not file_name:
         raise ValueError("Safetensors file name must be a non-empty string")
     if "\x00" in file_name:
         raise ValueError("Safetensors file name must not contain NUL")
 
-    model_root = Path(model_path).resolve()
     input_path = Path(file_name)
-    if (
-        input_path.is_absolute()
-        or file_name in {".", ".."}
-        or "/" in file_name
-        or "\\" in file_name
-    ):
-        raise ValueError("Safetensors file name must be a plain file name")
-    weight_path = (model_root / input_path).resolve()
-
-    if weight_path.suffix != ".safetensors":
+    if input_path.suffix != ".safetensors":
         raise ValueError("Weight file must use the .safetensors suffix")
-    if weight_path.parent != model_root:
-        raise ValueError("Safetensors file must stay inside the model directory")
-    if not weight_path.is_file():
-        raise FileNotFoundError(f"Safetensors file does not exist: {file_name}")
+
+    model_root = Path(model_path).resolve()
+    weight_path = (
+        input_path.resolve()
+        if input_path.is_absolute()
+        else (model_root / input_path).resolve()
+    )
+
+    if weight_path not in safetensors_files:
+        raise ValueError(
+            f"Safetensors file is not in the model directory allowlist: {file_name}"
+        )
     return weight_path
 
 
-def validate_weight_map(model_path, weight_map):
+def validate_weight_map(model_path, weight_map, safetensors_files):
     """Validate tensor-to-shard mappings loaded from a model index."""
     if not isinstance(weight_map, dict):
         raise ValueError("weight_map must be a dictionary")
     for weight_name, file_name in weight_map.items():
         if not isinstance(weight_name, str) or not weight_name:
             raise ValueError("weight_map keys must be non-empty strings")
-        resolve_safetensors_path(model_path, file_name)
+        resolve_safetensors_path(model_path, file_name, safetensors_files)

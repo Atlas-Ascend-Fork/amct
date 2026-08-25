@@ -40,6 +40,7 @@ from amct_pytorch.common.models.llm.common.deploy_export import (
     quant_payload,
 )
 from amct_pytorch.common.models.llm.common.weight_path_validation import (
+    collect_safetensors_files,
     resolve_safetensors_path,
     validate_weight_map,
 )
@@ -56,6 +57,7 @@ class LlmDeployWorkflow:
         self.pipeline = None
         self.model_name = args.model_name
         self.model_path = args.model
+        self.safetensors_files = None
         self.quant_dtype = args.quant_dtype
         self.output_dir = self.args.output_dir
         self.is_mx = self.quant_dtype.startswith("mx")
@@ -112,6 +114,11 @@ class LlmDeployWorkflow:
         model_cls = MODEL_REGISTRY.get(self.model_name)
         return model_cls(self.args)
 
+    def get_safetensors_files(self):
+        if getattr(self, "safetensors_files", None) is None:
+            self.safetensors_files = collect_safetensors_files(self.model_path)
+        return self.safetensors_files
+
     def _convert_tensor(self, weight_name: str, tensor: torch.Tensor) -> torch.Tensor:
         if self.quant_dtype == "bf16":
             return tensor.to(torch.bfloat16)
@@ -144,7 +151,11 @@ class LlmDeployWorkflow:
         if index_path.exists():
             with open(index_path, "r", encoding="utf-8") as f:
                 index = json.load(f)
-            validate_weight_map(self.model_path, index.get("weight_map"))
+            validate_weight_map(
+                self.model_path,
+                index.get("weight_map"),
+                self.get_safetensors_files(),
+            )
             return index
         single_path = Path(self.model_path) / SAFE_WEIGHTS_NAME
         if not single_path.exists():
@@ -154,7 +165,7 @@ class LlmDeployWorkflow:
             )
         with safe_open(str(single_path), framework="pt") as f:
             weight_map = {key: SAFE_WEIGHTS_NAME for key in f.keys()}
-        validate_weight_map(self.model_path, weight_map)
+        validate_weight_map(self.model_path, weight_map, self.get_safetensors_files())
         # total_size is a placeholder; _refresh_weight_index() recomputes and
         # overwrites it from the actual output shard sizes.
         return {
@@ -287,7 +298,9 @@ class LlmDeployWorkflow:
     def _convert_tensorwise_shard(
         self, source_file, model_dir, original_weight_map, quant_layers, loaded_files
     ):
-        source_path = resolve_safetensors_path(model_dir, source_file)
+        source_path = resolve_safetensors_path(
+            model_dir, source_file, self.get_safetensors_files()
+        )
         current_state_dict = load_file(str(source_path), device="cpu")
         loaded_files[source_file] = current_state_dict
 
@@ -309,6 +322,7 @@ class LlmDeployWorkflow:
                 model_dir,
                 loaded_files,
                 block_size,
+                self.get_safetensors_files(),
             )
             new_state_dict[weight_name] = weight
             if self.quant_dtype in ["int", "mxfp"]:
@@ -358,7 +372,9 @@ class LlmDeployWorkflow:
 
         model_dir = Path(self.model_path)
         for source_file in sorted(remaining_by_file):
-            source_path = resolve_safetensors_path(model_dir, source_file)
+            source_path = resolve_safetensors_path(
+                model_dir, source_file, self.get_safetensors_files()
+            )
             with safe_open(str(source_path), framework="pt", device="cpu") as f:
                 for weight_name in remaining_by_file[source_file]:
                     tensor = f.get_tensor(weight_name)

@@ -246,11 +246,12 @@ def test_load_scales_rejects_shard_outside_model_directory(tmp_path):
 
     model_dir = tmp_path / "model"
     model_dir.mkdir()
+    sf_save({"allowed": torch.ones(1)}, str(model_dir / "allowed.safetensors"))
     outside_path = tmp_path / "outside.safetensors"
     scale_name = "layer.weight_scale_inv"
     sf_save({scale_name: torch.ones(1)}, str(outside_path))
 
-    with pytest.raises(ValueError, match="plain file name"):
+    with pytest.raises(ValueError, match="not in the model directory allowlist"):
         deploy_export_mod._load_scales(
             (scale_name,),
             {scale_name: "../outside.safetensors"},

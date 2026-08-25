@@ -18,11 +18,12 @@
 
 import json
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 import torch
 import torch.nn as nn
+from loguru import logger
 from safetensors.torch import save_file
 
 from amct_pytorch.common.models.llm.common.base import BaseModel
@@ -55,6 +56,8 @@ class _StubModel(BaseModel):
             args.quant_target = list(quant_target)
         if not hasattr(args, 'quant_dtype'):
             args.quant_dtype = 'int8'
+        if not hasattr(args, 'trust_remote_code'):
+            args.trust_remote_code = True
 
         with (
             patch(
@@ -67,6 +70,116 @@ class _StubModel(BaseModel):
             ),
         ):
             super().__init__(args)
+
+
+def test_huggingface_loaders_use_trust_remote_code_from_args():
+    args = SimpleNamespace(
+        model="/fake/path",
+        model_name="qwen3",
+        quant_target=[],
+        quant_dtype="int8",
+        trust_remote_code=False,
+    )
+    config = SimpleNamespace(tie_word_embeddings=False)
+
+    with (
+        patch(
+            "amct_pytorch.common.models.llm.common.base.AutoConfig.from_pretrained",
+            return_value=config,
+        ) as config_loader,
+        patch(
+            "amct_pytorch.common.models.llm.common.base.AutoTokenizer.from_pretrained"
+        ) as tokenizer_loader,
+    ):
+        model = BaseModel(args)
+
+    assert config_loader.call_args.kwargs["trust_remote_code"] is False
+    assert tokenizer_loader.call_args.kwargs["trust_remote_code"] is False
+
+    with patch(
+        "amct_pytorch.common.models.llm.common.base.AutoModelForCausalLM.from_pretrained"
+    ) as float_model_loader:
+        model.float_model()
+    assert float_model_loader.call_args.kwargs["trust_remote_code"] is False
+
+    with (
+        patch(
+            "amct_pytorch.common.models.llm.common.base.init_empty_weights",
+            return_value=MagicMock(
+                __enter__=lambda _: None,
+                __exit__=lambda *_: None,
+            ),
+        ),
+        patch(
+            "amct_pytorch.common.models.llm.common.base.AutoModelForCausalLM.from_config"
+        ) as empty_model_loader,
+    ):
+        model.empty_weights_model()
+    assert empty_model_loader.call_args.kwargs["trust_remote_code"] is False
+
+
+def test_base_model_defaults_missing_trust_remote_code_to_false():
+    args = SimpleNamespace(
+        model="/fake/path",
+        model_name="qwen3",
+        quant_target=[],
+        quant_dtype="int8",
+    )
+    config = SimpleNamespace(tie_word_embeddings=False)
+
+    with (
+        patch(
+            "amct_pytorch.common.models.llm.common.base.AutoConfig.from_pretrained",
+            return_value=config,
+        ),
+        patch(
+            "amct_pytorch.common.models.llm.common.base.AutoTokenizer.from_pretrained"
+        ),
+    ):
+        model = BaseModel(args)
+
+    assert model.trust_remote_code is False
+
+
+def test_base_model_logs_trust_remote_code_scope_without_recommendation():
+    args = SimpleNamespace(
+        model="/fake/path",
+        model_name="qwen3",
+        quant_target=[],
+        quant_dtype="int8",
+        trust_remote_code=False,
+    )
+    config = SimpleNamespace(tie_word_embeddings=False)
+    messages = []
+    sink_id = logger.add(
+        lambda message: messages.append(str(message)), format="{message}"
+    )
+    try:
+        with (
+            patch(
+                "amct_pytorch.common.models.llm.common.base.AutoConfig.from_pretrained",
+                return_value=config,
+            ),
+            patch(
+                "amct_pytorch.common.models.llm.common.base.AutoTokenizer.from_pretrained"
+            ),
+        ):
+            model = BaseModel(args)
+    finally:
+        logger.remove(sink_id)
+
+    assert len(messages) == 1
+    assert "qwen3 is running without --trust_remote_code" in messages[0]
+    assert "Some models may require --trust_remote_code" in messages[0]
+    assert "recommend" not in messages[0].lower()
+    assert not hasattr(model, "model_name")
+
+
+def test_base_model_initializes_plural_safetensors_files_cache():
+    model = _StubModel()
+
+    assert model.safetensors_files is None
+    assert not hasattr(model, "safetensors_file")
 
 
 # ---- get_embed_load_specs ---------------------------
@@ -826,13 +939,18 @@ def test_load_layer_weight_reads_safetensors_from_disk(monkeypatch):
 
     model_dir, config, weight_map = _make_tiny_safetensors_model_dir()
     _mock_hf_for_safetensors_test(monkeypatch, model_dir, config)
+    absolute_weight_map = {
+        weight_name: str(model_dir / file_name)
+        for weight_name, file_name in weight_map.items()
+    }
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.get_weight_mappings",
-        lambda path: weight_map,
+        lambda path: absolute_weight_map,
     )
 
     args = SimpleNamespace(
         model=str(model_dir),
+        trust_remote_code=True,
         quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir="/tmp/fake",
@@ -865,6 +983,7 @@ def test_block_creates_layer_with_weights(monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
+        trust_remote_code=True,
         quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir="/tmp/fake",
@@ -896,6 +1015,7 @@ def test_load_embed_state_dict_loads_embed_weights(monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
+        trust_remote_code=True,
         quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir="/tmp/fake",
@@ -937,6 +1057,7 @@ def test_do_embedding_forward_runs_full_model_forward(tmp_path, monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
+        trust_remote_code=True,
         quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir=str(tmp_path),
@@ -981,6 +1102,7 @@ def test_do_embedding_forward_saves_position_info(tmp_path, monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
+        trust_remote_code=True,
         quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir=str(tmp_path),
@@ -1038,6 +1160,7 @@ def test_do_block_forward_runs_layer_forward_pass(monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
+        trust_remote_code=True,
         quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir="/tmp/fake",
@@ -1081,6 +1204,7 @@ def test_do_block_forward_with_hook_enables_act_stat_collection(monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
+        trust_remote_code=True,
         quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir="/tmp/fake",
@@ -1135,6 +1259,7 @@ def test_do_embedding_forward_saves_kwargs_when_hook_name_set(tmp_path, monkeypa
 
     args = SimpleNamespace(
         model=str(model_dir),
+        trust_remote_code=True,
         quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir=str(tmp_path),
@@ -1188,6 +1313,7 @@ def test_do_block_forward_with_quant_block_sets_quant_state(monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
+        trust_remote_code=True,
         quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir="/tmp/fake",
@@ -1238,6 +1364,7 @@ def test_do_block_forward_quant_eval_mode(monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
+        trust_remote_code=True,
         quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir="/tmp/fake",
@@ -1312,6 +1439,7 @@ def test_do_block_forward_with_hook_removal(monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
+        trust_remote_code=True,
         quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir="/tmp/fake",
@@ -1376,6 +1504,7 @@ def test_do_head_forward_runs_norm_and_lm_head(monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
+        trust_remote_code=True,
         quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir="/tmp/fake",

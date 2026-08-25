@@ -90,6 +90,21 @@ def _make_workflow(
     return workflow
 
 
+def test_workflow_initializes_plural_safetensors_files_cache():
+    args = SimpleNamespace(
+        granularity=GRANULARITY_BLOCK,
+        model_name=MODEL_NAME_QWEN3,
+        model=FAKE_MODEL,
+        quant_dtype="int8",
+        output_dir=TMP_DEPLOY_OUT,
+    )
+
+    workflow = LlmDeployWorkflow(args)
+
+    assert workflow.safetensors_files is None
+    assert not hasattr(workflow, "safetensors_file")
+
+
 # ---- dtype flag derivation ----------------------------------------------
 
 
@@ -183,13 +198,14 @@ def test_load_weight_index_reads_json(tmp_path):
 def test_load_weight_index_rejects_shard_outside_model_directory(tmp_path):
     model_dir = tmp_path / "model"
     model_dir.mkdir()
+    save_file({"allowed": torch.ones(1)}, str(model_dir / "allowed.safetensors"))
     outside_path = tmp_path / "outside.safetensors"
     save_file({"a.weight": torch.ones(1)}, str(outside_path))
     index = {"weight_map": {"a.weight": "../outside.safetensors"}}
     (model_dir / SAFETENSORS_INDEX_JSON).write_text(json.dumps(index))
 
     wf = _make_workflow(model_path=str(model_dir))
-    with pytest.raises(ValueError, match="plain file name"):
+    with pytest.raises(ValueError, match="not in the model directory allowlist"):
         wf._load_weight_index()
 
 
@@ -329,10 +345,11 @@ def test_write_remaining_weights_rejects_shard_outside_model_directory(tmp_path)
     output_dir = tmp_path / "output"
     model_dir.mkdir()
     output_dir.mkdir()
+    save_file({"allowed": torch.ones(1)}, str(model_dir / "allowed.safetensors"))
     save_file({"a": torch.ones(1)}, str(tmp_path / "outside.safetensors"))
 
     wf = _make_workflow(model_path=str(model_dir), output_dir=str(output_dir))
-    with pytest.raises(ValueError, match="plain file name"):
+    with pytest.raises(ValueError, match="not in the model directory allowlist"):
         wf._write_remaining_original_weights({"a": "../outside.safetensors"}, set())
 
 
@@ -341,6 +358,7 @@ def test_convert_tensorwise_shard_rejects_source_outside_model_directory(tmp_pat
     output_dir = tmp_path / "output" / "deploy"
     model_dir.mkdir()
     output_dir.mkdir(parents=True)
+    save_file({"allowed": torch.ones(1)}, str(model_dir / "allowed.safetensors"))
     save_file({"a.weight": torch.ones(1)}, str(tmp_path / "outside.safetensors"))
 
     wf = _make_workflow(
@@ -351,7 +369,7 @@ def test_convert_tensorwise_shard_rejects_source_outside_model_directory(tmp_pat
         block_size=lambda weight: 32,
     )
 
-    with pytest.raises(ValueError, match="plain file name"):
+    with pytest.raises(ValueError, match="not in the model directory allowlist"):
         wf._convert_tensorwise_shard(
             "../outside.safetensors",
             model_dir,
@@ -685,7 +703,8 @@ def test_run_tensorwise_copies_and_rewrites_weight_index(monkeypatch, tmp_path):
         original_weight_map,
         model_dir,
         loaded_files,
-        block_size: weight,
+        block_size,
+        safetensors_files: weight,
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_deploy.tqdm",

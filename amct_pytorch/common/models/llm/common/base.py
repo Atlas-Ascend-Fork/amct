@@ -44,6 +44,7 @@ from amct_pytorch.common.models.llm.common.ptq_units import (
     make_ptq_unit,
 )
 from amct_pytorch.common.models.llm.common.weight_path_validation import (
+    collect_safetensors_files,
     resolve_safetensors_path,
 )
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
@@ -64,11 +65,19 @@ class BaseModel(metaclass=ABCMeta):
         self.position_embeddings = None
         self.input_ids = None
         self.model_path = self.args.model
+        self.safetensors_files = None
+        self.trust_remote_code = getattr(self.args, "trust_remote_code", False)
+        if not self.trust_remote_code:
+            model_name = getattr(self.args, "model_name", self.__class__.__name__)
+            logger.warning(
+                f"{model_name} is running without --trust_remote_code. "
+                "Some models may require --trust_remote_code to load custom model code."
+            )
         self.config = AutoConfig.from_pretrained(
-            self.model_path, trust_remote_code=True
+            self.model_path, trust_remote_code=self.trust_remote_code
         )
         self.tokenizer = AutoTokenizer.from_pretrained(
-            self.model_path, trust_remote_code=True
+            self.model_path, trust_remote_code=self.trust_remote_code
         )
         self.ptq_param_handler = PtqParamHandler()
         self.ptq_param_store = PtqParamStore(
@@ -94,14 +103,18 @@ class BaseModel(metaclass=ABCMeta):
 
     def float_model(self):
         model = AutoModelForCausalLM.from_pretrained(
-            self.model_path, trust_remote_code=True, torch_dtype=torch.bfloat16
+            self.model_path,
+            trust_remote_code=self.trust_remote_code,
+            torch_dtype=torch.bfloat16,
         )
         return model
 
     def empty_weights_model(self):
         with init_empty_weights():
             model = AutoModelForCausalLM.from_config(
-                self.config, trust_remote_code=True, torch_dtype=torch.bfloat16
+                self.config,
+                trust_remote_code=self.trust_remote_code,
+                torch_dtype=torch.bfloat16,
             )
         return model
 
@@ -149,7 +162,9 @@ class BaseModel(metaclass=ABCMeta):
                 file_list.add(file_name)
         state_dict = {}
         for file_path in file_list:
-            full_path = resolve_safetensors_path(self.model_path, file_path)
+            full_path = resolve_safetensors_path(
+                self.model_path, file_path, self.get_safetensors_files()
+            )
             with safe_open(str(full_path), framework="pt", device="cpu") as f:
                 for key in f.keys():
                     if key.startswith(prefix):
@@ -157,6 +172,11 @@ class BaseModel(metaclass=ABCMeta):
                         state_dict[new_key] = f.get_tensor(key)
         state_dict.pop('self_attn.rotary_emb.inv_freq', None)
         return state_dict
+
+    def get_safetensors_files(self):
+        if self.safetensors_files is None:
+            self.safetensors_files = collect_safetensors_files(self.model_path)
+        return self.safetensors_files
 
     def block(self, layer_idx):
         decoder_layer = self.cls(self.config, layer_idx)

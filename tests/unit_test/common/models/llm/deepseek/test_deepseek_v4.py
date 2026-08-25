@@ -18,6 +18,7 @@
 
 from contextlib import nullcontext
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 import torch
@@ -32,8 +33,36 @@ from amct_pytorch.common.models.llm.deepseek.deepseek_v4.deepseekv4 import (
 def _make_model(model_path, weight_map):
     model = DeepseekV4.__new__(DeepseekV4)
     model.model_path = str(model_path)
+    model.safetensors_files = None
     model._weight_map = weight_map
     return model
+
+
+def test_init_requires_trust_remote_code():
+    args = SimpleNamespace(
+        model_name="deepseek_v4",
+        trust_remote_code=False,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="deepseek_v4 requires --trust_remote_code",
+    ):
+        DeepseekV4(args)
+
+
+def test_empty_weights_model_uses_trust_remote_code_from_args(monkeypatch):
+    from amct_pytorch.common.models.llm.deepseek.deepseek_v4 import deepseekv4
+
+    model = DeepseekV4.__new__(DeepseekV4)
+    model.config = SimpleNamespace()
+    model.trust_remote_code = True
+    monkeypatch.setattr(deepseekv4, "init_empty_weights", lambda **_: nullcontext())
+
+    with patch.object(deepseekv4.AutoModelForCausalLM, "from_config") as loader:
+        model.empty_weights_model()
+
+    assert loader.call_args.kwargs["trust_remote_code"] is True
 
 
 def test_block_sharded_rejects_shard_outside_model_directory(tmp_path, monkeypatch):
@@ -42,6 +71,7 @@ def test_block_sharded_rejects_shard_outside_model_directory(tmp_path, monkeypat
     model_dir = tmp_path / "model"
     model_dir.mkdir()
     weight_name = "model.layers.0.weight"
+    save_file({"allowed": torch.ones(1)}, str(model_dir / "allowed.safetensors"))
     save_file({weight_name: torch.ones(1, 1)}, str(tmp_path / "outside.safetensors"))
     model = _make_model(model_dir, {weight_name: "../outside.safetensors"})
     model.cls = lambda config, layer_idx: nn.Linear(1, 1, bias=False)
@@ -51,16 +81,17 @@ def test_block_sharded_rejects_shard_outside_model_directory(tmp_path, monkeypat
     model.get_layer_weight_prefix = lambda layer_idx: "model.layers.0."
     monkeypatch.setattr(deepseekv4, "init_empty_weights", nullcontext)
 
-    with pytest.raises(ValueError, match="plain file name"):
+    with pytest.raises(ValueError, match="not in the model directory allowlist"):
         model._block_sharded(0)
 
 
 def test_top_level_hc_params_reject_shard_outside_model_directory(tmp_path):
     model_dir = tmp_path / "model"
     model_dir.mkdir()
+    save_file({"allowed": torch.ones(1)}, str(model_dir / "allowed.safetensors"))
     save_file({"hc_head_fn": torch.ones(1)}, str(tmp_path / "outside.safetensors"))
     model = _make_model(model_dir, {"hc_head_fn": "../outside.safetensors"})
     model.model = nn.Module()
 
-    with pytest.raises(ValueError, match="plain file name"):
+    with pytest.raises(ValueError, match="not in the model directory allowlist"):
         model._load_top_level_hc_head_params()

@@ -66,6 +66,12 @@ class DeepseekV4(BaseModel):
     ffn_norm_name = "ffn_norm"
 
     def __init__(self, args):
+        if not getattr(args, "trust_remote_code", False):
+            model_name = getattr(args, "model_name", "deepseek_v4")
+            raise ValueError(
+                f"{model_name} requires --trust_remote_code. "
+                "Please rerun the command with --trust_remote_code."
+            )
         super().__init__(args)
         if not isinstance(self.config, DeepseekV4Config):
             self.config = DeepseekV4Config(**self.config.to_dict())
@@ -217,7 +223,7 @@ class DeepseekV4(BaseModel):
         with init_empty_weights(include_buffers=True):
             model = AutoModelForCausalLM.from_config(
                 self.config,
-                trust_remote_code=True,
+                trust_remote_code=self.trust_remote_code,
                 torch_dtype=torch.bfloat16,
             )
         from amct_pytorch.common.models.llm.deepseek.deepseek_v4.modeling.modeling_deepseek_v4 import (
@@ -306,7 +312,9 @@ class DeepseekV4(BaseModel):
             file_to_keys.setdefault(file_name, []).append((full_name, local_name))
 
         for file_name, keys in file_to_keys.items():
-            full_path = resolve_safetensors_path(self.model_path, file_name)
+            full_path = resolve_safetensors_path(
+                self.model_path, file_name, self.get_safetensors_files()
+            )
             with safe_open(str(full_path), framework="pt", device="cpu") as f:
                 for full_name, local_name in keys:
                     tensor = f.get_tensor(full_name)
@@ -390,7 +398,9 @@ class DeepseekV4(BaseModel):
                     name,
                 )
                 continue
-            file_path = resolve_safetensors_path(self.model_path, weight_map[key])
+            file_path = resolve_safetensors_path(
+                self.model_path, weight_map[key], self.get_safetensors_files()
+            )
             with safe_open(str(file_path), framework="pt", device="cpu") as f:
                 tensor = f.get_tensor(key)
             setattr(self.model, name, nn.Parameter(tensor.to(torch.float32)))
