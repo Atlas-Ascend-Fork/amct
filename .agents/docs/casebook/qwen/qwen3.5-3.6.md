@@ -26,7 +26,7 @@
 
 ### Qwen3.6-27B Dense
 
-- PTQ calibration：PileVal，`nsamples=16`，`seq_len=1024`；PPL evaluation：WikiText2 test，`seq_len=4096`。前者为校准长度，不是 PPL 评测长度。
+- PTQ calibration：PileVal，`nsamples=16`，`seq_len=1024`；PPL evaluation：WikiText2 test，`seq_len=4096`。
 - `attn-linear` 与 `mlp` 的 Direct、LWC、LAC、LWC+LAC、OmniQuant、AutoRound、FlatQuant 均完成 Deploy 与 clean reload；无缺失键、非预期键、形状不匹配或加载错误。
 - clean reload 识别 `attn-linear` 304 个量化模块（第 0 层 5 个）、`mlp` 192 个量化模块（第 0 层 3 个）；Vision 分支和 `lm_head` 未被错误量化。
 
@@ -34,7 +34,6 @@
 
 - **误用 DeepSeek 的 MLA 接口**（L3，Qwen3_5/3_6 专属） —— 现象：进 quant block 构建即调到不存在的 `apply_quant_mla()` 报错。根因：`qwen3_5moe` 继承 `Qwen3_5`，应复用 Qwen 公共接口而非 DeepSeek MLA 专用入口。处理：统一收回 `apply_quant_attn()`/`apply_quant_moe_mlp()`。**教训：Qwen 分支先看 dense adapter 公共接口，勿直接用 DeepSeek MLA 入口。**
 - 混合 attention causal mask 路由 / `linear` vs `full` 分开处理（`linear_attention` kernel 未就绪先留 BF16，仍可量化其投影 Linear）→ 见 [L2 · 混合 attention 类](../structure-family-pitfalls.md)。
-- Qwen3.6-27B Dense 的 MLP PTQ 参数仍通过 `--moe_mlp_param_dir` 传入；参数名中的 `moe` 不表示模型为 MoE。
 
 ## 量化结论
 
