@@ -45,7 +45,6 @@
 
 - 先参考：本案 + `qwen3-next`（混合 attention）+ Qwen README。
 - 先做什么：先确认 experts packed/展开；BF16 离谱先查混合 attention mask 路由。
-- **27B Dense**：从 `qwen3_5` adapter 起步，先确认 `model_type=qwen3_5` 与 64 层 Dense 结构；`attn-linear` / `mlp` 可沿用本案配置，其中 Dense MLP 的 PTQ 参数仍通过 `--moe_mlp_param_dir` 传入。
 - **不建议**：Qwen 分支误用 DeepSeek MLA 入口；`linear`/`full` attention 一把梭。
 
 ## 精度速查表
