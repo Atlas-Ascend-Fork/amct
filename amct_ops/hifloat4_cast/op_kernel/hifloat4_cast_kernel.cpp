@@ -116,9 +116,11 @@ public:
         vector_dup(nfbuf.ptr(), 1.0f, BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS);
         vector_dup(bf16_seven_buf.ptr(), (1.0f / 7.0f), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
-        vconv_f322bf16r(bf16_seven_buf_bf16.ptr(), bf16_seven_buf.ptr(), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS_BF16, VEC_REP_ELEMS);
+        vconv_f322bf16r(bf16_seven_buf_bf16.ptr(), bf16_seven_buf.ptr(), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS_BF16,
+            VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
-        vconv_bf162f32(bf16_seven_buf.ptr(), bf16_seven_buf_bf16.ptr(), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS_BF16);
+        vconv_bf162f32(bf16_seven_buf.ptr(), bf16_seven_buf_bf16.ptr(), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS,
+            VEC_REP_ELEMS_BF16);
     }
 
     aifunc void tiling() {
@@ -186,7 +188,8 @@ public:
         } else {
             inp_tsr_ = fp32inbuf;
             out_tsr_ = fp32outbuf;
-            vconv_bf162f32(inp_tsr_.ptr(), xbuf.get(mn_).ptr(), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS_BF16);
+            vconv_bf162f32(
+                inp_tsr_.ptr(), xbuf.get(mn_).ptr(), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS_BF16);
             pipe_barrier(PIPE_V);
         }
     }
@@ -243,14 +246,17 @@ public:
         pipe_barrier(PIPE_V);
         set_cmpmask(zerobuf.vptr()); // fallback = 0.0 (non-finite side)
         pipe_barrier(PIPE_V);
-        vsel(absbuf.ptr(), absbuf.ptr(), exp2maskbuf.vptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS, 1, 1);
+        vsel(absbuf.ptr(), absbuf.ptr(), exp2maskbuf.vptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS,
+            1, 1);
         pipe_barrier(PIPE_V);
         // per-64-block poison flag: max of the markers (same reduction as the scale path)
         vcmax(nfmaxbuf.ptr(), nfbuf.ptr(), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS, ONLY_VALUE);
         pipe_barrier(PIPE_V);
-        vbrcb((__ubuf__ uint32_t *)brcbbuf.ptr(), (__ubuf__ uint32_t *)nfmaxbuf.ptr(), 1, VEC_REP_ELEMS, (BATCH + 511) / 512);
+        vbrcb((__ubuf__ uint32_t *)brcbbuf.ptr(), (__ubuf__ uint32_t *)nfmaxbuf.ptr(), 1, VEC_REP_ELEMS,
+            (BATCH + 511) / 512);
         pipe_barrier(PIPE_V);
-        vbrcb((__ubuf__ uint32_t *)nfmaxbuf.ptr(), (__ubuf__ uint32_t *)brcbbuf.ptr(), 1, VEC_REP_ELEMS, BATCH / SEG_ELEMS);
+        vbrcb((__ubuf__ uint32_t *)nfmaxbuf.ptr(), (__ubuf__ uint32_t *)brcbbuf.ptr(), 1, VEC_REP_ELEMS,
+            BATCH / SEG_ELEMS);
         pipe_barrier(PIPE_V);
     }
 
@@ -258,15 +264,20 @@ public:
         // block max and the bf16 scale factor, clamped to [2^-48, 49152]
         vcmax(exp0buf.ptr(), absbuf.ptr(), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS, ONLY_VALUE);
         pipe_barrier(PIPE_V);
-        vbrcb((__ubuf__ uint32_t *)brcbbuf.ptr(), (__ubuf__ uint32_t *)exp0buf.ptr(), 1, VEC_REP_ELEMS, (BATCH + 511) / 512);
+        vbrcb((__ubuf__ uint32_t *)brcbbuf.ptr(), (__ubuf__ uint32_t *)exp0buf.ptr(), 1, VEC_REP_ELEMS,
+            (BATCH + 511) / 512);
         pipe_barrier(PIPE_V);
-        vbrcb((__ubuf__ uint32_t *)exp0buf.ptr(), (__ubuf__ uint32_t *)brcbbuf.ptr(), 1, VEC_REP_ELEMS, BATCH / SEG_ELEMS);
+        vbrcb((__ubuf__ uint32_t *)exp0buf.ptr(), (__ubuf__ uint32_t *)brcbbuf.ptr(), 1, VEC_REP_ELEMS,
+            BATCH / SEG_ELEMS);
         pipe_barrier(PIPE_V);
-        vmul(exp0buf.ptr(), exp0buf.ptr(), bf16_seven_buf.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS, VEC_REP_ELEMS);
+        vmul(exp0buf.ptr(), exp0buf.ptr(), bf16_seven_buf.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS,
+            VEC_REP_ELEMS, VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
-        vconv_f322bf16r(bf16_general_buf.ptr(), exp0buf.ptr(), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS_BF16, VEC_REP_ELEMS);
+        vconv_f322bf16r(
+            bf16_general_buf.ptr(), exp0buf.ptr(), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS_BF16, VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
-        vconv_bf162f32(exp0buf.ptr(), bf16_general_buf.ptr(), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS_BF16);
+        vconv_bf162f32(
+            exp0buf.ptr(), bf16_general_buf.ptr(), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS_BF16);
         pipe_barrier(PIPE_V);
         vmins(exp0buf.ptr(), exp0buf.ptr(), 49152.0f, BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
@@ -282,7 +293,8 @@ public:
         // here (1 = clean block); NaN replacement is deferred to the Reconstruct output
         // stage so NaN scales never enter intermediate vector arithmetic (vdiv/vconv
         // raise AI Core exceptions on NaN operands).
-        vcmpvs_lt((__ubuf__ uint8_t *)exp1maskbuf.ptr(), nfmaxbuf.ptr(), 0.5f, BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS);
+        vcmpvs_lt((__ubuf__ uint8_t *)exp1maskbuf.ptr(), nfmaxbuf.ptr(), 0.5f, BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS,
+            VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
     }
 
@@ -298,11 +310,13 @@ public:
         } else {
         }
         pipe_barrier(PIPE_V);
-        vdiv(exp0buf.ptr(), exp0buf.ptr(), sfexpbuf.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS, VEC_REP_ELEMS);
+        vdiv(exp0buf.ptr(), exp0buf.ptr(), sfexpbuf.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS,
+            VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
         vconv_f322f32r(exp0buf.ptr(), exp0buf.ptr(), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
-        vmul(exp0buf.ptr(), exp0buf.ptr(), sfexpbuf.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS, VEC_REP_ELEMS);
+        vmul(exp0buf.ptr(), exp0buf.ptr(), sfexpbuf.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS,
+            VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
     }
 
@@ -310,18 +324,24 @@ public:
         // per-8-group micro exponent: exp1 = (max8 * rec >= 4) ? 2 : 1
         vcgmax(exp1maxbuf.ptr(), absbuf.ptr(), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
-        vbrcb((__ubuf__ uint32_t *)exp1buf.ptr(), (__ubuf__ uint32_t *)exp1maxbuf.ptr(), 1, VEC_REP_ELEMS, BATCH / SEG_ELEMS);
+        vbrcb((__ubuf__ uint32_t *)exp1buf.ptr(), (__ubuf__ uint32_t *)exp1maxbuf.ptr(), 1, VEC_REP_ELEMS,
+            BATCH / SEG_ELEMS);
         pipe_barrier(PIPE_V);
-        vdiv(exp0recbuf.ptr(), onesbuf.ptr(), exp0buf.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS, VEC_REP_ELEMS);
+        vdiv(exp0recbuf.ptr(), onesbuf.ptr(), exp0buf.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS,
+            VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
-        vconv_f322bf16r(bf16_general_buf.ptr(), exp0recbuf.ptr(), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS_BF16, VEC_REP_ELEMS);
+        vconv_f322bf16r(
+            bf16_general_buf.ptr(), exp0recbuf.ptr(), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS_BF16, VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
-        vconv_bf162f32(exp0recbuf.ptr(), bf16_general_buf.ptr(), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS_BF16);
+        vconv_bf162f32(
+            exp0recbuf.ptr(), bf16_general_buf.ptr(), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS_BF16);
         pipe_barrier(PIPE_V);
-        vmul(exp1buf.ptr(), exp1buf.ptr(), exp0recbuf.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS, VEC_REP_ELEMS);
+        vmul(exp1buf.ptr(), exp1buf.ptr(), exp0recbuf.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS,
+            VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
 
-        vcmpvs_ge((__ubuf__ uint8_t *)exp1maskbuf.ptr(), exp1buf.ptr(), 4.0f, BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS);
+        vcmpvs_ge((__ubuf__ uint8_t *)exp1maskbuf.ptr(), exp1buf.ptr(), 4.0f, BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS,
+            VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
         set_cmpmask(onesbuf.vptr());
         pipe_barrier(PIPE_V);
@@ -347,8 +367,10 @@ public:
         vcgmax(exp2maxbufa.ptr(), exp2parta.ptr(), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS);
         vcgmax(exp2maxbufb.ptr(), exp2partb.ptr(), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
-        vbrcb((__ubuf__ uint32_t *)exp2parta.ptr(), (__ubuf__ uint32_t *)exp2maxbufa.ptr(), 1, VEC_REP_ELEMS, BATCH / SEG_ELEMS);
-        vbrcb((__ubuf__ uint32_t *)exp2partb.ptr(), (__ubuf__ uint32_t *)exp2maxbufb.ptr(), 1, VEC_REP_ELEMS, BATCH / SEG_ELEMS);
+        vbrcb((__ubuf__ uint32_t *)exp2parta.ptr(), (__ubuf__ uint32_t *)exp2maxbufa.ptr(), 1, VEC_REP_ELEMS,
+            BATCH / SEG_ELEMS);
+        vbrcb((__ubuf__ uint32_t *)exp2partb.ptr(), (__ubuf__ uint32_t *)exp2maxbufb.ptr(), 1, VEC_REP_ELEMS,
+            BATCH / SEG_ELEMS);
         pipe_barrier(PIPE_V);
     }
 
@@ -364,13 +386,17 @@ public:
         pipe_barrier(PIPE_V);
         set_vector_mask((uint64_t)-1, (uint64_t)-1);
         pipe_barrier(PIPE_V);
-        vadd(exp2buf.ptr(), exp2parta.ptr(), exp2partb.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS, VEC_REP_ELEMS);
+        vadd(exp2buf.ptr(), exp2parta.ptr(), exp2partb.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS,
+            VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
-        vdiv(exp2buf.ptr(), exp2buf.ptr(), exp1buf.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS, VEC_REP_ELEMS);
+        vdiv(exp2buf.ptr(), exp2buf.ptr(), exp1buf.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS,
+            VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
-        vmul(exp2buf.ptr(), exp2buf.ptr(), exp0recbuf.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS, VEC_REP_ELEMS);
+        vmul(exp2buf.ptr(), exp2buf.ptr(), exp0recbuf.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS,
+            VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
-        vcmpvs_ge((__ubuf__ uint8_t *)exp2maskbuf.ptr(), exp2buf.ptr(), 2.0f, BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS);
+        vcmpvs_ge((__ubuf__ uint8_t *)exp2maskbuf.ptr(), exp2buf.ptr(), 2.0f, BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS,
+            VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
         set_cmpmask(onesbuf.vptr());
         pipe_barrier(PIPE_V);
@@ -381,25 +407,32 @@ public:
     aifunc void ComputeMantissa() {
         // in-group value: bf16-round(abs / exp2 / exp1 * rec), then S1P2 (2 frac bits,
         // round-half-up via *4+0.5 then truncate), clamped to +/-1.75
-        vdiv(mantbuf.ptr(), absbuf.ptr(), exp2buf.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS, VEC_REP_ELEMS);
+        vdiv(mantbuf.ptr(), absbuf.ptr(), exp2buf.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS,
+            VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
-        vdiv(mantbuf.ptr(), mantbuf.ptr(), exp1buf.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS, VEC_REP_ELEMS);
+        vdiv(mantbuf.ptr(), mantbuf.ptr(), exp1buf.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS,
+            VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
-        vmul(mantbuf.ptr(), mantbuf.ptr(), exp0recbuf.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS, VEC_REP_ELEMS);
+        vmul(mantbuf.ptr(), mantbuf.ptr(), exp0recbuf.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS,
+            VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
         // round the in-group mantissa quotient to bf16 before the S1P2 round
-        vconv_f322bf16r(bf16_general_buf.ptr(), mantbuf.ptr(), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS_BF16, VEC_REP_ELEMS);
+        vconv_f322bf16r(
+            bf16_general_buf.ptr(), mantbuf.ptr(), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS_BF16, VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
-        vconv_bf162f32(mantbuf.ptr(), bf16_general_buf.ptr(), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS_BF16);
+        vconv_bf162f32(
+            mantbuf.ptr(), bf16_general_buf.ptr(), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS_BF16);
         pipe_barrier(PIPE_V);
 
-        vmuls(mantbuf.ptr(), mantbuf.ptr(), (float)(1 << (shape.MB - 1)), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS);
+        vmuls(mantbuf.ptr(), mantbuf.ptr(), (float)(1 << (shape.MB - 1)), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS,
+            VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
         vadds(mantbuf.ptr(), mantbuf.ptr(), 0.5f, BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
         vconv_f322f32z(mantbuf.ptr(), mantbuf.ptr(), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
-        vmuls(mantbuf.ptr(), mantbuf.ptr(), 1.0f / (float)(1 << (shape.MB - 1)), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS);
+        vmuls(mantbuf.ptr(), mantbuf.ptr(), 1.0f / (float)(1 << (shape.MB - 1)), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS,
+            VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
         float maxmant = 2.0f - 1.0f / (float)(1 << (shape.MB - 1));
         vmins(mantbuf.ptr(), mantbuf.ptr(), maxmant, BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS);
@@ -410,28 +443,35 @@ public:
 
     aifunc void Reconstruct() {
         // out = sign * mant * exp2 * exp1 * scale
-        vmul(out_tsr_.ptr(), exp2buf.ptr(), mantbuf.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS, VEC_REP_ELEMS);
+        vmul(out_tsr_.ptr(), exp2buf.ptr(), mantbuf.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS,
+            VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
-        vmul(out_tsr_.ptr(), exp1buf.ptr(), out_tsr_.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS, VEC_REP_ELEMS);
+        vmul(out_tsr_.ptr(), exp1buf.ptr(), out_tsr_.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS,
+            VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
-        vmul(out_tsr_.ptr(), exp0buf.ptr(), out_tsr_.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS, VEC_REP_ELEMS);
+        vmul(out_tsr_.ptr(), exp0buf.ptr(), out_tsr_.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS,
+            VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
-        vmul(out_tsr_.ptr(), out_tsr_.ptr(), signbuf.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS, VEC_REP_ELEMS);
+        vmul(out_tsr_.ptr(), out_tsr_.ptr(), signbuf.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS,
+            VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
         // Replace poisoned blocks with NaN as a whole (clean mask=1 keeps the computed
         // result; nfmaxbuf still holds the per-block flags).
-        vcmpvs_lt((__ubuf__ uint8_t *)exp2maskbuf.ptr(), nfmaxbuf.ptr(), 0.5f, BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS);
+        vcmpvs_lt((__ubuf__ uint8_t *)exp2maskbuf.ptr(), nfmaxbuf.ptr(), 0.5f, BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS,
+            VEC_REP_ELEMS);
         pipe_barrier(PIPE_V);
         set_cmpmask(nanbuf.vptr()); // fallback = quiet NaN (poisoned side)
         pipe_barrier(PIPE_V);
-        vsel(out_tsr_.ptr(), out_tsr_.ptr(), exp2maskbuf.vptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS, VEC_REP_ELEMS, 1, 1);
+        vsel(out_tsr_.ptr(), out_tsr_.ptr(), exp2maskbuf.vptr(), BATCH / SEG_ELEMS, 1, 1, 1, VEC_REP_ELEMS,
+            VEC_REP_ELEMS, 1, 1);
         pipe_barrier(PIPE_V);
     }
 
     aifunc void StoreOutput() {
         if constexpr (std::is_same<T, float>::value) {
         } else {
-            vconv_f322bf16a(outbuf.get(mn_).ptr(), out_tsr_.ptr(), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS_BF16, VEC_REP_ELEMS);
+            vconv_f322bf16a(
+                outbuf.get(mn_).ptr(), out_tsr_.ptr(), BATCH / SEG_ELEMS, 1, 1, VEC_REP_ELEMS_BF16, VEC_REP_ELEMS);
             pipe_barrier(PIPE_V);
         }
 
