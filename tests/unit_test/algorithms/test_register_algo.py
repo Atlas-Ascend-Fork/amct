@@ -17,8 +17,6 @@
 # ----------------------------------------------------------------------------
 
 
-import pytest
-
 from amct_pytorch.algorithms.register_algo import Algorithm
 
 ALG = 'alg'
@@ -84,56 +82,3 @@ def test_repeated_registration_can_extend_deploy_with_new_target():
     a.register(ALG, "Linear", _OpA, _OpB)
     a.register(ALG, "Linear", _OpA, _OpC)
     assert set(a.quant_to_deploy[_OpA]) == {_OpB, _OpC}
-
-
-def test_get_quant_op_by_name_resolves_registered_class():
-    a = Algorithm()
-    a.register(ALG, "Linear", _OpA, _OpB)
-    assert a.get_quant_op_by_name("_OpA") is _OpA
-
-
-def test_get_quant_op_by_name_ignores_string_quant_op():
-    a = Algorithm()
-    a.register(ALG, None, "FP8Linear", _OpB)
-    with pytest.raises(ValueError, match="not registered"):
-        a.get_quant_op_by_name("FP8Linear")
-
-
-def test_get_quant_op_by_name_deduplicates_same_class():
-    a = Algorithm()
-    a.register(ALG, "Linear", _OpA, _OpB)
-    a.register("other", "Conv2d", _OpA, _OpC)
-    assert a.get_quant_op_by_name("_OpA") is _OpA
-
-
-def test_get_quant_op_by_name_rejects_two_classes_with_the_same_name():
-    a = Algorithm()
-    a.register(ALG, "Linear", _OpA, _OpB)
-    clash = type("_OpA", (_Op,), {})
-    a.register("other", "Linear", clash, _OpC)
-    with pytest.raises(ValueError, match="ambiguous"):
-        a.get_quant_op_by_name("_OpA")
-
-
-@pytest.mark.parametrize("bad", ["", None, 1, _OpA])
-def test_get_quant_op_by_name_rejects_non_str(bad):
-    a = Algorithm()
-    with pytest.raises(ValueError):
-        a.get_quant_op_by_name(bad)
-
-
-def test_get_quant_op_by_name_rejects_unknown_name():
-    a = Algorithm()
-    a.register(ALG, "Linear", _OpA, _OpB)
-    with pytest.raises(ValueError, match="not registered"):
-        a.get_quant_op_by_name("_OpZ")
-
-
-def test_production_registry_resolves_real_quant_modules():
-    from amct_pytorch.algorithms import AlgorithmRegistry
-    from amct_pytorch.classic.quantize_op.gptq_module import GPTQuant
-    from amct_pytorch.classic.quantize_op.linear_awq_module import LinearAWQuant
-    from amct_pytorch.classic.quantize_op.minmax_module import MinMaxQuant
-
-    for cls in (MinMaxQuant, LinearAWQuant, GPTQuant):
-        assert AlgorithmRegistry.get_quant_op_by_name(cls.__name__) is cls

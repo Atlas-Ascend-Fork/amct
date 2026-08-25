@@ -131,7 +131,7 @@ def test_quantize_uses_default_config_when_none():
     args, _ = mock_parse.call_args
     assert args[0] is model
     assert args[1] is sentinel_default
-    mock_pass_cls.assert_called_once_with(sentinel_layer)
+    mock_pass_cls.assert_called_once_with(sentinel_layer, quant_result_writer=None)
     opt.add_pass.assert_called_once_with(mock_pass_cls.return_value)
     opt.do_optimizer.assert_called_once_with(model)
 
@@ -168,9 +168,9 @@ def test_quantize_rejects_non_dict_config():
 # --------------------------------------------------------------------------
 # quant_result_dir: quant result artifact persistence.
 #
-# The default (None) path must stay byte-for-byte the old behaviour: no
-# directory, no writer, no extra pass argument. With a directory, the manifest
-# appears only once every expected unit has been dumped.
+# The default (None) path keeps the old user-visible behaviour: no directory and
+# no artifact writes. With a directory, the manifest appears only once every
+# expected unit has been dumped.
 # --------------------------------------------------------------------------
 
 WEIGHT_ONLY_CFG = {
@@ -215,8 +215,8 @@ def test_quantize_without_result_dir_creates_nothing(tmp_path):
     before = sorted(p.name for p in tmp_path.iterdir())
     quantize(model, WEIGHT_ONLY_CFG)
     assert sorted(p.name for p in tmp_path.iterdir()) == before
-    assert model.fc1.quant_result_writer is None
-    assert not model.fc1.quant_params_dumped
+    assert not hasattr(model.fc1, 'quant_result_writer')
+    assert not hasattr(model.fc1, 'quant_params_dumped')
 
 
 def test_quantize_without_result_dir_keeps_pass_signature():
@@ -229,7 +229,7 @@ def test_quantize_without_result_dir_keeps_pass_signature():
     ):
         quantize(model, {"granularity": "tensor"})
 
-    mock_pass_cls.assert_called_once_with({"layer": "cfg"})
+    mock_pass_cls.assert_called_once_with({"layer": "cfg"}, quant_result_writer=None)
     mock_writer_cls.create.assert_not_called()
 
 
@@ -286,6 +286,12 @@ def test_quantize_rejects_result_dir_when_the_root_is_the_quant_layer(tmp_path):
     with pytest.raises(ValueError, match="itself a quantizable layer"):
         quantize(root_linear, WEIGHT_ONLY_CFG, quant_result_dir=str(out))
     assert list(out.iterdir()) == []
+
+
+def test_quantize_rejects_root_quant_layer_without_result_dir():
+    root_linear = nn.Linear(64, 32).to(torch.bfloat16)
+    with pytest.raises(ValueError, match="itself a quantizable layer"):
+        quantize(root_linear, WEIGHT_ONLY_CFG)
 
 
 def test_weight_only_publishes_without_any_forward(tmp_path):
@@ -461,9 +467,10 @@ def test_quantize_rejects_an_algorithm_without_export_support(tmp_path):
     out = tmp_path / "smoothquant"
     out.mkdir()
     model = _LinearShapedModel().to(torch.bfloat16)
-    with pytest.raises(ValueError, match="not supported yet for algorithm"):
+    with pytest.raises(ValueError, match="not supported yet for algorithm") as ctx:
         quantize(model, SMOOTHQUANT_CFG, quant_result_dir=str(out))
 
+    assert "_supports_quant_result_export" not in str(ctx.value)
     assert list(out.iterdir()) == [], "a rejected algorithm must write nothing"
     assert type(model.fc1).__name__ == "Linear", "the model must be left untouched"
 
@@ -589,11 +596,15 @@ def test_npu_round_trip_restores_params_to_the_device(tmp_path):
     assert torch.equal(reference(inputs), expected)
 
 
-def test_pass_rejects_a_quant_op_that_cannot_export(tmp_path):
-    class _LegacyQuantOp(nn.Module):
+def test_pass_attaches_the_writer_without_exposing_capability_flags():
+    class _RecordingQuantOp(nn.Module):
         def __init__(self, ori_module, layer_name, quant_config):
             super().__init__()
             self.ori_module = ori_module
+            self.attached_writer = None
+
+        def attach_quant_result_writer(self, writer):
+            self.attached_writer = writer
 
         def forward(self, inputs):
             return self.ori_module(inputs)
@@ -603,6 +614,6 @@ def test_pass_rejects_a_quant_op_that_cannot_export(tmp_path):
     quant_pass = InsertQuantizeModulePass(
         {"fc1": {"algorithm": {"minmax": {}}}}, quant_result_writer=writer
     )
-    quant_pass.quantize_ops["fc1"] = _LegacyQuantOp
-    with pytest.raises(TypeError, match="does not support quant result export"):
-        quant_pass.do_pass(model, model.fc1, "fc1")
+    quant_pass.quantize_ops["fc1"] = _RecordingQuantOp
+    quant_pass.do_pass(model, model.fc1, "fc1")
+    assert model.fc1.attached_writer is writer

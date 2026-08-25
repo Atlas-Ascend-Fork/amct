@@ -319,7 +319,6 @@ class _StubWriter:
 class _DeclaredParamsModule(BaseQuantizeModule):
     """Exercises the generic export/load plumbing with mixed value kinds."""
 
-    _supports_quant_result_export = True
     _quant_param_keys = ('scale_w', 'offset_w', 'group_size', 'scale_d')
 
     def __init__(self, layer_name='fc', quant_config=None):
@@ -370,14 +369,16 @@ class TestBaseQuantParamExport(unittest.TestCase):
         class _BadKeys(BaseQuantizeModule):
             _quant_param_keys = ('scale_w', 'scale_w')
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as duplicate_ctx:
             _BadKeys.quant_param_keys()
+        self.assertNotIn('_quant_param_keys', str(duplicate_ctx.exception))
 
         class _NonStrKeys(BaseQuantizeModule):
             _quant_param_keys = (1,)
 
-        with self.assertRaises(TypeError):
+        with self.assertRaises(TypeError) as type_ctx:
             _NonStrKeys.quant_param_keys()
+        self.assertNotIn('_quant_param_keys', str(type_ctx.exception))
 
 
 class TestBaseQuantParamLoad(unittest.TestCase):
@@ -414,6 +415,7 @@ class TestBaseQuantParamLoad(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             module.load_quant_params({'scale_bogus': torch.ones(1)})
         self.assertIn('not declared', str(ctx.exception))
+        self.assertNotIn('_quant_param_keys', str(ctx.exception))
         with self.assertRaises(ValueError):
             module.load_quant_params({}, {'not_declared': 1})
 
@@ -447,7 +449,8 @@ class TestBaseQuantResultDump(unittest.TestCase):
     def test_no_writer_means_no_dump(self):
         module = _DeclaredParamsModule()
         self.assertFalse(module.maybe_dump_quant_params())
-        self.assertFalse(module.quant_params_dumped)
+        self.assertFalse(hasattr(module, 'quant_result_writer'))
+        self.assertFalse(hasattr(module, 'quant_params_dumped'))
 
     def test_dumps_once_with_full_provenance(self):
         module = _DeclaredParamsModule(
@@ -456,7 +459,6 @@ class TestBaseQuantResultDump(unittest.TestCase):
         )
         writer = _StubWriter()
         module.attach_quant_result_writer(writer)
-        self.assertIs(module.quant_result_writer, writer)
 
         self.assertTrue(module.maybe_dump_quant_params())
         self.assertFalse(module.maybe_dump_quant_params())
@@ -480,40 +482,29 @@ class TestBaseQuantResultDump(unittest.TestCase):
         module.attach_quant_result_writer(_FailingWriter())
         with self.assertRaises(OSError):
             module.maybe_dump_quant_params()
-        self.assertFalse(module.quant_params_dumped)
+        retry_writer = _StubWriter()
+        module.attach_quant_result_writer(retry_writer)
+        self.assertTrue(module.maybe_dump_quant_params())
+        self.assertEqual(len(retry_writer.calls), 1)
 
-    def test_rejects_dump_without_a_layer_name(self):
-        module = _DeclaredParamsModule(layer_name='')
-        module.attach_quant_result_writer(_StubWriter())
-        with self.assertRaises(ValueError):
-            module.maybe_dump_quant_params()
+    def test_rejects_invalid_layer_name_during_construction(self):
+        for layer_name in ('', None, 1):
+            with self.subTest(layer_name=layer_name):
+                with self.assertRaisesRegex(ValueError, 'layer_name'):
+                    _DeclaredParamsModule(layer_name=layer_name)
 
     def test_rejects_a_quant_config_reload_could_not_use(self):
         module = _DeclaredParamsModule(quant_config={'mod': nn.Linear(2, 2)})
         module.attach_quant_result_writer(_StubWriter())
         with self.assertRaises(TypeError):
             module.maybe_dump_quant_params()
-        self.assertFalse(module.quant_params_dumped)
 
 
-class TestQuantResultExportCapability(unittest.TestCase):
-    """Export support is an explicit declaration, not merely inheritance."""
+class TestQuantResultParamDeclaration(unittest.TestCase):
+    """Each wired algorithm declares the params its implementation produces."""
 
-    def test_base_does_not_claim_support_by_default(self):
-        class _JustInherits(BaseQuantizeModule):
-            pass
-
-        self.assertFalse(_JustInherits.supports_quant_result_export())
-        self.assertFalse(BaseQuantizeModule.supports_quant_result_export())
-
-    def test_minmax_declares_support(self):
-        self.assertTrue(MinMaxQuant.supports_quant_result_export())
-
-    def test_wired_algorithms_declare_support_and_params(self):
-        # AWQ and GPTQ are wired: each declares its params and dumps at its own
-        # finalization point.
+    def test_wired_algorithms_declare_params(self):
         for quant_cls in (MinMaxQuant, LinearAWQuant, GPTQuant):
-            self.assertTrue(quant_cls.supports_quant_result_export())
             self.assertTrue(quant_cls.quant_param_keys())
 
     def test_gptq_persists_its_optimized_weight(self):
@@ -523,16 +514,9 @@ class TestQuantResultExportCapability(unittest.TestCase):
         self.assertNotIn('weight', LinearAWQuant.quant_param_keys())
         self.assertIn('scale', LinearAWQuant.quant_param_keys())
 
-    def test_algorithms_not_yet_wired_do_not_claim_support(self):
-        # SmoothQuant/Ofmr inherit the export plumbing but declare no
-        # _quant_param_keys and no dump point, so they must not be accepted:
-        # they would return normally and never publish a manifest.
+    def test_algorithms_not_yet_wired_declare_no_artifact_params(self):
         for quant_cls in (SmoothQuant, OfmrQuant):
-            self.assertFalse(
-                quant_cls.supports_quant_result_export(),
-                '{} must not claim export support until it declares its quant '
-                'params and dumps at a finalization point'.format(quant_cls.__name__),
-            )
+            self.assertEqual(quant_cls.quant_param_keys(), ())
 
 
 def _make_minmax_config(batch_num=2, quant_act=True):
@@ -566,7 +550,6 @@ class TestMinMaxQuantResultDump(unittest.TestCase):
         module.attach_quant_result_writer(writer)
         # scale_w/offset_w are already final after __init__: no forward needed.
         self.assertEqual(len(writer.calls), 1)
-        self.assertTrue(module.quant_params_dumped)
         self.assertEqual(sorted(writer.calls[0]['tensors']), ['offset_w', 'scale_w'])
         self.assertEqual(writer.calls[0]['quant_config']['algorithm'], {'minmax': {}})
 

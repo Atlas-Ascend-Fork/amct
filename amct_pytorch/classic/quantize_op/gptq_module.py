@@ -38,7 +38,6 @@ class GPTQuant(BaseQuantizeModule):
     APIs: forward.
     """
 
-    _supports_quant_result_export = True
     # ``weight`` must be persisted, unlike AWQ: GPTQ rewrites it with the
     # Hessian-corrected result, which cannot be recomputed from the original
     # weight and the scales. Dropping it would silently deploy the un-optimized

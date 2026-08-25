@@ -36,7 +36,6 @@ class LinearAWQuant(BaseQuantizeModule):
     APIs: forward.
     """
 
-    _supports_quant_result_export = True
     # ``weight`` is deliberately absent: AWQ never modifies its own weight, it
     # scales the original module's weight by 1/scale. Both calibration fake-quant
     # and deploy recompute that transform from the original weight and ``scale``,

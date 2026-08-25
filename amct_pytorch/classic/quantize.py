@@ -27,6 +27,7 @@ from amct_pytorch.classic.optimizer import (
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.classic.quant_result import (
     QuantResultWriter,
+    SUPPORTED_QUANT_RESULT_ALGORITHMS,
     compute_model_fingerprint,
     reload_quant_params,
     validate_quant_result_dir,
@@ -55,43 +56,37 @@ def quantize(model, config=None, quant_result_dir=None):
         config = set_default_config()
 
     layer_config = parse_config(model, config, AlgorithmRegistry)
+    if '' in layer_config:
+        # Module replacement is keyed by child name and cannot replace the root.
+        raise ValueError(
+            "the model passed to quantize() is itself a quantizable layer ({}); "
+            "each quantized layer must be a named submodule. Wrap it in a parent "
+            'nn.Module.'.format(type(model).__name__)
+        )
 
     writer = None
     if quant_result_dir is not None:
         writer = _create_quant_result_writer(model, layer_config, quant_result_dir)
 
     optimizer = ModelOptimizer()
-    if writer is None:
-        optimizer.add_pass(InsertQuantizeModulePass(layer_config))
-    else:
-        optimizer.add_pass(
-            InsertQuantizeModulePass(layer_config, quant_result_writer=writer)
-        )
+    optimizer.add_pass(
+        InsertQuantizeModulePass(layer_config, quant_result_writer=writer)
+    )
     optimizer.do_optimizer(model)
 
     if writer is not None:
         _finalize_quant_result(model, writer)
 
 
-def _check_algorithms_support_export(layer_config):
-    """Reject algorithms that cannot complete a quant result unit.
-
-    Deriving from BaseQuantizeModule is not sufficient: a quantize op also has
-    to declare its ``_quant_param_keys`` and dump at its own finalization point.
-    An op that does neither would return from quantize() normally and then leave
-    an empty directory whose manifest never publishes, so refuse up front --
-    before anything is written -- and name the algorithm at fault.
-    """
+def _check_quant_result_algorithms(layer_config):
+    """Enforce the algorithm boundary of the Classic result contract."""
     unsupported = {}
     for layer_name, cfg in layer_config.items():
         algorithm = cfg.get('algorithm') if isinstance(cfg, dict) else None
         alg_names, _ = get_alg_name_from_config(algorithm)
-        alg_name = alg_names[0]  # each module corresponds to only one algo
-        for quant_op in (AlgorithmRegistry.algo.get(alg_name) or {}).values():
-            supports = getattr(quant_op, 'supports_quant_result_export', None)
-            if callable(supports) and supports():
-                continue
-            unsupported.setdefault(alg_name, layer_name)
+        for alg_name in alg_names:
+            if alg_name not in SUPPORTED_QUANT_RESULT_ALGORITHMS:
+                unsupported.setdefault(alg_name, layer_name)
 
     if unsupported:
         details = ', '.join(
@@ -99,11 +94,11 @@ def _check_algorithms_support_export(layer_config):
             for name, layer in sorted(unsupported.items())
         )
         raise ValueError(
-            "quant_result_dir is not supported yet for algorithm(s) {}. Only "
-            "algorithms whose quantize op declares "
-            "_supports_quant_result_export can produce a complete quant "
-            "result; run without quant_result_dir, or pick a supported "
-            "algorithm.".format(details)
+            "quant_result_dir is not supported yet for algorithm(s) {}. "
+            "Supported algorithms are {}; run without quant_result_dir, or "
+            "pick a supported algorithm.".format(
+                details, sorted(SUPPORTED_QUANT_RESULT_ALGORITHMS)
+            )
         )
 
 
@@ -115,22 +110,12 @@ def _create_quant_result_writer(model, layer_config, quant_result_dir):
     quant module is inserted, so it always describes the original model.
     """
     validate_quant_result_dir(quant_result_dir)
-    if not layer_config:
+    if len(layer_config) == 0:
         raise ValueError(
             "no quantizable layer was found for this model and config, so "
             "there is no quant result to write to '{}'.".format(quant_result_dir)
         )
-    if '' in layer_config:
-        # The model root itself matched the config. Module replacement is keyed
-        # by name and cannot replace the root, so that layer would never be
-        # quantized and its unit could never be dumped, leaving the manifest
-        # unpublishable. Fail now with the fix rather than hang pending.
-        raise ValueError(
-            "the model passed to quantize() is itself a quantizable layer ({}); "
-            "quant result export needs each quantized layer to be a named "
-            "submodule. Wrap it in a parent nn.Module.".format(type(model).__name__)
-        )
-    _check_algorithms_support_export(layer_config)
+    _check_quant_result_algorithms(layer_config)
     model_fingerprint = compute_model_fingerprint(model)
     return QuantResultWriter.create(
         quant_result_dir, tuple(layer_config.keys()), model_fingerprint

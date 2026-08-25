@@ -62,6 +62,9 @@ UNIT_SUFFIX = '.safetensors'
 LIBRARY = 'amct_pytorch'
 LOG_TAG = 'QuantResultWriter'
 DIGEST_PREFIX = 'sha256:'
+# Algorithms covered by the version-1 Classic quant result contract. This is a
+# product-level support boundary, not a capability claimed by a quantize module.
+SUPPORTED_QUANT_RESULT_ALGORITHMS = frozenset(('awq', 'gptq', 'minmax'))
 
 # 640 for files, matching amct_log conventions.
 _FILE_MODE = stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP
@@ -1274,28 +1277,72 @@ def _check_no_nested_units(layer_names):
 
 
 def _resolve_quant_module_class(entry):
-    """Resolve a unit's ``quant_module_type`` to a registered class.
-
-    The name is only ever looked up in the algorithm registry -- nothing is
-    imported from the artifact -- and the resolved class must be a quantize
-    module, so an artifact cannot name an arbitrary class to instantiate.
-    """
+    """Resolve a unit through the registered algorithm and source module type."""
     # Imported lazily to keep this module free of an import-time dependency on
     # the algorithm registry.
     from amct_pytorch.algorithms import AlgorithmRegistry
+    from amct_pytorch.common.config.utils import get_alg_name_from_config
     from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 
-    quant_cls = AlgorithmRegistry.get_quant_op_by_name(entry['quant_module_type'])
+    layer_name = entry['layer_name']
+    quant_config = entry['quant_config']
+    _strict_mapping(quant_config, "quant_config of layer '{}'".format(layer_name))
+    try:
+        algorithms, _ = get_alg_name_from_config(quant_config.get('algorithm'))
+    except ValueError as error:
+        raise ValueError(
+            "quant config of layer '{}' must name exactly one algorithm.".format(
+                layer_name
+            )
+        ) from error
+    if len(algorithms) != 1:
+        raise ValueError(
+            "quant config of layer '{}' must name exactly one algorithm, got {}.".format(
+                layer_name, algorithms
+            )
+        )
+
+    algorithm = algorithms[0]
+    registered_sources = AlgorithmRegistry.algo.get(algorithm)
+    if registered_sources is None:
+        raise ValueError(
+            "quant config of layer '{}' names algorithm '{}', which is not "
+            'registered in this installation.'.format(layer_name, algorithm)
+        )
+    ori_module_type = entry['ori_module_type']
+    quant_cls = registered_sources.get(ori_module_type)
+    if quant_cls is None:
+        raise ValueError(
+            "algorithm '{}' has no registered quantize module for source type "
+            "'{}', required by layer '{}'.".format(
+                algorithm, ori_module_type, layer_name
+            )
+        )
+    if algorithm not in SUPPORTED_QUANT_RESULT_ALGORITHMS:
+        raise ValueError(
+            "algorithm '{}' of layer '{}' does not support quant result reload.".format(
+                algorithm, layer_name
+            )
+        )
+    if not isinstance(quant_cls, type):
+        raise ValueError(
+            "registered quantize module for algorithm '{}' and source type '{}' "
+            'is not a class.'.format(algorithm, ori_module_type)
+        )
     if not issubclass(quant_cls, BaseQuantizeModule):
         raise ValueError(
             "quantize module '{}' of layer '{}' is not a BaseQuantizeModule "
-            'subclass.'.format(entry['quant_module_type'], entry['layer_name'])
+            'subclass.'.format(quant_cls.__name__, layer_name)
         )
-    if not quant_cls.supports_quant_result_export():
+    if entry['quant_module_type'] != quant_cls.__name__:
         raise ValueError(
-            "quantize module '{}' of layer '{}' does not support quant result "
-            'reload in this installation.'.format(
-                entry['quant_module_type'], entry['layer_name']
+            "quant_module_type '{}' of layer '{}' does not match the registered "
+            "class '{}' selected by algorithm '{}' and source type '{}'.".format(
+                entry['quant_module_type'],
+                layer_name,
+                quant_cls.__name__,
+                algorithm,
+                ori_module_type,
             )
         )
     return quant_cls
@@ -1311,41 +1358,6 @@ def _check_ori_module_type(entry, ori_module):
                 entry['layer_name'], actual, entry['ori_module_type']
             )
         )
-
-
-def _check_quant_config(entry, quant_cls):
-    """Cross-check the persisted config against the resolved quantize class.
-
-    The config carries the algorithm name that selected the module, so a unit
-    whose config names a different algorithm than the class it asks for is
-    inconsistent and must not be rebuilt.
-    """
-    from amct_pytorch.algorithms import AlgorithmRegistry
-    from amct_pytorch.common.config.utils import get_alg_name_from_config
-
-    quant_config = entry['quant_config']
-    _strict_mapping(
-        quant_config, "quant_config of layer '{}'".format(entry['layer_name'])
-    )
-    algorithm = quant_config.get('algorithm')
-    if algorithm is None:
-        return
-    names, _ = get_alg_name_from_config(algorithm)
-    for name in names:
-        registered = AlgorithmRegistry.algo.get(name)
-        if registered is None:
-            raise ValueError(
-                "quant config of layer '{}' names algorithm '{}', which is not "
-                'registered in this installation.'.format(entry['layer_name'], name)
-            )
-        if quant_cls in registered.values():
-            return
-    raise ValueError(
-        "quant config of layer '{}' names algorithm(s) {}, but its "
-        "quant_module_type is '{}', which none of them use.".format(
-            entry['layer_name'], names, quant_cls.__name__
-        )
-    )
 
 
 def _module_device(module):
@@ -1365,7 +1377,6 @@ def _build_staged_module(entry, ori_module, tensors, non_tensor_params):
     """
     staged_source = copy.deepcopy(ori_module)
     quant_cls = _resolve_quant_module_class(entry)
-    _check_quant_config(entry, quant_cls)
     replacement = quant_cls(staged_source, entry['layer_name'], entry['quant_config'])
     replacement.load_quant_params(tensors, non_tensor_params)
     replacement.to(_module_device(ori_module))

@@ -353,17 +353,72 @@ class TestReloadRejectsBadStructure:
     def test_unregistered_quant_module_name_cannot_be_resolved(self):
         from amct_pytorch.classic.quant_result import _resolve_quant_module_class
 
-        entry = {'quant_module_type': 'NoSuchQuant', 'layer_name': 'fc1'}
+        entry = {
+            'layer_name': 'fc1',
+            'ori_module_type': 'Linear',
+            'quant_module_type': 'NoSuchQuant',
+            'quant_config': {'algorithm': {'minmax': {}}},
+        }
+        with pytest.raises(ValueError, match='does not match the registered class'):
+            _resolve_quant_module_class(entry)
+
+    def test_algorithm_and_source_type_resolve_the_registered_class(self):
+        from amct_pytorch.classic.quant_result import _resolve_quant_module_class
+
+        entry = {
+            'layer_name': 'fc1',
+            'ori_module_type': 'Linear',
+            'quant_module_type': 'MinMaxQuant',
+            'quant_config': {'algorithm': {'minmax': {}}},
+        }
+        assert _resolve_quant_module_class(entry) is MinMaxQuant
+
+    def test_unregistered_algorithm_is_rejected(self):
+        from amct_pytorch.classic.quant_result import _resolve_quant_module_class
+
+        entry = {
+            'layer_name': 'fc1',
+            'ori_module_type': 'Linear',
+            'quant_module_type': 'MinMaxQuant',
+            'quant_config': {'algorithm': {'not_registered': {}}},
+        }
         with pytest.raises(ValueError, match='not registered'):
             _resolve_quant_module_class(entry)
 
-    def test_quant_module_without_export_support_is_rejected(self):
+    def test_unregistered_source_type_is_rejected(self):
         from amct_pytorch.classic.quant_result import _resolve_quant_module_class
-        from amct_pytorch.classic.quantize_op.smooth_quant_module import SmoothQuant
 
-        assert not SmoothQuant.supports_quant_result_export()
-        entry = {'quant_module_type': 'SmoothQuant', 'layer_name': 'fc1'}
-        with pytest.raises(ValueError, match='does not support quant result'):
+        entry = {
+            'layer_name': 'fc1',
+            'ori_module_type': 'Conv2d',
+            'quant_module_type': 'MinMaxQuant',
+            'quant_config': {'algorithm': {'minmax': {}}},
+        }
+        with pytest.raises(ValueError, match='no registered quantize module'):
+            _resolve_quant_module_class(entry)
+
+    def test_multiple_algorithms_are_rejected(self):
+        from amct_pytorch.classic.quant_result import _resolve_quant_module_class
+
+        entry = {
+            'layer_name': 'fc1',
+            'ori_module_type': 'Linear',
+            'quant_module_type': 'MinMaxQuant',
+            'quant_config': {'algorithm': {'minmax': {}, 'awq': {}}},
+        }
+        with pytest.raises(ValueError, match='exactly one algorithm'):
+            _resolve_quant_module_class(entry)
+
+    def test_algorithm_outside_the_artifact_contract_is_rejected(self):
+        from amct_pytorch.classic.quant_result import _resolve_quant_module_class
+
+        entry = {
+            'layer_name': 'fc1',
+            'ori_module_type': 'Linear',
+            'quant_module_type': 'SmoothQuant',
+            'quant_config': {'algorithm': {'smoothquant': {}}},
+        }
+        with pytest.raises(ValueError, match='does not support quant result reload'):
             _resolve_quant_module_class(entry)
 
     def test_ori_module_type_mismatch_is_rejected(self, art):

@@ -26,26 +26,21 @@ LOG_TAG = 'BaseQuantizeModule'
 class BaseQuantizeModule(nn.Module):
     """Base class of calibration modules with quant param export and load.
 
-    Subclasses declare which of their attributes are quant params by listing
-    them in ``_quant_param_keys``; the generic export/load/dump plumbing here
-    then works for any algorithm without the base class knowing MinMax, AWQ or
-    GPTQ parameter names.
+    Each subclass declares its own quant param attribute names so the base class
+    does not hard-code the algorithm-specific names. The generic export, load
+    and dump plumbing can then be shared by MinMax, AWQ and GPTQ.
     """
 
     # Attribute names holding this algorithm's quant params. Values may be
     # tensors, JSON-serializable scalars, or None (skipped when exporting).
     _quant_param_keys = ()
 
-    # Whether this algorithm implements quant result export. Deriving from
-    # BaseQuantizeModule is not enough: a subclass must also declare its
-    # _quant_param_keys AND dump at its own finalization point, otherwise its
-    # unit would never be written and the manifest would stay pending forever.
-    # quantize() checks this before writing to the result directory, so an
-    # unsupported algorithm fails up front and leaves the directory empty.
-    _supports_quant_result_export = False
-
     def __init__(self, ori_module, layer_name, quant_config):
         super().__init__()
+        if not isinstance(layer_name, str) or not layer_name:
+            raise ValueError(
+                'layer_name must be a non-empty string, got {!r}.'.format(layer_name)
+            )
         self.ori_module_type = None
         self.act_type = None
         self.wts_type = None
@@ -67,23 +62,18 @@ class BaseQuantizeModule(nn.Module):
         pass
 
     @classmethod
-    def supports_quant_result_export(cls):
-        """Whether this quantize op can produce a complete result unit."""
-        return bool(cls._supports_quant_result_export)
-
-    @classmethod
     def quant_param_keys(cls):
         """Validated tuple of declared quant param attribute names."""
         keys = tuple(cls._quant_param_keys)
         for key in keys:
             if not isinstance(key, str) or not key:
                 raise TypeError(
-                    "{}._quant_param_keys entries must be non-empty str, got "
-                    "{!r}.".format(cls.__name__, key)
+                    "quant param names declared by {} must be non-empty strings, "
+                    "got {!r}.".format(cls.__name__, key)
                 )
         if len(set(keys)) != len(keys):
             raise ValueError(
-                "{}._quant_param_keys contains duplicate names.".format(cls.__name__)
+                '{} declares duplicate quant param names.'.format(cls.__name__)
             )
         return keys
 
@@ -143,10 +133,8 @@ class BaseQuantizeModule(nn.Module):
         unknown = sorted((set(tensors) | set(metadata)) - declared)
         if unknown:
             raise ValueError(
-                "quant params {} are not declared in {}._quant_param_keys; "
-                "refusing to load them onto layer '{}'.".format(
-                    unknown, type(self).__name__, self.layer_name
-                )
+                "quant params {} are not declared by {}; refusing to load them "
+                "onto layer '{}'.".format(unknown, type(self).__name__, self.layer_name)
             )
         overlap = sorted(set(tensors) & set(metadata))
         if overlap:
@@ -203,14 +191,6 @@ class BaseQuantizeModule(nn.Module):
         self._quant_result_writer = writer
         self._on_quant_result_writer_attached()
 
-    @property
-    def quant_result_writer(self):
-        return self._quant_result_writer
-
-    @property
-    def quant_params_dumped(self):
-        return self._quant_params_dumped
-
     def maybe_dump_quant_params(self):
         """Dump this layer's quant params once, if a writer is attached.
 
@@ -219,52 +199,29 @@ class BaseQuantizeModule(nn.Module):
         """
         if self._quant_result_writer is None or self._quant_params_dumped:
             return False
+        # Imported lazily: quant_result lives under classic/, which this module
+        # must not depend on at import time.
+        from amct_pytorch.classic.quant_result import to_jsonable
+
         tensors, non_tensor_params = self.export_quant_params()
         self._quant_result_writer.write_unit(
-            layer_name=self._quant_unit_name(),
+            layer_name=self.layer_name,
             tensors=tensors,
             non_tensor_params=non_tensor_params,
-            quant_config=self._serializable_quant_config(),
+            quant_config=to_jsonable(
+                self.quant_config,
+                "quant_config of layer '{}'".format(self.layer_name),
+            ),
             quant_module_type=type(self).__name__,
             ori_module_type=self.ori_module_type,
         )
         self._quant_params_dumped = True
         return True
 
-    def _quant_unit_name(self):
-        """Layer name this module's quant result unit is keyed by."""
-        if not isinstance(self.layer_name, str) or not self.layer_name:
-            raise ValueError(
-                "{} has no usable layer_name, cannot dump its quant params.".format(
-                    type(self).__name__
-                )
-            )
-        return self.layer_name
-
-    def _serializable_quant_config(self):
-        """Full layer-level quant config, strictly serialized.
-
-        This is the only home of the config needed to reconstruct the module on
-        reload, so conversion is strict: an unserializable value raises instead
-        of degrading into a string that reload could not use. The algorithm name
-        already lives inside the config, so it is not recorded separately.
-        """
-        # Imported lazily: quant_result lives under classic/, which this module
-        # must not depend on at import time.
-        from amct_pytorch.classic.quant_result import to_jsonable
-
-        return to_jsonable(
-            self.quant_config, "quant_config of layer '{}'".format(self.layer_name)
-        )
-
-    @property
-    def loaded_quant_param_keys(self):
-        """Param names the last ``load_quant_params`` actually restored."""
-        return getattr(self, '_loaded_quant_param_keys', frozenset())
-
     def require_loaded_quant_params(self, *keys):
         """Fail unless the loaded unit carried every one of ``keys``."""
-        missing = sorted(key for key in keys if key not in self.loaded_quant_param_keys)
+        loaded_keys = getattr(self, '_loaded_quant_param_keys', frozenset())
+        missing = sorted(key for key in keys if key not in loaded_keys)
         if missing:
             raise ValueError(
                 "quant result of layer '{}' is missing required quant param(s) {} "

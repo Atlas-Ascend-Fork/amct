@@ -45,11 +45,6 @@ class MinMaxQuant(BaseQuantizeModule):
     APIs: forward.
     """
 
-    # MinMax dumps at both of its finalization points (see
-    # _on_quant_result_writer_attached and forward), so it can complete a
-    # quant result unit.
-    _supports_quant_result_export = True
-
     # Quant params this algorithm produces. scale_w/offset_w are final right
     # after __init__; scale_d/offset_d only exist once activation calibration
     # completes; scale_w1/scale_w2 replace scale_w on the fp8/fp4 path.
