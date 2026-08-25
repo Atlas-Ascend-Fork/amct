@@ -9,8 +9,6 @@
 - **参考与差异**：3.5 参考 `qwen3_5` attention/blockwise + `qwen3_moe` MoE 路由；3.6 = `Qwen3_5Moe` 纯子类（`pass`），暂无显著结构差异。
 - **复用**：`BaseModel` blockwise、`PtqUnit`、`QuantLinear`、`apply_quant_attn`、`apply_quant_moe_mlp`。Qwen3.6-27B 的 attention 复用 Qwen3.5 实现，MLP 复用标准 Dense MLP 实现。**新增**：`qwen3_5_moe` 的 `build_quant_block()` 路由、`QuantPackedExperts`、`PackedExpertView`。
 - **起步复用清单**（下一条 Qwen3.5/3.6 MoE）：从 `qwen3_5_moe.py` 起步。
-- Qwen3.6-27B 为 64 层 Dense decoder，沿用 `qwen3_5` 主链，无需新增独立 adapter；本案分别验证 `attn-linear` 和 `mlp` 量化目标。
-- Qwen3.6-27B 的 Dense MLP 每层量化 `gate_proj`、`up_proj`、`down_proj`，共 192 个量化模块。
 
 ## 适配验证结论
 
