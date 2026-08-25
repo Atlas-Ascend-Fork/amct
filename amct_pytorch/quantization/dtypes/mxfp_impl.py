@@ -101,12 +101,12 @@ def weight_dequant(
     # scales are already direct multipliers (e.g. NVFP4 decodes its E4M3 scale upstream), so
     # they pass through unchanged.
     if not torch.is_floating_point(scale):
-        decoded = torch.exp2(scale.to(torch.float32) - FP32_EXPONENT_BIAS)
-        scale = torch.where(
-            (scale.to(torch.int32) & 0xFF) == 0xFF,
-            torch.full_like(decoded, float("nan")),
-            decoded,
-        )
+        # Read the exponent byte as UNSIGNED so it is correct whether the E8M0 is stored as
+        # uint8 or int8 (a signed .to(float) turns bytes >= 128 negative, wrecking every block
+        # whose scale factor is >= 2).
+        exp = (scale.to(torch.int32) & 0xFF).to(torch.float32)
+        decoded = torch.exp2(exp - FP32_EXPONENT_BIAS)
+        scale = torch.where(exp == 0xFF, torch.full_like(decoded, float("nan")), decoded)
     else:
         scale = scale.to(torch.float32)
     if block_size != 1:

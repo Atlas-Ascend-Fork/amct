@@ -173,10 +173,17 @@ def convert_state_dict(
     loaded_files,
     block_size,
 ):
+    """Dispatch a packed weight to its format decoder (see input_formats_packing_overview_CN §6.1).
+
+    The format is detected from the scale/weight signature (tuple-vs-single scale name,
+    dtypes, scale shape), then delegated to that format's own dequant function. Detection
+    fails closed: an unrecognized (weight dtype, scale dtype) combination raises rather than
+    being silently mis-decoded as FP8.
+    """
     if weight.element_size() != 1:
         return weight
     try:
-        # NVFP4
+        # NVFP4: the two scales (E4M3 block + FP32 per-tensor) arrive as a tuple name.
         if isinstance(scale_inv_name, tuple):
             from amct_pytorch.common.utils.nvfp4_format import nvfp4_weight_dequant
 
@@ -184,11 +191,13 @@ def convert_state_dict(
                 scale_inv_name, original_weight_map, model_dir, loaded_files
             )
             return nvfp4_weight_dequant(weight, scale, scale_2)
+
         scale_inv = _load_scales(
             (scale_inv_name,), original_weight_map, model_dir, loaded_files
         )[0]
 
-        # HiF4
+        # HiF4: uint8 weight + a 3-D uint8 composite scale record (..., 4). Its three-level
+        # scale can't be expressed as a single block broadcast, so it has its own unpacker.
         if (
             weight.dtype == torch.uint8
             and scale_inv.dtype == torch.uint8
@@ -197,17 +206,17 @@ def convert_state_dict(
         ):
             from amct_pytorch.quantization.dtypes.hifp_impl import hif4_unpack
 
-            weight = hif4_unpack(scale_inv, weight)
+            return hif4_unpack(scale_inv, weight)
 
-        # MX formats share an integer E8M0 block scale (power-of-two exponent, bias 127,
-        # decoded inside weight_dequant). What splits them is the *weight* element, not the
-        # scale: an FP8 (float) element -> MXFP8; a packed E2M1 element (int8 *or* uint8,
-        # 2 codes/byte) -> MXFP4. Keying MXFP4 on the integer scale instead of only
-        # weight.dtype==int8 also catches uint8-packed MXFP4 that the old chain missed.
-        elif not torch.is_floating_point(scale_inv):
+        # MXFP4 / MXFP8 / plain FP8 all share the generic block-scaled kernel weight_dequant
+        # (element unpack + E8M0/raw scale decode + per-block broadcast); only the flags differ.
+        # MX formats carry an integer E8M0 block scale (power-of-two exponent, bias 127). What
+        # splits MX is the *weight* element, not the scale: an FP8 (float) element -> MXFP8;
+        # a packed E2M1 element (int8 *or* uint8, 2 codes/byte) -> MXFP4. Keying on the integer
+        # scale (not weight.dtype==int8) also catches uint8-packed MXFP4 the old chain missed.
+        if not torch.is_floating_point(scale_inv):
             if torch.is_floating_point(weight):
-                # MXFP8: FP8 (E4M3/E5M2) weight + E8M0 block scale. Group size is derived
-                # from the scale and must tile the weight's last dim exactly.
+                # MXFP8: group size is derived from the scale and must tile the last dim.
                 n = weight.shape[-1]
                 scale_cols = (
                     scale_inv.shape[-1] if scale_inv.dim() == weight.dim() else 0
@@ -217,30 +226,26 @@ def convert_state_dict(
                         f"MXFP8 weight '{weight_name}': E8M0 scale shape "
                         f"{tuple(scale_inv.shape)} does not tile weight last dim {n}."
                     )
-                weight = weight_dequant(
+                return weight_dequant(
                     weight, scale_inv, block_size=n // scale_cols, is_mx=True
                 )
-            else:
-                # MXFP4: E2M1 packed into int8/uint8 (2 codes/byte) + E8M0 block scale.
-                weight = weight_dequant(
-                    weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True
-                )
+            return weight_dequant(
+                weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True
+            )
 
         # Plain FP8 (DeepSeek / Hunyuan): FP8 weight + a full float32 block scale. DeepSeek's
-        # weight_scale_inv already stores the *dequant* multiplier (README_WEIGHTS), so it is
-        # applied directly (no extra inverse).
-        elif torch.is_floating_point(weight) and scale_inv.dtype == torch.float32:
-            weight = weight_dequant(weight, scale_inv, block_size=block_size)
+        # weight_scale_inv already stores the *dequant* multiplier (README_WEIGHTS).
+        if torch.is_floating_point(weight) and scale_inv.dtype == torch.float32:
+            return weight_dequant(weight, scale_inv, block_size=block_size)
 
         # Fail closed: an unrecognized (weight dtype, scale dtype) combination should raise
         # rather than be silently mis-decoded as FP8 (e.g. a stray fp16/bf16 scale, an
         # unexpected fp8 scale, or a malformed NVFP4 that lost its _scale_2).
-        else:
-            raise ValueError(
-                f"Unrecognized quantized weight format for '{weight_name}': "
-                f"weight dtype={weight.dtype}, scale dtype={scale_inv.dtype}, "
-                f"scale shape={tuple(scale_inv.shape)}."
-            )
+        raise ValueError(
+            f"Unrecognized quantized weight format for '{weight_name}': "
+            f"weight dtype={weight.dtype}, scale dtype={scale_inv.dtype}, "
+            f"scale shape={tuple(scale_inv.shape)}."
+        )
 
     except KeyError:
         logger.warning(
