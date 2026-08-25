@@ -181,10 +181,12 @@ def calibrate(model, calib_blocks):
     对 GPTQ：该次前向内累积 Hessian 并当场做 Cholesky 误差补偿（batch_num=1）。
     calib_blocks: list[[1, block_size]] → 堆成 [n_blocks, block_size]。
 
-    ⚠️ 校准数据不足是**静默**故障：Hessian 秩亏时 Cholesky 未必报错（有阻尼兜底），
-    补偿会退化为对校准集过拟合，只表现为 PPL 变差，查不到源头。故此处显式拦截，
-    并按【实际送入模型的 token 数】计算诊断比值——calib 若长于 seqlen 会被截断，
-    用截断前的长度算会高报。
+    ⚠️ 校准集为空是**静默**故障：Hessian 全零时 Cholesky 未必报错（有阻尼兜底），
+    补偿退化为无操作，只表现为 PPL 变差、查不到源头，故显式拦截。
+
+    注：`--calib_block`（默认 512）与评测 `--seq_len` 相互独立，校准块**短于** seqlen
+    是正常工况（下面的 `calib[:, :seqlen]` 此时是恒等操作）。只有块**长于** seqlen 时
+    才会发生截断，此时按截断前长度算 token 数会高报，故 n_tok 取二者较小值。
     """
     if not calib_blocks:
         raise ValueError(
@@ -192,11 +194,9 @@ def calibrate(model, calib_blocks):
             "空输入会让误差补偿退化为无操作。请检查 --n_calib / --calib_block 与数据集加载。")
     calib = torch.cat(calib_blocks, dim=0)
     blk_len = calib.shape[1]
-    if blk_len < model.seqlen:
-        raise ValueError(
-            f"校准块长度 {blk_len} < model.seqlen {model.seqlen}：后续 calib[:, :seqlen] "
-            f"会静默地只喂 {blk_len} 个 token/块，实际校准量小于命令行所示。"
-            f"请调大 --calib_block，或将 --seq_len 降到 {blk_len} 以内。")
+    if blk_len > model.seqlen:
+        print(f"[calib] 注：校准块长 {blk_len} > seq_len {model.seqlen}，"
+              f"每块将被截断到 {model.seqlen} 个 token 送入")
     n_tok = calib.shape[0] * min(blk_len, model.seqlen)
     # Hessian H=2XXᵀ 是 [in,in]，样本数少于 in_features 时秩亏、补偿等于对校准集过拟合。
     # 全网最大的 in_features（Qwen3-8B 的 down_proj=12288）决定了所需样本量的下限。
