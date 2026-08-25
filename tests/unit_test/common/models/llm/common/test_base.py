@@ -164,13 +164,22 @@ def test_base_model_logs_trust_remote_code_scope_without_recommendation():
                 "amct_pytorch.common.models.llm.common.base.AutoTokenizer.from_pretrained"
             ),
         ):
-            BaseModel(args)
+            model = BaseModel(args)
     finally:
         logger.remove(sink_id)
 
     assert len(messages) == 1
+    assert "qwen3 is running without --trust_remote_code" in messages[0]
     assert "Some models may require --trust_remote_code" in messages[0]
     assert "recommend" not in messages[0].lower()
+    assert not hasattr(model, "model_name")
+
+
+def test_base_model_initializes_plural_safetensors_files_cache():
+    model = _StubModel()
+
+    assert model.safetensors_files is None
+    assert not hasattr(model, "safetensors_file")
 
 
 # ---- get_embed_load_specs ---------------------------

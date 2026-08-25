@@ -57,7 +57,7 @@ class LlmDeployWorkflow:
         self.pipeline = None
         self.model_name = args.model_name
         self.model_path = args.model
-        self.safetensors_file = None
+        self.safetensors_files = None
         self.quant_dtype = args.quant_dtype
         self.output_dir = self.args.output_dir
         self.is_mx = self.quant_dtype.startswith("mx")
@@ -115,9 +115,9 @@ class LlmDeployWorkflow:
         return model_cls(self.args)
 
     def get_safetensors_files(self):
-        if getattr(self, "safetensors_file", None) is None:
-            self.safetensors_file = collect_safetensors_files(self.model_path)
-        return self.safetensors_file
+        if getattr(self, "safetensors_files", None) is None:
+            self.safetensors_files = collect_safetensors_files(self.model_path)
+        return self.safetensors_files
 
     def _convert_tensor(self, weight_name: str, tensor: torch.Tensor) -> torch.Tensor:
         if self.quant_dtype == "bf16":

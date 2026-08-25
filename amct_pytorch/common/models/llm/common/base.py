@@ -65,12 +65,12 @@ class BaseModel(metaclass=ABCMeta):
         self.position_embeddings = None
         self.input_ids = None
         self.model_path = self.args.model
-        self.safetensors_file = None
-        self.model_name = getattr(self.args, "model_name", self.__class__.__name__)
+        self.safetensors_files = None
         self.trust_remote_code = getattr(self.args, "trust_remote_code", False)
         if not self.trust_remote_code:
+            model_name = getattr(self.args, "model_name", self.__class__.__name__)
             logger.warning(
-                f"{self.model_name} is running without --trust_remote_code. "
+                f"{model_name} is running without --trust_remote_code. "
                 "Some models may require --trust_remote_code to load custom model code."
             )
         self.config = AutoConfig.from_pretrained(
@@ -174,9 +174,9 @@ class BaseModel(metaclass=ABCMeta):
         return state_dict
 
     def get_safetensors_files(self):
-        if self.safetensors_file is None:
-            self.safetensors_file = collect_safetensors_files(self.model_path)
-        return self.safetensors_file
+        if self.safetensors_files is None:
+            self.safetensors_files = collect_safetensors_files(self.model_path)
+        return self.safetensors_files
 
     def block(self, layer_idx):
         decoder_layer = self.cls(self.config, layer_idx)

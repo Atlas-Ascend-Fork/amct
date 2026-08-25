@@ -90,6 +90,21 @@ def _make_workflow(
     return workflow
 
 
+def test_workflow_initializes_plural_safetensors_files_cache():
+    args = SimpleNamespace(
+        granularity=GRANULARITY_BLOCK,
+        model_name=MODEL_NAME_QWEN3,
+        model=FAKE_MODEL,
+        quant_dtype="int8",
+        output_dir=TMP_DEPLOY_OUT,
+    )
+
+    workflow = LlmDeployWorkflow(args)
+
+    assert workflow.safetensors_files is None
+    assert not hasattr(workflow, "safetensors_file")
+
+
 # ---- dtype flag derivation ----------------------------------------------
 
 

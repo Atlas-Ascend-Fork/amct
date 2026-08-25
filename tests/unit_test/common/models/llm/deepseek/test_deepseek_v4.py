@@ -33,7 +33,7 @@ from amct_pytorch.common.models.llm.deepseek.deepseek_v4.deepseekv4 import (
 def _make_model(model_path, weight_map):
     model = DeepseekV4.__new__(DeepseekV4)
     model.model_path = str(model_path)
-    model.safetensors_file = None
+    model.safetensors_files = None
     model._weight_map = weight_map
     return model
 
