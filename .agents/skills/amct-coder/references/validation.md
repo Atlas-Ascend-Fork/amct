@@ -28,7 +28,8 @@
 ## 最小静态验证
 
 - Python 语法：`python -m py_compile <files>`。
-- Python 风格：按 `.pre-commit-config.yaml` 的 `ruff-check --fix` 与 `ruff-format` hook，对本次改动文件运行 `ruff check --fix <changed files>` 和 `ruff format <changed files>`；格式选项来自 `pyproject.toml` 的 `[tool.ruff.format]`。
+- Python 风格检查：对本次改动文件运行 `ruff check <changed files>` 和 `ruff format --check <changed files>`，只验证、不改文件。
+- Python 风格修复：确认需要自动修复时运行 `ruff check --fix <changed files>` 和 `ruff format <changed files>`；对应 `.pre-commit-config.yaml` 的 `ruff-check --fix` / `ruff-format` hook，格式选项来自 `pyproject.toml` 的 `[tool.ruff.format]`。
 - pre-commit：准备提交且环境未就绪时，先运行 `python -m pip install pre-commit` 和 `pre-commit install`；再运行 `pre-commit run --files <changed files>`。**不要用 `--all-files`**，避免全仓存量问题掩盖本次改动信号。
 - C/C++：用仓库 `.clang-format` 检查或格式化本次改动文件。
 - 版权：检查新增代码包含仓库既有的 Apache 2.0 版权声明，现有版权头未被删除或破坏。

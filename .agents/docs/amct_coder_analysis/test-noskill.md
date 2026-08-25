@@ -10,6 +10,7 @@
 
 #### 一、需求澄清
 
+这部分是我瞎选的
 | 问题 | 回答 |
 |------|------|
 | BATQuant 应接入哪条量化管道？ | 经典管道 (Classic) |
@@ -74,89 +75,109 @@ convert()   → 替换为 NpuWeightQuantizedLinear
 **测试语：**
 
 基于 AMCT 现有 INT4 权重量化实现扩展 HIF4 路径，要求原有 INT4 行为、导出格式和测试结果不受影响。请跟踪并说明 Agent 从现有实现分析、兼容性边界识别、改动范围设计到回归验证设计的处理数据流，检查其是否满足向后兼容预期。本次只输出任务规划，不修改代码，不执行测试，不写入任何文件。
-
-### Agent 处理结果
-
-#### 一、HIF4 格式定义
-
+# Todos
+探索 AMCT INT4 权重量化完整路径：配置→量化→导出→部署
+识别 INT4 兼容性边界：配置验证、dtype 矩阵、导出格式、测试用例
+分析 HIF4 与 INT4 的差异点和可复用点
+提出 2-3 种 HIF4 扩展方案并给出推荐
+设计回归验证方案确保向后兼容
+输出完整任务规划和数据流分析
++ Thought: 663ms
+Explore Task — Trace INT4 weight quantization full path
+↳ 40 toolcalls · 4m 41s
+Explore Task — Find INT4 test cases and HiFloat8 patterns
+↳ 43 toolcalls · 5m 18s
+Explore Task — Explore INT4 dtype matrix and vars
+↳ 45 toolcalls · 4m 13s
+ctrl+x down view subagents
++ Thought: 21.6s
+# Todos
+探索 AMCT INT4 权重量化完整路径：配置→量化→导出→部署
+识别 INT4 兼容性边界：配置验证、dtype 矩阵、导出格式、测试用例
+分析 HIF4 与 INT4 的差异点和可复用点
+提出 2-3 种 HIF4 扩展方案并给出推荐
+设计回归验证方案确保向后兼容
+输出完整任务规划和数据流分析
++ Thought: 488ms
+已完成全面探索。在设计 HIF4 扩展方案前，需要澄清一个关键定义：
+# Questions
+HIF4 的具体数据格式是什么？它与现有 FLOAT4_E2M1（软件查表，max=6.0）和 MXFP4_E2M1（MX 格式共享指数）的区别在哪里？
+自定义格式
++ Thought: 98ms
+# Questions
+请描述 HIF4 的具体格式参数：
+1. 指数位数和尾数位数（如 E2M1）？
+2. max_norm（最大可表示值）？
+3. 是否有原生 NPU 类型支持（torch_npu.hifloat4）还是纯软件实现？
+4. 是否需要 shared exponent（MX 格式）还是 per-tensor/per-channel scale？
+5. 与 INT4 的核心区别是量化方式（浮点 vs 整数）还是存储格式？
+你自己设定吧
++ Thought: 23.0s
+# Todos
+探索 AMCT INT4 权重量化完整路径：配置→量化→导出→部署
+识别 INT4 兼容性边界：配置验证、dtype 矩阵、导出格式、测试用例
+分析 HIF4 与 INT4 的差异点和可复用点
+提出 2-3 种 HIF4 扩展方案并给出推荐
+设计回归验证方案确保向后兼容
+输出完整任务规划和数据流分析
++ Thought: 628ms
+好的，以下是我基于代码库分析设计的完整任务规划。
+一、HIF4 格式定义
 基于 AMCT 现有模式（HiFloat8 参考 + FLOAT4_E2M1 参考），HIF4 定义如下：
-
-| 属性 | 值 |
-|------|-----|
-| 常量名 | `HIFLOAT4 = 'hifloat4'` |
-| 格式 | E2M1（2 位指数，1 位尾数） |
-| max_norm | 6.0 |
-| 量化类型 | 浮点量化（quant_scope=6.0） |
-| 存储 dtype | `torch.float32`（量化后） / `torch.int32`（打包后） |
-| scale 策略 | per-tensor 或 per-channel（基于权重 min/max） |
-| 支持算法 | AWQ, GPTQ, MinMax |
-| 与 INT4 核心区别 | 浮点量化路径（`get_float_quant_scope()`）vs 整数量化路径（`get_int_quant_scope()`） |
-
-#### 二、INT4 兼容性边界识别
-
+属性
+常量名
+格式
+max_norm
+量化类型
+存储 dtype
+scale 策略
+支持算法
+与 INT4 核心区别
+二、INT4 兼容性边界识别
 通过代码分析，以下是 HIF4 扩展必须保持不动的 INT4 边界：
-
-##### 2.1 dtype 常量与矩阵层（vars.py）
-
-```
-SUPPORT_WEIGHT_QUANT_DTYPE    → 新增 'hifloat4'
-SUPPORT_INPUT_QUANT_DTYPE     → 不加（仅权重量化）
-ALGORITHM_SUPPORTED_QUANT_TYPE_COMB
-  → 新增 'NOT_QUANTIZE hifloat4': ['awq','gptq','minmax']
-  → 新增 'int8 hifloat4': ['minmax','smoothquant']
-ALLOWED_WEIGHT_DTYPES         → 新增 hifloat4 条目
-WTS_PER_*_SUPPORT_COMBINATION → 新增 hifloat4 组合
-GROUP_SIZE_SUPPORTED_DTYPE/MAP → 新增 hifloat4
-```
-
-**兼容性约束**：所有 INT4 现有条目 **零修改**。新增条目以 `'hifloat4'` 为 key，不改动 `'int4'` 的任何值。
-
-##### 2.2 配置解析层（fields.py + parser.py）
-
-| 检查点 | 兼容性约束 |
-|--------|-----------|
-| `WeightsCfgField.check()` | 追加 hifloat4 组合，不修改原有条件 |
-| `WTS_ASYMMETRIC_DTYPE` | 新增 hifloat4 条目 |
-| `check_group_size()` | 追加 hifloat4 支持 |
-| `check_quant_op_constraint()` | 追加 hifloat4 约束 |
-| `_check_quant_dtype_comb_rules()` | 追加 hifloat4 组合验证 |
-
-##### 2.3 量化核心层（quant_util.py + utils.py）
-
-| 函数 | INT4 路径 | HIF4 路径（新增） |
-|------|----------|-----------------|
-| `get_int_quant_scope('int4')` | 返回 7 或 8 | 不涉及 |
-| `get_float_quant_scope()` | 不包含 INT4 | 新增 `'hifloat4': 6.0` |
-| `calculate_scale_offset()` | INT4 走整数分支 | HIF4 走浮点分支 |
-| `convert_dtype()` | `round().clamp(-8,7).to(int32)` | `float_to_fp4e2m1()` |
-| `quant_tensor()` | `round().clamp(-8,7).to(int32)` | `float_to_fp4e2m1()` |
-| `quant_dequant_tensor()` | 通用 dequant 路径 | 复用通用路径 |
-
-##### 2.4 校准算子层（quantize_op/）
-
-| 文件 | 修改点 |
-|------|--------|
-| `linear_awq_module.py:86` | 类型元组追加 HIFLOAT4 |
-| `gptq_module.py` | 追加 HIFLOAT4 类型支持 |
-| `smooth_quant_module.py` | 追加 HIFLOAT4 类型支持 |
-| `minmax_module.py` | 追加 HIFLOAT4 类型支持 |
-
-##### 2.5 部署算子层（deploy_op/）
-
-| 文件 | 修改点 |
-|------|--------|
-| `weight_npu_quant_module.py:37` | 白名单追加 HIFLOAT4 |
-| `weight_npu_quant_module.py:107` | int4pack 路径追加 HIFLOAT4 |
-| `npu_quantization_linear.py:201` | W4A8 部署追加 HIFLOAT4 |
-| `npu_quantization_linear.py:262` | 部署路径追加 HIFLOAT4 |
-
-#### 三、扩展方案对比
-
-##### 方案 1：独立 dtype 新增（推荐）
-
+2.1 dtype 常量与矩阵层（vars.py）
+┌─────────────────────────────────────────────────────────┐
+│ SUPPORT_WEIGHT_QUANT_DTYPE    → 新增 'hifloat4'         │
+│ SUPPORT_INPUT_QUANT_DTYPE     → 不加（仅权重量化）       │
+│ ALGORITHM_SUPPORTED_QUANT_TYPE_COMB                     │
+│   → 新增 'NOT_QUANTIZE hifloat4': ['awq','gptq','minmax']│
+│   → 新增 'int8 hifloat4': ['minmax','smoothquant']      │
+│ ALLOWED_WEIGHT_DTYPES         → 新增 hifloat4 条目       │
+│ WTS_PER_*_SUPPORT_COMBINATION → 新增 hifloat4 组合       │
+│ GROUP_SIZE_SUPPORTED_DTYPE/MAP → 新增 hifloat4           │
+└─────────────────────────────────────────────────────────┘
+兼容性约束：所有 INT4 现有条目 零修改。新增条目以 'hifloat4' 为 key，不改动 'int4' 的任何值。
+2.2 配置解析层（fields.py + parser.py）
+检查点
+WeightsCfgField.check()
+WTS_ASYMMETRIC_DTYPE
+check_group_size()
+check_quant_op_constraint()
+_check_quant_dtype_comb_rules()
+兼容性约束：所有 if quant_data_comb in ['NOT_QUANTIZE int4', 'int8 int4'] 的分支需追加 hifloat4 组合，但 不修改原有条件。
+2.3 量化核心层（quant_util.py + utils.py）
+函数	INT4 路径
+get_int_quant_scope('int4')	返回 7 或 8
+get_float_quant_scope()	不包含 INT4
+calculate_scale_offset()	INT4 走整数分支
+convert_dtype()	round().clamp(-8,7).to(int32)
+quant_tensor()	round().clamp(-8,7).to(int32)
+quant_dequant_tensor()	通用 dequant 路径
+2.4 校准算子层（quantize_op/）
+文件
+linear_awq_module.py:86
+gptq_module.py
+smooth_quant_module.py
+minmax_module.py
+2.5 部署算子层（deploy_op/）
+文件
+weight_npu_quant_module.py:37
+weight_npu_quant_module.py:107
+npu_quantization_linear.py:201
+npu_quantization_linear.py:262
+三、扩展方案对比
+方案 1：独立 dtype 新增（推荐）
 核心思路：HIF4 作为独立 dtype 加入 AMCT，与 INT4 共享部署路径，但有独立的量化/反量化逻辑。
-
-```
 vars.py:     HIFLOAT4 = 'hifloat4'  (新常量)
               → 加入 SUPPORT_WEIGHT_QUANT_DTYPE
               → 新增 ALGORITHM_SUPPORTED_QUANT_TYPE_COMB 条目
@@ -165,98 +186,88 @@ quant_util.py: → convert_dtype() 新增 HIFLOAT4 分支 (float_to_fp4e2m1)
               → 不修改任何 INT4 分支
 deploy_op/weight_npu_quant_module.py: → 白名单追加 HIFLOAT4
               → int4pack 路径追加 HIFLOAT4
-```
-
-| 维度 | 评价 |
-|------|------|
-| INT4 兼容性 | 最强 — 零侵入，新增 key 不改旧 key |
-| 代码复用 | 高 — 复用 int4pack 部署路径 |
-| 改动文件数 | 8 个（全部追加式） |
-| 风险 | 低 |
-
-##### 方案 2：INT4 参数化扩展
-
-核心思路：不新增 dtype，而是在 INT4 配置中添加 `float_mode: True` 参数，复用 INT4 全部路径，仅在 scale 计算时切换 quant_scope。
-
-```python
+维度
+INT4 兼容性
+代码复用
+改动文件数
+风险
+方案 2：INT4 参数化扩展
+核心思路：不新增 dtype，而是在 INT4 配置中添加一个 float_mode: True 参数，复用 INT4 全部路径，仅在 scale 计算时切换 quant_scope。
 # 配置示例
 {'weights': {'type': 'int4', 'symmetric': True, 'strategy': 'channel', 'float_mode': True}}
-```
-
-| 维度 | 评价 |
-|------|------|
-| INT4 兼容性 | 中 — 修改 INT4 路径条件分支 |
-| 代码复用 | 最高 — 完全复用 INT4 路径 |
-| 改动文件数 | 少 |
-| 风险 | 中 — INT4 路径被修改 |
-
-##### 方案 3：继承 FLOAT4_E2M1 扩展
-
+维度
+INT4 兼容性
+代码复用
+改动文件数
+风险
+方案 3：继承 FLOAT4_E2M1 扩展
 核心思路：HIF4 本质是 FLOAT4_E2M1 的"HiFloat 原生路径版"。将 HIF4 作为 FLOAT4_E2M1 的一个子模式。
-
-| 维度 | 评价 |
-|------|------|
-| INT4 兼容性 | 高 — 不修改 INT4 |
-| 代码复用 | 中 — 需区分 FLOAT4_E2M1 和 HIF4 |
-| 改动文件数 | 中 |
-| 风险 | 中 |
-
-##### 推荐方案 1
-
-独立 dtype 新增最干净，与 HiFloat8 的扩展模式完全一致，且 INT4 兼容性最强（零侵入）。
-
-#### 四、回归验证方案（确保向后兼容）
-
-##### 4.1 回归测试矩阵
-
-| 测试层级 | 测试文件 |
-|---------|---------|
-| 单元测试 — 配置验证 | `test_fields.py`, `test_parser.py` |
-| 单元测试 — 量化核心 | `test_quant_util.py` |
-| 单元测试 — dtype | `test_dtypes.py` |
-| 集成测试 — AWQ | `test_awq.py` |
-| 集成测试 — GPTQ | `test_gptq.py` |
-| 集成测试 — MinMax | `test_minmax.py` |
-| 集成测试 — SmoothQuant | `test_smoothquant.py` |
-| 集成测试 — Config | `test_config.py` |
-| 集成测试 — 端到端 | `test_quantize.py` |
-| 部署测试 | `test_deploy_kv_quant.py` |
-
-##### 4.2 新增 HIF4 测试矩阵
-
-| 测试层级 | 测试内容 |
-|---------|---------|
-| 单元 — config | HIF4 配置解析、验证 |
-| 单元 — quant_util | `convert_dtype()`、`quant_tensor()`、`quant_dequant_tensor()` |
-| 集成 — AWQ | HIF4 + AWQ 量化 |
-| 集成 — GPTQ | HIF4 + GPTQ 量化 |
-| 集成 — Config | HIF4 预定义配置 |
-| 端到端 | HIF4 完整量化 + 部署 |
-
-##### 4.3 向后兼容性验证流程
-
-```
+维度
+INT4 兼容性
+代码复用
+改动文件数
+风险
+推荐方案 1：独立 dtype 新增最干净，与 HiFloat8 的扩展模式完全一致，且 INT4 兼容性最强（零侵入）。
+# Todos
+探索 AMCT INT4 权重量化完整路径：配置→量化→导出→部署
+识别 INT4 兼容性边界：配置验证、dtype 矩阵、导出格式、测试用例
+分析 HIF4 与 INT4 的差异点和可复用点
+提出 2-3 种 HIF4 扩展方案并给出推荐
+设计回归验证方案确保向后兼容
+输出完整任务规划和数据流分析
++ Thought: 2ms
+四、回归验证方案（确保向后兼容）
+4.1 回归测试矩阵
+测试层级	测试文件
+单元测试 — 配置验证	test_fields.py
+ 	test_parser.py
+ 	test_parser.py
+ 	test_parser.py
+单元测试 — 量化核心	test_quant_util.py
+ 	test_quant_util.py
+ 	test_quant_util.py
+ 	test_quant_util.py
+单元测试 — dtype	test_dtypes.py
+ 	test_dtypes.py
+集成测试 — AWQ	test_awq.py
+集成测试 — GPTQ	test_gptq.py
+集成测试 — MinMax	test_minmax.py
+集成测试 — SmoothQuant	test_smoothquant.py
+集成测试 — Config	test_config.py
+集成测试 — 端到端	test_quantize.py
+部署测试	test_deploy_kv_quant.py
+4.2 新增 HIF4 测试矩阵
+测试层级
+单元 — config
+ 
+ 
+ 
+单元 — quant_util
+ 
+ 
+ 
+集成 — AWQ
+ 
+集成 — GPTQ
+集成 — Config
+端到端
+4.3 向后兼容性验证流程
 Phase 1: 基线建立
   └→ 运行全部 INT4 现有测试，记录基线结果（pass/fail + 数值）
-
+  
 Phase 2: HIF4 代码合入
   └→ 运行全部 INT4 测试 → 必须全部通过（零回归）
   └→ 运行全部 HIF4 新增测试 → 必须全部通过
-
+  
 Phase 3: 交叉验证
   └→ 同时存在 INT4 + HIF4 配置的模型量化 → 互不干扰
   └→ 验证 ALGORITHM_SUPPORTED_QUANT_TYPE_COMB 无冲突
-
+  
 Phase 4: 导出格式验证
   └→ INT4 导出 → npu_convert_weight_to_int4pack → 与基线 bit-identical
   └→ HIF4 导出 → 同样走 int4pack（但 scale 值不同）
-```
-
-#### 五、完整数据流分析
-
-##### 5.1 需求解析阶段
-
-```
+五、完整数据流分析：Agent 处理流程
+5.1 需求解析阶段
 输入: "基于 INT4 扩展 HIF4 路径"
   │
   ├→ Agent 解析: HIF4 = 浮点4-bit量化 (E2M1, max=6.0)
@@ -267,11 +278,7 @@ Phase 4: 导出格式验证
   │              测试结果不回归
   │
   └→ 范围界定: 仅权重量化, AWQ/GPTQ/MinMax 算法
-```
-
-##### 5.2 代码定位阶段
-
-```
+5.2 代码定位阶段
 Agent 搜索链:
   grep('int4') → 353 matches across amct_pytorch/
     │
@@ -284,44 +291,33 @@ Agent 搜索链:
     ├→ linear_awq_module.py: AWQ 特殊处理 → 追加类型
     ├→ weight_npu_quant_module.py: 部署打包 → 追加类型
     └→ npu_quantization_linear.py: W4A8 部署 → 追加类型
-```
-
-##### 5.3 方案设计阶段
-
-```
+5.3 方案设计阶段
 决策树:
   HIF4 是新 dtype 还是 INT4 模式?
     → 新 dtype (方案1) [推荐, 与 HiFloat8 模式一致]
-
+  
   HIF4 走整数还是浮点量化路径?
     → 浮点路径 (QUANT_SCOPE['hifloat4'] = 6.0)
     → 走 get_float_quant_scope() 而非 get_int_quant_scope()
-
+  
   HIF4 部署打包格式?
     → 复用 int4pack (npu_convert_weight_to_int4pack)
     → 与 INT4 相同的 NPU 算子 (npu_weight_quant_batchmatmul)
-
+  
   HIF4 配置入口?
     → type: 'hifloat4' (独立 dtype 字符串)
     → algorithm: {'awq': {...}} (复用现有算法)
-```
-
-##### 5.4 改动范围精确清单
-
-| # | 文件 | 改动类型 |
-|---|------|---------|
-| 1 | `common/utils/vars.py` | 新增 HIFLOAT4 常量 + 矩阵条目 |
-| 2 | `common/utils/quant_util.py` | 新增 HIFLOAT4 量化/反量化分支 |
-| 3 | `classic/quantize_op/utils.py` | 新增浮点 scale 计算路径 |
-| 4 | `classic/quantize_op/linear_awq_module.py` | 类型元组追加 HIFLOAT4 |
-| 5 | `classic/deploy_op/weight_npu_quant_module.py` | 白名单 + int4pack 追加 |
-| 6 | `classic/deploy_op/npu_quantization_linear.py` | W4A8 部署追加 |
-| 7 | `common/config/config.py` | 新增 HIF4 预定义配置 |
-| 8 | `algorithms/__init__.py` | 追加 HIF4 支持声明 |
-
-##### 5.5 向后兼容性验证检查点
-
-```
+5.4 改动范围精确清单（按优先级）
+#	文件
+1	common/utils/vars.py
+2	common/utils/quant_util.py
+3	classic/quantize_op/utils.py
+4	classic/quantize_op/linear_awq_module.py
+5	classic/deploy_op/weight_npu_quant_module.py
+6	classic/deploy_op/npu_quantization_linear.py
+7	common/config/config.py
+8	algorithms/__init__.py
+5.5 向后兼容性验证检查点
 Check 1: vars.py 零修改验证
   → diff INT4 现有 6 个 map 条目 → 必须完全相同
   → 新增条目使用新 key 'hifloat4'，不改 'int4' 的值
@@ -343,17 +339,28 @@ Check 4: 测试回归验证
 Check 5: 配置解析验证
   → INT4 配置通过 → HIF4 配置通过 → 互不干扰
   → skip_layers 对两种 dtype 都生效
-```
-
-#### 六、总结
-
-| 维度 | 推荐方案 |
-|------|---------|
-| 核心改动 | 独立 dtype `'hifloat4'`，8 个文件追加式修改 |
-| INT4 兼容性 | 零侵入 — 所有 INT4 现有条目零修改 |
-| 复用度 | 高 — 复用 int4pack 部署路径、现有算法框架 |
-| 回归风险 | 低 — 通过 dtype 字符串隔离实现完全解耦 |
-| 验证策略 | 4 阶段回归验证 + INT4/HIF4 测试矩阵 |
+六、总结
+维度
+推荐方案
+核心改动
+INT4 兼容性
+复用度
+回归风险
+验证策略
+# Todos
+探索 AMCT INT4 权重量化完整路径：配置→量化→导出→部署
+识别 INT4 兼容性边界：配置验证、dtype 矩阵、导出格式、测试用例
+分析 HIF4 与 INT4 的差异点和可复用点
+提出 2-3 种 HIF4 扩展方案并给出推荐
+设计回归验证方案确保向后兼容
+输出完整任务规划和数据流分析
++ Thought: 1.5s
+任务规划完成。以上输出覆盖了：
+需求解析 → HIF4 定义为 E2M1 浮点 4-bit（quant_scope=6.0），与 INT4（整数 4-bit，quant_scope=7）的核心差异
+代码定位 → 353 个 INT4 引用点的完整扫描，8 个核心改动文件精确定位
+方案设计 → 推荐独立 dtype 方案（与 HiFloat8 扩展模式一致），8 个文件全部为追加式修改
+验证设计 → 4 阶段回归验证 + INT4/HIF4 测试矩阵，确保向后兼容
+所有改动均不修改 INT4 现有分支，通过 dtype 字符串隔离实现完全解耦
 
 
 ## 测试 3：BATQuant 敏感层自动识别

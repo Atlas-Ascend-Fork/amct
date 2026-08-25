@@ -1,7 +1,7 @@
 ---
 name: amct-coder
 description: |
-  AMCT 仓源代码编码、实现规划、行为诊断与代码 review 等辅助编码的入口：用于定位 workflow/CLI、solver、dtype、通用 quant module、LLM PTQ 算法、deploy 实现、classic graph、public API、tests、docs 和 examples 的修改落点，检查分层、越层、活跃调用链和上下游契约，并完成相应实现与最小验证。不适用于新增或结构性修改模型 adapter/wrapper/attention/MLP/MoE（转 $model-adapter）、Ascend C kernel/PyTorch C++ extension/schema/Meta/CMake（转 $amct-ops-dev）、实际运行量化或评测及生成 deploy 交付产物（转 $quant-workflow / $quant-run / $deploy-export）；评审已有文件或拟议落点是否越层仍使用本 skill。
+  AMCT 仓源代码编码、实现规划、行为诊断与代码 review 等辅助编码的入口：用于定位 workflow/CLI、solver、dtype、通用 quant module、LLM PTQ 算法、deploy 实现、classic graph、public API、tests、docs 和 examples 的修改落点，检查分层、越层、活跃调用链和上下游契约，并完成相应实现与最小验证。
 ---
 
 # AMCT Coder
@@ -84,7 +84,7 @@ repo-map 是稳定架构契约，源码是当前行为事实。repo-map 前置�
 
 | 类型 | Reference | 用途与加载时机 |
 | --- | --- | --- |
-| 项目规范 | [project-rules.md](references/project-rules.md) | AMCT 代码风格、版权、贡献门槛、模板和 GitCode 操作规范；修改代码前，或做规范合规 review 时读取 |
+| 项目规范 | [project-rules.md](references/project-rules.md) | AMCT 代码风格、版权、贡献门槛、模板和 GitCode 操作规范；编码前必读，规范合规 review 必读 |
 | 职责辅助 | [delegation.md](references/delegation.md) | 编码与专门流程的职责交界不清时读取；只解释稳定的高歧义交界，不是外部 skill 清单 |
 | 定位辅助 | [repo-scenarios.md](references/repo-scenarios.md) | 无法确定代码体系或入口时读取 |
 | 主场景 | [dtype-quant-module.md](references/dtype-quant-module.md) | 量化 dtype 和通用 quant module 相关开发与 review |
@@ -96,7 +96,7 @@ repo-map 是稳定架构契约，源码是当前行为事实。repo-map 前置�
 | 主场景 | [classic-graph.md](references/classic-graph.md) | classic 量化与 graph_based 相关开发与 review |
 | 主场景 | [ops-boundary.md](references/ops-boundary.md) | `amct_pytorch` 调用 `amct_ops` 的 Python 侧边界开发与 review |
 | 主场景 | [public-api-tests.md](references/public-api-tests.md) | 公共接口、打包、测试和用户资料相关开发与 review |
-| 阶段辅助 | [stage-impact.md](references/stage-impact.md) | 修改 LLM workflow、阶段产物或跨阶段契约时读取 |
+| 阶段辅助 | [stage-impact.md](references/stage-impact.md) | 修改 LLM workflow、数据流转、阶段产物或跨阶段契约时读取 |
 | 分层辅助 | [layer-rules.md](references/layer-rules.md) | 落点、越层或上下游边界仍不明确时读取 |
 | 模型辅助 | [attention-rules.md](references/attention-rules.md) | attention 相关 review 或局部非结构修复时读取 |
 | 模型辅助 | [wrapper-rules.md](references/wrapper-rules.md) | MLP、MoE 或 wrapper 相关 review 和局部非结构修复时读取 |

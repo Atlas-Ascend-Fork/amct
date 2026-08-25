@@ -1149,3 +1149,216 @@ algorithm compatibility / model-specific exact branches
 - 未执行 cold forward-test：当前会话和工作区已经包含原始测试答案、审查结论与本节预期，无法满足隔离要求。同会话静态复核不作为 Agent 行为证据。
 - 未更新 repo-map/casebook/docs/examples：本轮没有改变 AMCT 分层、模型经验或用户功能。
 - 工作区原有 `test.md`、`test-noskill.md`、`test-skill.md` 及测试 prompt 相关未提交状态均未改动或清理。
+
+### 21.13 有 / 无 Skill 横向对比结论补录
+
+第 21 节最初只记录了有 Skill 版本的残余漏洞和整改，没有把本轮 A/B 横向结论独立写入，这是记录遗漏。补录结论如下：
+
+- **有 Skill 版本约 3.5/10**：该分数来自 `test-skill.md` 第 487 行之后的 reviewer 审查，不属于被测 Agent 原始回答。
+- **无 Skill 版本约 2.5/10**：`test-noskill.md` 没有附同格式 reviewer 评分，本分数是按相同关注点做的回顾性启发式估计，不是统一 rubric 自动计算值。
+- **相对胜负为有 Skill 4 胜、1 平、1 负**。这里的“胜”只表示两份不合格答案中的相对表现更好，不表示该题已经达到可实施或可合入标准。
+
+| 测试 | 相对结果 | 主要差异 | 两边仍有的问题 |
+| --- | --- | --- | --- |
+| 1. BATQuant + MXFP4 | 有 Skill 胜 | 有 Skill 版本进入 LLM new-path 的 algorithm、structure transform 和 solver 契约；无 Skill 版本主要套用 classic `BaseQuantizeModule` / GPTQ 式路径 | 有 Skill 仍把可由源码确认的 transform、trainable params 和保存链留成待确认或判断错误 |
+| 2. HIF4 dtype | 有 Skill 胜 | 有 Skill 版本定位到 `quantization/dtypes`、registry 和 dtype 契约未知性；无 Skill 版本大量落点来自另一套 classic/experimental 配置与算子体系 | 有 Skill 漏掉 CLI、tensorwise deploy 和完整消费面，且过早固定文件/接口候选 |
+| 3. 敏感层识别 | 有 Skill 胜 | 有 Skill 版本至少把能力放回 new-path algorithm/workflow/solver 边界；无 Skill 版本主要围绕 classic quantize/pass 和已有 GPTQ 统计展开 | 有 Skill 没有闭环成对输出、score 聚合以及跳层在保存、eval、deploy 中的语义 |
+| 4. GPTQ | 平 | 两版都识别了 new-path `ALGO_REGISTRY`、weight target 和统计型算法与 trainable 算法的差异 | 两版都没有正确闭环 GT observe、无 trainable 参数时的数据遍历、一次性 finalize 以及优化权重的保存回载；无 Skill 的展开更长，但不构成更高等级证据 |
+| 5. Attention + MLP 联合校准 | 有 Skill 负 | 无 Skill 版本对联合 target、联合求解和实验矩阵展开得更完整；有 Skill 版本更早把 `attn+mlp` 和完整 block 路线写成确定方案，并错误声称递归保存已闭环 | 两版都没有正确处理 CLI choices、wrapper 双侧注入、block 原始输入与 double norm、完整 `PtqUnit`、保存回载和公平对照；无 Skill 也不合格，只是相对略优 |
+| 6. Kimi-K3 端到端流程 | 有 Skill 胜 | 有 Skill 版本更接近 adapter 与端到端 workflow 的职责边界；无 Skill 版本直接假设 Kimi-K3 复用 Qwen3，并转向未经当前主链证明的 experimental FlatQuant 实现 | 有 Skill 仍未真正路由 `quant-workflow`，混淆 FP16/BF16、INT4 weight-only/W4A4，并发明模型落点候选 |
+
+横评说明 Skill 的有效增益主要在三个方面：更容易进入正确代码体系，能识别 registry/adapter/solver 等分层边界，也更愿意保留未知契约。它没有稳定解决三个更关键的问题：确认活跃调用链、描述跨阶段状态机、把局部 helper/规则收口为可执行的端到端契约。因此本轮结论不是“有 Skill 已经可用”，而是“方向有改善，但准确度和闭环性仍不合格”，这也是 §21.1～§21.9 修订的依据。
+
+## 22. 第十三轮审视：隔离 cold forward-test 与规划一致性
+
+第 21 轮静态修订后，在 commit `e181c6e` 的浅克隆副本中移出 `test-skill.md`、`test-noskill.md` 和 `amct_coder_analysis/`，用三个无历史上下文的独立 Agent 分别验证模型落点 review、HIF4 dtype 规划和 GPTQ 统计生命周期。测试只投喂原始任务、`amct-coder` 路径和只读约束，没有提供预期答案或第 21 节诊断。
+
+### 22.1 结果
+
+| 用例 | 结果 | 主要证据 |
+| --- | --- | --- |
+| Kimi-K3 wrapper 拟放入 workflow | 通过 | 先由 `amct-coder` 否决越层落点，再实际加载 `model-adapter` 形成模型层计划；具体 family、类名和 wrapper 必要性保持为候选 |
+| 基于 INT4 扩展 HIF4 | 部分失败 | 正确核对 registry、CLI、bit policy、quantizer 和 deploy，且没有读取模型 casebook；但先声明 role 范围未冻结，后续又自行选择 weight-only 并拒绝 activation/cache |
+| GPTQ observe-then-finalize | 语义通过、读取预算失败 | 正确识别 GT observe、副作用边界、solver 无 trainable 参数提前返回、活跃保存链和 tensorwise deploy 缺口；但读取 7 份 Reference 及大量源码/测试，未说明超预算原因，人工催收后才停止 |
+
+这轮说明第 21 节新增的领域事实有效，但两条执行约束仍不够稳定：条件式计划会在后文被悄悄冻结；跨契约题会把“需要闭环”误读成“全文读取所有相关资料”。
+
+### 22.2 拟议修改
+
+本节只记录下一轮候选方案，当前尚未修改 `SKILL.md` 或任何 Reference：
+
+1. 在 `dtype-quant-module.md` 中把规则泛化为：参考实现的 role、bit、粒度和 deploy 范围只构成现状证据，不能自动冻结新 dtype 的目标契约。避免直接写入 HIF4、INT4 或 weight-only 等测试题专属措辞。
+2. 允许只读规划把未冻结的消费面标为 `pending`，并列出缺失契约及各条件分支；只有契约冻结后的实现 review 和最终说明才收口为 `supported`、`rejected` 或 `not applicable`。
+3. 增加对应 BLOCKER：不得先把 role、bit、粒度或 deploy 范围列为待确认，后续又在没有新证据时选定一个分支并写成目标状态。
+4. 暂不修改 `SKILL.md` 或 `llm-algorithm.md` 的读取预算规则。已有两轮隔离复测都没有证明候选停止门有效，继续增加文字只会扩大上下文。
+
+### 22.3 验证结果与边界
+
+- baseline cold 测试中，模型落点 review 通过；GPTQ 语义通过但读取预算失败；HIF4 暴露未知 role 被自行冻结的问题。
+- HIF4/GPTQ 各进行两轮隔离复测，均未在预算内完成并被中止；中止后的输出不计作独立 cold 语义证据。因此上述拟议修改尚无修改后行为证据，读取效率问题保持未解决。
+- 原始 baseline 输出保留在本轮 Agent trace，未写入被测副本；本轮不满足 `validation.md` 要求的 prompt、输出和评分分文件归档，不能把 trace 当成可复用测试资产。
+- 本轮不改变 AMCT 运行时代码、repo-map 或 casebook，不运行 AMCT Python/C++ 单测。
+
+### 22.4 下一步验证
+
+实施前先准备一个不含 HIF4、INT4 和 weight-only 关键词的短 dtype 规划题，验证规则能否迁移到其它格式和 role 组合。实施后用物理隔离的新会话复测，并将原始 prompt、Agent 输出和 reviewer 评分分别保存；只有 Agent 全程保留未知契约为 `pending`，且没有从参考实现偷渡目标范围时，才把拟议修改记为已验证。
+
+### 22.5 后续总体策略
+
+后续采用“小步修改 + 独立 cold test + 达标后再扩面”的迭代方式，不再一次性横向扩写 `SKILL.md` 或全部 Reference。当前证据只稳定支持两个优先问题：
+
+1. 未知目标契约会在规划后半段被 Agent 无证据地冻结。
+2. 跨契约任务会把“检查闭环”解释成“全文读取所有相关 Reference”，导致读取预算失控。
+
+第一个问题已有可复现的语义失败，下一轮可以直接修改；第二个问题同时存在规则静态冲突和行为失败，但具体收敛方式需要先记录读取轨迹，再决定调整 Reference 指令还是主入口预算。除这两项外，其它扩写必须由新测试失败驱动。
+
+### 22.6 P0-A：建立 dtype 目标契约状态机
+
+当前 `dtype-quant-module.md` 要求计划、实现 review 和最终说明的消费面状态只能是 `supported`、`rejected` 或 `not applicable`。这会迫使只读规划在信息不足时仍选择一个终态，是 HIF4 cold test 中 role 被自行冻结的直接诱因。
+
+下一轮应把“当前仓库事实”和“目标契约决策”拆成两个维度：
+
+| 维度 | 表达内容 | 允许状态 |
+| --- | --- | --- |
+| 当前仓库事实 | 现有 registry、CLI、bit policy、quantizer、deploy 和算法分支实际支持什么 | `confirmed` / `not found`，附源码证据 |
+| 目标契约 | 新 dtype 计划支持、拒绝或不涉及什么 | `pending` / `supported` / `rejected` / `not applicable` |
+
+状态转换规则：
+
+1. 只读规划允许目标契约保持 `pending`，同时列出缺失输入和各条件分支。
+2. `pending` 只能由用户明确输入、已冻结需求、兼容性裁决或可直接确定目标语义的源码契约转成终态；参考实现的当前行为本身不能触发转换。
+3. 当前实现是 weight-only、固定 bit 或固定粒度，只能证明现状，不能自动成为新 dtype 的目标范围。
+4. 同一回答前文已标记 `pending`，后文没有新增证据时不得改写为 `supported`、`rejected` 或 `not applicable`。
+5. 契约仍为 `pending` 时，不把具体 dtype 类名、实现文件、payload 字段、CLI 值或最终改动面写成已经确定的唯一方案。
+
+对应 BLOCKER 应增加：不得先承认 role、bit、粒度或 deploy 范围未知，随后仅根据参考实现选择一个分支；不得把现有实现证据写入目标决策列。
+
+#### 22.6.1 dtype 验证题与通过条件
+
+使用不包含 HIF4、INT4、MXFP4、weight-only 等现有测试关键词的短题，要求为一种新数值格式做只读接入规划，但故意不提供 weight/activation/cache role、bit、粒度和 deploy 范围。
+
+通过条件：
+
+- Agent 正确核对当前 registry、CLI、bit policy、quantizer 和 deploy 消费面。
+- 所有未给出的目标 role/bit/粒度保持 `pending`。
+- 输出条件分支，不替用户推荐缺少依据的默认范围。
+- 不从 INT、MXFP 或 experimental 参考实现偷渡目标契约。
+- 未冻结项不产生唯一文件、类名、payload 或命令方案。
+
+至少在三个相互隔离的 cold 会话中全部通过，才能认为该状态机具备稳定行为证据。
+
+### 22.7 P0-B：消除读取预算的规则冲突
+
+主 `SKILL.md` 当前规定默认只加载一个主 playbook、最多一份辅助 Reference 和首轮 2～4 个源码/测试锚点，但三个子能力存在会自动突破该预算的指令：
+
+- `llm-algorithm.md` 要求改变 dtype real quant 语义时同时读取 `dtype-quant-module` 和 `deploy-export-code`。
+- `ptq-solver-params.md` 要求新增 solver/granularity 时同时读取 `llm-data-workflow` 和 `public-api-tests`。
+- `llm-data-workflow.md` 要求新增 CLI 参数或用户可见数据格式时同时读取 `public-api-tests`。
+
+“辅助 Reference 默认最多一份”和“同时读两份”不能同时作为可执行规则。下一轮不应简单放宽预算，而应把自动扩张改成证据驱动：
+
+```text
+完整读取一个主 playbook
+  -> 先查主 playbook 已列出的直接源码/测试锚点
+  -> 明确仍未解决的跨契约问题及 owner
+  -> 只加载该 owner 的一份辅助 Reference
+  -> 第二份辅助 Reference 只有在第一份和源码仍无法回答时加载，并记录扩张原因
+```
+
+辅助读取前形成最小“扩张凭据”：
+
+| 字段 | 要求 |
+| --- | --- |
+| 未解决契约 | 精确到 CLI choice、payload、保存 caller、回载结构等具体问题 |
+| 已查证据 | 已读取的源码符号、调用方或测试断言 |
+| owner Reference | 为什么该 Reference 拥有剩余契约 |
+| 超预算理由 | 为什么主手册、源码和第一份辅助资料仍不足 |
+
+不要因为题面同时出现 algorithm、solver、deploy、CLI 等词就读取所有同名 Reference。跨阶段检查可以输出 `affected/not applicable` 状态，但只有实际改变该阶段的输入、状态或产物时才完整加载对应 owner 手册。
+
+#### 22.7.1 GPTQ 读取效率验收
+
+继续使用 observe-then-finalize GPTQ 题做语义与效率双重验证：
+
+- 正确识别 GT 生成阶段 observe、副作用隔离、无 trainable 参数时 solver 提前返回、一次性 finalize caller、优化状态保存/回载和 deploy 消费。
+- 默认控制在一个主 Reference、一份辅助 Reference 和首轮 2～4 个源码/测试切片内。
+- 必须超出时，在读取第二份辅助 Reference 前留下扩张凭据，不能结束后补写理由。
+- 输出达到任务所需证据后停止，不继续枚举无关算法、测试目录或模型实现。
+- 语义正确但读取未收敛，仍判失败，不能只按答案内容判通过。
+
+先记录一次不修改规则的完整读取轨迹，确认是上述“同时读”指令、主手册锚点不足还是停止条件失效；再做最小文字修改。不要在原因未定位前继续给主 `SKILL.md` 增加新的预算段落。
+
+### 22.8 建立统一 A/B 评分体系
+
+当前有 Skill 的 3.5/10 来自附在 `test-skill.md` 后的 reviewer，无 Skill 的 2.5/10 是回顾性启发式估计，两者不是严格统一 rubric 的测量结果。后续比较必须使用同一评分表：
+
+| 评分维度 | 权重 | 核心检查 |
+| --- | ---: | --- |
+| Skill 路由与代码体系 | 15 | 是否进入正确 workflow/new-path/classic/model/ops 体系 |
+| 源码事实与活跃调用链 | 25 | 是否找到真实 caller、注册、分派和保存/消费链 |
+| 未知契约处理 | 20 | 是否保留 `pending`、给条件分支且不擅自冻结 |
+| 跨阶段闭环 | 20 | 输入、状态、保存、回载、eval/deploy 是否一致 |
+| CLI/config 准确性 | 10 | 参数、choices、bit policy 和自然语言目标是否一致 |
+| 验证与证据等级 | 10 | 是否区分源码、单测、集成和真实环境证据 |
+
+增加硬性封顶规则：使用不存在的 CLI 参数、选择错误代码体系、把没有 caller 的 helper 当成活跃路径、静默混淆 FP16/BF16 或 weight-only/W4A4、以及把未知目标契约写成已冻结方案时，该题不得及格。篇幅、文件数量和细节丰富度不直接加分。
+
+A/B 测试必须保持同一源码 commit、模型版本、reasoning 配置、原始 prompt、权限和超时设置。reviewer 不知道哪份答案来自有 Skill 环境，先独立评分再揭示分组，避免确认偏差。
+
+### 22.9 测试资产与归档方式
+
+每个用例分别保存：
+
+1. 原始用户 prompt。
+2. 被测 Agent 原始输出，不追加 reviewer 结论。
+3. 实际读取的 Skill、Reference、源码和测试清单。
+4. token/时间/中止原因等效率数据。
+5. 独立 reviewer rubric、逐项得分和源码证据。
+6. 源码 commit、模型版本、cold/warm 模式和运行环境。
+
+prompt、回答和 review 必须分文件；被测副本移除历史测试答案、`amct_coder_analysis/` 和预期结论。中止的输出记录为效率失败或未完成，不能作为完整语义通过样本。相同题至少运行三次，避免把单次偶然行为当成稳定能力。
+
+### 22.10 短回归题矩阵
+
+先用短题验证单一门禁，再重跑六道综合题：
+
+| 短题 | 主要断言 |
+| --- | --- |
+| 未知 dtype role | 现状与目标分离；未知目标始终为 `pending` |
+| helper 存在但无 caller | 明确标为未接通，不声称集成闭环 |
+| 无 trainable 参数的统计算法 | 识别 solver 提前返回并要求显式数据驱动/finalize |
+| 复合 unit 使用 norm 输出 | 识别完整 block double norm 风险及原始输入/kwargs 契约 |
+| FP16/BF16、weight-only/W4A4 | 自然语言目标与 CLI/bit policy 逐 role 对齐 |
+| 模型 wrapper 放入 workflow | 首次路由否决越层，并进入 `model-adapter` |
+| NPU kernel 放入 Python quant module | 首次路由到 `amct-ops-dev`，只保留上层契约 review |
+
+短题稳定通过后再重跑原六题，随后扩展到尚未被充分覆盖的 `classic-graph`、`ops-boundary`、`deploy-export-code` 和 `public-api-tests`。不能用六道跨契约综合题代替每份 Reference 自身的正常、边界、未知契约和伪活跃链测试。
+
+### 22.11 推荐实施批次
+
+下一批只修改：
+
+1. `dtype-quant-module.md`：加入 `pending`、现状/目标双列和禁止无证据状态转换的 BLOCKER。
+2. `llm-algorithm.md`：把一次性“同时读两份”改为证据驱动的 owner 选择。
+3. `ptq-solver-params.md`：同样消除同时加载两份辅助 Reference 的指令。
+4. `llm-data-workflow.md`：把 public API/CLI 的辅助读取改为真实用户契约变化后按需加载。
+5. `validation.md`：补统一 rubric、实际读取资料和效率数据归档要求。
+6. `design-iteration.md`：记录实际修改、cold test 原始结果和裁决。
+
+主 `SKILL.md` 在这一批保持不变。只有读取轨迹证明主入口预算或停止条件本身有问题，才单独修改；不要让子能力局部问题再次推动主文件扩张。算法生命周期、保存链、composite unit、路由和精度门禁已经有语义改善证据，本批不做无关重写。
+
+### 22.12 阶段验收门
+
+下一轮完成标准：
+
+- dtype 通用未知契约题三个 cold 会话全部保留 `pending`，无参考实现偷渡。
+- GPTQ 三个 cold 会话语义门全部通过，读取遵守默认预算；超预算时有事前扩张凭据。
+- 所有答案不出现不存在的 CLI、错误代码体系、未接通 helper 闭环或精度/bit-policy 口径混淆。
+- prompt、回答、读取清单和 reviewer 评分全部独立归档，A/B 使用同一 rubric 盲评。
+- `quick_validate.py`、Markdown 链接检查、Reference 导航集合和 `git diff --check` 通过。
+
+达到这些门后再评估主 `SKILL.md` 是否需要压缩，并开始覆盖其它子能力。未达到时继续围绕失败用例做最小修订，不新增大范围规则，也不以“平均分提高”掩盖仍存在的 P0 错误。
+
+### 22.13 当前状态
+
+§22.5～§22.12 仅为后续改进方案，尚未修改 `SKILL.md`、Reference、测试资产或评分脚本，也没有产生修改后的 cold forward-test 证据。
