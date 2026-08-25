@@ -39,6 +39,18 @@ typedef enum {
 template <typename T, pos_t pos>
 class Tensor {};
 
+// UB tensors must be registered via TPipe::InitBuffer before use (otherwise the
+// kernel metadata reports zero workspace and the host-side std::vector::reserve
+// throws length_error at launch). Matches the EasyASC generated code of
+// HiFloat4-private: each tensor gets its own InitBuffer.
+template <TPosition pos, typename T>
+aifunc LocalTensor<T> AllocateLocalTensor(int len) {
+    TBuf<pos> tbuf;
+    TPipe *pipe_ptr = GetTPipePtr();
+    pipe_ptr->InitBuffer(tbuf, len * sizeof(T));
+    return tbuf.template Get<T>();
+}
+
 template <typename T>
 class Tensor<T, PGM> {
 public:
@@ -60,22 +72,18 @@ template <typename T>
 class Tensor<T, PUB> {
 public:
     aifunc Tensor() {}
-    aifunc Tensor(uint64_t offset) { m_ptr = (__ubuf__ T *)offset; }
-    aifunc Tensor(__ubuf__ uint8_t *ptr) { m_ptr = (__ubuf__ T *)ptr; }
-    aifunc Tensor(__ubuf__ uint8_t *ptr, int size, int &offset) {
-        m_ptr = (__ubuf__ T *)(ptr + offset);
-        offset += size * sizeof(T);
-    }
-    aifunc __ubuf__ T *ptr() { return m_ptr; }
-    aifunc __ubuf__ void *vptr() { return (__ubuf__ void *)m_ptr; }
-    aifunc Tensor<T, PUB> operator[](int off) { return Tensor<T, PUB>((__ubuf__ uint8_t *)(m_ptr + off)); }
+    aifunc Tensor(int len) { m_t = AllocateLocalTensor<TPosition::VECCALC, T>(len); }
+    aifunc Tensor(LocalTensor<T> lt) { m_t = lt; }
+    aifunc __ubuf__ T *ptr() { return (__ubuf__ T *)m_t.GetPhyAddr(); }
+    aifunc __ubuf__ void *vptr() { return (__ubuf__ void *)m_t.GetPhyAddr(); }
+    aifunc Tensor<T, PUB> operator[](int off) { return Tensor<T, PUB>(m_t[off]); }
     template <typename U>
     aifunc operator Tensor<U, PUB>() {
-        return Tensor<U, PUB>((__ubuf__ uint8_t *)m_ptr);
+        return Tensor<U, PUB>(m_t.template ReinterpretCast<U>());
     }
 
 private:
-    __ubuf__ T *m_ptr;
+    LocalTensor<T> m_t;
 };
 
 /* ------------- Double Buffer ------------- */
@@ -87,21 +95,26 @@ template <typename T>
 class DBuff<T, PUB> {
 public:
     aifunc DBuff() {}
-    aifunc DBuff(int base, int size, int &offset) {
-        tsr1 = Tensor<T, PUB>(base + offset);
-        tsr2 = Tensor<T, PUB>(base + offset + size * sizeof(T));
-        offset += 2 * size * sizeof(T);
+    aifunc DBuff(int len) { Init(len); }
+    aifunc void Init(int len) {
+        TPipe *pipe_ptr = GetTPipePtr();
+        pipe_ptr->InitBuffer(buf1, len * sizeof(T));
+        pipe_ptr->InitBuffer(buf2, len * sizeof(T));
+        tsr1 = buf1.template Get<T>();
+        tsr2 = buf2.template Get<T>();
     }
     aifunc Tensor<T, PUB> get(int i) {
         if (i % 2 == 0) {
-            return tsr1;
+            return Tensor<T, PUB>(tsr1);
         } else {
-            return tsr2;
+            return Tensor<T, PUB>(tsr2);
         }
     }
 
 private:
-    Tensor<T, PUB> tsr1, tsr2;
+    TBuf<TPosition::VECCALC> buf1;
+    TBuf<TPosition::VECCALC> buf2;
+    LocalTensor<T> tsr1, tsr2;
 };
 
 /* ------------- Events ------------- */

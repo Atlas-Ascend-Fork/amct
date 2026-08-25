@@ -24,6 +24,7 @@ import torch.nn as nn
 
 from ..common.utils.log import LOGGER
 
+from . import simulate
 from .compat import detect_backend, patch_common_config
 from .config import MethodSpec, PruneConfig
 from .context import BatchAdapter, PruneContext
@@ -168,7 +169,11 @@ class AutoPruner:
         for stage in self.stages:
             working = stage.apply(working, context, report, self.config)
 
-        patch_common_config(working)
+        if simulate.active() is None:
+            # A trial must not rewrite model.config: _clamp_int_attrs only ever lowers
+            # num_experts_per_tok, so an aggressive candidate would leave a wrong value
+            # behind that no later trial or the final prune could raise back.
+            patch_common_config(working)
         report.params_after = count_parameters(working)
         self.last_report = report
         return working

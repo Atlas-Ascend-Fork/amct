@@ -29,8 +29,8 @@ using namespace ge;
         std::cout << MESSAGE << std::endl; \
         return ge::GRAPH_FAILED;           \
     }
-#define ALIGN_UP(x, y) (((x) + (y)-1) / (y) * (y))
-#define CEIL_DIV(x, y) (((x) + (y)-1) / (y))
+#define ALIGN_UP(x, y) (((x) + (y) - 1) / (y) * (y))
+#define CEIL_DIV(x, y) (((x) + (y) - 1) / (y))
 
 namespace svd_quant {
 constexpr uint64_t INPUT_A_IDX = 0;
@@ -44,9 +44,14 @@ namespace optiling {
 
 static constexpr uint32_t SCALE_CEIL_NUMBER = 64;
 static constexpr uint32_t SCALE_NUMBER = 2;
-
 static constexpr int32_t MAX_BASE_MN = 256;
 static constexpr int32_t MIN_BASE_MN = 16;
+static constexpr int32_t B16_DEFAULT_BASE_K = 64;
+static constexpr int32_t B16_BLOCK_LEN = 16;
+static constexpr int32_t DIGIT_TWO = 2;
+static constexpr uint32_t SHIFT_8_BITS = 8;
+static constexpr uint32_t SHIFT_16_BITS = 16;
+static constexpr uint32_t SHIFT_24_BITS = 24;
 
 // mxTypePara bit layout (MatmulApiStaticTiling/TCubeTiling):
 // [0:6]   scaleFactorKa
@@ -60,8 +65,8 @@ struct ScaleFactors {
     uint32_t n;
 };
 uint32_t BuildMxTypePara(ScaleFactors &scale) {
-    return ((scale.ka & 0x7FU) << 0) | ((scale.kb & 0x7FU) << 8) | ((scale.m & 0x7FU) << 16) |
-           ((scale.n & 0x7FU) << 24);
+    return (scale.ka & 0x7FU) | ((scale.kb & 0x7FU) << SHIFT_8_BITS) | ((scale.m & 0x7FU) << SHIFT_16_BITS) |
+           ((scale.n & 0x7FU) << SHIFT_24_BITS);
 }
 
 ge::graphStatus SvdQuantTiling::ValidateShapes() {
@@ -142,7 +147,7 @@ ge::graphStatus SvdQuantTiling::ReadShapes() {
 
 bool SvdQuantTiling::CalcB16MatmulTiling(matmul_tiling::MultiCoreMatmulTiling &mmTiling, TCubeTiling &cubeTiling,
     int32_t M, int32_t N, int32_t K, int32_t coreNum) {
-    int32_t baseM, baseN, baseK = 64 < K ? 64 : ALIGN_UP(K, 16);
+    int32_t baseM, baseN, baseK = B16_DEFAULT_BASE_K < K ? B16_DEFAULT_BASE_K : ALIGN_UP(K, B16_BLOCK_LEN);
 
     CommonMatmulTiling(mmTiling, M, N, K, coreNum, baseM, baseN);
 
@@ -167,20 +172,20 @@ bool SvdQuantTiling::CalcB16MatmulTiling(matmul_tiling::MultiCoreMatmulTiling &m
 void SvdQuantTiling::SetMatmulCubeTiling(
     TCubeTiling &cubeTiling, int32_t K, uint64_t l0cSize, int32_t baseMN, int32_t baseK, int32_t maxDepthVal) {
     int32_t depthVal = 1;
-    while (depthVal * 2 <= maxDepthVal) {
-        depthVal *= 2;
+    while (depthVal * DIGIT_TWO <= maxDepthVal) {
+        depthVal *= DIGIT_TWO;
     }
     int32_t dbFactor = 2;
     int32_t stepK = depthVal / dbFactor;
-    baseK = baseK == 0 ? 16 : baseK;
+    baseK = baseK == 0 ? B16_DEFAULT_BASE_K : baseK;
     while ((stepK > CEIL_DIV(K, baseK))) {
-        stepK /= 2;
+        stepK /= DIGIT_TWO;
     }
     int32_t stepMN = (depthVal / dbFactor) / stepK;
 
     int32_t dbL0C = 1;
-    if ((l0cSize / (baseMN * sizeof(float))) >= 2) {
-        dbL0C = 2;
+    if ((l0cSize / (baseMN * sizeof(float))) >= dbFactor) {
+        dbL0C = dbFactor;
     }
 
     cubeTiling.set_baseK(baseK);
@@ -190,8 +195,8 @@ void SvdQuantTiling::SetMatmulCubeTiling(
     cubeTiling.set_stepKb(stepK);
     cubeTiling.set_depthA1(depthVal);
     cubeTiling.set_depthB1(depthVal);
-    cubeTiling.set_dbL0A(2);
-    cubeTiling.set_dbL0B(2);
+    cubeTiling.set_dbL0A(dbFactor);
+    cubeTiling.set_dbL0B(dbFactor);
     cubeTiling.set_dbL0C(dbL0C);
 }
 

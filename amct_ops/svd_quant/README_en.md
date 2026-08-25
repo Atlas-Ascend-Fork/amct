@@ -2,7 +2,7 @@
 
 SVDQuant method uses a low-rank branch to absorb outliers
 
-1. Activation outliers transfered to weights
+1. Activation outliers transferred to weights
 2. Weight decomposed into `L1 & L2 + R`. High-precision low-rank branch (L1 & L2) is used to process weight outliers
 3. The operator is implemented as X @ L1 @ L2 + Q(X) @ Q(R)
 
@@ -130,18 +130,15 @@ svd_quant/            # SVDQuant components
 
 ```bash
 source $ASCEND_HOME_PATH/set_env.sh
-path="amct"
-cd $path$/amct_ops
-bash ops_build.sh --soc ascend950 svd_quant
-./output/CANN-custom_ops--linux.aarch64.run --install-path=$ASCEND_HOME_PATH/opp
+bash amct_ops/ops_build.sh --soc ascend950
+./amct_ops/output/CANN-custom_ops-*.run --quiet --install-path=$ASCEND_HOME_PATH/opp
 source $ASCEND_HOME_PATH/opp/vendors/customize/bin/set_env.bash
 ```
 
 ### 2. PyTorch Operator Installation
 
 ```bash
-cd $path$/amct_ops
-pip install ./dist/amct-*.whl --force-reinstall --no-deps
+pip install ./amct_ops/dist/amct_*.whl --force-reinstall --no-deps
 ```
 
 ### 3. Usage Example
@@ -205,15 +202,12 @@ Accuracy verification is performed through the following conditions:
 ## Test Method
 
 ```bash
-cd $path$/tests/amct_ops
-pytest test_svd_quant.py
+PYTHONPATH=amct_ops/staging python3 -m unittest tests.amct_ops.test_svd_quant
 ```
 
 Can also install wheel first then run tests:
 
 ```bash
-cd $path$/amct_ops
-pip install dist/amct-1.0-*.whl
-pytest test_svd_quant.py
+pip install ./amct_ops/dist/amct_*.whl --force-reinstall --no-deps
+PYTHONPATH=amct_ops/staging python3 -m unittest tests.amct_ops.test_svd_quant
 ```
-

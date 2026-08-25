@@ -1,22 +1,46 @@
 # amct_ops Test Instructions
 
-Tests in `tests/amct_ops` depend on the compiled `amct_ops` Python package and operator `.so`. Before running tests, you need to first build `amct_ops`.
+Tests in `tests/amct_ops` depend on the compiled `amct_ops` Python package and
+operator `.so`. Before running tests, you need to first build `amct_ops`.
 
 ## Method 1: Use Staging to Run (Recommended for Development)
 
 ```bash
-bash amct_ops/ops_build.sh hifloat8_cast
+bash amct_ops/ops_build.sh <op_name>
 
-PYTHONPATH=amct_ops/staging python3 -m unittest tests.amct_ops.test_hifloat8_cast
+PYTHONPATH=amct_ops/staging python3 -m unittest <test_module>
+```
+
+Here, `<op_name>` is the operator directory name under `amct_ops`, and
+`<test_module>` is the unittest module under `tests.amct_ops`, for example
+`tests.amct_ops.test_hifloat8_cast`.
+
+If an operator needs a specific SOC or other build options, add the required
+options according to the operator README or `ops_build.sh --help`. For example,
+SVDQuant currently builds only for the `ascend950` SOC:
+
+```bash
+bash amct_ops/ops_build.sh --soc ascend950 svd_quant
+
+PYTHONPATH=amct_ops/staging python3 -m unittest tests.amct_ops.test_svd_quant
 ```
 
 ## Method 2: Install wheel then Run
 
 ```bash
-bash amct_ops/ops_build.sh hifloat8_cast
+bash amct_ops/ops_build.sh <op_name>
 pip install amct_ops/dist/amct_ops-*.whl
 
-python3 -m unittest tests.amct_ops.test_hifloat8_cast
+python3 -m unittest <test_module>
+```
+
+SVDQuant example after installing the wheel:
+
+```bash
+bash amct_ops/ops_build.sh --soc ascend950 svd_quant
+pip install amct_ops/dist/amct_ops-*.whl
+
+python3 -m unittest tests.amct_ops.test_svd_quant
 ```
 
 ## Environment Requirements
@@ -24,6 +48,10 @@ python3 -m unittest tests.amct_ops.test_hifloat8_cast
 - Have sourced CANN environment variables, such as `$ASCEND_HOME_PATH/set_env.sh`
 - Current environment has available `torch`, `torch_npu`
 - Current machine can access NPU, tests will call `torch.npu.set_device(0)`
+- Specific operators may have extra dependencies or platform constraints. For
+  example, `test_svd_quant` depends on a built or installed SVDQuant custom
+  operator, and the current build script only builds this operator for the
+  `ascend950` SOC
 
 ## HiFloat8 dtype smoke validation
 

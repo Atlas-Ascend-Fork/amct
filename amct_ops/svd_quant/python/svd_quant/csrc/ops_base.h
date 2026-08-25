@@ -68,17 +68,19 @@ typedef int (*_aclDestroyScalarList)(const aclScalarList *array);
 using OpApiFunc = int (*)(void *, uint64_t, aclOpExecutor *, const aclrtStream);
 
 namespace {
-std::tuple<at::Tensor, at::Tensor> construct_tsqr_output_tensor(const at::Tensor &x);
-std::tuple<at::Tensor, at::Tensor, at::Tensor> construct_svd_output_tensor(const at::Tensor &x);
+constexpr int64_t MAX_DIM_NUM = 5;
+constexpr int64_t NCL_DIM_NUM = 3;
+constexpr int64_t NCHW_DIM_NUM = 4;
+constexpr int64_t NCDHW_DIM_NUM = 5;
 } // namespace
 
 struct NPUStorageDesc {
 public:
     struct use_byte_size_t {};
 
-    c10::SmallVector<int64_t, 5> base_sizes_;
-    c10::SmallVector<int64_t, 5> base_strides_;
-    c10::SmallVector<int64_t, 5> storage_sizes_;
+    c10::SmallVector<int64_t, MAX_DIM_NUM> base_sizes_;
+    c10::SmallVector<int64_t, MAX_DIM_NUM> base_strides_;
+    c10::SmallVector<int64_t, MAX_DIM_NUM> storage_sizes_;
     int64_t base_offset_ = 0;
     use_byte_size_t base_dtype_ = {};
     aclFormat origin_format_ = ACL_FORMAT_UNDEFINED;
@@ -113,13 +115,6 @@ const int DIM_0 = 0;
 const int DIM_1 = 1;
 const int DIM_2 = 2;
 const int DIM_3 = 3;
-
-namespace {
-constexpr int64_t MAX_DIM_NUM = 5;
-constexpr int64_t NCL_DIM_NUM = 3;
-constexpr int64_t NCHW_DIM_NUM = 4;
-constexpr int64_t NCDHW_DIM_NUM = 5;
-} // namespace
 
 constexpr int g_hash_buf_size = 8192;
 constexpr int g_hash_buf_max_size = g_hash_buf_size + 1024;
@@ -192,7 +187,7 @@ inline std::string real_path(const std::string &path) {
 }
 
 inline std::vector<std::string> get_custom_lib_path() {
-    char *ascend_custom_opppath = std::getenv("ASCEND_CUSTOM_OPP_PATH");
+    char *ascend_custom_opppath = std::getenv("ASCEND_CUSTOM_OPP_PATH"); // NOLINT
     std::vector<std::string> custom_lib_path_list;
 
     if (ascend_custom_opppath == nullptr) {
@@ -214,7 +209,7 @@ inline std::vector<std::string> get_custom_lib_path() {
 }
 
 inline std::vector<std::string> get_default_custom_lib_path() {
-    char *ascend_opp_path = std::getenv("ASCEND_OPP_PATH");
+    char *ascend_opp_path = std::getenv("ASCEND_OPP_PATH"); // NOLINT
     std::vector<std::string> default_vendors_list;
 
     if (ascend_opp_path == nullptr) {
@@ -286,14 +281,16 @@ inline void *GetOpApiLibHandler(const char *libName) {
 }
 
 // get aclnn api from loaded so
-#define GET_OP_API_FUNC_FROM_FEATURE_LIB(lib_handler, lib_name, api_name)       \
-    static auto lib_handler = GetOpApiLibHandler(lib_name);                     \
-    if ((lib_handler) != nullptr) {                                             \
-        auto funcAddr = GetOpApiFuncAddrInLib(lib_handler, lib_name, api_name); \
-        if (funcAddr != nullptr) {                                              \
-            return funcAddr;                                                    \
-        }                                                                       \
+inline void *GetOpApiFuncFromFeatureLib(void *lib_handler, const char *lib_name, const char *api_name) {
+    if ((lib_handler) != nullptr) {
+        auto funcAddr = GetOpApiFuncAddrInLib(lib_handler, lib_name, api_name);
+        return funcAddr;
+    } else {
+        return nullptr;
     }
+}
+
+#define IS_VALID_FUNC_ADDR(funcAddr) (funcAddr != nullptr)
 
 #define GET_OP_API_FUNC(apiName) reinterpret_cast<_##apiName>(GetOpApiFuncAddr(#apiName))
 
@@ -333,12 +330,31 @@ inline void *GetOpApiFuncAddr(const char *apiName) {
         }
         ASCEND_LOGI("%s is not in default custom lib.", apiName);
     }
+    static auto opapiMathHandler = GetOpApiLibHandler("libopapi_math.so");
+    auto mathHandlerFuncAddr = GetOpApiFuncFromFeatureLib(opapiMathHandler, "libopapi_math.so", apiName);
+    if IS_VALID_FUNC_ADDR (mathHandlerFuncAddr)
+        return mathHandlerFuncAddr;
 
-    GET_OP_API_FUNC_FROM_FEATURE_LIB(opapiMathHandler, "libopapi_math.so", apiName);
-    GET_OP_API_FUNC_FROM_FEATURE_LIB(opapiNnHandler, "libopapi_nn.so", apiName);
-    GET_OP_API_FUNC_FROM_FEATURE_LIB(opapiCvHandler, "libopapi_cv.so", apiName);
-    GET_OP_API_FUNC_FROM_FEATURE_LIB(opapiTransformerHandler, "libopapi_transformer.so", apiName);
-    GET_OP_API_FUNC_FROM_FEATURE_LIB(opapiLegacyHandler, "libopapi_legacy.so", apiName);
+    static auto opapiNnHandler = GetOpApiLibHandler("libopapi_nn.so");
+    auto nnHandlerFuncAddr = GetOpApiFuncFromFeatureLib(opapiNnHandler, "libopapi_nn.so", apiName);
+    if IS_VALID_FUNC_ADDR (nnHandlerFuncAddr)
+        return nnHandlerFuncAddr;
+
+    static auto opapiCvHandler = GetOpApiLibHandler("libopapi_cv.so");
+    auto cvHandlerFuncAddr = GetOpApiFuncFromFeatureLib(opapiCvHandler, "libopapi_cv.so", apiName);
+    if IS_VALID_FUNC_ADDR (cvHandlerFuncAddr)
+        return cvHandlerFuncAddr;
+
+    static auto opapiTransformerHandler = GetOpApiLibHandler("libopapi_transformer.so");
+    auto transformerHandlerFuncAddr =
+        GetOpApiFuncFromFeatureLib(opapiTransformerHandler, "libopapi_transformer.so", apiName);
+    if IS_VALID_FUNC_ADDR (transformerHandlerFuncAddr)
+        return transformerHandlerFuncAddr;
+
+    static auto opapiLegacyHandler = GetOpApiLibHandler("libopapi_legacy.so");
+    auto legacyHandlerFuncAddr = GetOpApiFuncFromFeatureLib(opapiLegacyHandler, "libopapi_legacy.so", apiName);
+    if IS_VALID_FUNC_ADDR (legacyHandlerFuncAddr)
+        return legacyHandlerFuncAddr;
 
     static auto opApiHandler = GetOpApiLibHandler(GetOpApiLibName());
     if (opApiHandler != nullptr) {
@@ -439,9 +455,9 @@ inline aclTensor *ConvertType(const at::Tensor &at_tensor) {
         }
     } else {
         switch (dimNum) {
-            case 3: format = ACL_FORMAT_NCL; break;
-            case 4: format = ACL_FORMAT_NCHW; break;
-            case 5: format = ACL_FORMAT_NCDHW; break;
+            case NCL_DIM_NUM: format = ACL_FORMAT_NCL; break;
+            case NCHW_DIM_NUM: format = ACL_FORMAT_NCHW; break;
+            case NCDHW_DIM_NUM: format = ACL_FORMAT_NCDHW; break;
             default: format = ACL_FORMAT_ND;
         }
         if (acl_data_type != ACL_STRING) {
