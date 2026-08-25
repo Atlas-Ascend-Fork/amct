@@ -26,7 +26,7 @@ casebook/
 
 ### L3 个案导航（按系列）
 
-- **qwen/**：`qwen3-dense`(4B/8B)、`qwen3-moe`(30B-A3B/235B-A22B)、`qwen3.5-3.6`(35B-A3B/35B)、`qwen3-next-80b-a3b-instruct`
+- **qwen/**：`qwen3-dense`(4B/8B)、`qwen3-moe`(30B-A3B/235B-A22B)、`qwen3.5-3.6`(35B-A3B/35B/27B Dense)、`qwen3-next-80b-a3b-instruct`
 - **deepseek/**：`deepseekv4`、`deepseek-v3.2`
 - **glm/**：`glm-5.1`（继承 DeepseekV32，瘦案例）
 - **longcat/**：`longcat`(Flash-Lite/Next)
