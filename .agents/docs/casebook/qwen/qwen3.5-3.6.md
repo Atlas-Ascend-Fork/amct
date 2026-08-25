@@ -7,7 +7,7 @@
 
 - 40 层 decoder，`layer_types` 重复 `linear×3 + full`；checkpoint MoE 已 packed（不像 235B 需重组）。
 - **参考与差异**：3.5 参考 `qwen3_5` attention/blockwise + `qwen3_moe` MoE 路由；3.6 = `Qwen3_5Moe` 纯子类（`pass`），暂无显著结构差异。
-- **复用**：`BaseModel` blockwise、`PtqUnit`、`QuantLinear`、`apply_quant_attn`、`apply_quant_moe_mlp`。**新增**：`qwen3_5_moe` 的 `build_quant_block()` 路由、`QuantPackedExperts`、`PackedExpertView`。
+- **复用**：`BaseModel` blockwise、`PtqUnit`、`QuantLinear`、`apply_quant_attn`、`apply_quant_moe_mlp`。Qwen3.6-27B 的 attention 复用 Qwen3.5 实现，MLP 复用标准 Dense MLP 实现。**新增**：`qwen3_5_moe` 的 `build_quant_block()` 路由、`QuantPackedExperts`、`PackedExpertView`。
 - **起步复用清单**（下一条 Qwen3.5/3.6 MoE）：从 `qwen3_5_moe.py` 起步。
 - Qwen3.6-27B 为 64 层 Dense decoder，沿用 `qwen3_5` 主链，无需新增独立 adapter；本案分别验证 `attn-linear` 和 `mlp` 量化目标。
 - Qwen3.6-27B 的 Dense MLP 每层量化 `gate_proj`、`up_proj`、`down_proj`，共 192 个量化模块。
@@ -38,8 +38,7 @@
 ## 量化结论
 
 - 首推 `attn-linear + moe` W8A8-int8 直转，3.5/3.6 均 delta 小达标（见精度速查表）。`linear_attention` kernel 量化未就绪时先留 BF16，仅量化其投影 Linear（3.6 smoke 已验该单元可 PTQ）。
-- Qwen3.6-27B A4W4 MXFP4 `attn-linear`：Direct `delta=+0.2614`、LWC `+0.1794`、LAC `-0.1953`、LWC+LAC `-0.2275`、OmniQuant `+0.0161`、AutoRound `+0.3620`、FlatQuant `-0.5956`；其中 Direct 与 AutoRound 相对 BF16 的 PPL 增量超过 0.2。
-- Qwen3.6-27B A4W4 MXFP4 `mlp`：Direct `delta=+0.0982`、LWC `+0.2457`、LAC `+0.0434`、LWC+LAC `+0.1890`、OmniQuant `+0.0528`、AutoRound `+0.1447`、FlatQuant `-0.0886`；其中 LWC 相对 BF16 的 PPL 增量超过 0.2。
+- Qwen3.6-27B A4W4 MXFP4 `attn-linear` 和 `mlp` 结果见精度速查表。
 
 ## 适配建议（下次同系列/同结构）
 
