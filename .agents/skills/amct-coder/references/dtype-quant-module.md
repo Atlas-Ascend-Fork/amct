@@ -44,6 +44,23 @@ PRODUCE：`DTYPE_REGISTRY` 条目、quantizer 实例化接口、`export_deploy()
 5. 目标契约仍为 `pending` 时，只列候选锚点和条件分支，不给出唯一类名、实现文件、CLI 值、payload 字段或最终改动清单。
 6. 实际编码遇到会产出不兼容实现的 `pending` 时，完成不依赖该项的事实核验后一次性询问用户，不落盘投机分支。
 
+### 命名契约与动作一致性
+
+把产品称谓、CLI 值、registry key、Python 文件/类标识符和可选 ops schema 名分别记录为目标契约。它们可以相同，也可以映射，但不能只根据现有格式族命名惯例自动合并、删改用户给出的名称或生成新的公开名称。仓库惯例只能形成候选映射；公开值或兼容别名仍需用户输入、已冻结需求或兼容性证据。
+
+最终计划中每个会改变实现、公开契约或交付产物的立即动作，都必须引用一个非 `pending` 的目标状态。依赖 `pending` 的修改只能出现在条件分支或待确认清单中；为消歧而进行的源码核验和现状测试可以继续执行：
+
+| 目标项仍为 `pending` | 不能写成当前立即动作 |
+| --- | --- |
+| 新增、别名或复用 | 创建唯一 dtype 类/文件、registry key 或导入项 |
+| CLI 是否公开 | 修改 `choices`、help、配置或样例 |
+| deploy 参与范围 | 修改 payload、packing、index 或 `quantization_config` |
+| NPU 加速与接口 | 创建确定的 kernel、schema、Meta、构建项或算子目录 |
+
+交付前逐项比较目标状态与修改动作、落点、实施顺序和修改后测试。同一回答没有新增证据时，前文为 `pending` 的项目在后文仍保持条件式表达；不能通过“建议先建骨架”“顺手接入”或修改后测试暗中把它改成既定方案。
+
+只读规划默认只输出职责边界、关键当前事实、目标状态、条件动作和验证建议。搜索命中用于取证，不重复展开全部候选文件、跨层重构和实现骨架。
+
 ### 既有语义复用门
 
 冻结新名字前，先用数值格式、block/group 粒度、packing layout、scale 语义和 weight/activation 适用范围，与现有 INT、MXFP、experimental dtype 逐项比较。若已冻结的目标数值语义被现有实现完整覆盖，优先选择零改动、公开别名或复用现有 registry/消费分支；只有至少一项真实语义或用户契约不同，才新增 dtype 类和 deploy format。名称不同、产品称谓不同或题目说“基于 INT4 扩展”都不能单独证明需要新 dtype，也不能把被参考 dtype 的适用范围复制成目标契约。
@@ -74,15 +91,17 @@ PRODUCE：`DTYPE_REGISTRY` 条目、quantizer 实例化接口、`export_deploy()
 
 ## 分层实施顺序
 
+以下步骤只对相应目标契约已经转为 `supported` 的部分成立；仍为 `pending` 的步骤保留为条件分支，不进入当前改动清单。
+
 1. 填写当前事实和目标契约状态；检查现有 LLM、classic、experimental 实现是否已经覆盖已冻结的目标语义，不同代码体系不能直接复用注册表。
 2. 在 dtype/impl 层实现 fake quant、real quant、packing/dequant 和输入约束；保持 `bits == 16` 直通路径。
 3. 接入 `register_dtype()`，验证 registry 重复注册、未知名称和 import 顺序。
 4. 只在通用接口不兼容时修改 quant module；registry 构造已经满足时不重复增加 dtype 分支。
-5. 同步 bit policy、CLI choice 和配置样例；仅允许真实支持的 bit/activation/weight 组合进入入口。
-6. 若参与 deploy，按已冻结 payload 更新 blockwise/tensorwise 消费和 `quantization_config`；此阶段完整读取 `deploy-export-code`。
+5. 仅在目标 CLI/config 参与状态为 `supported` 时同步 bit policy、CLI choice 和配置样例；只允许真实支持的 bit/activation/weight 组合进入入口。
+6. 仅在目标 deploy 参与状态为 `supported` 时，按已冻结 payload 更新 blockwise/tensorwise 消费和 `quantization_config`；确认存在真实跨契约影响后再读取 `deploy-export-code`。
 7. 若现有 algorithm 显式区分 dtype，逐个确认支持、拒绝或 fallback；不要无依据扩展所有算法。
 8. 若模型侧显式依赖 dtype 选择 cache/layout，先做兼容性 review；需要模型专属结构实现时转 `model-adapter`。
-9. 若需要 NPU 加速，Python 路径继续作为语义参考或 fallback，上层软依赖由 `ops-boundary` 处理。
+9. 仅在目标 NPU 加速状态为 `supported` 时，以 Python 路径作为语义参考或 fallback，上层软依赖由 `ops-boundary` 处理；schema 和目录仍由 `amct-ops-dev` 根据已冻结接口确定。
 
 ## 消费面强制收口
 
@@ -122,6 +141,8 @@ PRODUCE：`DTYPE_REGISTRY` 条目、quantizer 实例化接口、`export_deploy()
 
 - 数值格式或适用范围未冻结，却按名称臆造实现语义或最终落点。
 - 前文把 role、bit、粒度、CLI 或 deploy 范围标为 `pending`，后文没有新增证据却自行选择终态。
+- 产品称谓、CLI 值、registry key、Python 标识符或 ops schema 未分别冻结，却仅按仓库命名惯例替用户改名或确定唯一映射。
+- 目标状态仍为 `pending`，却在修改动作、落点、实施顺序或修改后测试中把对应 CLI、deploy、NPU 或 dtype 骨架写成当前必改项。
 - 把 INT、MXFP、experimental 或其它参考实现的当前行为写入目标决策，借此默认 weight-only、weight+activation、固定 bit/粒度或 deploy 范围。
 - 未比较现有 INT/MXFP/experimental 数值语义，仅因新名称重复创建等价 dtype。
 - 新 dtype 未进入 `register_dtype()`，或 CLI/bit policy 允许框架实际不支持的组合。
@@ -138,4 +159,5 @@ PRODUCE：`DTYPE_REGISTRY` 条目、quantizer 实例化接口、`export_deploy()
 - CLI：`pytest tests/unit_test/cli/test_llm_module_entrypoints.py` 或新增的 parser 测试。
 - deploy：`pytest tests/unit_test/workflows/test_llm_deploy.py tests/unit_test/common/models/llm/common/test_deploy_export.py`
 - Skill 行为回归：用不含既有 dtype 名和 role 暗示的隔离规划题，验证未给出的目标项全程保持 `pending`，且不产生唯一实现落点。
+- 规划一致性回归：检查产品名、CLI、registry、Python 和 ops 命名分别记录；每个改变实现或公开契约的立即动作均能回指非 `pending` 的目标状态。
 - 真实 eval/deploy 或 NPU 数值未执行时，分别说明缺模型/数据/硬件环境。

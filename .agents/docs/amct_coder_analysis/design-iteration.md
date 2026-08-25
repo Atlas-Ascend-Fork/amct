@@ -1361,4 +1361,155 @@ prompt、回答和 review 必须分文件；被测副本移除历史测试答案
 
 ### 22.13 当前状态
 
-§22.5～§22.12 仅为后续改进方案，尚未修改 `SKILL.md`、Reference、测试资产或评分脚本，也没有产生修改后的 cold forward-test 证据。
+§22.5～§22.12 在本节形成时仅为后续改进方案，尚未修改 `SKILL.md`、Reference、测试资产或评分脚本，也没有产生修改后的 cold forward-test 证据。后续 dtype 状态机的实际修改与 warm 对照结果见第 23 节。
+
+## 23. 第十四轮审视：dtype 状态机 warm 对照与残余决策漂移
+
+第 22 节发现新 dtype 的未知 role 会在规划后半段被 Agent 无证据地冻结，因此在 `dtype-quant-module.md` 中实施了“当前仓库事实 / 目标契约”双维状态模型，并增加 `pending` 状态、状态转换规则、消费面双列表和对应 BLOCKER。本轮使用新的 dtype 行为题检查该修改是否改变 Agent 的规划路线。
+
+精炼结果见 [dtype-test.md](../dtype-test.md)，原始长回答归档于 [dtype-test-raw.md](../dtype-test-raw.md)。
+
+### 23.1 测试范围与证据边界
+
+本轮完成 5 组有 / 无 Skill 的成对只读规划题：
+
+| 用例 | 主要变量 |
+| --- | --- |
+| D1 `nova-float` | 只有产品名称，其余目标契约基本未知 |
+| D2 `orbit4` | 用户给出“复制 4 bit 实现即可自动接通”的错误暗示 |
+| D3 `quark4` | weight-only 与 4 bit 已确认，编码、粒度和 deploy 未确认 |
+| D4 `luma` | 只有 dtype 类、注册和数值单测，却声称已经完成接入 |
+| D5 新格式 + NPU | dtype Python 语义与 NPU 算子实现的职责交界 |
+
+本轮不是严格 cold A/B，证据限制如下：
+
+- 有 Skill 回答能够看到或复用无 Skill 阶段的结论，属于同会话 warm 对比。
+- 每题只有一次结果，没有证明行为可稳定复现。
+- 没有统一记录模型版本、源码 commit、完整读取轨迹、token、运行时间和中止原因，不能评价读取预算。
+- 原计划中用于验证“信息充分时能否正常收敛”的 `q6s` 未执行。
+- 两组都没有修改代码或运行单测、集成、真实模型和 NPU 验证。
+
+因此本节只能记录“规划行为方向性改善”，不能把 dtype 子能力标记为 cold 回归通过。
+
+### 23.2 对照结果
+
+| 用例 | 无 Skill 的主要路线 | 有 Skill 的主要路线 | 结果 |
+| --- | --- | --- | --- |
+| D1 只有名称 | 默认新增 dtype，提前确定命名、骨架和跨层重构 | 先裁决别名、classic 迁移或新语义，未知项保持 `pending` | 明显改善 |
+| D2 错误复用 | 能否决复制方案，但仍建议先建骨架并做 CLI/deploy 重构 | 先比较数值语义，再决定复用、别名或新增；搜索命中不等于必改 | 明显改善 |
+| D3 部分契约 | 采用已知 role/bit，但仍提前规划新文件、CLI 和 NPU | 已知项收口、未知项保持 `pending`，但默认建议修改注册名 | 有改善，仍有过早决策 |
+| D4 注册即完成 | 能追到 import、CLI 和 deploy，但检查面较大 | 用当前事实 / 目标契约表反证“完成”，但 CLI 状态前后不一致 | 有改善，仍有状态漂移 |
+| D5 dtype + NPU | 直接按 LLM dtype 与新算子路线展开 | 先裁决 LLM new-path / classic / 两者，再划分 dtype 与 ops owner | 明显改善 |
+
+有 Skill 后没有观察到相对无 Skill 的明显退化。D1、D2、D5 的路线改善最清楚；D3、D4 说明状态模型已经减少无依据方案，但还没有完全约束状态与后续动作的一致性。
+
+### 23.3 已确认的有效改进
+
+1. **规划起点前移。** Agent 不再直接回答“如何新增 dtype”，而是先判断现有语义复用、公开别名、跨体系迁移和真正新增。
+2. **现状与目标分离。** INT、MXFP、classic 或 experimental 的当前实现进入事实列，不再当然成为新 dtype 的 role、bit、粒度和 deploy 范围。
+3. **消费面证据增强。** Agent 能稳定区分“类存在 / 注册成功”与 CLI、quantizer、blockwise/tensorwise deploy 实际接通。
+4. **职责边界改善。** dtype + NPU 场景中，Python 参考语义和上层调用契约留在 `amct-coder`，kernel、C++ schema、Meta、构建和硬件验证进入 `amct-ops-dev`。
+5. **证据等级更明确。** 有 Skill 回答普遍说明只完成源码核验，没有把未运行的测试、集成或硬件验证写成已通过。
+
+因此，dtype 状态机不是无效扩写：它已经对 Agent 的规划行为产生了可见改善。
+
+### 23.4 仍存在的问题
+
+#### P0-A：目标状态与后续动作仍会分叉
+
+D4 前文把“是否公开 CLI 值”标为 `pending`，后文却把“加入 CLI choice”列为可立即修改。当前规则限制了 `pending -> supported/rejected` 的文字状态转换，但没有同样限制依赖该状态的动作清单。
+
+同类风险还包括：deploy 参与度为 `pending` 时直接规划 payload；NPU 需求为 `pending` 时直接创建 kernel/schema；新增或别名未裁决时直接创建 dtype 文件。
+
+#### P0-B：仓库惯例仍可能被当成目标决策依据
+
+D3 根据现有格式族命名惯例，建议把用户题面中的 `quark4` 注册名改成 `quark`。命名惯例可以形成候选方案和兼容性说明，但不能单独改变用户给出的产品名、CLI 值或 registry 名。当前状态机对 role/bit/粒度约束较强，对“产品名 / CLI 值 / registry key / Python 标识符”的分离还不够明确。
+
+#### P1：候选骨架仍可能被写成可立即实施
+
+D5 虽然正确停止了数值实现和 schema 决策，但仍把 ops 目录骨架描述成可立即确定。目录结构可引用现有模式作为候选；在代码体系和接口契约未冻结前，不应成为最终落点。
+
+#### P1：效率改善没有证据
+
+两种回答都偏长。本轮没有完整读取轨迹和 token 记录，不能判断是 Reference 读取过多、源码锚点扩张过多，还是最终输出没有收敛。该问题暂不推动主 `SKILL.md` 修改，先在下一轮 cold test 中记录轨迹。
+
+### 23.5 下一步最小修改
+
+下一步只修改 `references/dtype-quant-module.md`，不扩写主 `SKILL.md`：
+
+1. **增加状态与动作一致性门。** 最终计划中的每个立即动作必须引用一个非 `pending` 的目标状态；依赖 `pending` 的内容只能进入条件分支或待确认清单。
+2. **拆分命名契约。** 分别记录产品称谓、CLI 值、registry key、Python 文件/类标识符和可选 ops schema 名；仓库惯例只能支持候选映射，不能自动替用户选择或改名。
+3. **增加高风险动作表。** 明确以下对应关系：
+
+   | 目标项仍为 `pending` | 禁止写成立即动作 |
+   | --- | --- |
+   | 新增 / 别名 / 复用 | 创建唯一 dtype 类、文件或注册项 |
+   | CLI 是否公开 | 修改 `choices`、help 或配置样例 |
+   | deploy 参与范围 | 修改 payload、packing、index 或 `quantization_config` |
+   | NPU 加速与 schema | 创建确定的 kernel、schema、Meta 或算子目录 |
+
+4. **增加交付前一致性复核。** 输出前逐项比较“目标状态”和“动作清单”；没有新增证据时，前文 `pending` 的项目在落点、测试和实施顺序中也必须保持条件式表达。
+5. **限制只读规划输出。** 默认只保留边界、关键当前事实、目标状态、条件动作和验证建议，不重复铺开全部搜索命中和完整实现清单。
+
+这批修改只针对本轮可复现的 D3/D4/D5 问题，不改算法、solver、data workflow 或主入口读取预算。
+
+### 23.6 修改后验收
+
+1. 先补跑信息充分的 `q6s`，确认 Agent 能采用已冻结契约并收敛到最小第一阶段，而不是机械保留 `pending`。
+2. 在物理隔离的新会话中重跑 D1、D3、D4，每题至少三次：
+   - D1：未知 role、bit、粒度、CLI 和 deploy 全程保持 `pending`，不产生唯一文件或命名方案。
+   - D3：采用已给出的 weight-only / 4 bit，不依据仓库惯例改写 `quark4`；未知编码、粒度和 deploy 保持条件式。
+   - D4：能反证“注册即完成”，但 CLI/deploy 是否修改严格依赖目标参与范围，不从当前白名单事实自动推出必改动作。
+3. 记录同一模型配置、源码 commit、原始 prompt、实际读取资料、token、时间和 reviewer 评分。
+4. 语义正确且读取满足预算，或超预算前提供扩张凭据，才判该轮通过。
+5. `git diff --check`、Markdown 链接检查和 `quick_validate.py` 继续作为结构验证，不替代 cold 行为证据。
+
+### 23.7 当前状态
+
+- dtype 目标契约状态机已经实施。
+- 5 组 warm 对照观察到明确方向性改善。
+- D3 命名决策和 D4 CLI 动作仍暴露状态一致性缺口。
+- 本节形成时只记录结果与下一步方案，尚未实施 §23.5 的第二轮修改；后续实际修改见第 24 节，修改后的 cold 验收仍未完成。
+
+## 24. 第十五轮实施：dtype 动作一致性与算法读取收敛
+
+本轮先按第 23 节的 dtype warm 对照修复残余决策漂移，再按第 21、22 节的 BATQuant、敏感层、GPTQ 和 cold 读取轨迹修正算法子能力。修改限定在两份现有 Reference，不改主 `SKILL.md`，也不新增脚本或 Reference。
+
+### 24.1 dtype 第二轮修改
+
+`references/dtype-quant-module.md` 增加以下约束：
+
+1. 产品称谓、CLI 值、registry key、Python 标识符和 ops schema 分别作为目标契约记录，仓库命名惯例只能形成候选映射，不能自动改写用户名称。
+2. 每个改变实现、公开契约或交付产物的立即动作必须回指一个非 `pending` 的目标状态；新增/别名/复用、CLI、deploy 和 NPU 任一目标仍为 `pending` 时，对应文件、公开值、payload 或 schema 只能写成条件分支。源码核验和现状测试不受此限制。
+3. 分层实施顺序改为仅对 `supported` 项成立，避免步骤清单把前文未知契约暗中收口。
+4. 交付前比较目标状态与动作、落点、实施顺序和测试清单，并压缩只读规划输出。
+
+该修改直接对应 D3 根据命名惯例改写 `quark4`、D4 CLI 状态与立即动作冲突，以及 D5 接口未冻结却提前确定 ops 骨架的问题。
+
+### 24.2 llm-algorithm 修改
+
+`references/llm-algorithm.md` 保留第 21 节已经补齐的 trainable、observe-only、observe-then-finalize、敏感度决策和保存回载语义，本轮不重复扩写算法生命周期，只修正历史测试仍暴露的执行问题：
+
+1. 增加可查事实门：registry import、`targets`、构造签名、quantizer hook、trainable/observe/finalize caller、保存 caller 和 CLI 参数必须先从源码与直接测试核对，不能继续留作开放问题。
+2. helper 或 hook 找不到 caller 时标记为“源码存在但未接通”，不得推导 solver 驱动、递归保存或 eval/deploy 闭环。
+3. 删除“改变 real quant 就同时读取 dtype 和 deploy”的无条件扩张，按 dtype、solver、workflow、deploy、public API 的未解决契约选择一份 owner Reference。
+4. 第二份辅助 Reference 只有在第一份和新增源码证据仍不足时加载，并在加载前记录未解决契约、已查证据、owner 和超预算原因。
+5. 增加停止条件与精简输出要求，避免 GPTQ 语义已经闭环后继续枚举无关 Reference、算法和测试目录。
+
+该修改对应 BATQuant 中可查事实仍被留待确认、敏感层中 skip 保存/消费边界未按 owner 收口、GPTQ 中 helper/caller 容易混淆，以及 cold 测试一次读取 7 份 Reference 的问题。
+
+### 24.3 验证边界与下一步
+
+本轮只修改 Skill Reference 和设计记录，不改变 AMCT 运行时代码，因此不运行 Python/C++ 单测。已完成以下静态验证：
+
+- `quick_validate.py .agents/skills/amct-coder` 输出 `Skill is valid!`。
+- 三个修改文件通过 `git diff --check`。
+- 主 `SKILL.md` 的 Reference 导航去重后仍为 17 份，与 `references/*.md` 实际集合一致；本轮没有新增导航项。
+- 两份修改后的 Reference 及第 23 节涉及的相对链接目标均存在。
+
+静态验证只能证明文档结构成立，不能证明 Agent 已稳定遵循新规则。下一步行为回归分两组：
+
+- dtype：补跑信息充分的 `q6s`，再隔离重跑 D1、D3、D4，检查未知状态是否贯穿动作清单和命名映射。
+- algorithm：隔离重跑 GPTQ observe-then-finalize、dtype real quant + deploy、敏感层自动跳层三类题，记录实际读取资料；语义正确但无扩张凭据地超过默认预算仍判失败。
+
+在 cold 回归完成前，dtype 只能记为“warm 对照后完成第二轮规则修订”，算法只能记为“根据既有失败完成静态修订”，都不能标记为行为验收通过。

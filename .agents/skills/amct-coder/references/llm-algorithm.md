@@ -25,7 +25,7 @@
 - 上游：算法由 CLI `--algos` 传入，经 `ALGO_REGISTRY`、`register_algorithms()` 和 `build_algorithms_by_target()` 构建。
 - 平级：算法只通过 quantizer hook、module buffer/parameter 或 structure transform 影响量化，不直接读取 dataset 或 workflow。
 - 下游：`ptq-solver-params` 消费 `trainable_params()`、buffer 和 PTQ 参数导出；`deploy-export-code` 消费算法的 `export_deploy()` 或已回载状态。
-- 若算法改变 dtype real quant 语义，要同时读 `dtype-quant-module` 和 `deploy-export-code`。
+- 算法影响 dtype、solver、workflow、CLI 或 deploy 时，先用本手册列出的源码和测试确认真实跨契约影响，再按“跨契约扩张门”选择 owner；不要因题面同时出现多个层名就一次性读取多份 Reference。
 
 ## 执行步骤
 
@@ -37,6 +37,26 @@
 6. 对训练型算法实现 `trainable_params()`；对统计型算法实现 buffer、`export_ptq_params()`、`load_ptq_params()`。
 7. 若 eval/deploy 需要复现训练态，检查 `--algos`、参数文件和回载路径是否能构建出相同模块结构。
 8. 补 registry、算法本体、quantizer 分流、solver 或 deploy 的最小测试。
+
+## 可查事实与跨契约扩张门
+
+算法名称、业务目标和搜索命中不能替代当前调用链事实。形成方案前，先从源码、调用方和直接测试核对 registry import、`targets`、构造签名、quantizer hook、`trainable_params()`、observe/finalize caller、保存 caller 和 CLI 实际参数。能够从当前仓库查明的项目不得继续写成“待用户确认”；只有目标数值语义、产品选择或兼容策略等源码无法决定的内容才保持条件式。
+
+helper、hook 或导出函数存在但找不到 caller 时，明确记为“源码存在但当前未接通”。不能据此声称 solver 会驱动统计、训练结果会递归保存，或 eval/deploy 已能消费状态。
+
+主手册和首轮源码锚点仍不能回答问题时，按未解决契约选择一份 owner Reference：
+
+| 未解决契约 | owner Reference |
+| --- | --- |
+| 数值格式、packing 或 real quant dtype 语义 | `dtype-quant-module` |
+| 样本遍历、trainable 参数、finalize、保存或回载 | `ptq-solver-params` |
+| unit 输入、GT、阶段数据或 workflow 调度 | `llm-data-workflow` |
+| deploy payload、index、config 或下游消费 | `deploy-export-code` |
+| CLI 公开值、配置兼容性或用户可见接口 | `public-api-tests` |
+
+默认一次只加载最阻塞的一份辅助 Reference。读取前记录：未解决契约、已经核对的源码/测试和该 owner 的职责。只有第一份辅助资料与新增源码证据仍无法回答另一个会改变方案的问题时，才能加载第二份，并先说明超出默认预算的原因。其它受影响面只标记 `affected` 或条件式验证，不为列全链路而全文预读。
+
+达到以下条件后停止扩张：算法体系与 target 已确认；执行形态已确定或明确保持 `pending`；数据驱动者、完成动作和活跃保存/消费链已有证据或明确标为未接通；剩余未知项已能用条件分支表达。只读规划默认输出这些结论和最小验证，不重复枚举全部算法实现、测试目录或跨层文件清单。
 
 ## 算法执行形态与阶段状态机
 
@@ -71,7 +91,7 @@
 4. 决策的执行者；algorithm 产生统计或决策状态，solver 不按模型结构自行猜测 unit，workflow 只有在通用 skip 契约冻结后才执行。
 5. “跳过”的数值语义：保持浮点、回退 direct quant、跳过 PTQ 优化但仍量化，三者不能混写。
 
-skip/partial result 的文件、续跑、strict load、eval 和 deploy 行为按 `ptq-solver-params` 检查。在这些契约冻结前，只给条件式计划，不发明通用阈值参数或把“跳过 `solver.solve()`”表述为跳过量化。
+只有方案真实改变 skip/partial result 的文件、续跑或 strict load 语义时，才按“跨契约扩张门”读取 `ptq-solver-params`；eval/deploy 只在对应产物或消费契约变化时追加 owner。契约冻结前只给条件式计划，不发明通用阈值参数或把“跳过 `solver.solve()`”表述为跳过量化。
 
 ## 契约未冻结时的早停
 
@@ -118,6 +138,9 @@ classic path 只认 `AlgorithmRegistry`，规则见 [classic-graph.md](classic-g
 - registry metadata 没有 `targets`。
 - `targets` 与实际作用域不一致。
 - 未命名的新算法继承了前序任务的具体名称、状态或 payload 契约。
+- 可由源码核对的 registry、CLI、caller 或保存链事实仍被留作开放问题，或使用当前不存在的参数形成计划。
+- 仅因 helper/hook 存在就声称 observe、finalize、保存或 eval/deploy 已接通。
+- 没有形成未解决契约和 owner 依据，就同时读取 dtype、solver、workflow、deploy 或 public API 等多份辅助 Reference。
 - `register_algorithms()` 没导入，导致运行时不可选。
 - 有 trainable 参数但 `trainable_params()` 返回空。
 - observe-only / observe-then-finalize 算法没有明确的数据驱动者、observe 开关或完成 hook，却假设现有 solver 会遍历数据并触发优化。
@@ -135,3 +158,4 @@ classic path 只认 `AlgorithmRegistry`，规则见 [classic-graph.md](classic-g
 - 涉及统计/一次性优化：覆盖 GT 阶段不污染、observe 次数、无 trainable 参数的数据遍历、finalize 幂等和保存回载。
 - 涉及敏感层/跳层：覆盖 score 聚合、决策持久化、续跑、strict load、eval/deploy 的一致语义。
 - 涉及 deploy hook：`pytest tests/unit_test/workflows/test_llm_deploy.py`。
+- Skill 行为回归：记录实际读取资料；默认保持一个主 Reference、一份辅助 Reference 和首轮 2～4 个源码/测试切片，超出前给出扩张凭据，并验证达到停止条件后不再枚举无关实现。
