@@ -380,7 +380,7 @@ def _check_layer_constraints(mod, name, algo, quant_type_comb, quant_config):
 
 
 def get_supported_layers(model, quant_config, registed_alg):
-    '''get supported layers based on quant config and registed algorithm'''
+    '''get supported layers based on quant config and registered algorithm'''
     layer_types, quant_type_comb = _build_layer_types_and_quant_type(
         quant_config, registed_alg
     )

@@ -306,7 +306,7 @@ def accuracy_based_auto_calibration(  # pylint: disable=too-many-arguments
             config_file: the quant config json file
             record_file: the scale and offset record file path
             save_dir: prefix of file path and filename of save model
-            input_data: used to compile model, can be ramdom data
+            input_data: used to compile model, can be random data
             input_names: list of strings, names to assign to the input nodes
                 of the graph, need to be in order
             output_names: names to assign to the output nodes of the graph,
