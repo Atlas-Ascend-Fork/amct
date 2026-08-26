@@ -172,6 +172,7 @@ def convert_state_dict(
     model_dir,
     loaded_files,
     block_size,
+    num_bits=None,
 ):
     """Dispatch a packed weight to its format decoder (see input_formats_packing_overview_CN §6.1).
 
@@ -179,6 +180,10 @@ def convert_state_dict(
     dtypes, scale shape), then delegated to that format's own dequant function. Detection
     fails closed: an unrecognized (weight dtype, scale dtype) combination raises rather than
     being silently mis-decoded as FP8.
+
+    ``num_bits`` (4 or 8) selects symmetric INT4/INT8 decode when set; it can't be inferred
+    from the tensors (INT8 and packed INT4 both sit in an int8 container), so the caller must
+    supply it from the input checkpoint's quant config.
     """
     if weight.element_size() != 1:
         return weight
@@ -237,6 +242,18 @@ def convert_state_dict(
         # weight_scale_inv already stores the *dequant* multiplier (README_WEIGHTS).
         if torch.is_floating_point(weight) and scale_inv.dtype == torch.float32:
             return weight_dequant(weight, scale_inv, block_size=block_size)
+
+        # Symmetric INT8 / INT4: integer weight + float scale, no zero-point (w = int * scale).
+        # Reached only after the MX branch (which claims integer *scale*), so scale here is
+        # float. Bit-width can't be read from the tensors, so it comes from num_bits.
+        if (
+            num_bits in (4, 8)
+            and not torch.is_floating_point(weight)
+            and torch.is_floating_point(scale_inv)
+        ):
+            from amct_pytorch.quantization.dtypes.int_impl import int_weight_dequant
+
+            return int_weight_dequant(weight, scale_inv, bits=num_bits)
 
         # Fail closed: an unrecognized (weight dtype, scale dtype) combination should raise
         # rather than be silently mis-decoded as FP8 (e.g. a stray fp16/bf16 scale, an

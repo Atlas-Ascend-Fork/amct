@@ -17,6 +17,7 @@
 
 import numpy as np
 import torch
+from torch import Tensor
 
 
 def round_ste(x: torch.Tensor) -> torch.Tensor:
@@ -102,3 +103,58 @@ def int4_assistance_bias(weight, weight_scale):
     # 8 is the max value of INT4, for normalizing the quantization range of assistance bias.
     weight_assistant_matrix = (expanded_scale * weight * 8).sum(dim=1).float()
     return weight_assistant_matrix
+
+
+# --- decode side ----------------------------------------------------------------------
+# Reconstruct a *symmetric* integer weight (INT8 / INT4, no zero-point) to float, i.e. the
+# "normal" int quant matrix cell in docs/official_docs/input_formats_packing_overview_CN.md:
+# integer weight + float scale, w = int * scale. This is NOT the W4A8 MoEGMM packing above
+# (pack_4bit / scale_fp32_to_u64) — those are a hardware-specific encode format.
+
+
+def unpack_int4(packed: Tensor) -> Tensor:
+    """Unpack a symmetric INT4 weight: 2 signed 4-bit ints per byte, low-first (even index in
+    the low nibble), sign-extended. ``[..., N/2] -> int8 [..., N]``.
+
+    Packed along the last dim (in-features), matching MXFP4/HiF4 packing in this repo — *not*
+    the output-channel ``pack_4bit`` used by the W4A8 encode path.
+    """
+    u = packed.contiguous().view(torch.uint8)
+    lo = (u & 0x0F).to(torch.int16)
+    hi = ((u >> 4) & 0x0F).to(torch.int16)
+    # sign-extend 4-bit: codes 8..15 represent -8..-1
+    lo = torch.where(lo >= 8, lo - 16, lo)
+    hi = torch.where(hi >= 8, hi - 16, hi)
+    out = torch.stack([lo, hi], dim=-1).reshape(*packed.shape[:-1], packed.shape[-1] * 2)
+    return out.to(torch.int8)
+
+
+def int_weight_dequant(weight: Tensor, scale: Tensor, bits: int = 8) -> Tensor:
+    """Decode a symmetric integer weight to float: ``w = int * scale`` (no zero-point).
+
+    Args:
+        weight: INT8 ``[M, N]`` (1 elem/byte) when ``bits==8``; packed INT4 ``[M, N/2]``
+            (2 signed nibbles/byte, low-first) when ``bits==4``.
+        scale: float multiplier — per-tensor (scalar/``[1]``), per-channel ``[M, 1]`` or
+            per-group ``[M, N/g]``. Broadcast over its group along the last dim.
+        bits: 8 or 4.
+
+    Returns:
+        The dequantized weight cast to the default (float) dtype.
+    """
+    if bits == 4:
+        weight = unpack_int4(weight)
+    elif bits != 8:
+        raise ValueError(f"int_weight_dequant supports bits in (4, 8), got {bits}")
+    w = weight.to(torch.float32)
+    s = scale.to(torch.float32)
+    # Expand a per-group scale to the weight's last dim; per-channel [M,1], per-tensor scalar
+    # and per-element scales broadcast as-is.
+    if s.dim() == w.dim() and s.shape[-1] not in (0, 1, w.shape[-1]):
+        if w.shape[-1] % s.shape[-1] != 0:
+            raise ValueError(
+                f"INT scale last dim {s.shape[-1]} does not tile weight last dim "
+                f"{w.shape[-1]}."
+            )
+        s = s.repeat_interleave(w.shape[-1] // s.shape[-1], dim=1)
+    return (w * s).to(torch.get_default_dtype())
