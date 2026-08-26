@@ -360,7 +360,8 @@ class Graph(GraphBase):  # pylint: disable=no-member
                 LOGGER.logd('"%s" is unique in graph.' % (new_name), MODULE_NAME)
             else:
                 LOGGER.logd(
-                    '"%s" already exist in graph, may be reused module.' % (new_name),
+                    '"%s" already exists in the graph and may be a reused module.'
+                    % (new_name),
                     MODULE_NAME,
                 )
                 node.set_attr('is_reuse', True)

@@ -392,7 +392,7 @@ TdError TensorDecomposition::EstimateRanks(
     unsigned int rank;
     TD_FUNC_CHECK(EVBMF(rank, sizeL, sizeM, vecS));
     if (rank == 0) { // rank 0
-        TD_LOG_WARNING("estimate rank is %u, please check if pretrained weight is correct.", rank);
+        TD_LOG_WARNING("Estimated rank is %u; please check whether the pretrained weight is correct.", rank);
     }
     if ((divisor == 0) || ((divisor + 1) == 0)) {
         return TdError::TD_BAD_PARAMETERS_ERR;

@@ -270,7 +270,7 @@ class QuantCalibrationOp(nn.Module):
                 calibrated_layer_name, self.record_keyword
             ):
                 LOGGER.logw(
-                    'Layer {} already have {} in record file {}. It will be overwritten by AMCT'.format(
+                    'Layer {} already has {} in record file {}. It will be overwritten by AMCT.'.format(
                         calibrated_layer_name, self.record_keyword, self.record_file
                     )
                 )

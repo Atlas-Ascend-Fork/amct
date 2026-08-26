@@ -601,20 +601,20 @@ class GraphChecker:
                 and attr_helper.get_attr_value('transA') == 1
             ):
                 LOGGER.logw(
-                    'Cannot support quantize "Gemm" layer "{}" with '
-                    'transA:True.'.format(node.name)
+                    'Quantizing "Gemm" layer "{}" with '
+                    'transA:True is not supported.'.format(node.name)
                 )
                 return False
         if node.type == 'GlobalAveragePool':
             LOGGER.logw(
-                'Cannot support quantize global-average-pooling layer "{}".'.format(
+                'Quantizing global-average-pooling layer "{}" is not supported.'.format(
                     node.name
                 )
             )
             return False
         # Check not support reused node do quantize
         if node.has_attr('is_reuse') and node.get_attr('is_reuse'):
-            LOGGER.logw(f'Not support do reused module "{node.name}" do quantize.')
+            LOGGER.logw(f'Quantizing reused module "{node.name}" is not supported.')
             return False
 
         # check MatMul weights' dim is 1 or 2
@@ -738,7 +738,7 @@ class GraphChecker:
     def check_prune_limit(node):
         # Check not support reused node do prune
         if node.has_attr('is_reuse') and node.get_attr('is_reuse'):
-            LOGGER.logw(f'Not support do reused module {node.name} do prune.')
+            LOGGER.logw(f'Pruning reused module {node.name} is not supported.')
             return False
 
         # Check not support input_dimension_reduction node do quantize
@@ -786,7 +786,7 @@ class GraphChecker:
             if id(mod.weight) == id(graph_mod.weight):
                 weight_shared_count += 1
             if weight_shared_count > 1:
-                LOGGER.logw(f'Not support shared weight "{mod_type}" do quant.')
+                LOGGER.logw(f'Quantizing shared weight "{mod_type}" is not supported.')
                 return False
         return True
 
