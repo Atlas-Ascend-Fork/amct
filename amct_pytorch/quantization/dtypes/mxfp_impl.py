@@ -96,9 +96,16 @@ def weight_dequant(
     M, N = weight.shape
     weight = weight.to(torch.float32)
     # An integer/uint scale is an MX E8M0 block exponent (uint8, bias 127): decode it to the
-    # float power-of-two block factor (2 ** (e - 127)). Float scales are already direct
-    # multipliers (e.g. NVFP4 decodes its E4M3 scale upstream), so they pass through unchanged.
+    # float power-of-two block factor. OCP E8M0: 0..254 -> 2 ** (e - 127), 255 (0xff) is the
+    # reserved NaN encoding and has no valid power-of-two value; reject it fail-closed rather
+    # than silently decoding it to 2 ** 128. Float scales are already direct multipliers
+    # (e.g. NVFP4 decodes its E4M3 scale upstream), so they pass through unchanged.
     if not torch.is_floating_point(scale):
+        if torch.any(scale == 0xFF):
+            raise ValueError(
+                "E8M0 scale contains the reserved NaN encoding 0xFF; "
+                "refusing to decode it as 2 ** 128."
+            )
         scale = torch.exp2(scale.to(torch.float32) - FP32_EXPONENT_BIAS)
     else:
         scale = scale.to(torch.float32)
