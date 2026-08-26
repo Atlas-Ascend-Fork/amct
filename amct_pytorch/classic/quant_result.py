@@ -53,10 +53,8 @@ from safetensors.torch import save_file
 from amct_pytorch.common.utils.log import LOGGER
 
 MANIFEST_NAME = 'quant_manifest.json'
-# Frozen schema constants. MANIFEST_FORMAT/PARAM_FORMAT identify the two artifacts;
-# SCHEMA_VERSION is an int in the manifest and its str form in the header.
+# Frozen manifest schema constants.
 MANIFEST_FORMAT = 'amct-quant-result-manifest'
-PARAM_FORMAT = 'amct-quant-param'
 SCHEMA_VERSION = 1
 UNIT_SUFFIX = '.safetensors'
 LIBRARY = 'amct_pytorch'
@@ -517,15 +515,13 @@ def _library_version():
 
 
 def unit_header(artifact_id, layer_name, entry_digest):
-    """The minimal safetensors header: five ``str -> str`` fields.
+    """The minimal safetensors header: three ``str -> str`` cross-check fields.
 
-    Deliberately excludes quant_module_type/ori_module_type/quant_config/
-    non_tensor_params/tensor schema/file digests -- the manifest is their only
-    home, so the two copies cannot drift.
+    The manifest is the only place that declares the artifact format and schema
+    version. A unit only binds itself to that manifest and its corresponding
+    entry, so global schema metadata is not duplicated in every file.
     """
     return {
-        'format': PARAM_FORMAT,
-        'schema_version': str(SCHEMA_VERSION),
         'artifact_id': artifact_id,
         'layer_name': layer_name,
         'entry_digest': entry_digest,

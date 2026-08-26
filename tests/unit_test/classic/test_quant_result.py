@@ -34,7 +34,6 @@ import torch.nn as nn
 from amct_pytorch.classic.quant_result import (
     MANIFEST_FORMAT,
     MANIFEST_NAME,
-    PARAM_FORMAT,
     SCHEMA_VERSION,
     QuantResultWriter,
     canonical_json,
@@ -635,10 +634,9 @@ class TestReadBack:
         artifact_id = load_quant_manifest(writer.result_dir)['artifact_id']
         with safe_open(path, framework='pt') as handle:
             header = handle.metadata()
-        # Exactly the five frozen header fields, all str -> str.
+        # Exactly the three cross-check fields, all str -> str. The manifest is
+        # the single source of truth for the artifact format and schema version.
         assert header == {
-            'format': PARAM_FORMAT,
-            'schema_version': str(SCHEMA_VERSION),
             'artifact_id': artifact_id,
             'layer_name': 'fc1',
             'entry_digest': entry['entry_digest'],
@@ -893,7 +891,6 @@ class TestModelFingerprint:
 def test_protocol_constants_are_the_frozen_values():
     assert MANIFEST_NAME == 'quant_manifest.json'
     assert MANIFEST_FORMAT == 'amct-quant-result-manifest'
-    assert PARAM_FORMAT == 'amct-quant-param'
     assert SCHEMA_VERSION == 1
 
 
