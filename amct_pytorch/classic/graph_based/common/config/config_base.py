@@ -292,8 +292,8 @@ class ConfigBase:
             if layer in self.graph_querier.get_support_dmq_balancer_layers(graph)
         ]:
             LOGGER.logw(
-                "Except skip_layers or skip_types, no layer in graph support dmq_balancer, "
-                "please remove dmq_balancer in config file."
+                "Except for skip_layers or skip_types, no layer in the graph supports dmq_balancer. "
+                "Please remove dmq_balancer from the config file."
             )
 
     def check_int16_quantize_layers(self, graph, config, supported_layers):
@@ -661,7 +661,7 @@ class ConfigBase:
             LOGGER.logi("Check quant tensor success!")
         # step2: check layers in QUANTIZABLE_TYPES
         supported_layers = self.get_supported_layers(graph, tensor_quant_valid)
-        # step3: remove skiped type and layer
+        # step3: remove skipped type and layer
         layer_type = self.graph_querier.get_name_type_dict(graph)
         for item in supported_layers:
             if layer_type.get(item) in skip_types:
@@ -769,8 +769,8 @@ def check_config_dmq_balancer(quant_config):
         if quant_config[key].get("dmq_balancer_param"):
             return
     LOGGER.loge(
-        "No dmq_balancer layer in quant config file, please check whether the quant config file matches "
-        "or whether a layer in graph that supports dmq_balancer.",
+        "No dmq_balancer layer exists in the quant config file. Please check whether the quant config file "
+        "matches the graph or whether the graph contains a layer that supports dmq_balancer.",
         module_name=_MODULE_NAME,
     )
     raise RuntimeError(

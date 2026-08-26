@@ -191,7 +191,7 @@ inline std::vector<std::string> get_custom_lib_path() {
     std::vector<std::string> custom_lib_path_list;
 
     if (ascend_custom_opppath == nullptr) {
-        ASCEND_LOGW("ASCEND_CUSTOM_OPP_PATH is not exists");
+        ASCEND_LOGW("ASCEND_CUSTOM_OPP_PATH does not exist");
         return std::vector<std::string>();
     }
 
@@ -213,7 +213,7 @@ inline std::vector<std::string> get_default_custom_lib_path() {
     std::vector<std::string> default_vendors_list;
 
     if (ascend_opp_path == nullptr) {
-        ASCEND_LOGW("ASCEND_OPP_PATH is not exists");
+        ASCEND_LOGW("ASCEND_OPP_PATH does not exist");
         return std::vector<std::string>();
     }
 
@@ -221,12 +221,12 @@ inline std::vector<std::string> get_default_custom_lib_path() {
     vendors_path = vendors_path + "/vendors";
     std::string vendors_config_file = real_path(vendors_path + "/config.ini");
     if (vendors_config_file.empty()) {
-        ASCEND_LOGW("config.ini is not exists");
+        ASCEND_LOGW("config.ini does not exist");
         return std::vector<std::string>();
     }
 
     if (!is_file_exist(vendors_config_file)) {
-        ASCEND_LOGW("config.ini is not exists or the path length is more than %d", PATH_MAX);
+        ASCEND_LOGW("config.ini does not exist or its path length exceeds %d", PATH_MAX);
         return std::vector<std::string>();
     }
 
