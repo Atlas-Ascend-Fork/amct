@@ -177,6 +177,13 @@ def f4_unpacked_to_f32(x: torch.Tensor):
     """
     return _floatx_unpacked_to_f32(x, EBITS_F4_E2M1, MBITS_F4_E2M1)
 
+def shared_exponents(x: Tensor, emax):
+    shared_exp, _ = torch.max(torch.abs(x), dim=-1, keepdim=True)
+    shared_exp = shared_exp + FP32_MIN_NORMAL * (shared_exp == 0).type(shared_exp.dtype)
+    shared_exp = round_to_decimal(shared_exp)
+    shared_exp = shared_exp - emax
+    shared_exp = shared_exp.clamp(min=-127, max=1e10)
+    return shared_exp
 
 def round_to_decimal(x):
     exponent = torch.floor(torch.log2(x))
