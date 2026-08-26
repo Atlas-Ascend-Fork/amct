@@ -99,7 +99,9 @@ class AutoRound(QuantAlgorithmBase):
     def _get_group_size(args):
         if args.quant_dtype == "int":
             group_size = -1
-        elif args.quant_dtype == "mxfp" or args.quant_dtype == "fp":
+        elif args.quant_dtype == "mxfp":
+            group_size = 32
+        elif args.quant_dtype == "fp":
             group_size = 32
         else:
             group_size = 64

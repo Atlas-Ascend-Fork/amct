@@ -66,7 +66,7 @@ def parser_gen(command=None):
         help='Only support [mlp, moe, attn-linear, attn-cache]',
     )
     parser.add_argument("--seq_len", type=int, default=4096)
-    parser.add_argument("--block_size", type=int, default=128)
+    parser.add_argument("--block_size", type=int, default=128, choices=[32, 128])
 
     parser.add_argument('--data_dir', default="")
 

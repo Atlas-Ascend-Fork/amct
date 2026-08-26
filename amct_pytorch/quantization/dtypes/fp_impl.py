@@ -22,6 +22,7 @@
 
 import torch
 from torch import Tensor
+import torch.nn.functional as F
 from torchao.prototype.custom_fp_utils import (
     _f32_to_floatx_unpacked,
     _floatx_unpacked_to_f32,
@@ -32,7 +33,7 @@ FP32_MIN_NORMAL = 2 ** (-FP32_EXPONENT_BIAS + 1)
 EBITS_F4_E2M1, MBITS_F4_E2M1 = 2, 1
 
 
-def unpack_mxfloat4_to_fp32(packed_tensor):
+def unpack_float4_to_fp32(packed_tensor):
     e2m1_values = torch.tensor(
         [
             0.0,
@@ -91,7 +92,7 @@ def weight_dequant(
         AssertionError: If `scale` dimensions do not align with `weight` shape after scaling.
     """
     if is_packed:
-        weight = unpack_mxfloat4_to_fp32(weight.view(torch.uint8))
+        weight = unpack_float4_to_fp32(weight.view(torch.uint8))
     # Get the original dimensions of weight
     M, N = weight.shape
     weight = weight.to(torch.float32)
@@ -184,19 +185,67 @@ def round_to_decimal(x):
     return exponent
 
 
-def shared_exponents(x: Tensor, emax):
-    shared_exp, _ = torch.max(torch.abs(x), dim=-1, keepdim=True)
-    shared_exp = shared_exp + FP32_MIN_NORMAL * (shared_exp == 0).type(shared_exp.dtype)
-    shared_exp = round_to_decimal(shared_exp)
-    shared_exp = shared_exp - emax
-    shared_exp = shared_exp.clamp(min=-127, max=1e10)
-    return shared_exp
-
-
 def round_ste(x: torch.Tensor) -> torch.Tensor:
     rounded = torch.sign(x) * torch.floor(torch.abs(x) + 0.5)
     return (rounded - x).detach() + x
 
+def quantize_fp_block(x, fp8_min=-448.0, fp8_max=448.0, block_size=128):
+
+    ori_shape = x.shape
+    N = x.shape[-1]
+    x = x.reshape(-1, N)
+    M, N = x.shape
+
+    block_m = block_size
+    block_n = block_size
+
+    pad_m = (block_m - M % block_m) % block_m
+    pad_n = (block_n - N % block_n) % block_n
+
+    W_pad = F.pad(x, (0, pad_n, 0, pad_m))
+    pad_shape = W_pad.shape
+
+    Mp, Np = W_pad.shape
+    W_blocks = W_pad.reshape(Mp // block_m, block_m, Np // block_n, block_n).permute(0, 2, 1, 3)
+
+    amax = torch.amax(torch.abs(W_blocks), dim=(-1, -2), keepdim=True)
+
+    scale = amax / fp8_max
+    scale = torch.clamp(scale, min=1e-8)
+
+    W_scaled = W_blocks / scale
+    W_scaled = torch.clamp(W_scaled, -fp8_max, fp8_max)
+
+    W_scaled = W_scaled.permute(0, 2, 1, 3).reshape(pad_shape)[:M, :N]
+    W_fp8 = W_scaled.reshape(ori_shape)
+
+    return W_fp8, scale
+
+def dequantize_fp_block(x, scale, fp8_min=-448.0, fp8_max=448.0, block_size=128):
+    ori_shape = x.shape
+    N = x.shape[-1]
+    x = x.reshape(-1, N)
+    M, N = x.shape
+
+    block_m = block_size
+    block_n = block_size
+
+    pad_m = (block_m - M % block_m) % block_m
+    pad_n = (block_n - N % block_n) % block_n
+
+    W_pad = F.pad(x, (0, pad_n, 0, pad_m))
+
+    Mp, Np = W_pad.shape
+    W_blocks = W_pad.reshape(Mp // 128, 128, Np // 128, 128).permute(0, 2, 1, 3)
+
+    W_dequant = W_blocks * scale
+
+    W_dequant = W_dequant.permute(0, 2, 1, 3).reshape(Mp, Np)
+    W_dequant = W_dequant[:M, :N]
+
+    W_dequant = W_dequant.reshape(ori_shape)
+
+    return W_dequant
 
 def quantize_elewise(x, min_exp, max_norm, shift_val, v=0.0):
     private_exp = torch.floor(torch.log2(torch.abs(x) + (x == 0).type(x.dtype)))
