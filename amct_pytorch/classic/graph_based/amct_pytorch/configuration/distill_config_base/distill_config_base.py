@@ -597,7 +597,7 @@ class DistillConfigBase:
                 "Not support to distill reused module for {}".format(node.module_name)
             )
 
-        # save the path from start node to curent node
+        # save the path from start node to current node
         cur_path = path + [node]
         if node.module_name == end_layer:
             return [cur_path]

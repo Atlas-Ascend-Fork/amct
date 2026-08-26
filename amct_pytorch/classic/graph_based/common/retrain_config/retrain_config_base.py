@@ -469,7 +469,7 @@ class RetrainConfigBase:
         proto.check_field(self.enable_retrain, self.enable_prune)
 
         # Step2: check not support layers and not support types
-        # check gloabl
+        # check global
         self._check_proto_global(proto, retrain_layers.get('support_layers'))
         # check retrain
         if self.enable_retrain:
