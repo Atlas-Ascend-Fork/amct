@@ -503,63 +503,63 @@ def cvt_hifuint8_to_float(x, over_mode=True):
         dot_4_value = dot_4_bits >> 3
         if dot_4_value >= 12:
             # 备注 b1100 =12 D4
-            exponet = x & 30  # b00011110 = 30
-            exponet_int = exponet >> 1
-            if exponet_int >= 8:
+            exponent_bits = x & 30  # b00011110 = 30
+            exponent_int = exponent_bits >> 1
+            if exponent_int >= 8:
                 # 备注 b1000 = 8
-                exponet_value = -exponet_int
+                exponent_value = -exponent_int
             else:
-                exponet_value = exponet_int + 8
+                exponent_value = exponent_int + 8
 
             fra_int = x & 1  # b00000001
             m_value = 1.0 + fra_int * 0.5
         elif dot_4_value >= 8:
             # 备注 b1000 =8 D3
-            exponet = x & 28  # b00011100 = 28
-            exponet_int = exponet >> 2
-            if exponet_int >= 4:
+            exponent_bits = x & 28  # b00011100 = 28
+            exponent_int = exponent_bits >> 2
+            if exponent_int >= 4:
                 # 备注 b100 = 4
-                exponet_value = -exponet_int
+                exponent_value = -exponent_int
             else:
-                exponet_value = exponet_int + 4
+                exponent_value = exponent_int + 4
             fra_int = x & 3  # b00000011
             m_value = 1.0 + fra_int * 0.25
         elif dot_4_value >= 4:
             # 备注 b0100 =8 D2
-            exponet = x & 24  # b00011000 = 24
-            exponet_int = exponet >> 3
-            if exponet_int >= 2:
+            exponent_bits = x & 24  # b00011000 = 24
+            exponent_int = exponent_bits >> 3
+            if exponent_int >= 2:
                 # 备注 b10 = 2
-                exponet_value = -exponet_int
+                exponent_value = -exponent_int
             else:
-                exponet_value = exponet_int + 2
+                exponent_value = exponent_int + 2
             fra_int = x & 7  # b00000111
             m_value = 1.0 + fra_int * 0.125
         elif dot_4_value >= 2:
             # 备注 b0010 =2 D1
-            exponet = x & 8  # b00001000 = 8
-            exponet_sign = exponet >> 3
-            if exponet_sign >= 1:
+            exponent_bits = x & 8  # b00001000 = 8
+            exponent_sign = exponent_bits >> 3
+            if exponent_sign >= 1:
                 # 备注 b10 = 2
-                exponet_value = -1
+                exponent_value = -1
             else:
-                exponet_value = 1
+                exponent_value = 1
             fra_int = x & 7  # b00000111
             m_value = 1.0 + fra_int * 0.125
         elif dot_4_value == 1:
             # d0
-            exponet_value = 0
+            exponent_value = 0
             fra_int = x & 7  # b00000111
             m_value = 1.0 + fra_int * 0.125
         elif dot_4_value == 0:
             # dml
             m_value = 1
-            exponet_value = (x & 7) - 23  # b00000111 = 7
+            exponent_value = (x & 7) - 23  # b00000111 = 7
         else:
-            logger.info("error,dot error")
+            logger.error("error,dot error")
             m_value = 0.0
-            exponet_value = 0
-        return sign * pow(2.0, exponet_value) * m_value
+            exponent_value = 0
+        return sign * pow(2.0, exponent_value) * m_value
 
 
 _float16_to_hifuint8 = np.vectorize(
