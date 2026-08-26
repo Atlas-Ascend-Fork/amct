@@ -95,7 +95,7 @@ docker run --name cann_container --device /dev/davinci0 --device /dev/davinci_ma
 
   请确保该依赖已安装，注意满足版本要求。
 
-- PyTorch：2.7.1、2.1.0
+- PyTorch：2.7.1
 
 - Ascend Extension for PyTorch：版本配套关系请单击[Link](https://hiascend.com/document/redirect/pytorchuserguide)，查看“版本说明 >相关产品版本配套说明”章节。
 
