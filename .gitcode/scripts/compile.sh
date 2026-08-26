@@ -70,6 +70,7 @@ LOG_HEAD "Build ${REPOSITORY_NAME}."
 cd ${WORKSPACE}/ || exit 1
 echo "------------------"
 echo "${GIT_TARGET_BRANCH:-}"
+build_status=0
 if [ "${GE_ST_RT2:-}X" == "torchX" ];then
     if [ "${GIT_TARGET_BRANCH:-}" = "feature/community-tasks" ];then
         LOG_HEAD "not need build"
@@ -77,7 +78,7 @@ if [ "${GE_ST_RT2:-}X" == "torchX" ];then
         touch ${WORKSPACE}/build_out/cann-amct.tar.gz
         exit 0
     else
-        LOG_DO bash build.sh --torch --cann_3rd_lib_path="${ASCEND_3RD_LIB_PATH}"
+        LOG_DO bash build.sh --torch --cann_3rd_lib_path="${ASCEND_3RD_LIB_PATH}" || build_status=$?
     fi
 else
     if [ "${GIT_TARGET_BRANCH:-}" = "feature/community-tasks" ];then
@@ -86,7 +87,7 @@ else
         touch ${WORKSPACE}/build_out/cann-amct.tar.gz
         exit 0
     else
-        LOG_DO bash build.sh --pkg --cann_3rd_lib_path="/home/jenkins/opensource"
+        LOG_DO bash build.sh --pkg --cann_3rd_lib_path="/home/jenkins/opensource" || build_status=$?
     fi
 fi
-DP_ASSERT_EQUAL "$?" "0" "Build amct failed"
+DP_ASSERT_EQUAL "${build_status}" "0" "Build amct failed"
