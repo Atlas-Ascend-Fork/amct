@@ -87,14 +87,11 @@ class ActivationQuantizer(torch.nn.Module):
         self.bits = bits
         self.algorithms = nn.ModuleDict()
         self._init_algo()
+        params = [self.bits, True]
         if args.quant_dtype == "fp":
-            self.quant_obj = DTYPE_REGISTRY.get(args.quant_dtype)(
-                bits=self.bits, is_act=True, block_size=args.block_size
-            )
-        else:
-            self.quant_obj = DTYPE_REGISTRY.get(args.quant_dtype)(
-                bits=self.bits, is_act=True
-            )
+            params.append(args.block_size)
+        
+        self.quant_obj = DTYPE_REGISTRY.get(args.quant_dtype)(*params)
         self.is_observe = False
 
     def deploy(self):
