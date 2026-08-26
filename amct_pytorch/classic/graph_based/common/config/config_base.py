@@ -251,7 +251,10 @@ class ConfigBase:
             self.check_int16_quantize_layers(graph, config, supported_layers)
 
         self.check_and_down_grade_winograd_num_bits(graph, config, supported_layers)
-        self.check_int4_weight_quant_axis(graph, config, supported_layers)
+        quant_layers = self.check_int4_weight_quant_axis(
+            graph, config, list(PARAM_POOL.get_quant_layers())
+        )
+        PARAM_POOL.set_quant_layers(quant_layers)
         act_common_config = self.get_common_activation_quant_config(common_config)
         self._fill_default_activation_asymmetric(
             graph, config, supported_layers, act_common_config
@@ -311,10 +314,10 @@ class ConfigBase:
                     )
                 )
 
-    def check_int4_weight_quant_axis(self, graph, config, supported_layers):
+    def check_int4_weight_quant_axis(self, graph, config, quant_layers):
         '''Skip INT4 layers whose final Deploy pack axis is odd.'''
         skipped_layers = []
-        for layer in list(supported_layers):
+        for layer in quant_layers:
             layer_cfg = config.get(layer)
             wts_ptq = layer_cfg.get(WEIGHT_QUANT_PARAMS)
             wts_retrain = layer_cfg.get('retrain_weight_config')
@@ -336,16 +339,7 @@ class ConfigBase:
                 module_name=_MODULE_NAME,
             )
 
-        if not skipped_layers:
-            return
-        supported_layers[:] = [
-            layer for layer in supported_layers if layer not in skipped_layers
-        ]
-        quant_layers = PARAM_POOL.get_quant_layers()
-        if quant_layers is not None:
-            PARAM_POOL.set_quant_layers(
-                [layer for layer in quant_layers if layer not in skipped_layers]
-            )
+        return [layer for layer in quant_layers if layer not in skipped_layers]
 
     def check_and_down_grade_winograd_num_bits(self, graph, config, supported_layers):
         '''check quant num bits and turn it into 8 if it not support int6 int7 quant'''
@@ -594,7 +588,9 @@ class ConfigBase:
         # check quant layer's validation by the graph
         if quant_config.get('tensor_quantize'):
             self.check_quant_tensor_valid(graph, quant_config.get('tensor_quantize'))
-        self.check_int4_weight_quant_axis(graph, quant_config, quant_layers)
+        quant_layers = self.check_int4_weight_quant_axis(
+            graph, quant_config, quant_layers
+        )
         self.set_param_pool(quant_layers, graph)
         self.root.check(None, quant_config)
         self.root.fill_default(quant_config)
@@ -671,7 +667,7 @@ class ConfigBase:
             LOGGER.logi("Check quant tensor success!")
         # step2: check layers in QUANTIZABLE_TYPES
         supported_layers = self.get_supported_layers(graph, tensor_quant_valid)
-        # step3: remove skiped type and layer
+        # step3: remove skipped type and layer
         layer_type = self.graph_querier.get_name_type_dict(graph)
         for item in supported_layers:
             if layer_type.get(item) in skip_types:

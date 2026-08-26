@@ -52,7 +52,7 @@ class UlqScaleRetrainFunction(Function):
         axis=0,
     ):
         """
-        Function: UlqRetrain foward funtion.
+        Function: UlqRetrain forward function.
         """
         # check input data
         check_quant_data(inputs, 'weights')
@@ -104,7 +104,7 @@ class UlqScaleRetrainFunction(Function):
     @staticmethod
     def backward(ctx, grad_outputs, grad_scale, grad_offset):
         """
-        Function: UlqRetrain backward funtion required by torch
+        Function: UlqRetrain backward function required by torch
                   torch.autograd.
         """
         res = ulq_scale_retrain_backward_pytorch(

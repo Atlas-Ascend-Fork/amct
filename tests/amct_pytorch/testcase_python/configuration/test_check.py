@@ -435,7 +435,7 @@ class TestCheckModel(unittest.TestCase):
 
     def test_get_support_dmq_balancer_types(self):
         ret = GraphQuerier.get_support_dmq_balancer_types()
-        ans = set(
+        expected = set(
             [
                 CONV2D,
                 CONV3D,
@@ -449,12 +449,12 @@ class TestCheckModel(unittest.TestCase):
                 'ConvTranspose1d',
             ]
         )
-        self.assertEqual(set(ret), ans)
+        self.assertEqual(set(ret), expected)
 
     def test_get_support_dmq_balancer_layers(self):
         self.graph.add_model(self.model_001)
         layer_names = GraphQuerier.get_support_dmq_balancer_layers(self.graph)
-        ans = [
+        expected = [
             'layer1.0',
             'layer2.0',
             'layer3.0',
@@ -465,7 +465,7 @@ class TestCheckModel(unittest.TestCase):
             'fc.2',
             'fc.5',
         ]
-        self.assertEqual(layer_names, ans)
+        self.assertEqual(layer_names, expected)
 
 
 class TestCheckGraph(unittest.TestCase):
@@ -826,7 +826,7 @@ class TestCheckGraph(unittest.TestCase):
 
     def test_get_support_dmq_balancer_layers(self):
         layer_names = GraphQuerier.get_support_dmq_balancer_layers(self.graph)
-        ans = [
+        expected = [
             'layer1.0',
             'layer2.0',
             'layer3.0',
@@ -837,7 +837,7 @@ class TestCheckGraph(unittest.TestCase):
             'fc.2',
             'fc.5',
         ]
-        self.assertEqual(layer_names, ans)
+        self.assertEqual(layer_names, expected)
 
     def test_check_distill_type_conv2d(self):
         mod_name = CONV1

@@ -27,7 +27,6 @@ from amct_pytorch.classic.graph_based.amct_pytorch.common.config.config_base imp
     ConfigBase,
     GraphObjects,
 )
-from amct_pytorch.classic.graph_based.amct_pytorch.common.config.field import PARAM_POOL
 
 logger = logging.getLogger(__name__)
 
@@ -133,12 +132,12 @@ class TestConfigBaseChecks(unittest.TestCase):
             'l2': {'quant_enable': True, WGT: {'num_bits': 4}},
         }
 
-        obj.check_int4_weight_quant_axis(GRAPH, config, supported_layers)
+        quant_layers = obj.check_int4_weight_quant_axis(GRAPH, config, supported_layers)
 
         self.assertFalse(config['l1']['quant_enable'])
         self.assertEqual(config['l1'][WGT]['num_bits'], 4)
-        self.assertEqual(supported_layers, ['l2'])
-        self.assertEqual(PARAM_POOL.get_quant_layers(), ['l2'])
+        self.assertEqual(supported_layers, ['l1', 'l2'])
+        self.assertEqual(quant_layers, ['l2'])
         self.assertTrue(config['l2']['quant_enable'])
 
     def test_non_int4_layer_is_not_checked_for_pack_support(self):
