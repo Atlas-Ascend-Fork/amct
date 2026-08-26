@@ -102,7 +102,7 @@ class AccuracyBasedAutoCalibration(AccuracyBasedAutoCalibrationBase):  # pylint:
         # save the original model to pth file
         self.original_accuracy = self.evaluator.evaluate(self.original_model)
         LOGGER.logi(
-            "original evaluation accurcay: {}".format(self.original_accuracy),
+            "original evaluation accuracy: {}".format(self.original_accuracy),
             'auto_calibration',
         )
         return self.original_accuracy

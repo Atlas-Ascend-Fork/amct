@@ -67,13 +67,13 @@ class DistillConfigBase:
             if not layer_data_config.get(DST_TYPE):
                 LOGGER.logw(
                     "dst_type of DistillDataQuantConfig was not given in config, "
-                    "and was set to 'INT8' by defualt!",
+                    "and was set to 'INT8' by default!",
                     module_name='DistillConfig',
                 )
             if not layer_weight_config.get(DST_TYPE):
                 LOGGER.logw(
                     "dst_type of RetrainWeightQuantConfig was not given in config, "
-                    "and was set to 'INT8' by defualt!",
+                    "and was set to 'INT8' by default!",
                     module_name='DistillConfig',
                 )
             raise ValueError(

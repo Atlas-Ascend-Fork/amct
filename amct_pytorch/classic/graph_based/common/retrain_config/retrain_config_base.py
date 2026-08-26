@@ -522,13 +522,13 @@ def check_dst_type_legal(layer_data_config, layer_weight_config):
         if not layer_data_config.get(DST_TYPE):
             LOGGER.logw(
                 "dst_type of RetrainDataQuantConfig was not given in config, "
-                "and was set to 'INT8' by defualt!",
+                "and was set to 'INT8' by default!",
                 module_name=_MODULE_NAME,
             )
         if not layer_weight_config.get(DST_TYPE):
             LOGGER.logw(
                 "dst_type of RetrainWeightQuantConfig was not given in config, "
-                "and was set to 'INT8' by defualt!",
+                "and was set to 'INT8' by default!",
                 module_name=_MODULE_NAME,
             )
         error_info = (
