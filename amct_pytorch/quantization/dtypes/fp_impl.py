@@ -206,7 +206,7 @@ def quantize_fp_block(x, fp8_min=-448.0, fp8_max=448.0, block_size=128):
     pad_shape = W_pad.shape
 
     Mp, Np = W_pad.shape
-    W_blocks = W_pad.reshape(Mp // block_m, block_m, Np // block_n, block_n).permute(0, 2, 1, 3)
+    W_blocks = W_pad.reshape(Mp // block_n, block_n, Np // block_m, block_m).permute(0, 2, 1, 3)
 
     amax = torch.amax(torch.abs(W_blocks), dim=(-1, -2), keepdim=True)
 
@@ -236,7 +236,7 @@ def dequantize_fp_block(x, scale, fp8_min=-448.0, fp8_max=448.0, block_size=128)
     W_pad = F.pad(x, (0, pad_n, 0, pad_m))
 
     Mp, Np = W_pad.shape
-    W_blocks = W_pad.reshape(Mp // 128, 128, Np // 128, 128).permute(0, 2, 1, 3)
+    W_blocks = W_pad.reshape(Mp // block_n, block_n, Np // block_m, block_m).permute(0, 2, 1, 3)
 
     W_dequant = W_blocks * scale
 
