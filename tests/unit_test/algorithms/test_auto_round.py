@@ -122,7 +122,7 @@ def test_auto_round_forward_passthrough():
 
 def test_get_group_size_unsupported_raises():
     args = _auto_round_args(w_size=(4, 8), quant_dtype="fp8")
-    with pytest.raises(ValueError, match="hifx"):
+    with pytest.raises(ValueError, match="Not supported quant_dtype"):
         AutoRound._get_group_size(args)
 
 
@@ -170,3 +170,83 @@ def test_auto_round_quantize_with_group_size():
     weight = torch.randn(2, 12)
     result = ar.quantize(weight, mock_quant_obj)
     assert result.shape == weight.shape
+
+
+# ---- HiF4 (HiAutoRound): k (exponent) + v (mantissa) compensation ----------------
+
+
+def test_auto_round_init_hifp_dtype():
+    args = _auto_round_args(w_size=(4, 128), quant_dtype="hifp")
+    ar = AutoRound(args, w_bits=4)
+    assert ar.group_size == 64
+    assert ar.is_hif4 is True
+    assert ar.value.shape == (4, 128)
+    assert ar.k.shape == (4, 32)
+
+
+def test_auto_round_init_hifp_wrong_bits_raises():
+    args = _auto_round_args(w_size=(4, 128), quant_dtype="hifp")
+    with pytest.raises(ValueError, match="only HiFloat4"):
+        AutoRound(args, w_bits=8)
+
+
+def test_auto_round_init_hifp_columns_not_multiple_of_64_raises():
+    args = _auto_round_args(w_size=(4, 100), quant_dtype="hifp")
+    with pytest.raises(ValueError, match="multiple of 64"):
+        AutoRound(args, w_bits=4)
+
+
+def test_auto_round_hifp_trainable_params():
+    args = _auto_round_args(w_size=(4, 64), quant_dtype="hifp")
+    ar = AutoRound(args, w_bits=4)
+    assert len(ar.trainable_params()) == 2
+
+
+def test_auto_round_hifp_export_ptq_params():
+    args = _auto_round_args(w_size=(4, 64), quant_dtype="hifp")
+    ar = AutoRound(args, w_bits=4)
+    assert set(ar.export_ptq_params()) == {"value", "k"}
+
+
+def test_auto_round_hifp_quantize_shape_and_finite():
+    torch.manual_seed(0)
+    args = _auto_round_args(w_size=(4, 128), quant_dtype="hifp")
+    ar = AutoRound(args, w_bits=4)
+    weight = torch.randn(4, 128)
+
+    out = ar.quantize(weight, quant_obj=None)
+    assert out.shape == weight.shape
+    assert torch.isfinite(out).all()
+    assert not torch.equal(out, weight)
+
+
+def test_auto_round_hifp_gradient_flows_to_k_and_v():
+    torch.manual_seed(0)
+    args = _auto_round_args(w_size=(4, 128), quant_dtype="hifp")
+    ar = AutoRound(args, w_bits=4)
+    weight = torch.randn(4, 128)
+
+    ar.quantize(weight, quant_obj=None).sum().backward()
+
+    assert ar.value.grad is not None and ar.value.grad.abs().sum() > 0
+    assert ar.k.grad is not None and ar.k.grad.abs().sum() > 0
+
+
+def test_auto_round_hifp_export_deploy_uses_quant_obj():
+    torch.manual_seed(0)
+    args = _auto_round_args(w_size=(4, 64), quant_dtype="hifp")
+    ar = AutoRound(args, w_bits=4)
+    weight = torch.randn(4, 64)
+
+    calls = []
+
+    def mock_export_deploy(w):
+        calls.append(w)
+        return {"qweight": w}
+
+    quant_obj = SimpleNamespace(export_deploy=mock_export_deploy)
+    result = ar.export_deploy(weight, quant_obj)
+
+    assert len(calls) == 1
+    assert calls[0].shape == weight.shape
+    assert result["qweight"].shape == weight.shape
