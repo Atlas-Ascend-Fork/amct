@@ -254,7 +254,7 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
     if quant_data_comb in ['NOT_QUANTIZE mxfp4_e2m1', 'NOT_QUANTIZE float4_e2m1']:
         if mod.weight.shape[1] % 64 != 0 or mod.weight.shape[0] % 64 != 0:
             LOGGER.logd(
-                "layer:{} cannot be quantized, act_dtype and wts dtype {} has shape requirement"
+                "layer:{} cannot be quantized, act_dtype and wts dtype {} has shape requirement "
                 "cin and cout length should be integer multiple of 64".format(
                     layer_name, quant_data_comb
                 )
@@ -380,7 +380,7 @@ def _check_layer_constraints(mod, name, algo, quant_type_comb, quant_config):
 
 
 def get_supported_layers(model, quant_config, registed_alg):
-    '''get supported layers based on quant config and registed algorithm'''
+    '''get supported layers based on quant config and registered algorithm'''
     layer_types, quant_type_comb = _build_layer_types_and_quant_type(
         quant_config, registed_alg
     )
