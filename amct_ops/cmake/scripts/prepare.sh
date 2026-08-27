@@ -9,6 +9,7 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
+set -euo pipefail
 
 CPU_NUM=$(($(cat /proc/cpuinfo | grep "^processor" | wc -l)*2))
 JOB_NUM="-j${CPU_NUM}"
