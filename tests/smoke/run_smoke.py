@@ -29,7 +29,7 @@ import time
 
 import torch
 
-LOGGER = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 # 验证用短序列，节省耗时
 _SEQLEN = 128
@@ -208,10 +208,10 @@ def _run_all(cases, model_name_or_path, device):
         except Exception as exc:  # noqa: BLE001
             msg = str(exc)
             if skip_on and any(kw in msg for kw in skip_on):
-                LOGGER.warning("[%s] SKIP: %s", case['name'], msg)
+                logger.warning("[%s] SKIP: %s", case['name'], msg)
                 results[case["name"]] = "SKIP"
             else:
-                LOGGER.error("[%s] FAIL: %s", case['name'], exc)
+                logger.error("[%s] FAIL: %s", case['name'], exc)
                 results[case["name"]] = "FAIL"
 
     total = time.time() - total_start
@@ -219,7 +219,7 @@ def _run_all(cases, model_name_or_path, device):
     print("验证结果汇总:")
     all_pass = True
     for name, result in results.items():
-        log_result = LOGGER.error if result == "FAIL" else LOGGER.info
+        log_result = logger.error if result == "FAIL" else logger.info
         log_result("  [%s] %s", result, name)
         if result == "FAIL":
             all_pass = False
@@ -247,9 +247,9 @@ def main():
     all_pass = _run_all(cases, args.model, args.device)
 
     if all_pass:
-        LOGGER.info("[AMCT_EXAMPLE_ALL_PASS]")
+        logger.info("[AMCT_EXAMPLE_ALL_PASS]")
     else:
-        LOGGER.error("[AMCT_EXAMPLE_FAILED]")
+        logger.error("[AMCT_EXAMPLE_FAILED]")
 
     sys.exit(0 if all_pass else 1)
 
