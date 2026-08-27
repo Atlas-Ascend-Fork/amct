@@ -23,10 +23,13 @@
 import argparse
 import copy
 import gc
+import logging
 import sys
 import time
 
 import torch
+
+LOGGER = logging.getLogger(__name__)
 
 # 验证用短序列，节省耗时
 _SEQLEN = 128
@@ -202,28 +205,29 @@ def _run_all(cases, model_name_or_path, device):
                 case["skip_convert"],
             )
             results[case["name"]] = "PASS"
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             msg = str(exc)
             if skip_on and any(kw in msg for kw in skip_on):
-                print(f"[{case['name']}] SKIP: {msg}")
+                LOGGER.warning("[%s] SKIP: %s", case['name'], msg)
                 results[case["name"]] = "SKIP"
             else:
-                print(f"[{case['name']}] FAIL: {exc}")
+                LOGGER.error("[%s] FAIL: %s", case['name'], exc)
                 results[case["name"]] = "FAIL"
 
     total = time.time() - total_start
-    print(f"\n{'=' * 55}")
     print(f"总耗时: {total:.1f}s  ({total / 60:.1f}min)")
     print("验证结果汇总:")
     all_pass = True
     for name, result in results.items():
-        print(f"  [{result}] {name}")
+        log_result = LOGGER.error if result == "FAIL" else LOGGER.info
+        log_result("  [%s] %s", result, name)
         if result == "FAIL":
             all_pass = False
     return all_pass
 
 
 def main():
+    logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stdout)
     args = _parse_args()
 
     requested = [c.strip() for c in args.cases.split(",") if c.strip()]
@@ -243,9 +247,9 @@ def main():
     all_pass = _run_all(cases, args.model, args.device)
 
     if all_pass:
-        print("[AMCT_EXAMPLE_ALL_PASS]")
+        LOGGER.info("[AMCT_EXAMPLE_ALL_PASS]")
     else:
-        print("[AMCT_EXAMPLE_FAILED]")
+        LOGGER.error("[AMCT_EXAMPLE_FAILED]")
 
     sys.exit(0 if all_pass else 1)
 

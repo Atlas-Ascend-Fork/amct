@@ -1,4 +1,3 @@
-# coding=utf-8
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,29 +21,33 @@
 # See the LICENSE file in the root directory of this source tree
 # or at https://opensource.org/licenses/MIT for details.
 
+import logging
 import math
-from dataclasses import dataclass
-from typing import Tuple, Optional, Literal
-from functools import lru_cache
+import sys
 from contextlib import contextmanager
-from scipy.linalg import hadamard
+from dataclasses import dataclass
+from functools import lru_cache
+from typing import ClassVar, Literal, Optional
+
 import numpy as np
 import torch
-from torch import nn
-import torch.nn.functional as F
 import torch.distributed as dist
+import torch.nn.functional as F
+from scipy.linalg import hadamard
+from torch import nn
 from transformers import PreTrainedModel
 
 from amct_pytorch.common.models.llm.deepseek.deepseek_v4.modeling.configuration_deepseek_v4 import (
     DeepseekV4Config,
 )
 
-
 world_size = 1
 rank = 0
 default_dtype = torch.bfloat16
 scale_fmt = None
 scale_dtype = torch.float32
+
+logger = logging.getLogger(__name__)
 
 
 @contextmanager
@@ -65,8 +68,8 @@ class ModelArgs:
     max_batch_size: int = 4
     max_seq_len: int = 4096
     dtype: Literal["bf16", "fp8"] = "fp8"
-    scale_fmt: Literal[None, "ue8m0"] = "ue8m0"
-    expert_dtype: Literal[None, "fp4"] = None
+    scale_fmt: Optional[Literal["ue8m0"]] = "ue8m0"  # noqa: UP045
+    expert_dtype: Optional[Literal["fp4"]] = None  # noqa: UP045
     scale_dtype: Literal["fp32", "fp8"] = "fp8"
     vocab_size: int = 129280
     dim: int = 4096
@@ -90,7 +93,7 @@ class ModelArgs:
     o_groups: int = 8
     o_lora_rank: int = 1024
     window_size: int = 128
-    compress_ratios: Tuple[int] = (0, 0, 4, 128, 4, 128, 4, 0)
+    compress_ratios: tuple[int] = (0, 0, 4, 128, 4, 128, 4, 0)
     # yarn
     compress_rope_theta: float = 40000.0
     original_seq_len: int = 0
@@ -649,9 +652,11 @@ class Attention(nn.Module):
                 self.kv_cache[:bsz, cutoff:win], self.kv_cache[:bsz, :cutoff] = kv[
                     :, -win:
                 ].split([win - cutoff, cutoff], dim=1)
-            if self.compress_ratio:
-                if (kv_compress := self.compressor(x, start_pos)) is not None:
-                    kv = torch.cat([kv, kv_compress], dim=1)
+            if (
+                self.compress_ratio
+                and (kv_compress := self.compressor(x, start_pos)) is not None
+            ):
+                kv = torch.cat([kv, kv_compress], dim=1)
             # We performed QAT here, kv could also use fp8 format, though current implementation uses bf16
             o = self.sparse_attn(
                 q,
@@ -707,8 +712,10 @@ class Gate(nn.Module):
             )
 
     def forward(
-        self, x: torch.Tensor, input_ids: Optional[torch.Tensor] = None
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        self,
+        x: torch.Tensor,
+        input_ids: Optional[torch.Tensor] = None,  # noqa: UP045
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         scores = F.linear(x.float(), self.weight.float())
         if self.score_func == "softmax":
             scores = scores.softmax(dim=-1)
@@ -742,7 +749,9 @@ class Expert(nn.Module):
         self.swiglu_limit = swiglu_limit
 
     def forward(
-        self, x: torch.Tensor, weights: Optional[torch.Tensor] = None
+        self,
+        x: torch.Tensor,
+        weights: Optional[torch.Tensor] = None,  # noqa: UP045
     ) -> torch.Tensor:
         dtype = x.dtype
         gate = self.w1(x).float()
@@ -875,7 +884,7 @@ class Block(nn.Module):
         self,
         x: torch.Tensor,
         start_pos: int = 0,
-        input_ids: Optional[torch.Tensor] = None,
+        input_ids: Optional[torch.Tensor] = None,  # noqa: UP045
     ) -> torch.Tensor:
         residual = x
         x, post, comb = self.hc_pre(
@@ -945,7 +954,7 @@ class DeepseekV4PreTrainedModel(PreTrainedModel):
     config_class = DeepseekV4Config
     base_model_prefix = "model"
     supports_gradient_checkpointing = False
-    _no_split_modules = ["Block"]
+    _no_split_modules: ClassVar[list[str]] = ["Block"]
     _supports_cache_class = False
 
     def _init_weights(self, module):
@@ -1011,6 +1020,7 @@ class DeepseekV4ForCausalLM(DeepseekV4PreTrainedModel):
 if __name__ == "__main__":
     from dataclasses import asdict
 
+    logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stdout)
     torch.set_default_dtype(torch.bfloat16)
     torch.set_default_device("cuda")
     torch.manual_seed(0)
@@ -1019,11 +1029,11 @@ if __name__ == "__main__":
     x = torch.randint(0, config.vocab_size, (2, 128))
     model = DeepseekV4ForCausalLM(config)
 
-    print(model(x).size())
+    logger.info("model output size: %s", model(x).size())
     for i in range(128, 150):
-        print(i, model(x[:, 0:1], i).size())
+        logger.info("position %d output size: %s", i, model(x[:, 0:1], i).size())
 
     h = torch.randn(2, 128, config.hc_mult, config.dim)
     mtp = model.mtp[0]
-    print(mtp(h, 0, x).size())
-    print(mtp(h[:, 0:1], 1, x[:, 0:1]).size())
+    logger.info("MTP output size: %s", mtp(h, 0, x).size())
+    logger.info("incremental MTP output size: %s", mtp(h[:, 0:1], 1, x[:, 0:1]).size())
