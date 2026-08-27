@@ -26,6 +26,9 @@ from amct_pytorch.quantization.dtypes.fp_impl import (
 )
 
 def reshape_block(x, block_size):
+
+    M, N = x.shape
+
     block_m = block_size
     block_n = block_size
 
@@ -38,7 +41,7 @@ def reshape_block(x, block_size):
     Mp, Np = W_pad.shape
     W_blocks = W_pad.reshape(Mp // block_n, block_n, Np // block_m, block_m).permute(0, 2, 1, 3)
 
-    return W_blocks
+    return W_blocks, pad_shape
 
 
 def quantize_fp_block(x, fp8_min=-448.0, fp8_max=448.0, block_size=128):
@@ -48,7 +51,7 @@ def quantize_fp_block(x, fp8_min=-448.0, fp8_max=448.0, block_size=128):
     x = x.reshape(-1, N)
     M, N = x.shape
 
-    W_blocks = reshape_block(x, block_size)
+    W_blocks, pad_shape = reshape_block(x, block_size)
 
     amax = torch.amax(torch.abs(W_blocks), dim=(-1, -2), keepdim=True)
     scale = amax / fp8_max
@@ -68,7 +71,7 @@ def dequantize_fp_block(x, scale, fp8_min=-448.0, fp8_max=448.0, block_size=128)
     x = x.reshape(-1, N)
     M, N = x.shape
 
-    W_blocks = reshape_block(x, block_size)
+    W_blocks, _ = reshape_block(x, block_size)
 
     W_dequant = W_blocks * scale
     W_dequant = W_dequant.permute(0, 2, 1, 3).reshape(Mp, Np)
