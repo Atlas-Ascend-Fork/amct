@@ -20,7 +20,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from amct_pytorch.classic.graph_based.common.capacity import query_capacity
+from amct_pytorch.classic.graph_based.amct_pytorch.common.capacity import (
+    query_capacity,
+)
 
 
 class TestQueryCapacity(unittest.TestCase):
