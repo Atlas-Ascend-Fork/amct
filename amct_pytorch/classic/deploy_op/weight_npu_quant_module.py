@@ -205,7 +205,7 @@ class NpuWeightQuantizedLinear(nn.Module):
         ori_shape = inputs.shape
         inputs = inputs.to(self.quantized_weight.device)
         # input shape reshape to 2d for npu op
-        inputs = inputs.reshape(-1, inputs.shape[-1])
+        inputs = inputs.reshape(-1, inputs.shape[-1]).contiguous()
         if self.scale_factor is not None:
             inputs = torch.mul(inputs, self.scale_factor)
 
