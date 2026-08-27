@@ -69,4 +69,4 @@ class TestLog(unittest.TestCase):
     def test_debug_debug_level(self):
         os.environ[LOG_FILE_SET_ENV] = 'debug'
         logger = Logger(self.temp_folder, self.log_file)
-        self.assertIsNone(logger.logi("this is debug test"))
+        self.assertIsNone(logger.logd("this is debug test"))

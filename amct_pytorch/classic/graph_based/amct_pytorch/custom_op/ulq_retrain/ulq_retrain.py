@@ -46,7 +46,7 @@ class UlqRetrainFunction(Function):
         world_size,
     ):
         """
-        Function: UlqRetrain foward funtion.
+        Function: UlqRetrain forward function.
         """
         check_quant_data(inputs, 'activation')
         outputs, scale, offset, clip_max, clip_min = ulq_retrain_forward_pytorch(
@@ -95,7 +95,7 @@ class UlqRetrainFunction(Function):
     @staticmethod
     def backward(ctx, grad_outputs, grad_scale, grad_offset, grad_max, grad_min):
         """
-        Function: UlqRetrain backward funtion required by torch
+        Function: UlqRetrain backward function required by torch
                   torch.autograd.
         """
         inputs, clip_max, clip_min = ctx.saved_tensors
@@ -138,7 +138,7 @@ class UlqRetrainFuncQAT(UlqRetrainFunction):
             inputs[5].get("acts_offset"),
         )
         LOGGER.logi(
-            'Convert ULQ op to onnx to onnx QuantizeLinear and DequantizeLinear op successfully.'
+            'Converted ULQ op to ONNX QuantizeLinear and DequantizeLinear ops successfully.'
         )
         ret = (output, None, None, None, None)
         return ret

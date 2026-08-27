@@ -40,7 +40,7 @@ class DeepseekV3AttentionQuant(BaseQuantizeModule):
         self.layer_name = layer_name
         if not self.kvcache_enable:
             LOGGER.logd(
-                "kvcache is not enable of layer '{}'!".format(self.layer_name),
+                "KV cache is not enabled for layer '{}'!".format(self.layer_name),
                 'DeepseekV3AttentionQuant',
             )
         self.quant_type = quant_config.get('kvcache_cfg').get('quant_type')
