@@ -23,6 +23,23 @@ else
 fi
 gcc --version
 
+if gcc --version | head -n1 | grep -q "15\."; then
+    rm -rf /home/jenkins/opensource/lib_cache
+    if [ -d /home/jenkins/opensource/gcc15 ]; then
+        rm -rf /home/jenkins/opensource/gcc15/lib_cache/abseil-cpp
+        rm -rf /home/jenkins/opensource/gcc15/lib_cache/device/abseil-cpp
+        ln -s /home/jenkins/opensource/gcc15/lib_cache/ /home/jenkins/opensource/lib_cache
+    elif [ -d /home/jenkins/opensource/gcc15x86 ]; then
+        rm -rf /home/jenkins/opensource/gcc15x86/lib_cache/abseil-cpp
+        rm -rf /home/jenkins/opensource/gcc15x86/lib_cache/device/abseil-cpp
+        ln -s /home/jenkins/opensource/gcc15x86/lib_cache/ /home/jenkins/opensource/lib_cache
+    fi
+else
+    gcc --version
+    rm -rf /home/jenkins/opensource/lib_cache
+    ln -s /home/jenkins/opensource/ubuntu20/lib_cache /home/jenkins/opensource/lib_cache
+fi
+
 if [ -z "${ASCEND_3RD_LIB_PATH:-}" ]; then
     export ASCEND_3RD_LIB_PATH=/home/jenkins/opensource
 fi
