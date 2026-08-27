@@ -20,17 +20,15 @@ from unittest.mock import patch
 
 import numpy as np
 
-from amct_pytorch.classic.graph_based.common.auto_calibration.cosine_similarity_sensitivity import (
-    CosineSimilaritySensitivity,
+from amct_pytorch.classic.graph_based.amct_pytorch.common.auto_calibration import (
+    cosine_similarity_sensitivity,
 )
 
 
 class TestCosineSimilaritySensitivity(unittest.TestCase):
-    @patch(
-        'amct_pytorch.classic.graph_based.common.auto_calibration.cosine_similarity_sensitivity.LOGGER.logd'
-    )
+    @patch.object(cosine_similarity_sensitivity.LOGGER, 'logd')
     def test_nonzero_inputs_are_compared_with_debug_log(self, mock_logd):
-        sensitivity = CosineSimilaritySensitivity()
+        sensitivity = cosine_similarity_sensitivity.CosineSimilaritySensitivity()
 
         similarity = sensitivity.compare(np.array([1.0, 2.0]), np.array([1.0, 2.0]))
 
