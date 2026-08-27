@@ -22,11 +22,61 @@ from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY
 from amct_pytorch.quantization.dtypes.fp_impl import (
     f32_to_f4_unpacked,
     pack_uint4,
-    quantize_elewise,
-    quantize_fp_block,
-    dequantize_fp_block
+    quantize_elewise
 )
 
+def reshape_block(x, block_size):
+    block_m = block_size
+    block_n = block_size
+
+    pad_m = (block_m - M % block_m) % block_m
+    pad_n = (block_n - N % block_n) % block_n
+
+    W_pad = F.pad(x, (0, pad_n, 0, pad_m))
+    pad_shape = W_pad.shape
+
+    Mp, Np = W_pad.shape
+    W_blocks = W_pad.reshape(Mp // block_n, block_n, Np // block_m, block_m).permute(0, 2, 1, 3)
+
+    return W_blocks
+
+
+def quantize_fp_block(x, fp8_min=-448.0, fp8_max=448.0, block_size=128):
+
+    ori_shape = x.shape
+    N = x.shape[-1]
+    x = x.reshape(-1, N)
+    M, N = x.shape
+
+    W_blocks = reshape_block(x, block_size)
+
+    amax = torch.amax(torch.abs(W_blocks), dim=(-1, -2), keepdim=True)
+    scale = amax / fp8_max
+    scale = torch.clamp(scale, min=1e-8)
+
+    W_scaled = W_blocks / scale
+    W_scaled = torch.clamp(W_scaled, -fp8_max, fp8_max)
+
+    W_scaled = W_scaled.permute(0, 2, 1, 3).reshape(pad_shape)[:M, :N]
+    W_fp8 = W_scaled.reshape(ori_shape)
+
+    return W_fp8, scale
+
+def dequantize_fp_block(x, scale, fp8_min=-448.0, fp8_max=448.0, block_size=128):
+    ori_shape = x.shape
+    N = x.shape[-1]
+    x = x.reshape(-1, N)
+    M, N = x.shape
+
+    W_blocks = reshape_block(x, block_size)
+
+    W_dequant = W_blocks * scale
+    W_dequant = W_dequant.permute(0, 2, 1, 3).reshape(Mp, Np)
+    W_dequant = W_dequant[:M, :N]
+
+    W_dequant = W_dequant.reshape(ori_shape)
+
+    return W_dequant
 
 @DTYPE_REGISTRY.register(name="fp", description="quant dequant for block fp")
 class QuantDequantFP(torch.nn.Module):
