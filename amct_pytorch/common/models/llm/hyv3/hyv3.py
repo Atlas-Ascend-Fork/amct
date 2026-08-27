@@ -79,9 +79,9 @@ class HyV3(BaseModel):
         return 1
 
     def parse_quant_mode(self):
-        if "mlp" in self.quant_target:
+        if "mlp" in self.quant_target and self.args.granularity != "tensor":
             raise ValueError(
-                "HyV3 is a MoE model and does not support quant_target='mlp'. Use 'moe' instead."
+                "HyV3 supports quant_target='mlp' only for tensorwise deploy."
             )
 
     def get_layer_weight_prefix(self, layer_idx: int) -> str:
@@ -141,16 +141,24 @@ class HyV3(BaseModel):
         self,
     ):
         bit_policy = ensure_bit_policy(self.args)
+        quant_targets = set(self.quant_target)
         num_hidden_layers = self.config.num_hidden_layers
         num_nextn_predict_layers = self.config.num_nextn_predict_layers
         num_layers = num_hidden_layers + num_nextn_predict_layers
         num_experts = self.config.num_experts
         quant_layers = {}
         for i in range(num_layers):
-            for n in self.ATTN_LINEAR_NAMES:
-                bit = bit_policy["attn-linear"][n].w
-                quant_layers[f"model.layers.{i}.self_attn.{n}"] = bit
+            if "attn-linear" in quant_targets:
+                for n in self.ATTN_LINEAR_NAMES:
+                    bit = bit_policy["attn-linear"][n].w
+                    quant_layers[f"model.layers.{i}.self_attn.{n}"] = bit
             if i == 0:
+                if "mlp" in quant_targets:
+                    for n in self.MLP_LINEAR_NAMES:
+                        bit = bit_policy["mlp"][n].w
+                        quant_layers[f"model.layers.0.mlp.{n}"] = bit
+                continue
+            if "moe" not in quant_targets:
                 continue
             for j in range(num_experts):
                 for n in self.MLP_LINEAR_NAMES:
@@ -162,9 +170,26 @@ class HyV3(BaseModel):
         return quant_layers
 
     def generate_tensorwise_ignore_layers(self):
+        quant_targets = set(self.quant_target)
+        num_layers = (
+            self.config.num_hidden_layers + self.config.num_nextn_predict_layers
+        )
         ignore = []
-        for n in self.MLP_LINEAR_NAMES:
-            ignore.append(f"model.layers.0.mlp.{n}")
+        if "mlp" not in quant_targets:
+            for n in self.MLP_LINEAR_NAMES:
+                ignore.append(f"model.layers.0.mlp.{n}")
+        if "attn-linear" not in quant_targets:
+            for i in range(num_layers):
+                for n in self.ATTN_LINEAR_NAMES:
+                    ignore.append(f"model.layers.{i}.self_attn.{n}")
+        if "moe" not in quant_targets:
+            ignore.append(
+                r"re:^model\.layers\.\d+\.mlp\.experts"
+                r"(?:\.\d+\.(?:gate_proj|up_proj|down_proj))?$"
+            )
+            for i in range(1, num_layers):
+                for n in self.MLP_LINEAR_NAMES:
+                    ignore.append(f"model.layers.{i}.mlp.shared_mlp.{n}")
         ignore.append(f"model.layers.{self.num_layers}.eh_proj")
         ignore.append("model.embed_tokens")
         ignore.append("lm_head")
