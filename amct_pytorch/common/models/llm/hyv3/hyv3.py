@@ -158,15 +158,14 @@ class HyV3(BaseModel):
                         bit = bit_policy["mlp"][n].w
                         quant_layers[f"model.layers.0.mlp.{n}"] = bit
                 continue
-            if "moe" not in quant_targets:
-                continue
-            for j in range(num_experts):
+            if "moe" in quant_targets:
+                for j in range(num_experts):
+                    for n in self.MLP_LINEAR_NAMES:
+                        bit = bit_policy["moe.routed"][n].w if i < num_hidden_layers else 8
+                        quant_layers[f"model.layers.{i}.mlp.experts.{j}.{n}"] = bit
                 for n in self.MLP_LINEAR_NAMES:
-                    bit = bit_policy["moe.routed"][n].w if i < num_hidden_layers else 8
-                    quant_layers[f"model.layers.{i}.mlp.experts.{j}.{n}"] = bit
-            for n in self.MLP_LINEAR_NAMES:
-                bit = bit_policy["moe.shared"][n].w
-                quant_layers[f"model.layers.{i}.mlp.shared_mlp.{n}"] = bit
+                    bit = bit_policy["moe.shared"][n].w
+                    quant_layers[f"model.layers.{i}.mlp.shared_mlp.{n}"] = bit
         return quant_layers
 
     def generate_tensorwise_ignore_layers(self):
