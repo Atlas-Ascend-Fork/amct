@@ -450,3 +450,34 @@ def test_hifp_deploy_and_export_deploy_are_unsupported():
         qdq.export_deploy(x)
     with pytest.raises(NotImplementedError, match="deploy is not supported"):
         qdq.deploy(x)
+
+
+def test_weight_dequant_decodes_e8m0_integer_scale():
+    from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
+
+    w8 = torch.zeros(2, 32, dtype=torch.float8_e4m3fn)
+    w8[0, 0] = torch.finfo(torch.float8_e4m3fn).max  # 448 in fp32
+    # E8M0: e=127 -> 2^0 = 1.0; e=130 -> 2^3 = 8.0
+    scale = torch.tensor([[127, 130]], dtype=torch.uint8).expand(2, -1)
+    out = weight_dequant(w8, scale, block_size=32, is_mx=True)
+    assert out.dtype == torch.get_default_dtype()
+    assert out[0, 0] == 448.0  # 448 * 2^(127-127)
+    assert out[1, 0] == 0.0
+
+
+def test_weight_dequant_rejects_e8m0_reserved_0xff():
+    from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
+
+    w8 = torch.zeros(1, 32, dtype=torch.float8_e4m3fn)
+    bad = torch.full((1, 1), 255, dtype=torch.uint8)
+    with pytest.raises(ValueError, match="0xFF"):
+        weight_dequant(w8, bad, block_size=32, is_mx=True)
+
+
+def test_weight_dequant_float_scale_passes_through():
+    from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
+
+    w8 = torch.zeros(1, 32, dtype=torch.float8_e4m3fn)
+    w8[0, 0] = 448.0
+    out = weight_dequant(w8, torch.tensor([[2.0]]), block_size=32, is_mx=True)
+    assert out[0, 0] == 896.0
