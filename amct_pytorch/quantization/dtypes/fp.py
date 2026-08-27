@@ -66,6 +66,7 @@ def quantize_fp_block(x, fp8_min=-448.0, fp8_max=448.0, block_size=128):
     return W_fp8, scale
 
 def dequantize_fp_block(x, scale, fp8_min=-448.0, fp8_max=448.0, block_size=128):
+    
     ori_shape = x.shape
     N = x.shape[-1]
     x = x.reshape(-1, N)
