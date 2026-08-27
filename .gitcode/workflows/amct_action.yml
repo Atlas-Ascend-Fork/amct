@@ -27,6 +27,7 @@ env:
   obs_path: "${{ env.org_name }}/${{ env.repo_name }}/ci/package/${{ env.MERGE_ID }}"
   obs_smoke_path: "${{ env.obs_path }}/presmoke/2"
   online: ${{ vars.APPLY_LABEL }}
+  comment: ${{atomgit.event.comment.body}}
 
 stages:
   stage1:
@@ -35,6 +36,19 @@ stages:
       JOB_image:
         name: Test_image
         steps:
+          - name: Specify CI_REPO
+            run: |
+              set -e
+              comment="${{ env.comment }}"
+              ci_branch=(echo "$comment" | sed -n 's/.*@\([^ ]*\).*/\1/p')
+              if [ -z "ci_branch" ]; then
+                ci_path="https://gitcode.com/cann/.gitcode.git"
+              else
+                ci_path="https://gitcode.com/opencann/.gitcode.git"
+                git config --global url."https://cann-robot:${{ secrets.GIT_TOKEN }}@gitcode.com/".insteadOf "https://gitcode.com/"
+              fi
+              echo "ci_branch=$ci_branch" >> $ATOMGIT_ENV
+              echo "CI_PATH=$ci_path" >> $ATOMGIT_ENV
           - name: revise_image
             identifier: revise_image
             uses: cann/.gitcode/actions/revise-img@master
@@ -42,6 +56,7 @@ stages:
               repo_name: ${{ env.repo_name }}
               target_branch: ${{ env.TARGET_BRANCH }}
               repo_url: ${{ vars.CI_PATH }}
+              ci_branch: ${{ env.ci_branch }}
           -
             name: show_output
             run: |
