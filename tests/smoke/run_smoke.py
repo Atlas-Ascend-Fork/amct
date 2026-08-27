@@ -29,7 +29,7 @@ import time
 
 import torch
 
-logger = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
 
 # 验证用短序列，节省耗时
 _SEQLEN = 128
@@ -57,7 +57,7 @@ def _parse_args():
 def _load_base_model(model_name_or_path):
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    logger.info("Loading model: %s", model_name_or_path)
+    print(f"[*] 加载模型: {model_name_or_path}")
     t0 = time.time()
     # 不用 device_map="auto"：多卡环境下 0.5B 会被拆到两卡，触发跨设备 addmm 报错
     model = AutoModelForCausalLM.from_pretrained(
@@ -69,7 +69,7 @@ def _load_base_model(model_name_or_path):
     AutoTokenizer.from_pretrained(
         model_name_or_path, use_fast=False, trust_remote_code=True
     )
-    logger.info("Model loading completed in %.1f s.", time.time() - t0)
+    print(f"    完成，耗时 {time.time() - t0:.1f}s")
     return model
 
 
@@ -90,7 +90,7 @@ def _verify_forward(model, device):
 def _run_case(name, base_model, cfg, device, needs_calib, skip_convert=False):
     import amct_pytorch as amct
 
-    logger.info("[%s] Starting.", name)
+    print(f"\n[{name}] 开始")
     t0 = time.time()
 
     # Phase0: prepare model
@@ -111,9 +111,7 @@ def _run_case(name, base_model, cfg, device, needs_calib, skip_convert=False):
     # Phase3: convert deploy model
     if skip_convert:
         # convert() 依赖原生 hifloat8，环境不支持时跳过，仅验证仿真量化前向
-        logger.warning(
-            "[%s] Skipping convert(): native HiFloat8 support is unavailable.", name
-        )
+        print("    convert() 已跳过（当前环境无原生 hifloat8 支持）")
     else:
         amct.convert(quant_model)
         if device.startswith("npu"):
@@ -125,7 +123,7 @@ def _run_case(name, base_model, cfg, device, needs_calib, skip_convert=False):
     del quant_model
     gc.collect()
 
-    logger.info("[%s] PASS in %.1f s.", name, time.time() - t0)
+    print(f"[{name}] PASS  耗时 {time.time() - t0:.1f}s")
 
 
 def _build_cases(amct):
@@ -207,40 +205,35 @@ def _run_all(cases, model_name_or_path, device):
                 case["skip_convert"],
             )
             results[case["name"]] = "PASS"
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             msg = str(exc)
             if skip_on and any(kw in msg for kw in skip_on):
-                print(f"[{case['name']}] SKIP: {msg}")
+                LOGGER.warning("[%s] SKIP: %s", case['name'], msg)
                 results[case["name"]] = "SKIP"
             else:
-                print(f"[{case['name']}] FAIL: {exc}")
+                LOGGER.error("[%s] FAIL: %s", case['name'], exc)
                 results[case["name"]] = "FAIL"
 
     total = time.time() - total_start
-    print(f"\n{'=' * 55}")
-    logger.info("Total elapsed time: %.1f s (%.1f min).", total, total / 60)
-    logger.info("Verification summary:")
+    print(f"总耗时: {total:.1f}s  ({total / 60:.1f}min)")
+    print("验证结果汇总:")
     all_pass = True
     for name, result in results.items():
-        print(f"  [{result}] {name}")
+        log_result = LOGGER.error if result == "FAIL" else LOGGER.info
+        log_result("  [%s] %s", result, name)
         if result == "FAIL":
             all_pass = False
     return all_pass
 
 
 def main():
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
-    logger.handlers.clear()
-    logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-    logger.propagate = False
+    logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stdout)
     args = _parse_args()
 
     requested = [c.strip() for c in args.cases.split(",") if c.strip()]
     unknown = [c for c in requested if c not in _ALL_CASES]
     if unknown:
-        logger.error("Unknown cases: %s. Available cases: %s.", unknown, _ALL_CASES)
+        print(f"[ERROR] 未知用例: {unknown}，可选: {_ALL_CASES}")
         sys.exit(1)
 
     if args.device.startswith("npu"):
@@ -254,9 +247,9 @@ def main():
     all_pass = _run_all(cases, args.model, args.device)
 
     if all_pass:
-        print("[AMCT_EXAMPLE_ALL_PASS]")
+        LOGGER.info("[AMCT_EXAMPLE_ALL_PASS]")
     else:
-        print("[AMCT_EXAMPLE_FAILED]")
+        LOGGER.error("[AMCT_EXAMPLE_FAILED]")
 
     sys.exit(0 if all_pass else 1)
 
