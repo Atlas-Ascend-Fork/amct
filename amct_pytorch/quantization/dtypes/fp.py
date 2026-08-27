@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import torch
 from torch import Tensor
+import torch.nn.functional as F
+
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY
 from amct_pytorch.quantization.dtypes.fp_impl import (
     f32_to_f4_unpacked,
@@ -52,6 +54,7 @@ def quantize_fp_block(x, fp8_min=-448.0, fp8_max=448.0, block_size=128):
     M, N = x.shape
 
     W_blocks, pad_shape = reshape_block(x, block_size)
+    
 
     amax = torch.amax(torch.abs(W_blocks), dim=(-1, -2), keepdim=True)
     scale = amax / fp8_max
@@ -66,13 +69,14 @@ def quantize_fp_block(x, fp8_min=-448.0, fp8_max=448.0, block_size=128):
     return W_fp8, scale
 
 def dequantize_fp_block(x, scale, fp8_min=-448.0, fp8_max=448.0, block_size=128):
-    
+
     ori_shape = x.shape
     N = x.shape[-1]
     x = x.reshape(-1, N)
     M, N = x.shape
 
-    W_blocks, _ = reshape_block(x, block_size)
+    W_blocks, pad_shape = reshape_block(x, block_size)
+    Mp, Np = pad_shape
 
     W_dequant = W_blocks * scale
     W_dequant = W_dequant.permute(0, 2, 1, 3).reshape(Mp, Np)
