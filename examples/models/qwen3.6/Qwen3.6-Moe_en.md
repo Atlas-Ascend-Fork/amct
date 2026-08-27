@@ -47,7 +47,7 @@ The one-stop platform has pre-configured deployment runtime environment. When us
   Download [Qwen/Qwen3.6-35B-A3B original weights](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) and upload to a fixed path on each node, such as `/data/models/Qwen3.6-35B-A3B`.
 
 ### Local Package Build
-  For local package build process, please check [Environment Installation & Verification](../../../README.md#installation-verification)
+  For local package build process, please check [Environment Installation & Verification](../../../README_en.md#installation--verification)
 
 ### Baseline Test
 
@@ -73,7 +73,7 @@ Required parameter explanation:
 Baseline test accuracy result:
 `Wikitext2-ppl=6.2825`
 
-For more detailed parameter explanation, please refer to [Parameter Description](../../../docs/zh/AMCT_Pytorch_LLM.md#31-general-parameters)
+For more detailed parameter explanation, please refer to [Parameter Description](../../../docs/zh/AMCT_Pytorch_LLM.md#31-通用参数)
 
 ### Direct Conversion Quantization Accuracy Evaluation
 According to YAML bit configuration, perform direct conversion quantization accuracy test, evaluate the gap with baseline accuracy. Current solution defaults to full A8W4 int quantization on `quant-target`:
@@ -97,7 +97,7 @@ Required parameter explanation:
 Direct conversion quantization accuracy result:
 `Wikitext2-ppl=7.0407`
 
-For more detailed parameter explanation, please refer to [Parameter Description](../../../docs/zh/AMCT_Pytorch_LLM.md#32-ppl-evaluation-parameters)
+For more detailed parameter explanation, please refer to [Parameter Description](../../../docs/zh/AMCT_Pytorch_LLM.md#32-ppl-评估参数)
 
 ### PTQ Data Extraction
 Extract corresponding PTQ calibration dataset according to different quantization objects `quant_target`:
@@ -115,7 +115,7 @@ python -m amct_pytorch.extract_ptq_data \
 Required parameter explanation:
 - data_dir: Extracted data directory
 
-For more detailed parameter explanation, please refer to [Parameter Description](../../../docs/zh/AMCT_Pytorch_LLM.md#33-data-extraction-parameters)
+For more detailed parameter explanation, please refer to [Parameter Description](../../../docs/zh/AMCT_Pytorch_LLM.md#33-数据提取参数)
 
 ### Post-Training Quantization
 Introduce quantization algorithm to optimize the quantization process to reduce quantization loss, using autoround as an example:
@@ -147,7 +147,7 @@ Required parameter explanation:
 To improve training efficiency, we provide training scripts under multi-card
 For multi-card environment, please refer to script [ptq_multi_npu](../../ptq_multi_npu.sh)
 
-For more detailed parameter explanation, please refer to [Parameter Description](../../../docs/zh/AMCT_Pytorch_LLM.md#35-ptq-parameters)
+For more detailed parameter explanation, please refer to [Parameter Description](../../../docs/zh/AMCT_Pytorch_LLM.md#35-ptq-参数)
 
 ### Direct Conversion Quantization Accuracy Evaluation Based on Post-Training Quantization
 After completing PTQ, add quantization algorithm in direct conversion quantization accuracy evaluation, compare with baseline test and direct conversion quantization accuracy without quantization algorithm, verify quantization algorithm effectiveness:
