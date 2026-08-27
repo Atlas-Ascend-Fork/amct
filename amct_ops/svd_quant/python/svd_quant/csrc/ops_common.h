@@ -181,10 +181,8 @@ inline aclTensor *ConvertType(const TensorWrapper &tensor_r) {
     if (!at_tensor.defined())
         return nullptr;
 
-    TORCH_CHECK(torch_npu::utils::is_npu(at_tensor),
-        "Expected all tensors to be on the same device. "
-        "Expected NPU tensor, please check whether the input tensor device is correct.",
-        OPS_ERROR(ErrCode::TYPE));
+    TORCH_CHECK(torch_npu::utils::is_npu(at_tensor), "Expected an NPU tensor, but got a tensor on ", at_tensor.device(),
+        ".", OPS_ERROR(ErrCode::TYPE));
 
     aclDataType acl_data_type = tensor_r.dtype;
     c10::SmallVector<int64_t, MAX_DIM_NUM> storageDims;
@@ -197,8 +195,8 @@ inline aclTensor *ConvertType(const TensorWrapper &tensor_r) {
         format = torch_npu::NPUBridge::GetNpuStorageImpl(at_tensor)->npu_desc_.npu_format_;
         // if acl_data_type is ACL_STRING, storageDims is empty.
         if (acl_data_type != ACL_STRING) {
-            TORCH_CHECK(
-                at_tensor.itemsize() > 0, "the itemsize of tensor must be greater than 0.", OPS_ERROR(ErrCode::VALUE));
+            TORCH_CHECK(at_tensor.itemsize() > 0, "tensor item size must be greater than 0, but got ",
+                at_tensor.itemsize(), OPS_ERROR(ErrCode::VALUE));
             storageDims = torch_npu::NPUBridge::GetNpuStorageImpl(at_tensor)->npu_desc_.storage_sizes_;
         }
     } else {
@@ -210,8 +208,8 @@ inline aclTensor *ConvertType(const TensorWrapper &tensor_r) {
         }
         // if acl_data_type is ACL_STRING, storageDims is empty.
         if (acl_data_type != ACL_STRING) {
-            TORCH_CHECK(
-                at_tensor.itemsize() > 0, "the itemsize of tensor must be greater than 0.", OPS_ERROR(ErrCode::VALUE));
+            TORCH_CHECK(at_tensor.itemsize() > 0, "tensor item size must be greater than 0, but got ",
+                at_tensor.itemsize(), OPS_ERROR(ErrCode::VALUE));
             storageDims.push_back(at_tensor.storage().nbytes() / at_tensor.itemsize());
         }
     }
