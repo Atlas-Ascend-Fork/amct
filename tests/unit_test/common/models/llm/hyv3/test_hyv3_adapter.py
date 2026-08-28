@@ -516,11 +516,11 @@ def test_hyv3_generate_tensorwise_quant_layers():
     assert "model.layers.1.mlp.experts.0.gate_proj" in layers
     assert "model.layers.1.mlp.experts.1.down_proj" in layers
     assert "model.layers.1.mlp.shared_mlp.gate_proj" in layers
-    # Layer 2 (nextn predict): experts (with bit=8) + shared_mlp
+    # Layer 2 (nextn predict): experts follow the routed-expert bit policy.
     assert "model.layers.2.mlp.experts.0.gate_proj" in layers
     assert layers["model.layers.1.mlp.experts.0.gate_proj"] == 4
-    # Next-token prediction layers force routed experts to 8-bit.
-    assert layers["model.layers.2.mlp.experts.0.gate_proj"] == 8
+    # Next-token prediction layers follow the routed-expert bit policy.
+    assert layers["model.layers.2.mlp.experts.0.gate_proj"] == 4
 
 
 def test_hyv3_generate_tensorwise_mlp_layers_only():
