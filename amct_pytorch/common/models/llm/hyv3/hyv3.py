@@ -219,4 +219,11 @@ class HyV3(BaseModel):
                 "symmetric": "True",
             }
         }
+        if self.quant_dtype == "mxfp":
+            scheme.update(
+                {
+                    "quant_method": "mxfp8",
+                    "activation_scheme": "dynamic",
+                }
+            )
         return scheme

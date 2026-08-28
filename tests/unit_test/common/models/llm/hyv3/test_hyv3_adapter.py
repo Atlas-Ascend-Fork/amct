@@ -487,6 +487,17 @@ def test_hyv3_cache_scheme_float():
     assert scheme["kv_cache_scheme"]["type"] == "float"
 
 
+def test_hyv3_cache_scheme_mxfp():
+    stub = _stub_hyv3()
+    stub.quant_dtype = "mxfp"
+
+    scheme = stub.cache_scheme()
+
+    assert scheme["kv_cache_scheme"]["type"] == "float"
+    assert scheme["quant_method"] == "mxfp8"
+    assert scheme["activation_scheme"] == "dynamic"
+
+
 def test_hyv3_bits_scheme():
     stub = _stub_hyv3()
     result = stub.bits_scheme()
