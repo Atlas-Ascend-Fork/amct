@@ -8,14 +8,14 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-set +e
+set -euo pipefail
 
 REPOSITORY_NAME="amct"
 sudo update-alternatives --set gcc /usr/bin/gcc-14
 export PATH=/opt/buildtools/python-3.10.2/bin:$PATH
 gcc --version
 
-if [ -z "${ASCEND_3RD_LIB_PATH}" ]; then
+if [ -z "${ASCEND_3RD_LIB_PATH:-}" ]; then
     export ASCEND_3RD_LIB_PATH=/home/jenkins/opensource
 fi
 
@@ -49,7 +49,8 @@ DP_ASSERT_EQUAL()
 
 LOG_HEAD "Start run c++ testcase"
 cd ${WORKSPACE}/ || exit 1
-LOG_DO bash build.sh -u --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH}
-DP_ASSERT_EQUAL "$?" "0" "Run UT TESTCASE"
+ut_status=0
+LOG_DO bash build.sh -u --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} || ut_status=$?
+DP_ASSERT_EQUAL "${ut_status}" "0" "Run UT TESTCASE"
 
 echo "ut_process=ut_cov" >> "${ATOMGIT_OUTPUT}"

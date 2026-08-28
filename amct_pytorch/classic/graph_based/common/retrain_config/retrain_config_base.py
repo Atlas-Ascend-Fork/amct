@@ -469,7 +469,7 @@ class RetrainConfigBase:
         proto.check_field(self.enable_retrain, self.enable_prune)
 
         # Step2: check not support layers and not support types
-        # check gloabl
+        # check global
         self._check_proto_global(proto, retrain_layers.get('support_layers'))
         # check retrain
         if self.enable_retrain:
@@ -522,13 +522,13 @@ def check_dst_type_legal(layer_data_config, layer_weight_config):
         if not layer_data_config.get(DST_TYPE):
             LOGGER.logw(
                 "dst_type of RetrainDataQuantConfig was not given in config, "
-                "and was set to 'INT8' by defualt!",
+                "and was set to 'INT8' by default!",
                 module_name=_MODULE_NAME,
             )
         if not layer_weight_config.get(DST_TYPE):
             LOGGER.logw(
                 "dst_type of RetrainWeightQuantConfig was not given in config, "
-                "and was set to 'INT8' by defualt!",
+                "and was set to 'INT8' by default!",
                 module_name=_MODULE_NAME,
             )
         error_info = (

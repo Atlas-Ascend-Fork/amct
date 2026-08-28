@@ -77,7 +77,7 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
             )
 
         if isinstance(object_module, deploy_ops[0]):
-            LOGGER.logd(f'{module_type.__name__} do not need to invoke convert')
+            LOGGER.logd(f'{module_type.__name__} does not need to invoke convert')
             return
 
         if (

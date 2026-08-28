@@ -50,7 +50,7 @@ class Net001(nn.Module):
     conv + bn
     conv(with bias) + bn
     depthwise_conv + bn
-    depthwise_conv(with bais) + bn
+    depthwise_conv(with bias) + bn
     group_conv + bn
     group_conv(bias) + bn
     fc + bn
@@ -194,7 +194,7 @@ class TestTaylorLossSensitivity(unittest.TestCase):
                 test_iteration=100,
             )
         except Exception as e:
-            logger.info('[Exception]test_sensitivity_param_error:', e)
+            logger.debug('[Exception]test_sensitivity_param_error: %s', e)
             self.assertTrue(True)
 
     def test_get_sensitivity(self):

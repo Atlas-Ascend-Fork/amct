@@ -640,7 +640,7 @@ class DeepseekV3Attention(nn.Module):
         if layer_idx is None:
             logger.warning_once(
                 f"Instantiating {self.__class__.__name__} without passing `layer_idx` is not recommended and will "
-                "to errors during the forward call, if caching is used. Please make sure to provide a `layer_idx` "
+                "lead to errors during the forward call if caching is used. Please make sure to provide a `layer_idx` "
                 "when creating this class."
             )
 
@@ -767,7 +767,7 @@ class DeepseekV3Attention(nn.Module):
         if "padding_mask" in kwargs:
             warnings.warn(
                 "Passing `padding_mask` is deprecated and will be removed in v4.37. "
-                "Please make sure use `attention_mask` instead.`"
+                "Please make sure to use `attention_mask` instead."
             )
         bsz, q_len, _ = hidden_states.size()
 
@@ -899,7 +899,7 @@ class DeepseekV3FlashAttention2(DeepseekV3Attention):
         if "padding_mask" in kwargs:
             warnings.warn(
                 "Passing `padding_mask` is deprecated and will be removed in v4.37. "
-                "Please make sure use `attention_mask` instead.`"
+                "Please make sure to use `attention_mask` instead."
             )
 
             # overwrite attention_mask with padding_mask
@@ -991,9 +991,9 @@ class DeepseekV3FlashAttention2(DeepseekV3Attention):
                 )
 
             logger.warning_once(
-                f"The input hidden states seems to be silently casted in float32, this might be related to"
-                f" the fact you have upcasted embedding or layer norm layers in float32. We will cast back the input in"
-                f" {target_dtype}."
+                f"The input hidden states seem to be silently cast to float32. This might be related to"
+                f" the fact that you have upcast the embedding or layer norm layers to float32. We will cast the input"
+                f" back to {target_dtype}."
             )
 
             query_states = query_states.to(target_dtype)
@@ -1230,7 +1230,7 @@ class DeepseekV3DecoderLayer(nn.Module):
         if "padding_mask" in kwargs:
             warnings.warn(
                 "Passing `padding_mask` is deprecated and will be removed in v4.37. "
-                "Please make sure use `attention_mask` instead.`"
+                "Please make sure to use `attention_mask` instead."
             )
         residual = hidden_states
 
@@ -1310,50 +1310,50 @@ DeepseekV3_INPUTS_DOCSTRING = r"""
         input_ids (`torch.LongTensor` of shape `(batch_size, sequence_length)`):
             Indices of input sequence tokens in the vocabulary. Padding will be ignored by default should you provide
             it.
-            
+
             Indices can be obtained using [`AutoTokenizer`]. See [`PreTrainedTokenizer.encode`] and
             [`PreTrainedTokenizer.__call__`] for details.
-            
+
             [What are input IDs?](../glossary#input-ids)
         attention_mask (`torch.Tensor` of shape `(batch_size, sequence_length)`, *optional*):
             Mask to avoid performing attention on padding token indices. Mask values selected in `[0, 1]`:
-            
+
             - 1 for tokens that are **not masked**,
             - 0 for tokens that are **masked**.
-            
+
             [What are attention masks?](../glossary#attention-mask)
-            
+
             Indices can be obtained using [`AutoTokenizer`]. See [`PreTrainedTokenizer.encode`] and
             [`PreTrainedTokenizer.__call__`] for details.
-            
+
             If `past_key_values` is used, optionally only the last `input_ids` have to be input (see
             `past_key_values`).
-            
+
             If you want to change padding behavior, you should read [`modeling_opt._prepare_decoder_attention_mask`]
             and modify to your needs. See diagram 1 in [the paper](https://arxiv.org/abs/1910.13461) for more
             information on the default strategy.
-            
+
             - 1 indicates the head is **not masked**,
             - 0 indicates the head is **masked**.
         position_ids (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
             Indices of positions of each input sequence tokens in the position embeddings. Selected in the range `[0,
             config.n_positions - 1]`.
-            
+
             [What are position IDs?](../glossary#position-ids)
         past_key_values (`Cache` or `tuple(tuple(torch.FloatTensor))`, *optional*):
             Pre-computed hidden-states (key and values in the self-attention blocks and in the cross-attention
             blocks) that can be used to speed up sequential decoding. This typically consists in the `past_key_values`
             returned by the model at a previous stage of decoding, when `use_cache=True` or `config.use_cache=True`.
-            
+
             Two formats are allowed:
             - a [`~cache_utils.Cache`] instance;
             - Tuple of `tuple(torch.FloatTensor)` of length `config.n_layers`, with each tuple having 2 tensors of
             shape `(batch_size, num_heads, sequence_length, embed_size_per_head)`). This is also known as the legacy
             cache format.
-            
+
             The model will output the same cache format that is fed as input. If no `past_key_values` are passed, the
             legacy cache format will be returned.
-            
+
             If `past_key_values` are used, the user can optionally input only the last `input_ids` (those that don't
             have their past key value states given to this model) of shape `(batch_size, 1)` instead of all `input_ids`
             of shape `(batch_size, sequence_length)`.
@@ -1695,7 +1695,7 @@ class DeepseekV3ForCausalLM(DeepseekV3PreTrainedModel):
 
             # Keep only the unprocessed tokens:
             # 1 - If the length of the attention_mask exceeds the length of input_ids, then we are in a setting where
-            # some of the inputs are exclusivelly passed as part of the cache (e.g. when passing input_embeds as
+            # some of the inputs are exclusively passed as part of the cache (e.g. when passing input_embeds as
             # input)
             if (
                 attention_mask is not None

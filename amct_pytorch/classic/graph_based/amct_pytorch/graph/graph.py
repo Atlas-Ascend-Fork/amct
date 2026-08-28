@@ -224,7 +224,7 @@ class Graph(GraphBase):  # pylint: disable=no-member
                     )
                 if delete_node.get_output_anchor(0).get_peer_input_anchor():
                     LOGGER.logd(
-                        'Node "%s" still connect to other node, cannot'
+                        'Node "%s" still connect to other node, cannot '
                         "remove it now." % (delete_node.name)
                     )
                     return
@@ -360,7 +360,8 @@ class Graph(GraphBase):  # pylint: disable=no-member
                 LOGGER.logd('"%s" is unique in graph.' % (new_name), MODULE_NAME)
             else:
                 LOGGER.logd(
-                    '"%s" already exist in graph, may be reused module.' % (new_name),
+                    '"%s" already exists in the graph and may be a reused module.'
+                    % (new_name),
                     MODULE_NAME,
                 )
                 node.set_attr('is_reuse', True)

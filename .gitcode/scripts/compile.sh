@@ -8,12 +8,12 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-set +e
+set -euo pipefail
 
 REPOSITORY_NAME="amct"
 echo $(grep -E "^VERSION_ID=" /etc/os-release | cut -d'"' -f2)
 export PATH=/opt/buildtools/python-3.10.2/bin:$PATH
-if [[ "${task_name}" == *ubuntu24* ]]; then
+if [[ "${task_name:-}" == *ubuntu24* ]]; then
     sudo update-alternatives --set gcc /usr/bin/gcc-14
 else
     if [[ -f "/opt/rh/devtoolset-7/enable" ]]; then
@@ -23,11 +23,11 @@ else
 fi
 gcc --version
 
-if [ -z "${ASCEND_3RD_LIB_PATH}" ]; then
+if [ -z "${ASCEND_3RD_LIB_PATH:-}" ]; then
     export ASCEND_3RD_LIB_PATH=/home/jenkins/opensource
 fi
 
-if [ -z "${OS_TYPE}" ]; then
+if [ -z "${OS_TYPE:-}" ]; then
     OS_TYPE=$(uname -m)
 fi
 
@@ -59,7 +59,7 @@ DP_ASSERT_EQUAL()
     fi
 }
 
-if [[ "${task_name}" =~ Compile_Ascend_X86_ubuntu24 ]]; then
+if [[ "${task_name:-}" =~ Compile_Ascend_X86_ubuntu24 ]]; then
     sed -i "1i set(CMAKE_EXPORT_COMPILE_COMMANDS ON)" "CMakeLists.txt"
     echo "api-check=compile" >> "${ATOMGIT_OUTPUT}"
 else
@@ -69,24 +69,25 @@ fi
 LOG_HEAD "Build ${REPOSITORY_NAME}."
 cd ${WORKSPACE}/ || exit 1
 echo "------------------"
-echo "${GIT_TARGET_BRANCH}"
-if [ "${GE_ST_RT2}X" == "torchX" ];then
-    if [ "${GIT_TARGET_BRANCH}" = "feature/community-tasks" ];then
+echo "${GIT_TARGET_BRANCH:-}"
+build_status=0
+if [ "${GE_ST_RT2:-}X" == "torchX" ];then
+    if [ "${GIT_TARGET_BRANCH:-}" = "feature/community-tasks" ];then
         LOG_HEAD "not need build"
         mkdir -p build_out
         touch ${WORKSPACE}/build_out/cann-amct.tar.gz
         exit 0
     else
-        LOG_DO bash build.sh --torch --cann_3rd_lib_path="${ASCEND_3RD_LIB_PATH}"
+        LOG_DO bash build.sh --torch --cann_3rd_lib_path="${ASCEND_3RD_LIB_PATH}" || build_status=$?
     fi
 else
-    if [ "${GIT_TARGET_BRANCH}" = "feature/community-tasks" ];then
+    if [ "${GIT_TARGET_BRANCH:-}" = "feature/community-tasks" ];then
         LOG_HEAD "not need build"
         mkdir -p build_out
         touch ${WORKSPACE}/build_out/cann-amct.tar.gz
         exit 0
     else
-        LOG_DO bash build.sh --pkg --cann_3rd_lib_path="/home/jenkins/opensource"
+        LOG_DO bash build.sh --pkg --cann_3rd_lib_path="/home/jenkins/opensource" || build_status=$?
     fi
 fi
-DP_ASSERT_EQUAL "$?" "0" "Build amct failed"
+DP_ASSERT_EQUAL "${build_status}" "0" "Build amct failed"
