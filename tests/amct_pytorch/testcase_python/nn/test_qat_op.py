@@ -636,6 +636,20 @@ class TestLinearQAT(unittest.TestCase):
         ):
             LinearQAT(4, 3, config=config)
 
+    def test_linear_qat_int4_multidimensional_weight_checks_out_features(self):
+        config = {
+            RETRAIN_DATA_CONFIG: {'dst_type': 'INT8'},
+            'retrain_weight_config': {'dst_type': 'INT8', 'channel_wise': True},
+        }
+        mod = LinearQAT(4, 4, config=config)
+        mod.retrain_weight_config['dst_type'] = 'INT4'
+        mod.weight = torch.nn.Parameter(torch.randn(4, 2, 3))
+        self.assertTrue(mod.check_quantifiable())
+
+        mod.weight = torch.nn.Parameter(torch.randn(3, 2, 4))
+        with self.assertRaisesRegex(ValueError, r'out_features.*odd'):
+            mod.check_quantifiable()
+
     def test_linear_qat_int4_odd_in_features_is_supported(self):
         config = {
             'retrain_weight_config': {

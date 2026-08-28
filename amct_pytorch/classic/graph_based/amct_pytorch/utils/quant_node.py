@@ -244,7 +244,7 @@ class QuantOpInfo:
                 ):
                     cout_length = tensor.dims[0]
                 else:
-                    cout_length = tensor.dims[1]
+                    cout_length = tensor.dims[-1]
             elif node.type == 'Gemm':
                 attr_helper = AttributeProtoHelper(node.proto)
                 if (

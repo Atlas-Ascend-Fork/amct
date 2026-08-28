@@ -74,6 +74,19 @@ class TestWeightFakequantModulePass(unittest.TestCase):
 
         torch.testing.assert_close(fake_linear.sub_module.weight, original_weight)
 
+    def test_linear_offset_broadcasts_for_multidimensional_weight(self):
+        model = LinearModel()
+        model.linear.weight = torch.nn.Parameter(
+            torch.arange(24, dtype=torch.float32).reshape(4, 2, 3)
+        )
+        records = self._records()
+        original_weight = model.linear.weight.detach().clone()
+        fake_linear = FakeQuantizedLinear(model.linear, records['linear'], 'linear', 8)
+
+        WeightFakequantModulePass(records, 8).do_pass(model, fake_linear, 'linear')
+
+        torch.testing.assert_close(fake_linear.sub_module.weight, original_weight)
+
 
 if __name__ == '__main__':
     unittest.main()

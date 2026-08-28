@@ -130,6 +130,10 @@ class TestQuantOpInfo(unittest.TestCase):
         with mock.patch.object(QuantOpInfo, 'get_weight_tensor', return_value=weight):
             self.assertEqual(QuantOpInfo.get_scale_shape(node, True), ([4], 4))
 
+        weight.dims = [2, 3, 4]
+        with mock.patch.object(QuantOpInfo, 'get_weight_tensor', return_value=weight):
+            self.assertEqual(QuantOpInfo.get_scale_shape(node, True), ([4], 4))
+
         weight.dims = [4, 3]
         node.has_attr.return_value = True
         node.get_attr.return_value = True

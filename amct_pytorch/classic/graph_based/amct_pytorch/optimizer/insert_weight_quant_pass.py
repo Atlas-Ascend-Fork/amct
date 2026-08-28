@@ -80,23 +80,26 @@ class InsertWeightQuantPass(BaseFusionPass):
         if object_node.type == 'ConvTranspose':
             group = get_deconv_group(object_node)
             weight = adjust_deconv_weight_shape(group, weight)
-        transpose_weight = object_node.type == 'MatMul' and not (
+        weight_quant_axis = 0
+        if object_node.type == 'MatMul' and not (
             object_node.has_attr('with_weights_trans')
             and object_node.get_attr('with_weights_trans')
-        )
+        ):
+            weight_quant_axis = -1
         if object_node.type == 'Gemm':
             attr_helper = AttributeProtoHelper(object_node.proto)
-            transpose_weight = (
+            if (
                 not attr_helper.has_attr('transB')
                 or attr_helper.get_attr_value('transB') == 0
-            )
-        if transpose_weight:
-            weight = weight.transpose(1, 0)
+            ):
+                weight_quant_axis = 1
+        if weight_quant_axis != 0:
+            weight = np.moveaxis(weight, weight_quant_axis, 0)
         scale_w = self.records.get(object_node.name).get('weight_scale')
         offset_w = self.records.get(object_node.name).get('weight_offset')
         quant_weight = weight_quant_np(weight, scale_w, offset_w, num_bits)
-        if transpose_weight:
-            quant_weight = quant_weight.transpose(1, 0)
+        if weight_quant_axis != 0:
+            quant_weight = np.moveaxis(quant_weight, 0, weight_quant_axis)
         if object_node.type == 'ConvTranspose':
             group = get_deconv_group(object_node)
             quant_weight = adjust_deconv_weight_shape(group, quant_weight)

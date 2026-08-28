@@ -159,6 +159,45 @@ class TestWeightQuantPass(unittest.TestCase):
             np.array([[1, 1, 1, 1], [2, 2, 2, 2]], dtype=np.int8),
         )
 
+    def test_matmul_multidimensional_weight_quantizes_per_output_channel(self):
+        weight = np.stack(
+            [
+                np.full((2, 3), 1, dtype=np.float32),
+                np.full((2, 3), 10, dtype=np.float32),
+                np.full((2, 3), 100, dtype=np.float32),
+                np.full((2, 3), 1000, dtype=np.float32),
+            ],
+            axis=-1,
+        )
+        model = helper.make_model(
+            helper.make_graph(
+                [
+                    helper.make_node(
+                        'MatMul', ['inputs', 'weight'], ['output'], name='linear'
+                    )
+                ],
+                'linear_graph',
+                [helper.make_tensor_value_info('inputs', TensorProto.FLOAT, [1, 2, 3])],
+                [helper.make_tensor_value_info('output', TensorProto.FLOAT, None)],
+                [numpy_helper.from_array(weight, name='weight')],
+            )
+        )
+        graph = Graph(model)
+        node = graph.get_node_by_name('linear')
+        records = {
+            'linear': {
+                'weight_scale': np.array([1, 10, 100, 1000], dtype=np.float32),
+                'weight_offset': np.zeros(4, dtype=np.int8),
+                'wts_type': 'INT8',
+            }
+        }
+
+        InsertWeightQuantPass(records).do_pass(graph, node)
+
+        quantized = TensorProtoHelper(graph.get_node_by_name('weight').proto).get_data()
+        self.assertEqual(list(quantized.shape), [2, 3, 4])
+        np.testing.assert_array_equal(quantized, np.ones((2, 3, 4), dtype=np.int8))
+
     def test_matmul_transposed_weight_quantizes_per_output_channel(self):
         weight = np.array(
             [[1, 2], [10, 20], [100, 200], [1000, 2000]], dtype=np.float32

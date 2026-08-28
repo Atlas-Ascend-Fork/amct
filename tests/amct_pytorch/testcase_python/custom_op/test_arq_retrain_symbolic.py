@@ -53,11 +53,13 @@ def _make_inputs(
     channel_wise=False,
     out_channels=4,
     scale_count=None,
+    weight_shape=(4, 4),
 ):
     module = mock.MagicMock()
     module.hidden_size = hidden_size
     module.out_channels = out_channels
     module.wts_scales = torch.ones(out_channels if scale_count is None else scale_count)
+    module.weight = torch.randn(*weight_shape)
     # symbolic reads positional args tensor, scale, offset, wts_param, zero_point
     wts_param = {
         "module_type": module_type,
@@ -65,7 +67,7 @@ def _make_inputs(
         "num_bits": num_bits,
         "channel_wise": channel_wise,
     }
-    tensor = torch.randn(4, 4)
+    tensor = module.weight
     scale = module.wts_scales
     offset = torch.zeros(1)
     zero_point = torch.zeros(1)
@@ -129,6 +131,22 @@ class TestArqRetrainSymbolic(unittest.TestCase):
         self.assertEqual(calls[1].kwargs['axis_i'], 1)
         self.assertEqual(calls[1].kwargs['output_dtype_i'], TensorProto.INT4)
         self.assertEqual(len(calls[1].args), 3)
+
+    def test_int4_linear_multidimensional_weight_swaps_first_two_axes(self):
+        g = _make_graph()
+        inputs = _make_inputs(
+            'Linear',
+            num_bits=4,
+            channel_wise=True,
+            weight_shape=(4, 2, 3),
+        )
+        with _export_opset(21):
+            ArqRetrainFuncQAT.symbolic(g, *inputs)
+
+        calls = g.op.call_args_list
+        self.assertEqual(calls[0].kwargs['perm_i'], [1, 0, 2])
+        self.assertEqual(calls[3].kwargs['perm_i'], [1, 0, 2])
+        self.assertEqual(calls[1].kwargs['axis_i'], 1)
 
     def test_int4_linear_per_tensor_has_no_transpose_or_zero_point(self):
         g = _make_graph()

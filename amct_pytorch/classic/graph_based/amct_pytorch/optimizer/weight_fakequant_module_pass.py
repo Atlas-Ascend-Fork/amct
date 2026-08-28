@@ -96,7 +96,11 @@ class WeightFakequantModulePass(BaseModuleFusionPass):
                 reshaped_weight_shape
             )
         elif type(object_module).__name__ == FAKE_LINEAR:
-            weight_offset = weight_offset.astype(np.float32).reshape([-1, 1])
+            reshaped_weight_shape = [1] * len(object_module.sub_module.weight.shape)
+            reshaped_weight_shape[0] = -1
+            weight_offset = weight_offset.astype(np.float32).reshape(
+                reshaped_weight_shape
+            )
 
         int9_weight = int8_weight.astype(np.float32) - weight_offset
         if type(object_module).__name__ == FAKE_CONV_TRANSPOSE:

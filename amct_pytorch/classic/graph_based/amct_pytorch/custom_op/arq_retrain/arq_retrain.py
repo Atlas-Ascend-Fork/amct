@@ -132,11 +132,14 @@ class ArqRetrainFuncQAT(ArqRetrainFunction):
             if channel_axis is None:
                 out_node = add_qdq(g, inputs[0], inputs[1], inputs[4], num_bits)
             else:
-                transpose = g.op(TRANSPOSE, inputs[0], perm_i=[1, 0])
+                weight_dim = wts_param.get('module').weight.dim()
+                transpose_axes = list(range(weight_dim))
+                transpose_axes[0], transpose_axes[1] = 1, 0
+                transpose = g.op(TRANSPOSE, inputs[0], perm_i=transpose_axes)
                 dequant = add_qdq(
                     g, transpose, inputs[1], inputs[4], num_bits, channel_axis
                 )
-                out_node = g.op(TRANSPOSE, dequant, perm_i=[1, 0])
+                out_node = g.op(TRANSPOSE, dequant, perm_i=transpose_axes)
         elif module_type in RNN_TENSOR_NUM:
             shape = g.op(
                 "Constant",
