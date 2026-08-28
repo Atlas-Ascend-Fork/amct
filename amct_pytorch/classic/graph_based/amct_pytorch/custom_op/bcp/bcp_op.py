@@ -50,6 +50,7 @@ def check_params(
                 )
             )
             flag = False
+            continue
 
         cout_length = tensor_list[i].shape[prune_axis_list[i]]
         if cout_length < prune_group:
