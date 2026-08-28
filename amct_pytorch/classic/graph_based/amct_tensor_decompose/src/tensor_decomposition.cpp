@@ -364,12 +364,12 @@ TdError TensorDecomposition::EVBMF(unsigned int &resultOut, int sizeL, int sizeM
  * 调整EVBMF估计得到的秩，使之能被divisor整除。
  * 结果存入newV。
  */
-TdError TensorDecomposition::MakeDivisible(unsigned int &newV, int rank, int divisor, int minVal) {
-    if (TensorDecomposition::CheckScalar(rank, true) && TensorDecomposition::CheckScalar(divisor, true) &&
-        TensorDecomposition::CheckScalar(minVal, true) && (divisor != 0)) {
-        newV = max(minVal, (static_cast<int>(rank + divisor / 2) / divisor) * divisor); // get new value 2
+TdError TensorDecomposition::MakeDivisible(unsigned int &newV, int rank, int divisior, int minVal) {
+    if (TensorDecomposition::CheckScalar(rank, true) && TensorDecomposition::CheckScalar(divisior, true) &&
+        TensorDecomposition::CheckScalar(minVal, true) && (divisior != 0)) {
+        newV = max(minVal, (static_cast<int>(rank + divisior / 2) / divisior) * divisior); // get new value 2
         if (newV < 0.9 * rank) {                                                        // divide rule 0.9
-            newV += divisor;
+            newV += divisior;
         }
         return TdError::TD_SUCCESS;
     } else {
