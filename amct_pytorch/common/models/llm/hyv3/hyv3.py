@@ -161,7 +161,7 @@ class HyV3(BaseModel):
             if "moe" in quant_targets:
                 for j in range(num_experts):
                     for n in self.MLP_LINEAR_NAMES:
-                        bit = bit_policy["moe.routed"][n].w if i < num_hidden_layers else 8
+                        bit = bit_policy["moe.routed"][n].w
                         quant_layers[f"model.layers.{i}.mlp.experts.{j}.{n}"] = bit
                 for n in self.MLP_LINEAR_NAMES:
                     bit = bit_policy["moe.shared"][n].w
