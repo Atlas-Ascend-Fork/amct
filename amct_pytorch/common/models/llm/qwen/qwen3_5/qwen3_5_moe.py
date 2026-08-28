@@ -40,6 +40,7 @@ from amct_pytorch.quantization.modules.quant_linear import QuantLinear
     name="qwen3_5_moe",
     task="llm",
     family="qwen",
+    model_type="qwen3_5_moe",
     description="Qwen3.5 moe model adapter",
 )
 class Qwen3_5Moe(Qwen3_5):

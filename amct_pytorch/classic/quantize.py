@@ -39,19 +39,62 @@ from amct_pytorch.common.utils.log import LOGGER
 
 
 @check_params(
-    model=nn.Module, config=(dict, type(None)), quant_result_dir=(str, type(None))
+    model=(nn.Module, str),
+    config=(dict, type(None)),
+    quant_result_dir=(str, type(None)),
 )
 def quantize(model, config=None, quant_result_dir=None):
     """
     Function: Modify user's model for quantization
-    Parameter: model: user mode instance of Torch.nn.Module
-               config: simply config dict from user to set
-               quant_result_dir: optional path of an existing directory to persist
-                   the quant result artifact into. Unrelated files may coexist,
-                   but AMCT never overwrites its own result files. None (default)
-                   keeps the model in-memory only and writes nothing.
+    Parameter: model: user model instance for the full pipeline, or a local model
+                      directory path for the layerwise pipeline
+               config: simply config dict from user to set. config.pipeline may
+                   be "full" or "layerwise"; when omitted, model type selects
+                   "full" for nn.Module and "layerwise" for str.
+               quant_result_dir: full mode accepts an optional existing directory;
+                   None keeps the model in memory only. Layerwise mode treats it
+                   as the future artifact destination and defaults to
+                   "./quant_result"; later execution stages create the directory.
     Return: None
     """
+    selected_pipeline = _resolve_pipeline(model, config)
+    if selected_pipeline == 'layerwise':
+        if isinstance(model, nn.Module):
+            raise TypeError(
+                "pipeline='layerwise' requires model to be a local directory "
+                "path str, not an instantiated nn.Module."
+            )
+        return _quantize_layerwise(model, config, quant_result_dir)
+
+    if not isinstance(model, nn.Module):
+        raise TypeError(
+            "pipeline='full' with a model path is part of the final layerwise "
+            "design but is not implemented; currently pass an instantiated "
+            "nn.Module."
+        )
+    return _quantize_full(model, config, quant_result_dir)
+
+
+def _resolve_pipeline(model, config):
+    """Resolve config.pipeline, inferring the default from the model type."""
+    pipeline = None if config is None else config.get('pipeline')
+    if pipeline is not None and not isinstance(pipeline, str):
+        raise TypeError(
+            "config.pipeline must be 'full' or 'layerwise', got {}.".format(
+                type(pipeline).__name__
+            )
+        )
+    if pipeline is None:
+        return 'layerwise' if isinstance(model, str) else 'full'
+    if pipeline not in ('full', 'layerwise'):
+        raise ValueError(
+            "config.pipeline must be 'full' or 'layerwise', got {!r}.".format(pipeline)
+        )
+    return pipeline
+
+
+def _quantize_full(model, config, quant_result_dir):
+    """Original Classic implementation, isolated so its call path stays stable."""
     if config is None:
         config = set_default_config()
 
@@ -78,6 +121,20 @@ def quantize(model, config=None, quant_result_dir=None):
         _finalize_quant_result(model, writer)
 
 
+
+def _quantize_layerwise(model_path, config, quant_result_dir):
+    """Build the Week 5 hand-off; Extract and PTQ are added in later slices."""
+    from amct_pytorch.classic.layerwise import prepare_layerwise_quantization
+
+    plan = prepare_layerwise_quantization(model_path, config, quant_result_dir)
+    raise NotImplementedError(
+        "pipeline='layerwise' preparation succeeded for adapter '{}' and target "
+        "'{}', but Extract/PTQ execution is not connected to the Classic entry "
+        "yet.".format(plan.args.model_name, plan.args.quant_target[0])
+    )
+
+
+D
 def _check_quant_result_algorithms(model, layer_config):
     """Screen selected registered quant classes before writing any files.
 

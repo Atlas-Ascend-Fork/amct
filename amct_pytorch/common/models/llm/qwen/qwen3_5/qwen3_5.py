@@ -44,6 +44,7 @@ from amct_pytorch.common.models.llm.qwen.qwen3_5.quant_module import (
     name="qwen3_5",
     task="llm",
     family="qwen",
+    model_type="qwen3_5",
     description="Qwen3.5 dense model adapter",
 )
 class Qwen3_5(BaseModel):

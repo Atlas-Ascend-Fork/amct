@@ -30,6 +30,7 @@ from amct_pytorch.common.models import MODEL_REGISTRY
     name="longcat_next",
     task="llm",
     family="longcat",
+    model_type="longcat_next",
     description="LongCat-Next model adapter",
 )
 class LongcatNext(LongcatLite):

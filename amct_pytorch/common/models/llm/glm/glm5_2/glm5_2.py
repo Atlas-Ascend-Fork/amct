@@ -45,6 +45,7 @@ from amct_pytorch.quantization.modules.quant_linear import QuantLinear
     name="glm5_2",
     task="llm",
     family="glm",
+    model_type="glm_moe_dsa",
     description="GLM-5.2 MoE DSA model adapter",
 )
 class GLM5_2(BaseModel):
