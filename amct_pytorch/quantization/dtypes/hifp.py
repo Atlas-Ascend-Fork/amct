@@ -43,7 +43,9 @@ class QuantDequantHifp(torch.nn.Module):
             return dq.detach() + (x - x.detach())
         elif self.bits == 4:
             quant_dtype = (
-                x.dtype if x.dtype in (torch.float16, torch.bfloat16) else torch.bfloat16
+                x.dtype
+                if x.dtype in (torch.float16, torch.bfloat16)
+                else torch.bfloat16
             )
             dq = hifloat4_fake_quant(x.to(quant_dtype)).to(x.dtype)
             return dq.detach() + (x - x.detach())
