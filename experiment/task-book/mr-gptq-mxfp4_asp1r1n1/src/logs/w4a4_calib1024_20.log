@@ -1,0 +1,133 @@
+/opt/buildtools/Python-3.11.4/lib/python3.11/site-packages/torch_npu/utils/_path_manager.py:66: UserWarning: Permission mismatch: The owner of /opt/buildtools/Python-3.11.4/lib/python3.11/site-packages/torch_npu/lib/libop_plugin_atb.so does not match.
+  warnings.warn(f"Permission mismatch: The owner of {path} does not match.")
+Loading model: /mnt/workspace/models/Qwen3-8B (seqlen=4096, dtype=torch.float16, device_map=None)
+Skipping import of cpp extensions due to incompatible torch version. Please upgrade to torch >= 2.11.0 (found 2.7.1+cpu).
+Loading weights:   0%|          | 0/399 [00:00<?, ?it/s]Loading weights:  24%|██▍       | 97/399 [00:00<00:00, 963.89it/s]Loading weights:  49%|████▊     | 194/399 [00:00<00:00, 943.51it/s]Loading weights:  72%|███████▏  | 289/399 [00:00<00:00, 941.46it/s]Loading weights:  96%|█████████▌| 384/399 [00:00<00:00, 931.88it/s]Loading weights: 100%|██████████| 399/399 [00:00<00:00, 945.89it/s]
+[MR-GPTQ] 校准前向分块 = 每 32 块（与整块数学等价，仅降峰值显存以放大校准集）
+[MR-GPTQ] increments = {'hadamard': True, 'scale_fitting': True, 'act_reorder': False, 'act_quant': True, 'act_scale_fit': True, 'joint_comp': True, 'act_clip': False, 'weight_clip': False, 'act_fit_rowwise': False}
+[MR-GPTQ] Hadamard 块大小 = 4096（消融：>128 测更强旋转压离群值）
+[MR-GPTQ] W4A4 混合精度：以下层名子串的层保激活高精度 = ['down_proj', 'o_proj']
+[MR-GPTQ] 激活量化开启：W4A4（激活也 MXFP4）
+[cfg] skip_layers = ['lm_head']
+[transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (244153 > 131072). Running this sequence through the model will result in indexing errors
+[coverage] 量化 nn.Linear: 252/253 = 99.6%  (skip=['lm_head'])
+[memory] Linear 权重 16→4.25 bit；整体权重显存降低 = 67.4%
+2026-07-27 21:43:55,314 - INFO - [AMCT]:[Optimizer]: Do <class 'amct_pytorch.classic.optimizer.insert_quantize_op_pass.InsertQuantizeModulePass'>
+[calib] shape=(501, 512)  tokens=256512  最大 in_features=12288  样本/维度比=20.9:1
+/mnt/workspace/mrgptq/experiment/task-book/mr-gptq-mxfp4_asp1r1n1/src/mr_gptq_module.py:187: UserWarning: Cannot create tensor with interal format while allow_internel_format=False, tensor will be created with base format. (Triggered internally at ../torch_npu/csrc/aten/common/TensorFactories.cpp:340.)
+  L = torch.where(torch.isfinite(L), L, torch.zeros_like(L))  # 空块→0
+[MR-GPTQ] layer #  1  model.layers.0.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
+[MR-GPTQ]   ↳ done in 4.5s
+[MR-GPTQ] layer #  2  model.layers.0.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
+[MR-GPTQ]   ↳ done in 2.9s
+[MR-GPTQ] layer #  3  model.layers.0.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
+[MR-GPTQ]   ↳ done in 2.8s
+[MR-GPTQ] layer #  4  model.layers.0.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
+[MR-GPTQ]   ↳ done in 4.5s
+[MR-GPTQ] layer #  5  model.layers.0.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
+[MR-GPTQ]   ↳ done in 8.1s
+[MR-GPTQ] layer #  6  model.layers.0.mlp.up_proj  (in=4096, had=True, scale_fit=True)
+[MR-GPTQ]   ↳ done in 8.1s
+[MR-GPTQ] layer #  7  model.layers.0.mlp.down_proj  (in=12288, had=True, scale_fit=True)
+[MR-GPTQ]   ↳ done in 15.7s
+[MR-GPTQ] layer #  8  model.layers.1.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
+[MR-GPTQ]   ↳ done in 4.4s
+[MR-GPTQ] layer #  9  model.layers.1.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
+[MR-GPTQ]   ↳ done in 2.9s
+[MR-GPTQ] layer # 10  model.layers.1.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
+[MR-GPTQ]   ↳ done in 2.8s
+[MR-GPTQ] layer # 11  model.layers.1.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
+[MR-GPTQ]   ↳ done in 4.5s
+[MR-GPTQ] layer # 12  model.layers.1.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
+[MR-GPTQ]   ↳ done in 8.0s
+[MR-GPTQ] layer # 13  model.layers.1.mlp.up_proj  (in=4096, had=True, scale_fit=True)
+[MR-GPTQ]   ↳ done in 8.1s
+[MR-GPTQ] layer # 14  model.layers.1.mlp.down_proj  (in=12288, had=True, scale_fit=True)
+[MR-GPTQ]   ↳ done in 15.0s
+[MR-GPTQ] layer # 15  model.layers.2.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
+[MR-GPTQ]   ↳ done in 4.4s
+[MR-GPTQ] layer # 16  model.layers.2.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
+[MR-GPTQ]   ↳ done in 2.9s
+[MR-GPTQ] layer # 17  model.layers.2.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
+[MR-GPTQ]   ↳ done in 2.9s
+[MR-GPTQ] layer # 18  model.layers.2.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
+[MR-GPTQ]   ↳ done in 4.4s
+[MR-GPTQ] layer # 19  model.layers.2.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
+[MR-GPTQ]   ↳ done in 8.2s
+[MR-GPTQ] layer # 20  model.layers.2.mlp.up_proj  (in=4096, had=True, scale_fit=True)
+[MR-GPTQ]   ↳ done in 8.2s
+[MR-GPTQ] layer # 21  model.layers.2.mlp.down_proj  (in=12288, had=True, scale_fit=True)
+[MR-GPTQ]   ↳ done in 15.1s
+[MR-GPTQ] layer # 22  model.layers.3.self_attn.q_proj  (in=4096, had=True, scale_fit=True)
+[MR-GPTQ]   ↳ done in 4.3s
+[MR-GPTQ] layer # 23  model.layers.3.self_attn.k_proj  (in=4096, had=True, scale_fit=True)
+[MR-GPTQ]   ↳ done in 2.9s
+[MR-GPTQ] layer # 24  model.layers.3.self_attn.v_proj  (in=4096, had=True, scale_fit=True)
+[MR-GPTQ]   ↳ done in 3.0s
+[MR-GPTQ] layer # 25  model.layers.3.self_attn.o_proj  (in=4096, had=True, scale_fit=True)
+[MR-GPTQ]   ↳ done in 4.5s
+[MR-GPTQ] layer # 26  model.layers.3.mlp.gate_proj  (in=4096, had=True, scale_fit=True)
+[MR-GPTQ]   ↳ done in 8.1s
+[MR-GPTQ] layer # 27  model.layers.3.mlp.up_proj  (in=4096, had=True, scale_fit=True)
+[MR-GPTQ]   ↳ done in 8.0s
+[17184] [2026-07-27 21:53:04:601] torch_npu.memory: [ERROR] [17184] NPU out of memory. Tried to allocate 5.87 GiB (NPU 0; 61.27 GiB total capacity; 38.75 GiB already allocated; 38.75 GiB current active; 3.96 GiB free; 56.79 GiB reserved in total by PyTorch).If reserved memory is >> allocated memory try setting max_split_size_mb to avoid fragmentation.
+Traceback (most recent call last):
+  File "/mnt/workspace/mrgptq/experiment/task-book/mr-gptq-mxfp4_asp1r1n1/src/run_eval.py", line 161, in <module>
+    main()
+  File "/mnt/workspace/mrgptq/experiment/task-book/mr-gptq-mxfp4_asp1r1n1/src/run_eval.py", line 146, in main
+    calibrate(model, calib)
+  File "/opt/buildtools/Python-3.11.4/lib/python3.11/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/workspace/mrgptq/experiment/task-book/mr-gptq-mxfp4_asp1r1n1/src/eval_utils.py", line 189, in calibrate
+    model(calib[:, : model.seqlen].to(input_device(model)))
+  File "/opt/buildtools/Python-3.11.4/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/buildtools/Python-3.11.4/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/developer/.local/lib/python3.11/site-packages/transformers/utils/generic.py", line 907, in wrapper
+    output = func(self, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/developer/.local/lib/python3.11/site-packages/transformers/models/qwen3/modeling_qwen3.py", line 492, in forward
+    outputs: BaseModelOutputWithPast = self.model(
+                                       ^^^^^^^^^^^
+  File "/opt/buildtools/Python-3.11.4/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/buildtools/Python-3.11.4/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/developer/.local/lib/python3.11/site-packages/transformers/utils/generic.py", line 1036, in wrapper
+    output = func(self, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/developer/.local/lib/python3.11/site-packages/transformers/utils/output_capturing.py", line 252, in wrapper
+    outputs = func(self, *args, **kwargs)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/developer/.local/lib/python3.11/site-packages/transformers/models/qwen3/modeling_qwen3.py", line 424, in forward
+    hidden_states = decoder_layer(
+                    ^^^^^^^^^^^^^^
+  File "/home/developer/.local/lib/python3.11/site-packages/transformers/modeling_layers.py", line 93, in __call__
+    return super().__call__(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/buildtools/Python-3.11.4/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/buildtools/Python-3.11.4/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/developer/.local/lib/python3.11/site-packages/transformers/models/qwen3/modeling_qwen3.py", line 332, in forward
+    hidden_states = self.mlp(hidden_states)
+                    ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/buildtools/Python-3.11.4/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/buildtools/Python-3.11.4/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/developer/.local/lib/python3.11/site-packages/transformers/models/qwen3/modeling_qwen3.py", line 82, in forward
+    down_proj = self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))
+                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+torch.OutOfMemoryError: NPU out of memory. Tried to allocate 5.87 GiB (NPU 0; 61.27 GiB total capacity; 38.75 GiB already allocated; 38.75 GiB current active; 3.96 GiB free; 56.79 GiB reserved in total by PyTorch).If reserved memory is >> allocated memory try setting max_split_size_mb to avoid fragmentation.
+[ERROR] 2026-07-27-21:53:05 (PID:17184, Device:0, RankID:-1) ERR99999 UNKNOWN applicaiton exception

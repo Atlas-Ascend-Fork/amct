@@ -106,11 +106,10 @@ mr-gptq-mxfp4_asp1r1n1/
     ├── eval_utils.py       # 加载 / 校准 / PPL / 覆盖率与显存统计
     ├── data.py             # WikiText2 / pile 数据集加载
     ├── run_ablations.sh    # 消融批跑（分组 / 断点续跑 / 自动汇总）
-    ├── run_night.sh        # 夜间队列（测量分辨率复测与 35B W4A4）
-    └── logs/               # 运行日志输出目录（内容不随 MR 上传）
+    └── run_night.sh        # 夜间队列（测量分辨率复测与 35B W4A4）
 ```
 
-> **关于日志文件**：`src/logs/` 下的运行日志按评审要求不纳入提交。
+> **关于日志文件**：运行日志按评审要求不纳入提交（批跑脚本会在 `src/logs/` 下自行创建）。
 > 各文档中出现的 `xxx.log` 是**运行标识**，用于标注每个数值出自哪一次运行、
 > 便于按上文命令复现，不指向仓内文件。所有被引用的数值均已在文档正文中列出。
 
@@ -202,6 +201,6 @@ HuggingFace 模型仓内的 `modeling_*.py` / `tokenization_*.py` 等自定义�
 设计文档、算法代码与自验证报告**统一由单个 PR 交付**：分支 `feat/mr-gptq-impl` →
 `cann/amct:feature/community-tasks`，目录 `experiment/task-book/mr-gptq-mxfp4_asp1r1n1/`。
 
-- 交付 #1 自测用例 / 测试报告 / 步骤文档 → `docs/self-verification-report.md`（§3 为可复现步骤）、`src/logs/`
+- 交付 #1 自测用例 / 测试报告 / 步骤文档 → `docs/self-verification-report.md`（§3 为可复现步骤）
 - 交付 #2 算法代码 → `src/`（核心为 `mr_gptq_module.py`）
 - 交付 #3 设计文档 → `docs/design.md`
