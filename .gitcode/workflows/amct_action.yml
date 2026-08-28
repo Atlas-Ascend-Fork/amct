@@ -36,20 +36,13 @@ stages:
       JOB_image:
         name: Test_image
         steps:
-          - name: Specify CI_REPO
-            run: |
-              set -e
-              comment="${{ env.comment }}"
-              ci_branch=(echo "$comment" | sed -n 's/.*@\([^ ]*\).*/\1/p')
-              echo "ci_branch=$ci_branch" >> $ATOMGIT_ENV
           - name: revise_image
             identifier: revise_image
             uses: cann/.gitcode/actions/revise-img@master
             with:
               repo_name: ${{ env.repo_name }}
               target_branch: ${{ env.TARGET_BRANCH }}
-              repo_url: ${{ vars.CI_PATH }}
-              ci_branch: ${{ env.ci_branch }}
+              comment: ${{ atomgit.event.comment.body }}
               token: ${{ secrets.GIT_TOKEN }}
           -
             name: show_output
