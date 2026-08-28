@@ -187,6 +187,15 @@ class TestBcp(unittest.TestCase):
             'BCP input tensor[0] channel count (1) must be at least the prune group size (2).'
         )
 
+    @patch.object(bcp_op.LOGGER, 'loge')
+    def test_prune_axis_must_be_within_tensor_rank(self, mock_loge):
+        with self.assertRaisesRegex(RuntimeError, 'Inner Error'):
+            bcp_op.check_params([torch.empty(1)], [5], 0.3, 1, True)
+
+        mock_loge.assert_called_once_with(
+            'BCP input tensor[0] rank (1) must be greater than prune axis (5).'
+        )
+
     @unittest.skip('*')
     def test_algo_006(self):
         """tensor:2, ascend_optimized:true, prune_group:2"""
