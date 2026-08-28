@@ -22,7 +22,9 @@ from unittest.mock import patch
 
 import numpy as np
 import torch
+from onnx import TensorProto, helper, numpy_helper
 
+from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.graph_optimizer import (
     GraphOptimizer,
 )
@@ -120,6 +122,82 @@ class TestWeightQuantPass(unittest.TestCase):
         )
         self.assertEqual(list(weight_node.proto.dims), original_dims)
         self.assertEqual(len(weight_node.proto.raw_data), (element_count + 1) // 2)
+
+    def test_matmul_weight_quantizes_per_output_channel(self):
+        class LinearModel(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.linear = torch.nn.Linear(2, 4, bias=False)
+                self.linear.weight.data = torch.tensor(
+                    [[1, 2], [10, 20], [100, 200], [1000, 2000]],
+                    dtype=torch.float32,
+                )
+
+            def forward(self, inputs):
+                return self.linear(inputs)
+
+        model = LinearModel()
+        tmp_onnx = BytesIO()
+        Parser.export_onnx(model, torch.ones(1, 2), tmp_onnx)
+        graph = Parser.parse_net_to_graph(tmp_onnx)
+        node = graph.get_node_by_name('linear')
+        self.assertEqual(node.type, 'MatMul')
+        records = {
+            'linear': {
+                'weight_scale': np.array([1, 10, 100, 1000], dtype=np.float32),
+                'weight_offset': np.zeros(4, dtype=np.int8),
+                'wts_type': 'INT8',
+            }
+        }
+
+        InsertWeightQuantPass(records).do_pass(graph, node)
+
+        weight_node = QuantOpInfo.get_weight_node(node)
+        quantized = TensorProtoHelper(weight_node.proto).get_data()
+        np.testing.assert_array_equal(
+            quantized,
+            np.array([[1, 1, 1, 1], [2, 2, 2, 2]], dtype=np.int8),
+        )
+
+    def test_matmul_transposed_weight_quantizes_per_output_channel(self):
+        weight = np.array(
+            [[1, 2], [10, 20], [100, 200], [1000, 2000]], dtype=np.float32
+        )
+        model = helper.make_model(
+            helper.make_graph(
+                [
+                    helper.make_node(
+                        'Transpose', ['weight'], ['weight_t'], name='weight_trans'
+                    ),
+                    helper.make_node(
+                        'MatMul', ['inputs', 'weight_t'], ['output'], name='linear'
+                    ),
+                ],
+                'linear_graph',
+                [helper.make_tensor_value_info('inputs', TensorProto.FLOAT, [1, 2])],
+                [helper.make_tensor_value_info('output', TensorProto.FLOAT, [1, 4])],
+                [numpy_helper.from_array(weight, name='weight')],
+            )
+        )
+        graph = Graph(model)
+        node = graph.get_node_by_name('linear')
+        records = {
+            'linear': {
+                'weight_scale': np.array([1, 10, 100, 1000], dtype=np.float32),
+                'weight_offset': np.zeros(4, dtype=np.int8),
+                'wts_type': 'INT8',
+            }
+        }
+
+        InsertWeightQuantPass(records).do_pass(graph, node)
+
+        weight_node = graph.get_node_by_name('weight')
+        quantized = TensorProtoHelper(weight_node.proto).get_data()
+        self.assertEqual(list(weight_node.proto.dims), [4, 2])
+        np.testing.assert_array_equal(
+            quantized,
+            np.array([[1, 2], [1, 2], [1, 2], [1, 2]], dtype=np.int8),
+        )
 
     def test_rnn_weight_quant_success(self):
         class RNNModule(torch.nn.Module):

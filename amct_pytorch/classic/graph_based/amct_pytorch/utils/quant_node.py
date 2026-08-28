@@ -67,6 +67,9 @@ class QuantOpInfo:
                 length = weight_param.dims[1]
                 shape = [1] * len(weight_param.dims)
                 shape[1] = length
+            elif node.type in ['Gemm', 'MatMul']:
+                length = QuantOpInfo.get_cout_length(node)
+                shape = [length]
             else:
                 # conv2D or conv3D
                 length = weight_param.dims[0]
@@ -232,9 +235,16 @@ class QuantOpInfo:
             tensor = QuantOpInfo.get_weight_tensor(node)
             if node.type == 'Conv':
                 cout_length = tensor.dims[0]
-            elif node.type in ['ConvTranspose', 'MatMul']:
+            elif node.type == 'ConvTranspose':
                 # group conv case
                 cout_length = tensor.dims[1]
+            elif node.type == 'MatMul':
+                if node.has_attr('with_weights_trans') and node.get_attr(
+                    'with_weights_trans'
+                ):
+                    cout_length = tensor.dims[0]
+                else:
+                    cout_length = tensor.dims[1]
             elif node.type == 'Gemm':
                 attr_helper = AttributeProtoHelper(node.proto)
                 if (

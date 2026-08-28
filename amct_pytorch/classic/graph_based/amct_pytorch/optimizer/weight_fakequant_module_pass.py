@@ -25,6 +25,7 @@ from ...amct_pytorch.custom_op.arq.arq import weight_quant_np
 from ...amct_pytorch.custom_op.fake_quant import FAKE_MODULES
 from ...amct_pytorch.custom_op.fake_quant import FAKE_CONV_TRANSPOSE
 from ...amct_pytorch.custom_op.fake_quant import FAKE_CONV
+from ...amct_pytorch.custom_op.fake_quant import FAKE_LINEAR
 from ...amct_pytorch.utils.log import LOGGER
 from ...amct_pytorch.utils.weight_quant_api import adjust_deconv_weight_shape
 
@@ -94,6 +95,8 @@ class WeightFakequantModulePass(BaseModuleFusionPass):
             weight_offset = weight_offset.astype(np.float32).reshape(
                 reshaped_weight_shape
             )
+        elif type(object_module).__name__ == FAKE_LINEAR:
+            weight_offset = weight_offset.astype(np.float32).reshape([-1, 1])
 
         int9_weight = int8_weight.astype(np.float32) - weight_offset
         if type(object_module).__name__ == FAKE_CONV_TRANSPOSE:
