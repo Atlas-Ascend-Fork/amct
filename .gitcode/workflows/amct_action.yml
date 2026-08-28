@@ -27,7 +27,6 @@ env:
   obs_path: "${{ env.org_name }}/${{ env.repo_name }}/ci/package/${{ env.MERGE_ID }}"
   obs_smoke_path: "${{ env.obs_path }}/presmoke/2"
   online: ${{ vars.APPLY_LABEL }}
-  comment: ${{atomgit.event.comment.body}}
 
 stages:
   stage1:
