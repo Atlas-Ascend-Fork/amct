@@ -57,7 +57,7 @@ def _parse_args():
 def _load_base_model(model_name_or_path):
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    print(f"[*] 加载模型: {model_name_or_path}")
+    logger.info("Loading model: %s", model_name_or_path)
     t0 = time.time()
     # 不用 device_map="auto"：多卡环境下 0.5B 会被拆到两卡，触发跨设备 addmm 报错
     model = AutoModelForCausalLM.from_pretrained(
@@ -69,7 +69,7 @@ def _load_base_model(model_name_or_path):
     AutoTokenizer.from_pretrained(
         model_name_or_path, use_fast=False, trust_remote_code=True
     )
-    print(f"    完成，耗时 {time.time() - t0:.1f}s")
+    logger.info("Model loading completed in %.1f s.", time.time() - t0)
     return model
 
 
@@ -84,13 +84,13 @@ def _verify_forward(model, device):
         out = model(_dummy_input(model.config.vocab_size, device))
     logits = out.logits
     if torch.isnan(logits).any() or torch.isinf(logits).any():
-        raise ValueError("模型输出含有 NaN / Inf")
+        raise ValueError("Model output contains NaN or Inf values.")
 
 
 def _run_case(name, base_model, cfg, device, needs_calib, skip_convert=False):
     import amct_pytorch as amct
 
-    print(f"\n[{name}] 开始")
+    logger.info("[%s] Starting.", name)
     t0 = time.time()
 
     # Phase0: prepare model
@@ -111,7 +111,9 @@ def _run_case(name, base_model, cfg, device, needs_calib, skip_convert=False):
     # Phase3: convert deploy model
     if skip_convert:
         # convert() 依赖原生 hifloat8，环境不支持时跳过，仅验证仿真量化前向
-        print("    convert() 已跳过（当前环境无原生 hifloat8 支持）")
+        logger.warning(
+            "[%s] Skipping convert(): native HiFloat8 support is unavailable.", name
+        )
     else:
         amct.convert(quant_model)
         if device.startswith("npu"):
@@ -123,7 +125,7 @@ def _run_case(name, base_model, cfg, device, needs_calib, skip_convert=False):
     del quant_model
     gc.collect()
 
-    print(f"[{name}] PASS  耗时 {time.time() - t0:.1f}s")
+    logger.info("[%s] PASS in %.1f s.", name, time.time() - t0)
 
 
 def _build_cases(amct):
@@ -215,8 +217,8 @@ def _run_all(cases, model_name_or_path, device):
                 results[case["name"]] = "FAIL"
 
     total = time.time() - total_start
-    print(f"总耗时: {total:.1f}s  ({total / 60:.1f}min)")
-    print("验证结果汇总:")
+    logger.info("Total elapsed time: %.1f s (%.1f min).", total, total / 60)
+    logger.info("Verification summary:")
     all_pass = True
     for name, result in results.items():
         log_result = logger.error if result == "FAIL" else logger.info
@@ -233,7 +235,7 @@ def main():
     requested = [c.strip() for c in args.cases.split(",") if c.strip()]
     unknown = [c for c in requested if c not in _ALL_CASES]
     if unknown:
-        print(f"[ERROR] 未知用例: {unknown}，可选: {_ALL_CASES}")
+        logger.error("Unknown cases: %s. Available cases: %s.", unknown, _ALL_CASES)
         sys.exit(1)
 
     if args.device.startswith("npu"):
