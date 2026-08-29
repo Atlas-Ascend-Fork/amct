@@ -26,12 +26,85 @@ from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.qdq_symbolic import
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.qdq_symbolic import (
     add_qdq_dynamo,
+    add_weight_qdq_dynamo,
     check_int4_dynamo_export,
     is_dynamo_export,
 )
 
 
 class TestQdqSymbolic(unittest.TestCase):
+    def _patch_dynamo_ops(self):
+        ops = mock.MagicMock()
+        ops.symbolic.side_effect = lambda name, inputs, **kwargs: mock.Mock(
+            name=name, dtype=kwargs.get('dtype'), shape=kwargs.get('shape')
+        )
+        return mock.patch('torch.onnx.ops', ops, create=True), ops
+
+    def test_add_weight_qdq_dynamo_conv_transpose(self):
+        patcher, ops = self._patch_dynamo_ops()
+        with patcher:
+            add_weight_qdq_dynamo(
+                torch.randn(2, 4, 3),
+                torch.ones(4),
+                torch.zeros(1),
+                4,
+                'ConvTranspose1d',
+                True,
+                mock.Mock(),
+            )
+        self.assertEqual(ops.symbolic.call_count, 2)
+
+    def test_add_weight_qdq_dynamo_conv_transposes_layout(self):
+        patcher, ops = self._patch_dynamo_ops()
+        with patcher:
+            add_weight_qdq_dynamo(
+                torch.randn(4, 2, 3, 3),
+                torch.ones(4),
+                torch.zeros(1),
+                4,
+                'Conv2d',
+                True,
+                mock.Mock(),
+            )
+        quant_inputs = ops.symbolic.call_args_list[0].args[1]
+        self.assertEqual(tuple(quant_inputs[0].shape), (2, 4, 3, 3))
+
+    def test_add_weight_qdq_dynamo_linear_per_channel_transposes_layout(self):
+        patcher, ops = self._patch_dynamo_ops()
+        module = mock.Mock(weight=torch.randn(4, 2, 3))
+        with patcher:
+            add_weight_qdq_dynamo(
+                module.weight, torch.ones(4), torch.zeros(1), 4, 'Linear', True, module
+            )
+        quant_inputs = ops.symbolic.call_args_list[0].args[1]
+        self.assertEqual(tuple(quant_inputs[0].shape), (2, 4, 3))
+
+    def test_add_weight_qdq_dynamo_linear_per_tensor(self):
+        patcher, ops = self._patch_dynamo_ops()
+        with patcher:
+            add_weight_qdq_dynamo(
+                torch.randn(4, 2),
+                torch.ones(1),
+                torch.zeros(1),
+                8,
+                'Linear',
+                False,
+                mock.Mock(),
+            )
+        self.assertEqual(ops.symbolic.call_count, 2)
+
+    def test_add_weight_qdq_dynamo_rejects_unknown_module(self):
+        with self.assertRaisesRegex(RuntimeError, 'Unsupported QAT module'):
+            add_weight_qdq_dynamo(
+                torch.randn(2, 2),
+                torch.ones(1),
+                torch.zeros(1),
+                8,
+                'Unknown',
+                False,
+                mock.Mock(),
+            )
+
     def test_is_dynamo_export_requires_onnx_export_context(self):
         with (
             mock.patch('torch.compiler.is_compiling', return_value=True),
