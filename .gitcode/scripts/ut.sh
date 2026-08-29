@@ -13,7 +13,7 @@ set -euo pipefail
 REPOSITORY_NAME="amct"
 if [ "${GIT_TARGET_BRANCH}" == "master"]
     sudo update-alternatives --set gcc /usr/bin/gcc-15
-else
+else 
     sudo update-alternatives --set gcc /usr/bin/gcc-14
 fi
 if gcc --version | head -n1 | grep -q "15\."; then
