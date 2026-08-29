@@ -35,7 +35,8 @@ class QuantDequantFP(torch.nn.Module):
         super(QuantDequantFP, self).__init__()
         self.bits = bits
         if self.bits != 8 and self.bits != 16:
-            raise ValueError(f"Block fp quant currently supports only 8-bits quantization, but got bits={self.bits}")
+            if scale_dtype!="e8m0":
+                raise ValueError(f"Block fp quant currently supports only 8-bits quantization, but got bits={self.bits}")
         self.is_act = is_act
         self.is_observe = False
         self._get_format_params()
