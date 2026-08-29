@@ -19,11 +19,15 @@ import logging
 import math
 import os
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.custom_op import bcp
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.bcp import (
+    bcp_op,
+)
 
 DEVICE = 'cuda:0'
 
@@ -164,6 +168,33 @@ class TestBcp(unittest.TestCase):
         # compare
         is_equal = (prune_mask_list == prune_mask.cpu().numpy()).all()
         self.assertTrue(is_equal)
+
+    @patch.object(bcp_op.LOGGER, 'loge')
+    def test_tensor_and_prune_axis_counts_must_match(self, mock_loge):
+        with self.assertRaisesRegex(RuntimeError, 'Inner Error'):
+            bcp_op.check_params([], [0], 0.3, 1, True)
+
+        mock_loge.assert_called_once_with(
+            'The number of BCP input tensors (0) must equal the number of prune axes (1).'
+        )
+
+    @patch.object(bcp_op.LOGGER, 'loge')
+    def test_channel_count_must_cover_prune_groups(self, mock_loge):
+        with self.assertRaisesRegex(RuntimeError, 'Inner Error'):
+            bcp_op.check_params([torch.empty(1)], [0], 0.3, 2, True)
+
+        mock_loge.assert_called_once_with(
+            'BCP input tensor[0] channel count (1) must be at least the prune group size (2).'
+        )
+
+    @patch.object(bcp_op.LOGGER, 'loge')
+    def test_prune_axis_must_be_within_tensor_rank(self, mock_loge):
+        with self.assertRaisesRegex(RuntimeError, 'Inner Error'):
+            bcp_op.check_params([torch.empty(1)], [5], 0.3, 1, True)
+
+        mock_loge.assert_called_once_with(
+            'BCP input tensor[0] rank (1) must be greater than prune axis (5).'
+        )
 
     @unittest.skip('*')
     def test_algo_006(self):

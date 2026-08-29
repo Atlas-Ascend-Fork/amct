@@ -83,7 +83,7 @@ at::Tensor Unpermute(const at::Tensor &output, const std::vector<int64_t> &perm)
 // at the dispatcher entry (register.cpp).
 at::Tensor Hifloat4CastTorch(const at::Tensor &input, int64_t qdim) {
     int64_t nd = input.dim();
-    TORCH_CHECK(nd > 0, "hifloat4_fake_quant: input must have at least one dimension");
+    TORCH_CHECK(nd > 0, "hifloat4_fake_quant: input rank must be greater than 0, but got ", nd);
     int64_t qd = qdim >= 0 ? qdim : qdim + nd;
     TORCH_CHECK(qd >= 0 && qd < nd, "hifloat4_fake_quant: qdim ", qdim, " out of range for ", nd, "-D input");
 
@@ -91,7 +91,7 @@ at::Tensor Hifloat4CastTorch(const at::Tensor &input, int64_t qdim) {
     at::Tensor xp = PermuteToLast(input, qd, perm);
 
     int64_t n = xp.size(-1);
-    TORCH_CHECK(n > 0, "hifloat4_fake_quant: input must have a non-empty last dim");
+    TORCH_CHECK(n > 0, "hifloat4_fake_quant: last dimension size must be greater than 0, but got ", n);
     TORCH_CHECK(n % HIF4_QUANT_BLOCK == 0, "hifloat4_fake_quant: quant dim length must be a multiple of ",
         HIF4_QUANT_BLOCK, ", got ", n);
     bool need_slice = false;
