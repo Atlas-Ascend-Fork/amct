@@ -27,7 +27,13 @@ from ....amct_pytorch.custom_op.utils import check_group_param
 from ....amct_pytorch.custom_op.utils import process_tensor_shape
 from ....amct_pytorch.utils.vars import TRANSPOSE
 from ....amct_pytorch.utils.weight_quant_api import adjust_axis_for_group_wise
-from ....amct_pytorch.custom_op.qdq_symbolic import add_qdq, check_int4_export
+from ....amct_pytorch.custom_op.qdq_symbolic import (
+    add_qdq,
+    add_weight_qdq_dynamo,
+    check_int4_export,
+    check_int4_dynamo_export,
+    is_dynamo_export,
+)
 
 
 MODULE_TYPE = 'module_type'
@@ -54,6 +60,22 @@ class UlqScaleRetrainFunction(Function):
         """
         Function: UlqRetrain forward function.
         """
+        if is_dynamo_export():
+            if wts_qat_param.get('num_bits', 8) == 4:
+                check_int4_dynamo_export(wts_qat_param)
+            return (
+                add_weight_qdq_dynamo(
+                    inputs,
+                    scale,
+                    offset,
+                    wts_qat_param.get('num_bits', 8),
+                    wts_qat_param.get(MODULE_TYPE),
+                    wts_qat_param.get('channel_wise', False),
+                    wts_qat_param.get('module'),
+                ),
+                scale,
+                offset,
+            )
         # check input data
         check_quant_data(inputs, 'weights')
 

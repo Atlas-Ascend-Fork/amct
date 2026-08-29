@@ -27,7 +27,13 @@ from ....amct_pytorch.custom_op.utils import check_group_param
 from ....amct_pytorch.custom_op.utils import process_tensor_shape
 from ....amct_pytorch.utils.vars import TRANSPOSE
 from ....amct_pytorch.utils.weight_quant_api import adjust_axis_for_group_wise
-from ....amct_pytorch.custom_op.qdq_symbolic import add_qdq, check_int4_export
+from ....amct_pytorch.custom_op.qdq_symbolic import (
+    add_qdq,
+    add_weight_qdq_dynamo,
+    check_int4_export,
+    check_int4_dynamo_export,
+    is_dynamo_export,
+)
 
 
 class ArqRetrainFunction(Function):
@@ -50,6 +56,22 @@ class ArqRetrainFunction(Function):
         """
         Function: ArqRetrain forward function.
         """
+        if is_dynamo_export():
+            if wts_param.get('num_bits', 8) == 4:
+                check_int4_dynamo_export(wts_param)
+            return (
+                add_weight_qdq_dynamo(
+                    weight_tensor,
+                    scale,
+                    offset,
+                    wts_param.get('num_bits', 8),
+                    wts_param.get('module_type'),
+                    wts_param.get('channel_wise', False),
+                    wts_param.get('module'),
+                ),
+                scale,
+                offset,
+            )
         # check weight tensor
         check_quant_data(weight_tensor, 'weight')
         weight_tensor_processed = process_tensor_shape(

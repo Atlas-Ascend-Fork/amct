@@ -35,6 +35,12 @@ from .....amct_pytorch.custom_op.arq_retrain.arq_retrain import ArqRetrainFuncQA
 from .....amct_pytorch.custom_op.ulq_scale_retrain.ulq_scale_retrain import (
     UlqScaleRetrainFuncQAT,
 )
+from .....amct_pytorch.custom_op.qdq_symbolic import (
+    add_qdq_dynamo,
+    add_weight_qdq_dynamo,
+    check_int4_dynamo_export,
+    is_dynamo_export,
+)
 from .....amct_pytorch.utils.vars import (
     CLIP_MAX,
     CLIP_MIN,
@@ -325,6 +331,8 @@ class QATBase(metaclass=ABCMeta):
                     inputs.dtype
                 )
             )
+        if is_dynamo_export() and self.retrain_enable:
+            return self._forward_qat_export(inputs)
         if self.retrain_enable:
             if self.do_init:
                 self.acts_quant_init(inputs)
@@ -337,6 +345,42 @@ class QATBase(metaclass=ABCMeta):
                 self.cur_batch += 1
         else:
             quantized_acts, quantized_weights = inputs, self.weight
+        return quantized_acts, quantized_weights
+
+    def _forward_qat_export(self, inputs):
+        """Build Q/DQ nodes without retraining-time state updates."""
+        if self.do_init:
+            raise RuntimeError(
+                'QAT model must be initialized before Dynamo ONNX export.'
+            )
+
+        quantized_acts = add_qdq_dynamo(
+            inputs,
+            self.acts_scale,
+            self.acts_offset_deploy,
+            self.act_num_bits,
+        )
+
+        wts_config = self.retrain_weight_config
+        if self.wts_num_bits == 4:
+            check_int4_dynamo_export(
+                {
+                    'channel_wise': wts_config.get('channel_wise', True),
+                    'module': self,
+                }
+            )
+        algo = wts_config.get('weights_retrain_algo', 'arq_retrain')
+        if algo not in ('arq_retrain', 'ulq_retrain'):
+            raise RuntimeError('Unsupported weights retrain algorithm: {}'.format(algo))
+        quantized_weights = add_weight_qdq_dynamo(
+            self.weight,
+            self.wts_scales,
+            self.wts_offsets,
+            self.wts_num_bits,
+            self.layer_type,
+            wts_config.get('channel_wise', True),
+            self,
+        )
         return quantized_acts, quantized_weights
 
     def acts_quant_init(self, inputs):
