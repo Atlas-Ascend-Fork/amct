@@ -33,7 +33,7 @@ from ...amct_pytorch.utils.weight_quant_api import get_deconv_group
 
 class QuantOpInfo:
     '''
-    Find infomation of quant_op.
+    Find information of quant_op.
     '''
 
     @staticmethod
@@ -110,7 +110,7 @@ class QuantOpInfo:
     def get_dequant_shape(node):
         """
         Function: Get the dequant scale's shape from node
-        Inputs: node: the node te be quantized
+        Inputs: node: the node to be quantized
         Returns: the shape of dequant scale
         """
         if node.type in ["Conv", "AscendDequant", "ConvTranspose"]:
