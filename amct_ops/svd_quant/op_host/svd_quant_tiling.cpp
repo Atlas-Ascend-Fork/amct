@@ -174,6 +174,7 @@ bool SvdQuantTiling::CalcB16MatmulTiling(matmul_tiling::MultiCoreMatmulTiling &m
     int32_t maxDepthVal = l1TotalSize / l0BlockSize;
 
     if (mmTiling.GetTiling(cubeTiling) == -1) {
+        OP_LOGE("SvdQuant", "Failed to generate B16 matmul tiling.");
         return false;
     }
     SetMatmulCubeTiling(cubeTiling, K, l0cSize, baseM * baseN, baseK, maxDepthVal);
@@ -255,6 +256,7 @@ bool SvdQuantTiling::CalcMxMatmulTiling(matmul_tiling::MultiCoreMatmulTiling &mm
     int32_t maxDepthVal = static_cast<int32_t>(fpDepthVal);
 
     if (mmTiling.GetTiling(cubeTiling) == -1) {
+        OP_LOGE("SvdQuant", "Failed to generate MX matmul tiling.");
         return false;
     }
     SetMatmulCubeTiling(cubeTiling, K, l0cSize, baseM * baseN, baseK, maxDepthVal);

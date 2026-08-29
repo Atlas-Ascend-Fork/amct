@@ -35,7 +35,7 @@ def check_params(
                 tensor_num, len(prune_axis_list)
             )
         )
-        flag = False
+        raise RuntimeError("Inner Error of bcp op in prune process.")
 
     if prune_ratio >= 1 or prune_ratio <= 0:
         raise RuntimeError(
