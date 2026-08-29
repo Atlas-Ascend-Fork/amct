@@ -17,7 +17,12 @@
 # ----------------------------------------------------------------------------
 from onnx import TensorProto
 import torch
-from torch.onnx import _globals
+
+try:
+    from torch.onnx import _globals
+except ImportError:
+    # PyTorch 2.10 moved the legacy TorchScript exporter globals.
+    from torch.onnx._internal.torchscript_exporter import _globals
 
 from ...amct_pytorch.common.utils.vars_util import RNN_TENSOR_NUM
 from ...amct_pytorch.utils.vars import DEQUANTIZE_LINEAR, QUANTIZE_LINEAR
