@@ -226,7 +226,8 @@ inline std::vector<std::string> get_default_custom_lib_path() {
     }
 
     if (!is_file_exist(vendors_config_file)) {
-        ASCEND_LOGW("config.ini does not exist or its path length exceeds %d", PATH_MAX);
+        ASCEND_LOGW("config.ini path %s does not exist or exceeds the maximum path length of %d",
+            vendors_config_file.c_str(), PATH_MAX);
         return std::vector<std::string>();
     }
 
@@ -449,7 +450,8 @@ inline aclTensor *ConvertType(const at::Tensor &at_tensor) {
     if (!IsOpInputBaseFormatCommon(at_tensor)) {
         format = static_cast<NPUStorageImpl *>(at_tensor.storage().unsafeGetStorageImpl())->npu_desc_.npu_format_;
         if (acl_data_type != ACL_STRING) {
-            TORCH_CHECK(at_tensor.itemsize() > 0, "the itemsize of tensor must be greater than 0.");
+            TORCH_CHECK(
+                at_tensor.itemsize() > 0, "tensor item size must be greater than 0, but got ", at_tensor.itemsize());
             storageDims =
                 static_cast<NPUStorageImpl *>(at_tensor.storage().unsafeGetStorageImpl())->npu_desc_.storage_sizes_;
         }
@@ -461,7 +463,8 @@ inline aclTensor *ConvertType(const at::Tensor &at_tensor) {
             default: format = ACL_FORMAT_ND;
         }
         if (acl_data_type != ACL_STRING) {
-            TORCH_CHECK(at_tensor.itemsize() > 0, "the itemsize of tensor must be greater than 0.");
+            TORCH_CHECK(
+                at_tensor.itemsize() > 0, "tensor item size must be greater than 0, but got ", at_tensor.itemsize());
             storageDims.push_back(at_tensor.storage().nbytes() / at_tensor.itemsize());
         }
     }

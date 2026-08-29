@@ -30,26 +30,41 @@ def check_params(
     tensor_num = len(tensor_list)
     flag = True
     if tensor_num != len(prune_axis_list):
-        LOGGER.loge("bcp input tensor num is not equal to prune axis num.")
-        flag = False
+        LOGGER.loge(
+            "The number of BCP input tensors ({}) must equal the number of prune axes ({}).".format(
+                tensor_num, len(prune_axis_list)
+            )
+        )
+        raise RuntimeError("Inner Error of bcp op in prune process.")
 
     if prune_ratio >= 1 or prune_ratio <= 0:
         raise RuntimeError(
-            "prune_ratio should be larger than 0 and samller than 1, pls check config."
+            "prune_ratio should be larger than 0 and smaller than 1, pls check config."
         )
 
     for i in range(0, tensor_num):
         if tensor_list[i].dim() <= prune_axis_list[i]:
-            LOGGER.loge("bcp input tensor[{}] dim is less than prune axis.".format(i))
+            LOGGER.loge(
+                "BCP input tensor[{}] rank ({}) must be greater than prune axis ({}).".format(
+                    i, tensor_list[i].dim(), prune_axis_list[i]
+                )
+            )
             flag = False
+            continue
 
         cout_length = tensor_list[i].shape[prune_axis_list[i]]
         if cout_length < prune_group:
-            LOGGER.loge("bcp input tensor[{}] cout is less than prune group.".format(i))
+            LOGGER.loge(
+                "BCP input tensor[{}] channel count ({}) must be at least the prune group size ({}).".format(
+                    i, cout_length, prune_group
+                )
+            )
             flag = False
         if not ascend_optimized and cout_length % prune_group != 0:
             LOGGER.loge(
-                "bcp input tensor[{}] cout is not multiple of prune group.".format(i)
+                "BCP input tensor[{}] channel count ({}) must be a multiple of the prune group size ({}).".format(
+                    i, cout_length, prune_group
+                )
             )
             flag = False
 
@@ -113,13 +128,13 @@ def gen_mask_by_group(num_channel, prune_group, group_len, prune_num_group, norm
 
 def bcp(tensor_list, prune_axis_list, prune_ratio, prune_group, ascend_optimized):
     """
-    Function: bcp funtion.
+    Function: bcp function.
     Args:
     tensor_list: data used for channel prune in list of torch.tensor.
     prune_axis_list: prune axis for channel prune in list of dim value
     prune_ratio: ratio of prune channels to the total number of channels
     prune_group: num of prune groups
-    ascend_optimized: bool, is optimation for ascend is needed
+    ascend_optimized: bool, whether optimization for Ascend is needed
     """
     check_params(
         tensor_list, prune_axis_list, prune_ratio, prune_group, ascend_optimized

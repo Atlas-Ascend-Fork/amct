@@ -84,7 +84,7 @@ def _verify_forward(model, device):
         out = model(_dummy_input(model.config.vocab_size, device))
     logits = out.logits
     if torch.isnan(logits).any() or torch.isinf(logits).any():
-        raise ValueError("模型输出含有 NaN / Inf")
+        raise ValueError("Model output contains NaN or Inf values.")
 
 
 def _run_case(name, base_model, cfg, device, needs_calib, skip_convert=False):
@@ -207,34 +207,29 @@ def _run_all(cases, model_name_or_path, device):
                 case["skip_convert"],
             )
             results[case["name"]] = "PASS"
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             msg = str(exc)
             if skip_on and any(kw in msg for kw in skip_on):
-                print(f"[{case['name']}] SKIP: {msg}")
+                logger.warning("[%s] SKIP: %s", case['name'], msg)
                 results[case["name"]] = "SKIP"
             else:
-                print(f"[{case['name']}] FAIL: {exc}")
+                logger.error("[%s] FAIL: %s", case['name'], exc)
                 results[case["name"]] = "FAIL"
 
     total = time.time() - total_start
-    print(f"\n{'=' * 55}")
     logger.info("Total elapsed time: %.1f s (%.1f min).", total, total / 60)
     logger.info("Verification summary:")
     all_pass = True
     for name, result in results.items():
-        print(f"  [{result}] {name}")
+        log_result = logger.error if result == "FAIL" else logger.info
+        log_result("  [%s] %s", result, name)
         if result == "FAIL":
             all_pass = False
     return all_pass
 
 
 def main():
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
-    logger.handlers.clear()
-    logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-    logger.propagate = False
+    logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stdout)
     args = _parse_args()
 
     requested = [c.strip() for c in args.cases.split(",") if c.strip()]
@@ -254,9 +249,9 @@ def main():
     all_pass = _run_all(cases, args.model, args.device)
 
     if all_pass:
-        print("[AMCT_EXAMPLE_ALL_PASS]")
+        logger.info("[AMCT_EXAMPLE_ALL_PASS]")
     else:
-        print("[AMCT_EXAMPLE_FAILED]")
+        logger.error("[AMCT_EXAMPLE_FAILED]")
 
     sys.exit(0 if all_pass else 1)
 

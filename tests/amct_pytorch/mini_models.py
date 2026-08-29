@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # ----------------------------------------------------------------------------
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
 #
@@ -20,9 +19,13 @@ HuggingFace-style mini model definitions
 - CNN, MoE, MLP models
 """
 
+import logging
+
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
+
+LOGGER = logging.getLogger(__name__)
 
 
 class MiniMLPConfig:
@@ -284,27 +287,28 @@ def create_mini_moe():
 
 
 if __name__ == "__main__":
-    print("Testing Mini Models...")
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    LOGGER.info("Testing Mini Models...")
 
-    print("\n1. Mini MLP:")
+    LOGGER.info("\n1. Mini MLP:")
     mlp, mlp_config = create_mini_mlp()
-    print(f"   Params: {sum(p.numel() for p in mlp.parameters()):,}")
+    LOGGER.info("   Params: %s", f"{sum(p.numel() for p in mlp.parameters()):,}")
     test_input = torch.randint(0, 1000, (2, 10))
     output = mlp(test_input)
-    print(f"   Output shape: {output.shape}")
+    LOGGER.info("   Output shape: %s", output.shape)
 
-    print("\n2. Mini CNN:")
+    LOGGER.info("\n2. Mini CNN:")
     cnn, cnn_config = create_mini_cnn()
-    print(f"   Params: {sum(p.numel() for p in cnn.parameters()):,}")
+    LOGGER.info("   Params: %s", f"{sum(p.numel() for p in cnn.parameters()):,}")
     test_input = torch.randn(2, 3, 32, 32)
     output = cnn(test_input)
-    print(f"   Output shape: {output.shape}")
+    LOGGER.info("   Output shape: %s", output.shape)
 
-    print("\n3. Mini MoE:")
+    LOGGER.info("\n3. Mini MoE:")
     moe, moe_config = create_mini_moe()
-    print(f"   Params: {sum(p.numel() for p in moe.parameters()):,}")
+    LOGGER.info("   Params: %s", f"{sum(p.numel() for p in moe.parameters()):,}")
     test_input = torch.randint(0, 1000, (2, 10))
     output = moe(test_input)
-    print(f"   Output shape: {output.shape}")
+    LOGGER.info("   Output shape: %s", output.shape)
 
-    print("\nAll models created successfully!")
+    LOGGER.info("\nAll models created successfully!")
