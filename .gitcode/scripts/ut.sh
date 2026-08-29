@@ -11,7 +11,7 @@
 set -euo pipefail
 
 REPOSITORY_NAME="amct"
-if [ "${GIT_TARGET_BRANCH}" == "master"]
+if [ "${GIT_TARGET_BRANCH}" == "master" ]; then
     sudo update-alternatives --set gcc /usr/bin/gcc-15
 else
     sudo update-alternatives --set gcc /usr/bin/gcc-14
@@ -27,6 +27,8 @@ if gcc --version | head -n1 | grep -q "15\."; then
         rm -rf /home/jenkins/opensource/gcc15x86/lib_cache/device/abseil-cpp
         ln -s /home/jenkins/opensource/gcc15x86/lib_cache/ /home/jenkins/opensource/lib_cache
     fi
+elif gcc --version | head -n1 | grep -q "14\."; then
+    gcc --version
 else
     gcc --version
     rm -rf /home/jenkins/opensource/lib_cache
