@@ -78,6 +78,13 @@ def check_int4_dynamo_export(wts_param):
         )
 
 
+def _restore_input_device(output, input_tensor):
+    """Keep Dynamo fake outputs on the same device as the traced input."""
+    if isinstance(output, torch.Tensor) and output.device != input_tensor.device:
+        return output.to(device=input_tensor.device)
+    return output
+
+
 def add_qdq(g, tensor, scale, zero_point, num_bits, axis=None):
     """Add standard ONNX Q/DQ nodes for an AMCT QAT weight tensor."""
     attributes = {}
@@ -128,10 +135,11 @@ def add_qdq_dynamo(tensor, scale, zero_point, num_bits, axis=None, shape=None):
         shape=shape,
         version=21,
     )
+    quant = _restore_input_device(quant, tensor)
 
     dequant_attrs = {'axis': axis} if axis is not None else {}
     dequant_inputs = (quant, scale) if num_bits == 4 else (quant, scale, zero_point)
-    return onnx_ops.symbolic(
+    dequant = onnx_ops.symbolic(
         DEQUANTIZE_LINEAR,
         dequant_inputs,
         attrs=dequant_attrs,
@@ -139,6 +147,7 @@ def add_qdq_dynamo(tensor, scale, zero_point, num_bits, axis=None, shape=None):
         shape=shape,
         version=21,
     )
+    return _restore_input_device(dequant, tensor)
 
 
 def add_weight_qdq_dynamo(

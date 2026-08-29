@@ -174,6 +174,17 @@ class TestQdqSymbolic(unittest.TestCase):
             add_qdq_dynamo(tensor, mock.sentinel.scale, mock.sentinel.zero_point, 16)
         self.assertEqual(ops.symbolic.call_args_list[0].kwargs['dtype'], torch.int16)
 
+    def test_add_qdq_dynamo_restores_input_device(self):
+        ops = mock.MagicMock()
+        ops.symbolic.side_effect = lambda *args, **kwargs: torch.zeros(
+            kwargs['shape'], dtype=torch.float32
+        )
+        tensor = torch.empty((2, 4), device='meta')
+        scale = torch.empty(1, device='meta')
+        with mock.patch('torch.onnx.ops', ops, create=True):
+            output = add_qdq_dynamo(tensor, scale, None, 8)
+        self.assertEqual(output.device, tensor.device)
+
     def test_add_qdq_dynamo_requires_native_export_api(self):
         with mock.patch('torch.onnx.ops', None, create=True):
             with self.assertRaisesRegex(RuntimeError, 'PyTorch 2.10'):
