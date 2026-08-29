@@ -42,7 +42,7 @@ stages:
               repo_name: ${{ env.repo_name }}
               target_branch: ${{ env.TARGET_BRANCH }}
               comment: ${{ atomgit.event.comment.body }}
-              token: ${{ secrets.GIT_TOKEN }}
+              token: ${{ secrets.TESTTOKEN }}
           -
             name: show_output
             run: |
@@ -99,7 +99,7 @@ stages:
         with:
           task_name: 'Compile_Ascend_X86_torch_ubuntu24'
           ge_st_rt2: 'torch'
-          image_version: ${{ jobs.JOB_image.outputs.Compile_Ascend_X86 }}
+          image_version: ${{ jobs.JOB_image.outputs.Compile_Ascend_X86_ubuntu24 }}
           arch: 'x64'
           package_name: 'amct_pytorch-py3-none-linux_x86_64_ubuntu24.tar.gz'
       JOB_torch_arm_compile:
@@ -117,7 +117,7 @@ stages:
         with:
           task_name: 'Compile_Ascend_ARM_torch_ubuntu24'
           ge_st_rt2: 'torch'
-          image_version: ${{ jobs.JOB_image.outputs.Compile_Ascend_ARM }}
+          image_version: ${{ jobs.JOB_image.outputs.Compile_Ascend_ARM_ubuntu24 }}
           arch: 'arm64'
           package_name: 'amct_pytorch-py3-none-linux_aarch64_ubuntu24.tar.gz'
       JOB_codecheck:
@@ -173,7 +173,6 @@ stages:
             identifier: process_checkout
             uses: checkout
             with:
-              token: ${{secrets.GIT_TOKEN}}
               ref: ${{ atomgit.event.pull_request.merge_commit_sha }}
           -
             name: download
