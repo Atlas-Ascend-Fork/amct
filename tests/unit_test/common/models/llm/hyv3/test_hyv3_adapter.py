@@ -586,14 +586,10 @@ def test_hyv3_tensorwise_mlp_layers_are_not_ignored():
     expert_ignore = next(item for item in ignore if item.startswith("re:"))
     expert_pattern = expert_ignore.removeprefix("re:")
     assert re.match(expert_pattern, "model.layers.1.mlp.experts")
-    assert re.match(
-        expert_pattern, "model.layers.1.mlp.experts.0.gate_proj"
-    )
+    assert re.match(expert_pattern, "model.layers.1.mlp.experts.0.gate_proj")
     assert not re.match(expert_pattern, "model.layers.1.mlp.shared_mlp.gate_proj")
     assert "model.layers.1.mlp.shared_mlp.gate_proj" in ignore
-    assert re.match(
-        expert_pattern, "model.layers.2.mlp.experts.1.down_proj"
-    )
+    assert re.match(expert_pattern, "model.layers.2.mlp.experts.1.down_proj")
     assert "model.layers.2.mlp.shared_mlp.down_proj" in ignore
     assert "model.layers.2.eh_proj" in ignore
     assert "model.embed_tokens" in ignore
