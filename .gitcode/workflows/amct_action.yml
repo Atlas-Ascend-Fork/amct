@@ -42,7 +42,7 @@ stages:
               repo_name: ${{ env.repo_name }}
               target_branch: ${{ env.TARGET_BRANCH }}
               comment: ${{ atomgit.event.comment.body }}
-              token: ${{ secrets.GIT_TOKEN }}
+              token: ${{ secrets.TESTTOKEN }}
           -
             name: show_output
             run: |
@@ -173,7 +173,6 @@ stages:
             identifier: process_checkout
             uses: checkout
             with:
-              token: ${{secrets.GIT_TOKEN}}
               ref: ${{ atomgit.event.pull_request.merge_commit_sha }}
           -
             name: download
