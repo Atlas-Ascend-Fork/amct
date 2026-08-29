@@ -16,7 +16,7 @@ export PATH=/opt/buildtools/python-3.10.2/bin:$PATH
 if [[ "${task_name:-}" == *ubuntu24* ]]; then
     if [ "${GIT_TARGET_BRANCH}" == "master"]
         sudo update-alternatives --set gcc /usr/bin/gcc-15
-    else 
+    else
         sudo update-alternatives --set gcc /usr/bin/gcc-14
     fi
 else
