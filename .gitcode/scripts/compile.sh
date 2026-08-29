@@ -14,7 +14,7 @@ REPOSITORY_NAME="amct"
 echo $(grep -E "^VERSION_ID=" /etc/os-release | cut -d'"' -f2)
 export PATH=/opt/buildtools/python-3.10.2/bin:$PATH
 if [[ "${task_name:-}" == *ubuntu24* ]]; then
-    if [ "${GIT_TARGET_BRANCH}" == "master"];then
+    if [ "${GIT_TARGET_BRANCH}" == "master" ];then
         sudo update-alternatives --set gcc /usr/bin/gcc-15
     else
         sudo update-alternatives --set gcc /usr/bin/gcc-14
