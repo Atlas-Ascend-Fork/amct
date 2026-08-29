@@ -31,7 +31,7 @@ from amct_pytorch.quantization.dtypes.fp_impl import (
 
 @DTYPE_REGISTRY.register(name="fp", description="quant dequant for block fp")
 class QuantDequantFP(torch.nn.Module):
-    def __init__(self, bits=8, is_act=False, block_size=128, scale_dtype="fp32"):
+    def __init__(self, bits=8, is_act=False, block_size_col=128, scale_dtype="fp32"):
         super(QuantDequantFP, self).__init__()
         self.bits = bits
         if self.bits != 8 and self.bits != 16:
@@ -39,15 +39,15 @@ class QuantDequantFP(torch.nn.Module):
         self.is_act = is_act
         self.is_observe = False
         self._get_format_params()
-        self.block_size = block_size
+        self.block_size_col = block_size_col
         self.scale_dtype = scale_dtype
     
-    def reshape_block(self, x, block_size):
+    def reshape_block(self, x):
 
         M, N = x.shape
 
-        block_m = block_size
-        block_n = block_size
+        block_m = self.block_size_col
+        block_n = 128
 
         pad_m = (block_m - M % block_m) % block_m
         pad_n = (block_n - N % block_n) % block_n
@@ -61,14 +61,14 @@ class QuantDequantFP(torch.nn.Module):
         return W_blocks, pad_shape
 
 
-    def quantize_fp_block(self, x, fp8_min=-448.0, fp8_max=448.0, block_size=128):
+    def quantize_fp_block(self, x, fp8_min=-448.0, fp8_max=448.0):
 
         ori_shape = x.shape
         N = x.shape[-1]
         x = x.reshape(-1, N)
         M, N = x.shape
 
-        W_blocks, pad_shape = self.reshape_block(x, block_size)
+        W_blocks, pad_shape = self.reshape_block(x)
         
 
         amax = torch.amax(torch.abs(W_blocks), dim=(-1, -2), keepdim=True)
@@ -87,14 +87,14 @@ class QuantDequantFP(torch.nn.Module):
 
         return W_fp8, scale
 
-    def dequantize_fp_block(self, x, scale, fp8_min=-448.0, fp8_max=448.0, block_size=128):
+    def dequantize_fp_block(self, x, scale, fp8_min=-448.0, fp8_max=448.0):
 
         ori_shape = x.shape
         N = x.shape[-1]
         x = x.reshape(-1, N)
         M, N = x.shape
 
-        W_blocks, pad_shape = self.reshape_block(x, block_size)
+        W_blocks, pad_shape = self.reshape_block(x)
         Mp, Np = pad_shape
 
         W_dequant = W_blocks * scale

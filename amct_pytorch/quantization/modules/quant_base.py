@@ -92,7 +92,7 @@ class ActivationQuantizer(torch.nn.Module):
             "is_act": True,
         }
         if args.quant_dtype == "fp":
-            kwargs["block_size"] = args.block_size
+            kwargs["block_size_col"] = args.block_size_col
             kwargs["scale_dtype"] = args.scale_dtype
         
         self.quant_obj = DTYPE_REGISTRY.get(args.quant_dtype)(**kwargs)
