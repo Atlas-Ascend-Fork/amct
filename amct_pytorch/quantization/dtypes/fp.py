@@ -44,7 +44,6 @@ class QuantDequantFP(torch.nn.Module):
         self.scale_dtype = scale_dtype
     
     def reshape_block(self, x):
-
         M, N = x.shape
 
         block_m = self.block_size_col
@@ -63,7 +62,6 @@ class QuantDequantFP(torch.nn.Module):
 
 
     def quantize_fp_block(self, x, fp8_min=-448.0, fp8_max=448.0):
-
         ori_shape = x.shape
         N = x.shape[-1]
         x = x.reshape(-1, N)
@@ -89,7 +87,6 @@ class QuantDequantFP(torch.nn.Module):
         return W_fp8, scale
 
     def dequantize_fp_block(self, x, scale, fp8_min=-448.0, fp8_max=448.0):
-
         ori_shape = x.shape
         N = x.shape[-1]
         x = x.reshape(-1, N)
@@ -137,7 +134,9 @@ class QuantDequantFP(torch.nn.Module):
         if isinstance(v, torch.Tensor):
             v = v.to(device=x.device, dtype=x.dtype)
         x_scaled, scale = self.quantize_fp_block(x, self.min_exp, self.max_norm)
-        ex_mx = quantize_elewise(x_scaled, self.min_exp, self.max_norm, self.shift_val, v=v)
+        ex_mx = quantize_elewise(
+            x_scaled, self.min_exp, self.max_norm, self.shift_val, v=v
+        )
         return scale, ex_mx
 
     def _get_format_params(self):
