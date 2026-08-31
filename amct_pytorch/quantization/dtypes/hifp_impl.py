@@ -428,7 +428,7 @@ def _exact_mul_pow2(a, e):
 def _ste_mul_pow2(a, e):
     if torch.is_tensor(e):
         return a * torch.exp2(e)
-    return a * (2.0 ** e)
+    return a * (2.0**e)
 
 
 _EXACT_PRIMS = _HifxPrims(
