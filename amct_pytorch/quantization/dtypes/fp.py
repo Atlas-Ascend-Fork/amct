@@ -48,7 +48,7 @@ class QuantDequantFP(torch.nn.Module):
         M, N = x.shape
 
         block_m = self.block_size_col
-        block_n = 128
+        block_n = 128 # amct only support [1x128, 128x128] two quantization block shape
 
         pad_m = (block_m - M % block_m) % block_m
         pad_n = (block_n - N % block_n) % block_n
