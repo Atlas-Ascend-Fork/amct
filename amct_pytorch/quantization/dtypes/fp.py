@@ -75,7 +75,7 @@ class QuantDequantFP(torch.nn.Module):
         amax = torch.amax(torch.abs(W_blocks), dim=(-1, -2), keepdim=True)
 
         if self.scale_dtype=="e8m0":
-            scale = shared_exponents(x, self.emax)
+            scale = shared_exponents(W_blocks, self.emax)
         else:
             scale = amax / fp8_max
             scale = torch.clamp(scale, min=1e-8)
