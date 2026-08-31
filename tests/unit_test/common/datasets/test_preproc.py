@@ -109,11 +109,15 @@ def test_get_pileval_passes_through_to_pileval_awq(monkeypatch):
 
 
 def test_get_wikitext2_concatenates_and_tokenizes(monkeypatch):
-    monkeypatch.setattr(
-        preproc,
-        "load_dataset",
-        lambda *a, **k: {"text": ["hello world", "foo"]},
-    )
+    captured = {}
+
+    def fake_load_dataset(name, config, split):
+        captured["name"] = name
+        captured["config"] = config
+        captured["split"] = split
+        return {"text": ["hello world", "foo"]}
+
+    monkeypatch.setattr(preproc, "load_dataset", fake_load_dataset)
 
     class _Tok:
         def __call__(self, text, return_tensors=None):
@@ -121,6 +125,11 @@ def test_get_wikitext2_concatenates_and_tokenizes(monkeypatch):
             return type("Enc", (), {"input_ids": torch.tensor([[1, 2, 3]])})()
 
     enc = preproc.get_wikitext2(_Tok())
+    assert captured == {
+        "name": "Salesforce/wikitext",
+        "config": "wikitext-2-raw-v1",
+        "split": "test",
+    }
     assert torch.equal(enc.input_ids, torch.tensor([[1, 2, 3]]))
 
 
