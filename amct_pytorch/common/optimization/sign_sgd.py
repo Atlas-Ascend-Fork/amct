@@ -1,23 +1,25 @@
 # -*- coding: UTF-8 -*-
 # ----------------------------------------------------------------------------
-# Adapted from
-# https://github.com/intel/neural-compressor (AutoRound SignSGD) and
-# https://github.com/pytorch/pytorch (torch.optim.sgd)
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
-# Copyright (c) 2023 Intel Corporation. Licensed under Apache-2.0.
-# Copyright (c) 2016 Facebook, Inc. Licensed under BSD-3-Clause.
+# SPDX-License-Identifier: Apache-2.0
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
+# Portions of this file are adapted from third-party open-source projects;
+# the remainder is Huawei-authored.
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+# - SignSGD / _sign_sgd (sign-based parameter update):
+#     adapted from Intel auto-round
+#     https://github.com/intel/auto-round/blob/main/auto_round/algorithms/quantization/sign_round/sign_sgd.py
+#     Copyright (c) 2023 Intel Corporation
+#     SPDX-License-Identifier: Apache-2.0
 #
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# - SGD scaffolding (Optimizer subclass, step(), momentum / weight-decay /
+#   nesterov handling, _RequiredParameter, _use_grad_for_differentiable):
+#     adapted from PyTorch
+#     https://github.com/pytorch/pytorch/blob/main/torch/optim/sgd.py
+#     Copyright (c) 2016 Facebook, Inc. and affiliates.
+#     SPDX-License-Identifier: BSD-3-Clause
+#     Full BSD-3-Clause text and disclaimer:
+#     https://github.com/pytorch/pytorch/blob/main/LICENSE
 # ----------------------------------------------------------------------------
 
 from typing import List, Optional
