@@ -35,7 +35,9 @@ def check_params(
                 tensor_num, len(prune_axis_list)
             )
         )
-        raise RuntimeError("Inner Error of bcp op in prune process.")
+        raise RuntimeError(
+            "BCP parameter validation failed: input tensor count does not match prune axis count."
+        )
 
     if prune_ratio >= 1 or prune_ratio <= 0:
         raise RuntimeError(
@@ -69,7 +71,9 @@ def check_params(
             flag = False
 
     if not flag:
-        raise RuntimeError("Inner Error of bcp op in prune process.")
+        raise RuntimeError(
+            "BCP parameter validation failed: one or more input tensor parameters are invalid."
+        )
 
 
 def cal_prune_num(num, prune_ratio, ascend_optimized, prune_group=1):
