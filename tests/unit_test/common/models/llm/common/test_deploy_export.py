@@ -598,3 +598,34 @@ def test_get_quant_ignore_linear_names_mixed_plain_and_plain_linear():
     block.wrapped = PlainLinear(nn.Linear(4, 4))
     names = get_quant_ignore_linear_names(block, "")
     assert sorted(names) == ["plain_fc", "wrapped"]
+
+
+def test_convert_state_dict_mxfp8_dequant():
+    """FP8 weight + uint8 E8M0 2-D scale must dequantize via the MXFP8 branch."""
+    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+
+    w8 = torch.zeros(2, 64, dtype=torch.float8_e4m3fn)
+    w8[0, 0] = 448.0
+    # e=127 -> 2^0 = 1.0; e=130 -> 2^3 = 8.0
+    scale = torch.tensor([[127, 130]], dtype=torch.uint8).expand(2, -1)
+    loaded_files = {"shard.safetensors": {"mod.weight_scale": scale}}
+    weight_map = {"mod.weight_scale": "shard.safetensors"}
+    out = convert_state_dict(
+        w8, "mod.weight", "mod.weight_scale", weight_map, "", loaded_files, 32
+    )
+    assert out[0, 0] == 448.0
+    assert out[1, 32] == 0.0
+
+
+def test_convert_state_dict_mxfp8_bad_scale_tiling_raises():
+    """An E8M0 scale whose last dim does not divide the weight last dim must fail loudly."""
+    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+
+    w8 = torch.zeros(2, 64, dtype=torch.float8_e4m3fn)
+    scale = torch.zeros(2, 3, dtype=torch.uint8)  # 64 % 3 != 0
+    loaded_files = {"shard.safetensors": {"mod.weight_scale": scale}}
+    weight_map = {"mod.weight_scale": "shard.safetensors"}
+    with pytest.raises(ValueError, match="does not tile"):
+        convert_state_dict(
+            w8, "mod.weight", "mod.weight_scale", weight_map, "", loaded_files, 32
+        )
