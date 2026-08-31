@@ -53,7 +53,7 @@ public:
         unsigned int sizeM, const Vector &vecS, double xatol = 1e-5, unsigned int maxIter = 500);
     static TdError Tau(Vector &vecRes, const Vector &vecX, double alpha);
     static TdError EVBMF(unsigned int &resultOut, int sizeL, int sizeM, const Vector &vecS);
-    static TdError MakeDivisible(unsigned int &newV, int rank, int divisior, int minVal);
+    static TdError MakeDivisible(unsigned int &newV, int rank, int divisor, int minVal);
     static TdError EstimateRanks(unsigned int &rankResult, const Vector &vecS, int sizeL, int sizeM, int divisor);
     static int Check(TdError ret, int estimateRank, int originRank);
     static unsigned int Estimation(const ConvInfo &info, const Vector &vecS, unsigned int length);

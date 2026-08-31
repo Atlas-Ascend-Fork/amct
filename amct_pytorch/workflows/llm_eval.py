@@ -145,10 +145,24 @@ class LlmEvalWorkflow:
                 use_quant_block=use_quant_block,
                 enable_quant=enable_quant,
             )
-            if layer_idx == self.pipeline.num_layers - 1:
-                preds = self.pipeline.do_head_forward(inter_io)
-        ppl = wikitext2_ppl(preds, samples, seq_len=self.seq_len)
+
+        ppl = wikitext2_ppl(
+            self.pipeline.do_head_forward(inter_io),
+            samples,
+            device=self.device,
+            seq_len=self.seq_len,
+        )
         return ppl
+
+    def _iter_model_logits(self, model, samples):
+        """Yield shifted full-model logits on the workflow device."""
+        with torch.no_grad():
+            for sample in samples:
+                lm_logits = model(sample.to(self.device)).logits
+                shift_logits = lm_logits[:, :-1, :].contiguous()
+                del lm_logits
+                yield shift_logits
+                del shift_logits
 
     def _run_modelwise(
         self,
@@ -157,13 +171,13 @@ class LlmEvalWorkflow:
         tokenizer = self.pipeline.tokenizer
         samples = get_wiki_inputs(tokenizer, self.seq_len)
         logger.info("Loaded {} eval samples for modelwise eval.", len(samples))
-        preds = []
-        with torch.no_grad():
-            for i, sample in tqdm(enumerate(samples), desc="Evaluating"):
-                lm_logits = model(sample.to(self.device)).logits
-                shift_logits = lm_logits[:, :-1, :].contiguous()
-                preds.append(shift_logits.to("cpu"))
-        ppl = wikitext2_ppl(preds, samples, seq_len=self.seq_len)
+
+        ppl = wikitext2_ppl(
+            self._iter_model_logits(model, samples),
+            samples,
+            device=self.device,
+            seq_len=self.seq_len,
+        )
         return ppl
 
     def _save_inter_result(self, result, name):

@@ -30,6 +30,7 @@ from amct_pytorch.common.models.llm.longcat.longcat_lite.longcat_lite import Lon
 def _make_args(**extra):
     base = {
         "model": "/tmp/fake_model",
+        "trust_remote_code": True,
         "quant_target": ["mlp"],
         "device": "cpu",
         "data_dir": "/tmp/fake_data",

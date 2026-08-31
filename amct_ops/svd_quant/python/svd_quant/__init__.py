@@ -1,3 +1,4 @@
+# -*- coding: UTF-8 -*-
 # This program is free software, you can redistribute it and/or modify it.
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This file is a part of the CANN Open Software.

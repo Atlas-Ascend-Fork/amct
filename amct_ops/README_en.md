@@ -29,12 +29,14 @@
 | Operator | Description | Python Interface |
 |------|------|-------------|
 | [`hifloat8_cast`](./hifloat8_cast/) | FP16 / BF16 ↔ HiFloat8 bidirectional conversion | `encode_to_hifloat8(x)`<br>`decode_from_hifloat8(x, dtype)` |
+| [`hifloat4_cast`](./hifloat4_cast/) | FP16 / BF16 → HiFloat4 simulation (fake-quant, 64-element block scaling) | `hifloat4_fake_quant(x, qdim=-1)` |
 
 ## Directory Structure
 
 ```
 amct_ops/
 ├── hifloat8_cast/          # HiFloat8 conversion operator source code (kernel + binding + Python interface)
+├── hifloat4_cast/          # HiFloat4 FP→HiF4→FP simulation operator source code (kernel + binding + Python interface)
 ├── svd_quant/              # SVD quantization operator with mixed Mxfp4/Bf16
 ├── ops_build.sh            # Unified build entry
 ├── setup.py                # wheel packaging configuration

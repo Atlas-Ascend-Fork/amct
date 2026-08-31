@@ -22,6 +22,7 @@ __all__ = [
 ]
 
 from dataclasses import dataclass
+from typing import Optional
 
 from .base import QuantAlgorithmBase
 
@@ -39,11 +40,12 @@ def register_algorithms():
     from .auto_round import AutoRound  # noqa: F401
     from .omniquant import OmniQuant  # noqa: F401
     from .flatquant import FlatQuant  # noqa: F401
+    from .gptq import GPTQ  # noqa: F401
 
     _REGISTERED = True
 
 
 @dataclass
 class AlgoBuildContext:
-    matrix_size: int | None = None
-    dim_size: int | None = None
+    matrix_size: Optional[int] = None
+    dim_size: Optional[int] = None

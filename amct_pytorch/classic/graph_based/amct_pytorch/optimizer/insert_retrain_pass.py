@@ -58,7 +58,7 @@ REPLACE_DICT = {
 
 class InsertRetrainPass(BaseFusionPass):
     """
-    Function: Insert some mudule about retrain quantization.
+    Function: Insert some module about retrain quantization.
     APIs: match_pattern, do_pass
     """
 
@@ -88,7 +88,7 @@ class InsertRetrainPass(BaseFusionPass):
 
     def do_pass(self, graph, object_node, model=None):
         """
-        Function: Insert some mudule about retrain quantization.
+        Function: Insert some module about retrain quantization.
         Parameters: graph: graph structure
                     object_node: node to process
                     model: torch.nn.Module, the model to be modified. if it's
@@ -136,8 +136,8 @@ class InsertRetrainPass(BaseFusionPass):
             object_module.common_config = common_config
             setattr(parent_module, object_node_name.split('.')[-1], object_module)
             LOGGER.logd(
-                "Current module is already replaced module. open quant retrain"
-                "'{}'.".format(object_node.name),
+                "The current module has already been replaced. Enable quant retraining "
+                "for '{}'.".format(object_node.name),
                 'InsertRetrainPass',
             )
             return

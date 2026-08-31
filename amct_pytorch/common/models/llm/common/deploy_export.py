@@ -14,14 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from loguru import logger
 import torch
 import torch.nn as nn
+from loguru import logger
 from safetensors.torch import load_file
 
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from amct_pytorch.quantization.dtypes.fp_impl import weight_dequant
 from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
+from amct_pytorch.common.models.llm.common.weight_path_validation import (
+    collect_safetensors_files,
+    resolve_safetensors_path,
+)
+from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
+from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
 def generate_quant_group(a_bits=8, w_bits=8, qtype="float", activation_use_clip=False):
@@ -153,6 +159,24 @@ def export_block_deploy(pipeline, layer_idx: int, quant_ignore_layers: list):
     return deploy_tensors, tensor_routes
 
 
+def _load_scales(
+    names, original_weight_map, model_dir, loaded_files, safetensors_files=None
+):
+    """Load scale tensors by name, loading their shards on demand."""
+    scales = []
+    for name in names:
+        file_name = original_weight_map[name]
+        if file_name not in loaded_files:
+            if safetensors_files is None:
+                safetensors_files = collect_safetensors_files(model_dir)
+            file_path = resolve_safetensors_path(
+                model_dir, file_name, safetensors_files
+            )
+            loaded_files[file_name] = load_file(str(file_path), device="cpu")
+        scales.append(loaded_files[file_name][name])
+    return scales
+
+
 def convert_state_dict(
     weight,
     weight_name,
@@ -161,26 +185,57 @@ def convert_state_dict(
     model_dir,
     loaded_files,
     block_size,
+    safetensors_files=None,
 ):
-    if weight.element_size() == 1:
-        # FP8 weight
-        try:
-            # Get scale_inv from the correct file
-            file_name = original_weight_map[scale_inv_name]
-            if file_name not in loaded_files:
-                file_path = model_dir / file_name
-                loaded_files[file_name] = load_file(file_path, device="cpu")
-            scale_inv = loaded_files[file_name][scale_inv_name]
-            if weight.dtype == torch.int8:
-                weight = weight_dequant(
-                    weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True
-                )
-            else:
-                weight = weight_dequant(weight, scale_inv, block_size=block_size)
-        except KeyError:
-            logger.warning(
-                f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion"
+    if weight.element_size() != 1:
+        return weight
+    try:
+        # NVFP4
+        if isinstance(scale_inv_name, tuple):
+            from amct_pytorch.common.utils.nvfp4_format import nvfp4_weight_dequant
+
+            scale, scale_2 = _load_scales(
+                scale_inv_name,
+                original_weight_map,
+                model_dir,
+                loaded_files,
+                safetensors_files,
             )
+            return nvfp4_weight_dequant(weight, scale, scale_2)
+        scale_inv = _load_scales(
+            (scale_inv_name,),
+            original_weight_map,
+            model_dir,
+            loaded_files,
+            safetensors_files,
+        )[0]
+
+        # HiF4
+        if (
+            weight.dtype == torch.uint8
+            and scale_inv.dtype == torch.uint8
+            and scale_inv.ndim == 3
+            and scale_inv.shape[-1] == 4
+        ):
+            from amct_pytorch.quantization.dtypes.hifp_impl import hif4_unpack
+
+            weight = hif4_unpack(scale_inv, weight)
+
+        # MXFP4
+        elif weight.dtype == torch.int8:
+            weight = weight_dequant(
+                weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True
+            )
+
+        # FP8 / MXFP8
+        else:
+            weight = weight_dequant(weight, scale_inv, block_size=block_size)
+
+    except KeyError:
+        logger.warning(
+            f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion"
+        )
+
     return weight
 
 

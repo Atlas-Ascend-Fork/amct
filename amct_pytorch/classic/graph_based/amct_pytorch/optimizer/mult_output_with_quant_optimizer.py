@@ -148,7 +148,7 @@ class MultQuantOptimizerPass(BaseFusionPass):
                 )
             elif peer_node.type not in self._optimizer_type:
                 LOGGER.logd(
-                    'Find node {} has unsupprted output {}'.format(
+                    'Find node {} has unsupported output {}'.format(
                         node.name, peer_node.name
                     ),
                     'MultQuantOptimizerPass',
@@ -156,7 +156,7 @@ class MultQuantOptimizerPass(BaseFusionPass):
                 return False, None, None
             else:
                 LOGGER.logd(
-                    'Find node {} has supprted output {}'.format(
+                    'Find node {} has supported output {}'.format(
                         node.name, peer_node.name
                     ),
                     'MultQuantOptimizerPass',

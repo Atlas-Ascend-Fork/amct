@@ -47,7 +47,7 @@
   下载[Qwen/Qwen3.6-35B-A3B原始权重](https://huggingface.co/Qwen/Qwen3.6-35B-A3B)并上传到各节点的某个固定的路径下，比如`/data/models/Qwen3.6-35B-A3B`。
 
 ### 本地编包
-  本地编包的流程请查看[环境安装&验证](../../../README.md#安装验证)
+  本地编包流程请查看[环境安装&验证](../../../README.md#安装验证)
 
 ### 基准测试
 
@@ -55,6 +55,7 @@
 
   ```shell
 python -m amct_pytorch.eval \
+     --trust_remote_code \
      --model /data/models/Qwen3.6-35B-A3B \
      --model_name qwen3_6_moe \
      --seq_len 4096 \
@@ -72,12 +73,13 @@ python -m amct_pytorch.eval \
 基准测试精度结果：
 `Wikitext2-ppl=6.2825`
 
-更多参数详细解释请参见[参数说明](../../../docs/zh/AMCT_Pytorch_LLM.md#31-通用参数)
+更多参数说明请参见[参数说明](../../../docs/zh/AMCT_Pytorch_LLM.md#31-通用参数)
 
 ### 直转量化精度评估
 根据YAML的bit配置，进行直转量化精度测试，评估与基准精度的差距，当前方案默认为对`quant-target`做全A8W4的int量化：
   ```shell
 python -m amct_pytorch.eval \
+    --trust_remote_code \
     --model /data/models/Qwen3.6-35B-A3B \
     --model_name qwen3_6_moe \
     --seq_len 4096 \
@@ -95,12 +97,13 @@ python -m amct_pytorch.eval \
 直转量化精度结果：
 `Wikitext2-ppl=7.0407`
 
-更多参数详细解释请参见[参数说明](../../../docs/zh/AMCT_Pytorch_LLM.md#32-ppl-评估参数)
+更多参数说明请参见[参数说明](../../../docs/zh/AMCT_Pytorch_LLM.md#32-ppl-评估参数)
 
 ### PTQ数据提取
 根据不同的量化对象`quant_target`提取相应的 PTQ 校准数据集：
   ```shell
 python -m amct_pytorch.extract_ptq_data \
+    --trust_remote_code \
     --model /data/models/Qwen3.6-35B-A3B \
     --model_name qwen3_6_moe \
     --seq_len 4096 \
@@ -112,13 +115,14 @@ python -m amct_pytorch.extract_ptq_data \
 必要传参解释：
 - data_dir：提取数据目录
 
-更多参数详细解释请参见[参数说明](../../../docs/zh/AMCT_Pytorch_LLM.md#33-数据提取参数)
+更多参数说明请参见[参数说明](../../../docs/zh/AMCT_Pytorch_LLM.md#33-数据提取参数)
 
 ### Post-Training Quantization
 引入量化算法，对量化过程做优化，以减少量化带来的损失，以autoround为例：
 #### 单卡环境
   ```shell
 python -m amct_pytorch.ptq \
+    --trust_remote_code \
     --model /data/models/Qwen3.6-35B-A3B \
     --model_name qwen3_6_moe \
     --seq_len 4096 \
@@ -143,23 +147,24 @@ python -m amct_pytorch.ptq \
 为提升训练效率，我们提供多卡下的训练脚本
 多卡环境请参照脚本[ptq_multi_npu](../../ptq_multi_npu.sh)
 
-更多参数详细解释请参见[参数说明](../../../docs/zh/AMCT_Pytorch_LLM.md#35-ptq-参数)
+更多参数说明请参见[参数说明](../../../docs/zh/AMCT_Pytorch_LLM.md#35-ptq-参数)
 
 ### 基于Post-Training Quantization的直转量化精度评估
 完成PTQ后，在直转量化精度评估中加入量化算法，与基准测试、无量化算法的直转量化精度比对，验证量化算法的效果：
   ```shell
 python -m amct_pytorch.eval \
-  --model /data/models/Qwen3.6-35B-A3B \
-  --model_name qwen3_6_moe \
-  --seq_len 4096 \
-  --granularity block \
-  --device npu:0 \
-  --eval_mode quant \
-  --quant_target attn-linear \
-  --bit_config amct_pytorch/configs/w4a8.yaml \
-  --quant_dtype int \
-  --algos autoround \
-  --attn_linear_param_dir ptq_result/ptq_params/qwen3_6_moe/attn-linear
+    --trust_remote_code \
+    --model /data/models/Qwen3.6-35B-A3B \
+    --model_name qwen3_6_moe \
+    --seq_len 4096 \
+    --granularity block \
+    --device npu:0 \
+    --eval_mode quant \
+    --quant_target attn-linear \
+    --bit_config amct_pytorch/configs/w4a8.yaml \
+    --quant_dtype int \
+    --algos autoround \
+    --attn_linear_param_dir ptq_result/ptq_params/qwen3_6_moe/attn-linear
   ```
 必要传参解释：
 - attn_linear_param_dir：`quant_target`为`attn-linear`时，量化算法系数保存路径
@@ -168,15 +173,16 @@ python -m amct_pytorch.eval \
 完成上述所有步骤后，导出量化权重用于加载，权重对应的weight_map和huggingface官方对齐
   ```shell
 python -m amct_pytorch.deploy \
-  --model /data/models/Qwen3.6-35B-A3B \
-  --model_name qwen3_6_moe \
-  --granularity block \
-  --quant_target attn-linear \
-  --bit_config amct_pytorch/configs/w4a8.yaml \
-  --quant_dtype int \
-  --algos autoround \
-  --attn_linear_param_dir ptq_result/ptq_params/qwen3_6_moe/attn-linear \
-  --output_dir ./output/Qwen3.6-35B-A8W4-INT
+    --trust_remote_code \
+    --model /data/models/Qwen3.6-35B-A3B \
+    --model_name qwen3_6_moe \
+    --granularity block \
+    --quant_target attn-linear \
+    --bit_config amct_pytorch/configs/w4a8.yaml \
+    --quant_dtype int \
+    --algos autoround \
+    --attn_linear_param_dir ptq_result/ptq_params/qwen3_6_moe/attn-linear \
+    --output_dir ./output/Qwen3.6-35B-A8W4-INT
   ```
 必要传参解释：
 - output_dir：导出权重保存路径

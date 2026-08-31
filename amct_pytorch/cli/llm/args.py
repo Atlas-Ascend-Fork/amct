@@ -16,8 +16,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import argparse
+import os
 
 from amct_pytorch.quantization.bit_policy import BitPolicy
 
@@ -47,6 +47,12 @@ def parser_gen(command=None):
         type=str,
         default='deepseek-ai/DeepSeek-V4-Flash',
         help='Model to load.',
+    )
+    parser.add_argument(
+        '--trust_remote_code',
+        action='store_true',
+        default=False,
+        help='Whether to allow HuggingFace model repositories to execute custom code.',
     )
     parser.add_argument('--device', type=str, default='npu:0', help='Device to use.')
     parser.add_argument(

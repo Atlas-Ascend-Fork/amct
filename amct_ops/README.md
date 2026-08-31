@@ -29,12 +29,14 @@
 | 算子 | 说明 | Python 接口 |
 |------|------|-------------|
 | [`hifloat8_cast`](./hifloat8_cast/) | FP16 / BF16 ↔ HiFloat8 双向转换 | `encode_to_hifloat8(x)`<br>`decode_from_hifloat8(x, dtype)` |
+| [`hifloat4_cast`](./hifloat4_cast/) | FP16 / BF16 → HiFloat4 仿真（fake-quant，64 元素块缩放） | `hifloat4_fake_quant(x, qdim=-1)` |
 
 ## 目录结构
 
 ```
 amct_ops/
 ├── hifloat8_cast/          # HiFloat8 转换算子源码（kernel + binding + Python 接口）
+├── hifloat4_cast/          # HiFloat4 FP→HiF4→FP 仿真算子源码（kernel + binding + Python 接口）
 ├── svd_quant/              # 使用混合Mxfp4/Bf16算子的SVD量化方法
 ├── ops_build.sh            # 统一构建入口
 ├── setup.py                # wheel 打包配置

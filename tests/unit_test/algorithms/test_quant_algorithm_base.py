@@ -115,7 +115,7 @@ def test_base_requires_subclass_to_implement_forward():
 
 @pytest.mark.parametrize("name", ALGO_REGISTRY.list_all())
 def test_registered_algorithm_satisfies_calibration_contract(name):
-    expected_algorithms = {"autoround", "flatquant", "lac", "lwc", "omniquant"}
+    expected_algorithms = {"autoround", "flatquant", "gptq", "lac", "lwc", "omniquant"}
     assert set(ALGO_REGISTRY.list_all()) == expected_algorithms
 
     item = ALGO_REGISTRY.get_item(name)

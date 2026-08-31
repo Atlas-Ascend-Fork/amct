@@ -42,6 +42,12 @@ from amct_pytorch.common.datasets.ptq_io import save_ptq_kwargs
 )
 class DeepseekV32(BaseModel):
     def __init__(self, args):
+        if not getattr(args, "trust_remote_code", False):
+            model_name = getattr(args, "model_name", "deepseek_v3_2")
+            raise ValueError(
+                f"{model_name} requires --trust_remote_code. "
+                "Please rerun the command with --trust_remote_code."
+            )
         super().__init__(args)
         self.quant_target = args.quant_target
         self.init_cls()
@@ -127,16 +133,11 @@ class DeepseekV32(BaseModel):
     def do_head_forward(self, inps):
         self.model.norm.to(self.args.device)
         self.model.head.to(self.args.device)
-        preds = []
         with torch.no_grad():
-            for idx, inp in tqdm(
-                enumerate(inps), total=len(inps), desc='Head Processing...'
-            ):
+            for inp in inps:
                 inp = inp.to(self.args.device)
                 out = self.model.norm(inp)
-                out = self.model.head(out)[:, :-1, :].contiguous()
-                preds.append(out.to('cpu'))
-        return preds
+                yield self.model.head(out)[:, :-1, :].contiguous()
 
     def build_quant_block(self, layer_idx):
         decoder_layer = self.block(layer_idx)

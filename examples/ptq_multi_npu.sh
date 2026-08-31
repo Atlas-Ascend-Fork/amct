@@ -46,6 +46,7 @@ for ((i=0; i<NUM_TASKS; i++)); do
 
   echo "Launching task $i: blocks [$start, $end), npu $logic_id"
   ASCEND_RT_VISIBLE_DEVICES=$logic_id python -m amct_pytorch.ptq \
+      --trust_remote_code \
       --model $model_path \
       --model_name $model_name \
       --data_dir $data_path \

@@ -49,7 +49,7 @@ class AccuracyBasedAutoCalibrationBase:  # pylint: disable=R0902
 
     This superclass contains the main control of automatic calibration
     and a list of functions that subclasses must inherit and implement
-    accroding to framework.
+    according to framework.
 
     Args:
         record_file (str): a string of record file path.
@@ -136,7 +136,7 @@ class AccuracyBasedAutoCalibrationBase:  # pylint: disable=R0902
         LOGGER.logi("metric_eval: {}".format(record.get(METRIC_EVAL)))
 
     def get_original_accuracy(self):
-        """Accroding to framework, get the original model'saccuracy with
+        """According to framework, get the original model'saccuracy with
         object 'evaluator'.
 
         Return:
@@ -146,7 +146,7 @@ class AccuracyBasedAutoCalibrationBase:  # pylint: disable=R0902
         raise NotImplementedError
 
     def get_global_quant_accuracy(self):
-        """Accroding to framework, get the global quantized model's
+        """According to framework, get the global quantized model's
         accuracy with object 'evaluator'.
 
         Return:
@@ -156,7 +156,7 @@ class AccuracyBasedAutoCalibrationBase:  # pylint: disable=R0902
         raise NotImplementedError
 
     def get_ranking_info(self) -> list:
-        """Accroding to framework, get cosine similarity between
+        """According to framework, get cosine similarity between
         quantized model and original model for every layer.
 
         Return:
@@ -165,7 +165,7 @@ class AccuracyBasedAutoCalibrationBase:  # pylint: disable=R0902
         raise NotImplementedError
 
     def roll_back_and_evaluate_model(self, roll_back_config: dict):
-        """Accroding to 'roll_back_config', create the quantized config
+        """According to 'roll_back_config', create the quantized config
         file, calibration on original model and get the current model's
         accuracy with object 'evaluator'.
 
@@ -360,8 +360,8 @@ class AccuracyBasedAutoCalibrationBase:  # pylint: disable=R0902
         )
         if not is_satisfied:
             LOGGER.loge(
-                "Compare between original_accuracy and original_accuracy can not satisfy the acc requirement, please "
-                "check the metric_eval() function."
+                "The comparison between original_accuracy and original_accuracy does not satisfy the accuracy "
+                "requirement. Please check the metric_eval() function."
             )
             raise ValueError(
                 "Compare between original_accuracy and original_accuracy can not satisfy the acc requirement, please "
@@ -376,12 +376,13 @@ class AccuracyBasedAutoCalibrationBase:  # pylint: disable=R0902
         if is_global_satisfied:
             self.saved_model_accuracy = self.global_quant_accuracy
             LOGGER.logi(
-                "The model satisfy the requirement after all layers are quantized, automatic calibration succeed!"
+                "The model satisfies the requirement after all layers are quantized. Automatic calibration "
+                "succeeded!"
             )
         elif self.ranking_info:
             self.strategy.initialize(self.ranking_info)
             roll_back_status = self.fine_search()
-            LOGGER.logi("Fine search finish, automatic calibration succeed!")
+            LOGGER.logi("Fine search finished. Automatic calibration succeeded!")
             LOGGER.logi("accuracy based auto calibration search record:")
             for record in self.history_records:
                 AccuracyBasedAutoCalibrationBase.show_record_info(record)
@@ -417,7 +418,7 @@ class AccuracyBasedAutoCalibrationBase:  # pylint: disable=R0902
         else:
             self.clear()
             LOGGER.logi(
-                "No quantized model are generated due to all quant layers are roll backed, "
-                "the accuracy target may be too difficult to achieve."
+                "No quantized model is generated because all quantized layers are rolled back. "
+                "The accuracy target may be too difficult to achieve."
             )
         shutil.rmtree(self.temp_dir)

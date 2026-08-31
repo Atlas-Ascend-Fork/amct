@@ -376,10 +376,18 @@ def test_hifp_is_registered_under_hifp_name_only():
 
 
 def test_hifp_quant_dtype_cli_option_replaces_hif():
-    with patch.object(sys, "argv", ["amct", "--quant_dtype", "hifp"]):
+    with patch.object(
+        sys,
+        "argv",
+        ["amct", "--trust_remote_code", "--quant_dtype", "hifp"],
+    ):
         assert parser_gen().quant_dtype == "hifp"
 
-    with patch.object(sys, "argv", ["amct", "--quant_dtype", "hif"]):
+    with patch.object(
+        sys,
+        "argv",
+        ["amct", "--trust_remote_code", "--quant_dtype", "hif"],
+    ):
         with pytest.raises(SystemExit):
             parser_gen()
 

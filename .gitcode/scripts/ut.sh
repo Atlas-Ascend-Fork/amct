@@ -8,14 +8,36 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-set +e
+set -euo pipefail
 
 REPOSITORY_NAME="amct"
-sudo update-alternatives --set gcc /usr/bin/gcc-14
+if [ "${GIT_TARGET_BRANCH}" == "master" ]; then
+    sudo update-alternatives --set gcc /usr/bin/gcc-15
+else
+    sudo update-alternatives --set gcc /usr/bin/gcc-14
+fi
+if gcc --version | head -n1 | grep -q "15\."; then
+    rm -rf /home/jenkins/opensource/lib_cache
+    if [ -d /home/jenkins/opensource/gcc15 ]; then
+        rm -rf /home/jenkins/opensource/gcc15/lib_cache/abseil-cpp
+        rm -rf /home/jenkins/opensource/gcc15/lib_cache/device/abseil-cpp
+        ln -s /home/jenkins/opensource/gcc15/lib_cache/ /home/jenkins/opensource/lib_cache
+    elif [ -d /home/jenkins/opensource/gcc15x86 ]; then
+        rm -rf /home/jenkins/opensource/gcc15x86/lib_cache/abseil-cpp
+        rm -rf /home/jenkins/opensource/gcc15x86/lib_cache/device/abseil-cpp
+        ln -s /home/jenkins/opensource/gcc15x86/lib_cache/ /home/jenkins/opensource/lib_cache
+    fi
+elif gcc --version | head -n1 | grep -q "14\."; then
+    gcc --version
+else
+    gcc --version
+    rm -rf /home/jenkins/opensource/lib_cache
+    ln -s /home/jenkins/opensource/ubuntu20/lib_cache /home/jenkins/opensource/lib_cache
+fi
 export PATH=/opt/buildtools/python-3.10.2/bin:$PATH
 gcc --version
 
-if [ -z "${ASCEND_3RD_LIB_PATH}" ]; then
+if [ -z "${ASCEND_3RD_LIB_PATH:-}" ]; then
     export ASCEND_3RD_LIB_PATH=/home/jenkins/opensource
 fi
 
@@ -49,7 +71,8 @@ DP_ASSERT_EQUAL()
 
 LOG_HEAD "Start run c++ testcase"
 cd ${WORKSPACE}/ || exit 1
-LOG_DO bash build.sh -u --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH}
-DP_ASSERT_EQUAL "$?" "0" "Run UT TESTCASE"
+ut_status=0
+LOG_DO bash build.sh -u --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} || ut_status=$?
+DP_ASSERT_EQUAL "${ut_status}" "0" "Run UT TESTCASE"
 
 echo "ut_process=ut_cov" >> "${ATOMGIT_OUTPUT}"
