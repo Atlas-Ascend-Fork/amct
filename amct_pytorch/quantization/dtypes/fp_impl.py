@@ -31,8 +31,7 @@ FP32_EXPONENT_BIAS = 127
 FP32_MIN_NORMAL = 2 ** (-FP32_EXPONENT_BIAS + 1)
 EBITS_F4_E2M1, MBITS_F4_E2M1 = 2, 1
 
-
-def unpack_float4_to_fp32(packed_tensor):
+def unpack_mxfloat4_to_fp32(packed_tensor):
     e2m1_values = torch.tensor(
         [
             0.0,
