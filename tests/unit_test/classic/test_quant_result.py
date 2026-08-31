@@ -50,8 +50,7 @@ from amct_pytorch.classic.quant_result import (
 
 SOURCE_MODEL = {
     'model_type': 'tiny',
-    'config_sha256': 'sha256:' + '0' * 64,
-    'state_dict_sha256': 'sha256:' + '1' * 64,
+    'torch_dtype': 'bfloat16',
 }
 
 
@@ -479,15 +478,11 @@ class TestManifestPublish:
             'format',
             'schema_version',
             'artifact_id',
-            'producer',
             'source_model',
             'units',
         }
         assert manifest['format'] == MANIFEST_FORMAT == 'amct-quant-result-manifest'
         assert manifest['schema_version'] == SCHEMA_VERSION == 1
-        assert set(manifest['producer']) == {'library', 'library_version'}
-        assert manifest['producer']['library'] == 'amct_pytorch'
-        assert manifest['producer']['library_version']
         assert manifest['source_model'] == SOURCE_MODEL
         assert [unit['layer_name'] for unit in manifest['units']] == ['fc1', 'fc2']
 
@@ -708,7 +703,6 @@ class TestReadBack:
             'format',
             'schema_version',
             'artifact_id',
-            'producer',
             'source_model',
             'units',
         ],
@@ -748,7 +742,7 @@ class TestReadBack:
         writer = _writer(tmp_path, units=('fc1',))
         _write(writer, 'fc1')
         writer.publish_if_complete()
-        self._repoint(writer, lambda m: m['source_model'].pop('state_dict_sha256'))
+        self._repoint(writer, lambda m: m['source_model'].pop('torch_dtype'))
         with pytest.raises(ValueError, match='missing required field'):
             load_quant_manifest(writer.result_dir)
 
@@ -824,19 +818,16 @@ class _FakeHfConfig:
 
 
 class TestModelFingerprint:
-    """source_model must be stable, and sensitive to weights and structure."""
+    """source_model records only the identity inputs used by quantization."""
 
     def test_returns_exactly_the_source_model_fields(self):
         fingerprint = compute_model_fingerprint(_TinyModel())
         assert set(fingerprint) == {
             'model_type',
-            'config_sha256',
-            'state_dict_sha256',
+            'torch_dtype',
         }
         assert fingerprint['model_type'] == '_TinyModel'
-        for field in ('config_sha256', 'state_dict_sha256'):
-            assert fingerprint[field].startswith('sha256:')
-            assert len(fingerprint[field]) == len('sha256:') + 64
+        assert fingerprint['torch_dtype'] == 'float32'
 
     def test_same_weights_give_the_same_fingerprint(self):
         model = _TinyModel()
@@ -844,38 +835,33 @@ class TestModelFingerprint:
         clone.load_state_dict(model.state_dict())
         assert compute_model_fingerprint(model) == compute_model_fingerprint(clone)
 
-    def test_changed_weight_changes_the_fingerprint(self):
+    def test_changed_weight_does_not_change_the_quantization_identity(self):
         model = _TinyModel()
         before = compute_model_fingerprint(model)
         with torch.no_grad():
             model.fc1.weight[0, 0] += 1.0
         after = compute_model_fingerprint(model)
-        assert after['state_dict_sha256'] != before['state_dict_sha256']
-        # Structure is unchanged, so the config digest must stay put.
-        assert after['config_sha256'] == before['config_sha256']
+        assert after == before
 
-    def test_changed_structure_changes_both_digests(self):
+    def test_changed_structure_does_not_change_the_identity_fields(self):
         small = compute_model_fingerprint(_TinyModel(hidden=8))
         large = compute_model_fingerprint(_TinyModel(hidden=16))
-        assert small['state_dict_sha256'] != large['state_dict_sha256']
-        assert small['config_sha256'] != large['config_sha256']
+        assert small == large
 
-    def test_dtype_change_changes_the_state_dict_digest(self):
+    def test_dtype_change_changes_the_identity(self):
         model = _TinyModel()
         before = compute_model_fingerprint(model)
         after = compute_model_fingerprint(model.to(torch.bfloat16))
-        assert after['state_dict_sha256'] != before['state_dict_sha256']
+        assert after['torch_dtype'] != before['torch_dtype']
 
-    def test_hf_config_supplies_model_type_and_config_digest(self):
+    def test_hf_config_supplies_model_type_and_dtype(self):
         model = _TinyModel()
         model.config = _FakeHfConfig(8)
         fingerprint = compute_model_fingerprint(model)
         assert fingerprint['model_type'] == 'fake_hf'
+        assert fingerprint['torch_dtype'] == 'bfloat16'
         model.config = _FakeHfConfig(16)
-        assert (
-            compute_model_fingerprint(model)['config_sha256']
-            != fingerprint['config_sha256']
-        )
+        assert compute_model_fingerprint(model) == fingerprint
 
     def test_hf_config_with_a_torch_dtype_does_not_break_fingerprinting(self):
         # A real HF config carries torch dtypes and other non-JSON objects; the
@@ -927,25 +913,32 @@ class TestManifestSchemaIsEnforced:
         with pytest.raises(ValueError, match='schema_version'):
             load_quant_manifest(result_dir)
 
-    @pytest.mark.parametrize(
-        'producer',
-        [
-            [],
-            'amct_pytorch',
-            None,
-            {},
-            {'library': 'amct_pytorch'},
-            {'library': '', 'library_version': '1'},
-            {'library': 'amct_pytorch', 'library_version': ''},
-            {'library': 'other_lib', 'library_version': '1'},
-            {'library': 1, 'library_version': '1'},
-        ],
-    )
-    def test_producer_must_identify_this_library(self, tmp_path, producer):
-        result_dir = self._forge(
-            tmp_path, lambda man: man.update({'producer': producer})
-        )
-        with pytest.raises(ValueError, match='producer|library'):
+    @pytest.mark.parametrize('location', ['manifest', 'source_model', 'unit', 'tensor'])
+    def test_reader_rejects_unknown_protocol_fields(self, tmp_path, location):
+        def add_unknown(manifest):
+            if location == 'manifest':
+                manifest['unexpected'] = True
+            elif location == 'source_model':
+                manifest['source_model']['unexpected'] = True
+            elif location == 'unit':
+                manifest['units'][0]['unexpected'] = True
+            else:
+                manifest['units'][0]['tensors'][0]['unexpected'] = True
+
+        result_dir = self._forge(tmp_path, add_unknown, name='unknown_' + location)
+        with pytest.raises(ValueError, match='unknown field'):
+            load_quant_manifest(result_dir)
+
+    def test_reader_rejects_duplicate_json_keys(self, tmp_path):
+        result_dir = self._published(tmp_path, name='duplicate_key')
+        path = os.path.join(result_dir, MANIFEST_NAME)
+        raw = open(path, encoding='utf-8').read()
+        needle = '"format":"{}"'.format(MANIFEST_FORMAT)
+        assert needle in raw
+        raw = raw.replace(needle, needle + ',' + needle, 1)
+        with open(path, 'w', encoding='utf-8') as handle:
+            handle.write(raw)
+        with pytest.raises(ValueError, match='duplicate JSON key'):
             load_quant_manifest(result_dir)
 
     @pytest.mark.parametrize(
@@ -958,32 +951,19 @@ class TestManifestSchemaIsEnforced:
         with pytest.raises(ValueError, match='artifact_id'):
             load_quant_manifest(result_dir)
 
-    @pytest.mark.parametrize('field', ['config_sha256', 'state_dict_sha256'])
-    @pytest.mark.parametrize(
-        'digest',
-        [
-            '',
-            'deadbeef',
-            'sha256:' + 'x' * 64,
-            'sha256:' + 'A' * 64,
-            'sha1:' + 'a' * 64,
-            None,
-        ],
-    )
-    def test_source_model_digests_must_be_prefixed_sha256(
-        self, tmp_path, field, digest
-    ):
-        result_dir = self._forge(
-            tmp_path, lambda man: man['source_model'].update({field: digest})
-        )
-        with pytest.raises(ValueError, match=field):
-            load_quant_manifest(result_dir)
-
     def test_source_model_type_must_be_a_non_empty_string(self, tmp_path):
         result_dir = self._forge(
             tmp_path, lambda man: man['source_model'].update({'model_type': ''})
         )
         with pytest.raises(ValueError, match='model_type'):
+            load_quant_manifest(result_dir)
+
+    @pytest.mark.parametrize('value', ['', None, 1, ['bfloat16']])
+    def test_source_model_dtype_must_be_a_non_empty_string(self, tmp_path, value):
+        result_dir = self._forge(
+            tmp_path, lambda man: man['source_model'].update({'torch_dtype': value})
+        )
+        with pytest.raises(ValueError, match='torch_dtype'):
             load_quant_manifest(result_dir)
 
     @pytest.mark.parametrize(

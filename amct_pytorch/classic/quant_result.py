@@ -53,16 +53,37 @@ from safetensors.torch import save_file
 from amct_pytorch.common.utils.log import LOGGER
 
 MANIFEST_NAME = 'quant_manifest.json'
-# Frozen manifest schema constants.
+# Frozen manifest schema constants.  Keep every wire-format constant together;
+# readers and writers must derive their behavior from this single block.
 MANIFEST_FORMAT = 'amct-quant-result-manifest'
 SCHEMA_VERSION = 1
 UNIT_SUFFIX = '.safetensors'
-LIBRARY = 'amct_pytorch'
 LOG_TAG = 'QuantResultWriter'
+RELOAD_LOG_TAG = 'reload_quant_params'
 DIGEST_PREFIX = 'sha256:'
-# Algorithms covered by the version-1 Classic quant result contract. This is a
-# product-level support boundary, not a capability claimed by a quantize module.
-SUPPORTED_QUANT_RESULT_ALGORITHMS = frozenset(('awq', 'gptq', 'minmax'))
+
+_REQUIRED_MANIFEST_FIELDS = (
+    'format',
+    'schema_version',
+    'artifact_id',
+    'source_model',
+    'units',
+)
+_REQUIRED_UNIT_FIELDS = (
+    'layer_name',
+    'file',
+    'quant_module_type',
+    'ori_module_type',
+    'quant_config',
+    'non_tensor_params',
+    'tensors',
+    'file_size',
+    'sha256',
+    'entry_digest',
+)
+_REQUIRED_SOURCE_MODEL_FIELDS = ('model_type', 'torch_dtype')
+_REQUIRED_TENSOR_FIELDS = ('key', 'dtype', 'shape')
+_DIGEST_PATTERN = re.compile(r'sha256:[0-9a-f]{64}')
 
 # 640 for files, matching amct_log conventions.
 _FILE_MODE = stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP
@@ -71,6 +92,27 @@ _UNSAFE_NAME_CHARS = re.compile(r'[^0-9a-zA-Z_]')
 _HASH_CHUNK_SIZE = 1024 * 1024
 # Fields derived from the file itself, therefore excluded from entry_digest.
 _DERIVED_ENTRY_FIELDS = ('file_size', 'sha256', 'entry_digest')
+_ADDRESS_PATTERN = re.compile(r'0x[0-9a-fA-F]{6,}')
+
+
+def is_quant_result_supported(quant_cls):
+    """Return the class-level artifact capability declaration.
+
+    The declaration is only an eligibility signal.  ``write_unit`` and the
+    reload validators still verify the actual tensor and metadata payload, so a
+    class cannot claim a valid artifact merely by setting this flag.
+    """
+    if not isinstance(quant_cls, type):
+        return False
+    if not bool(getattr(quant_cls, 'supports_quant_result', False)):
+        return False
+    quant_param_keys = getattr(quant_cls, 'quant_param_keys', None)
+    if not callable(quant_param_keys):
+        return False
+    try:
+        return bool(quant_param_keys())
+    except (TypeError, ValueError):
+        return False
 
 
 def canonical_json(data):
@@ -200,9 +242,6 @@ def _strict_mapping(mapping, path):
             )
         result[json_key] = to_jsonable(item, '{}.{}'.format(path, json_key))
     return result
-
-
-_ADDRESS_PATTERN = re.compile(r'0x[0-9a-fA-F]{6,}')
 
 
 def to_jsonable_lossy(value):
@@ -418,30 +457,6 @@ def _write_text_atomically(file_path, text):
     _atomic_write_via(file_path, _write)
 
 
-def _model_structure_config(model):
-    """Structural description of a plain ``nn.Module`` (no HF config).
-
-    Records the model class plus every submodule name and type, which is what
-    makes the fingerprint sensitive to architecture rather than only weights.
-    """
-    model_type = type(model)
-    return {
-        'model_class': '{}.{}'.format(model_type.__module__, model_type.__qualname__),
-        'modules': [
-            {'name': name, 'type': type(module).__name__}
-            for name, module in sorted(model.named_modules(), key=lambda kv: kv[0])
-        ],
-        # Parameter shapes make this digest architecture-sensitive: two models
-        # with the same module types but different widths must not share a
-        # config digest, so a mismatch reported at reload distinguishes "wrong
-        # architecture" from "wrong weights".
-        'parameters': [
-            {'name': name, 'dtype': dtype_name(param.dtype), 'shape': list(param.shape)}
-            for name, param in sorted(model.named_parameters(), key=lambda kv: kv[0])
-        ],
-    }
-
-
 def _source_model_type(model):
     """Artifact ``source_model.model_type``: HF model_type, else class name."""
     config = getattr(model, 'config', None)
@@ -451,67 +466,45 @@ def _source_model_type(model):
     return type(model).__name__
 
 
-def _model_config_digest(model):
-    """Digest of the model config: HF ``to_dict()`` when present, else structure."""
-    config = getattr(model, 'config', None)
-    to_dict = getattr(config, 'to_dict', None)
-    if callable(to_dict):
-        return digest_of(to_jsonable_lossy(to_dict()))
-    return digest_of(to_jsonable_lossy(_model_structure_config(model)))
+def _source_model_dtype(model):
+    """Return the dtype that quantization treats as the source model dtype.
 
-
-def _state_dict_digest(model):
-    """Deterministic fingerprint of the state_dict: schema plus raw bytes.
-
-    Streams each tensor through the hash on CPU, so a large state_dict is never
-    copied in full.
+    HuggingFace models declare it on ``config.torch_dtype``.  Plain PyTorch
+    modules do not, so use their first parameter or buffer as the equivalent
+    declaration.  The artifact intentionally records this semantic input,
+    rather than hashing every weight byte or unrelated configuration field.
     """
-    state_dict = model.state_dict(keep_vars=False)
-    hasher = hashlib.sha256()
-    for key in sorted(state_dict.keys()):
-        value = state_dict[key]
-        if not isinstance(value, torch.Tensor):
-            hasher.update(
-                canonical_json({'key': key, 'value': to_jsonable_lossy(value)}).encode(
-                    'utf-8'
-                )
-            )
-            continue
-        hasher.update(
-            canonical_json(
-                {
-                    'key': key,
-                    'dtype': dtype_name(value.dtype),
-                    'shape': list(value.shape),
-                }
-            ).encode('utf-8')
-        )
-        update_hash_with_tensor(hasher, value)
-    return _prefixed(hasher.hexdigest())
+    config = getattr(model, 'config', None)
+    configured = getattr(config, 'torch_dtype', None)
+    if configured is None:
+        to_dict = getattr(config, 'to_dict', None)
+        if callable(to_dict):
+            config_dict = to_dict()
+            if isinstance(config_dict, dict):
+                configured = config_dict.get('torch_dtype')
+    if isinstance(configured, torch.dtype):
+        return dtype_name(configured)
+    if isinstance(configured, str) and configured:
+        return dtype_name(configured)
+    for tensor in model.parameters():
+        return dtype_name(tensor.dtype)
+    for tensor in model.buffers():
+        return dtype_name(tensor.dtype)
+    return 'unknown'
 
 
 def compute_model_fingerprint(model):
-    """Build the source_model block before any quant module is inserted.
+    """Build the source-model identity before any quant module is inserted.
 
-    Uses the HuggingFace config when present, and otherwise a structural config
-    derived from the model class and submodule types, so plain ``nn.Module``
-    models are supported too.
+    Only model type and source dtype are compared during reload.  Quantization
+    results are intentionally reusable across checkpoints with the same
+    quantization identity; layer names, module types and tensor shapes remain
+    independently validated while staging each replacement module.
     """
     return {
         'model_type': _source_model_type(model),
-        'config_sha256': _model_config_digest(model),
-        'state_dict_sha256': _state_dict_digest(model),
+        'torch_dtype': _source_model_dtype(model),
     }
-
-
-def _library_version():
-    """Version string shipped in ``amct_pytorch/.version``."""
-    version_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.version')
-    try:
-        with open(version_file, encoding='utf-8') as file_handle:
-            return file_handle.readline().strip() or 'unknown'
-    except OSError:
-        return 'unknown'
 
 
 def unit_header(artifact_id, layer_name, entry_digest):
@@ -547,9 +540,9 @@ class QuantResultWriter:
     ):
         self._result_dir = os.path.abspath(result_dir)
         self._expected_units = self._check_expected_units(expected_units)
-        self._model_fingerprint = model_fingerprint
+        _validate_source_model_fields(model_fingerprint)
+        self._model_fingerprint = dict(model_fingerprint)
         self._artifact_id = artifact_id or str(uuid.uuid4())
-        self._library_version = _library_version()
         self._entries = {}
         self._file_names = {}
         self._published = False
@@ -810,10 +803,6 @@ class QuantResultWriter:
             'format': MANIFEST_FORMAT,
             'schema_version': SCHEMA_VERSION,
             'artifact_id': self._artifact_id,
-            'producer': {
-                'library': LIBRARY,
-                'library_version': self._library_version,
-            },
             'source_model': self._model_fingerprint,
             'units': [self._entries[unit] for unit in self._expected_units],
         }
@@ -872,39 +861,13 @@ class QuantResultWriter:
         )
 
 
-_REQUIRED_MANIFEST_FIELDS = (
-    'format',
-    'schema_version',
-    'artifact_id',
-    'producer',
-    'source_model',
-    'units',
-)
-_REQUIRED_UNIT_FIELDS = (
-    'layer_name',
-    'file',
-    'quant_module_type',
-    'ori_module_type',
-    'quant_config',
-    'non_tensor_params',
-    'tensors',
-    'file_size',
-    'sha256',
-    'entry_digest',
-)
-_REQUIRED_SOURCE_MODEL_FIELDS = ('model_type', 'config_sha256', 'state_dict_sha256')
-_REQUIRED_PRODUCER_FIELDS = ('library', 'library_version')
-_REQUIRED_TENSOR_FIELDS = ('key', 'dtype', 'shape')
-_DIGEST_PATTERN = re.compile(r'sha256:[0-9a-f]{64}')
-
-
 def load_quant_manifest(quant_result_dir):
     """Load and validate ``quant_manifest.json`` of a published artifact.
 
     A directory without the manifest is not a valid quant result, so its absence
     is an error rather than an empty read. Parsed with ``json`` only -- never
-    pickle -- and every required field, the unit uniqueness rule and the safe
-    relative-path rule are enforced before anything is handed back.
+    pickle -- and every exact schema field, duplicate-key rule, unit uniqueness
+    rule and safe relative-path rule are enforced before anything is handed back.
     """
     result_dir = os.path.abspath(os.path.expanduser(quant_result_dir))
     manifest_path = os.path.join(result_dir, MANIFEST_NAME)
@@ -914,7 +877,7 @@ def load_quant_manifest(quant_result_dir):
             "produced it did not complete.".format(quant_result_dir, MANIFEST_NAME)
         )
     with open(manifest_path, encoding='utf-8') as file_handle:
-        manifest = json.load(file_handle)
+        manifest = json.load(file_handle, object_pairs_hook=_reject_duplicate_keys)
     if not isinstance(manifest, dict):
         raise ValueError(
             "quant manifest '{}' is not a JSON object.".format(manifest_path)
@@ -940,7 +903,6 @@ def load_quant_manifest(quant_result_dir):
             '{}.'.format(version, SCHEMA_VERSION)
         )
     _validate_artifact_id(manifest['artifact_id'])
-    _validate_producer(manifest['producer'])
     _validate_source_model_fields(manifest['source_model'])
     _validate_units(manifest['units'], result_dir)
     return manifest
@@ -981,18 +943,6 @@ def _validate_artifact_id(artifact_id):
         ) from None
 
 
-def _validate_producer(producer):
-    """``producer`` identifies the library that wrote the artifact."""
-    _check_required(producer, _REQUIRED_PRODUCER_FIELDS, 'quant manifest producer')
-    for field in _REQUIRED_PRODUCER_FIELDS:
-        _non_empty_str(producer[field], 'quant manifest producer.{}'.format(field))
-    if producer['library'] != LIBRARY:
-        raise ValueError(
-            "quant manifest was produced by library '{}', but only '{}' artifacts "
-            'can be reloaded here.'.format(producer['library'], LIBRARY)
-        )
-
-
 def _validate_digest(value, what):
     """Digests are always ``sha256:`` followed by 64 lowercase hex chars."""
     _non_empty_str(value, what)
@@ -1008,17 +958,31 @@ def _validate_source_model_fields(source_model):
     """``source_model`` is the fingerprint reload matches the input model on."""
     _check_required(source_model, _REQUIRED_SOURCE_MODEL_FIELDS, 'source_model')
     _non_empty_str(source_model['model_type'], 'source_model.model_type')
-    for field in ('config_sha256', 'state_dict_sha256'):
-        _validate_digest(source_model[field], 'source_model.{}'.format(field))
+    _non_empty_str(source_model['torch_dtype'], 'source_model.torch_dtype')
+
+
+def _reject_duplicate_keys(pairs):
+    """Reject duplicate JSON object keys instead of silently keeping the last."""
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(
+                "quant manifest contains duplicate JSON key {!r}.".format(key)
+            )
+        result[key] = value
+    return result
 
 
 def _check_required(mapping, fields, what):
-    """Every required field must be present."""
+    """Require the exact frozen field set for a protocol object."""
     if not isinstance(mapping, dict):
         raise ValueError("{} must be a JSON object.".format(what))
     missing = [field for field in fields if field not in mapping]
     if missing:
         raise ValueError("{} is missing required field(s) {}.".format(what, missing))
+    unexpected = sorted(set(mapping) - set(fields))
+    if unexpected:
+        raise ValueError("{} contains unknown field(s) {}.".format(what, unexpected))
 
 
 def _validate_unit_fields(entry):
@@ -1217,9 +1181,6 @@ def validate_source_model(model, source_model):
         )
 
 
-RELOAD_LOG_TAG = 'reload_quant_params'
-
-
 def resolve_layer_parent(model, layer_name):
     """Resolve ``layer_name`` to ``(parent_module, attr_name, child_module)``.
 
@@ -1314,11 +1275,11 @@ def _resolve_quant_module_class(entry):
                 algorithm, ori_module_type, layer_name
             )
         )
-    if algorithm not in SUPPORTED_QUANT_RESULT_ALGORITHMS:
+    if not is_quant_result_supported(quant_cls):
         raise ValueError(
-            "algorithm '{}' of layer '{}' does not support quant result reload.".format(
-                algorithm, layer_name
-            )
+            "algorithm '{}' of layer '{}' does not support quant result reload "
+            'because its registered quantize class does not declare the artifact '
+            'contract.'.format(algorithm, layer_name)
         )
     if not isinstance(quant_cls, type):
         raise ValueError(
@@ -1349,8 +1310,8 @@ def _check_ori_module_type(entry, ori_module):
     actual = type(ori_module).__name__
     if actual != entry['ori_module_type']:
         raise ValueError(
-            "layer '{}' is a {} in the model passed in but the quant result was "
-            'produced from a {}.'.format(
+            "the model passed in is not the model expected by quant result layer "
+            "'{}': it is a {}, but the artifact was produced from a {}.".format(
                 entry['layer_name'], actual, entry['ori_module_type']
             )
         )

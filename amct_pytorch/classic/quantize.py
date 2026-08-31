@@ -27,8 +27,8 @@ from amct_pytorch.classic.optimizer import (
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.classic.quant_result import (
     QuantResultWriter,
-    SUPPORTED_QUANT_RESULT_ALGORITHMS,
     compute_model_fingerprint,
+    is_quant_result_supported,
     reload_quant_params,
     validate_quant_result_dir,
 )
@@ -78,14 +78,23 @@ def quantize(model, config=None, quant_result_dir=None):
         _finalize_quant_result(model, writer)
 
 
-def _check_quant_result_algorithms(layer_config):
-    """Enforce the algorithm boundary of the Classic result contract."""
+def _check_quant_result_algorithms(model, layer_config):
+    """Screen selected registered quant classes before writing any files.
+
+    Artifact support is declared by the class in ``AlgorithmRegistry.algo``;
+    there is no second algorithm-name allowlist to drift out of sync.  The
+    writer still validates concrete values when each layer reaches finalization.
+    """
     unsupported = {}
+    modules = dict(model.named_modules())
     for layer_name, cfg in layer_config.items():
         algorithm = cfg.get('algorithm') if isinstance(cfg, dict) else None
         alg_names, _ = get_alg_name_from_config(algorithm)
         for alg_name in alg_names:
-            if alg_name not in SUPPORTED_QUANT_RESULT_ALGORITHMS:
+            module = modules.get(layer_name)
+            source_type = type(module).__name__ if module is not None else None
+            quant_cls = AlgorithmRegistry.algo.get(alg_name, {}).get(source_type)
+            if not is_quant_result_supported(quant_cls):
                 unsupported.setdefault(alg_name, layer_name)
 
     if unsupported:
@@ -95,19 +104,18 @@ def _check_quant_result_algorithms(layer_config):
         )
         raise ValueError(
             "quant_result_dir is not supported yet for algorithm(s) {}. "
-            "Supported algorithms are {}; run without quant_result_dir, or "
-            "pick a supported algorithm.".format(
-                details, sorted(SUPPORTED_QUANT_RESULT_ALGORITHMS)
-            )
+            "The selected registered quantize class has no artifact contract; "
+            "run without quant_result_dir, or choose a class that declares "
+            "artifact support.".format(details)
         )
 
 
 def _create_quant_result_writer(model, layer_config, quant_result_dir):
     """Validate the target dir, fingerprint the source model, build the writer.
 
-    Ordering matters: the path and the algorithms are checked before the
-    (potentially expensive) fingerprint, and the fingerprint is taken before any
-    quant module is inserted, so it always describes the original model.
+    Ordering matters: the path and the algorithm declarations are checked before
+    fingerprinting, and the fingerprint is taken before any quant module is
+    inserted, so it always describes the original model.
     """
     validate_quant_result_dir(quant_result_dir)
     if len(layer_config) == 0:
@@ -115,7 +123,7 @@ def _create_quant_result_writer(model, layer_config, quant_result_dir):
             "no quantizable layer was found for this model and config, so "
             "there is no quant result to write to '{}'.".format(quant_result_dir)
         )
-    _check_quant_result_algorithms(layer_config)
+    _check_quant_result_algorithms(model, layer_config)
     model_fingerprint = compute_model_fingerprint(model)
     return QuantResultWriter.create(
         quant_result_dir, tuple(layer_config.keys()), model_fingerprint

@@ -41,6 +41,7 @@ class LinearAWQuant(BaseQuantizeModule):
     # and deploy recompute that transform from the original weight and ``scale``,
     # so persisting it would only duplicate the source model.
     _quant_param_keys = ('scale_w', 'offset_w', 'scale')
+    supports_quant_result = True
 
     def __init__(self, ori_module, layer_name, quant_config):
         """

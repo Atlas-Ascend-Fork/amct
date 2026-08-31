@@ -56,6 +56,7 @@ class MinMaxQuant(BaseQuantizeModule):
         'scale_w1',
         'scale_w2',
     )
+    supports_quant_result = True
 
     def __init__(self, ori_module, layer_name, quant_config):
         """

@@ -29,6 +29,7 @@ from amct_pytorch.classic.quant_result import (
     MANIFEST_NAME,
     SCHEMA_VERSION,
     compute_model_fingerprint,
+    is_quant_result_supported,
     load_quant_manifest,
     read_quant_unit,
     validate_result_directory,
@@ -39,6 +40,9 @@ from amct_pytorch.classic.quantize import (
     quantize,
 )
 from amct_pytorch.classic.quantize_op.minmax_module import MinMaxQuant
+from amct_pytorch.classic.quantize_op.linear_awq_module import LinearAWQuant
+from amct_pytorch.classic.quantize_op.gptq_module import GPTQuant
+from amct_pytorch.classic.quantize_op.smooth_quant_module import SmoothQuant
 from amct_pytorch.common.utils.model_util import ModuleHelper
 from amct_pytorch.quantize_op import BaseQuantizeModule
 
@@ -58,6 +62,19 @@ def test_classic_quantize_imports_without_ptq_package_layer():
     )
 
     assert classic_algorithm_register is algorithm_register
+
+
+def test_artifact_support_is_declared_by_the_registered_quant_class():
+    assert is_quant_result_supported(MinMaxQuant)
+    assert is_quant_result_supported(LinearAWQuant)
+    assert is_quant_result_supported(GPTQuant)
+    assert not is_quant_result_supported(SmoothQuant)
+
+    class _DeclaredWithoutParams(BaseQuantizeModule):
+        supports_quant_result = True
+
+    # A declaration alone cannot make an unloadable class eligible.
+    assert not is_quant_result_supported(_DeclaredWithoutParams)
 
 
 class _DummyQuantOp(BaseQuantizeModule):

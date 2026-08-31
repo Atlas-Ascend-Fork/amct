@@ -35,6 +35,11 @@ class BaseQuantizeModule(nn.Module):
     # tensors, JSON-serializable scalars, or None (skipped when exporting).
     _quant_param_keys = ()
 
+    # A declaration consumed by the Classic artifact path.  It only says that
+    # the class participates in the artifact contract; the writer still checks
+    # the concrete values produced at each algorithm's finalization point.
+    supports_quant_result = False
+
     def __init__(self, ori_module, layer_name, quant_config):
         super().__init__()
         if not isinstance(layer_name, str) or not layer_name:

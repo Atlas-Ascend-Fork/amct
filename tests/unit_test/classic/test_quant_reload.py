@@ -284,16 +284,19 @@ class TestReloadRejectsWrongModel:
             reload_quant_params(model, result_dir)
         _assert_unchanged(model, snapshot, children)
 
-    def test_different_weights_are_rejected(self, art):
+    def test_different_weights_are_allowed_when_type_and_dtype_match(self, art):
         _, _, out_dir = art
         torch.manual_seed(123)
-        self._expect_rejected(_model(), out_dir, match='not the model')
+        model = _model()
+        assert reload_quant_params(model, out_dir) is model
+        assert isinstance(model.fc1, MinMaxQuant)
 
-    def test_changed_weight_is_rejected(self, art):
+    def test_changed_weight_is_allowed_when_type_and_dtype_match(self, art):
         source, _, out_dir = art
         with torch.no_grad():
             source.fc1.weight[0, 0] += 1
-        self._expect_rejected(source, out_dir, match='state_dict_sha256')
+        assert reload_quant_params(source, out_dir) is source
+        assert isinstance(source.fc1, MinMaxQuant)
 
     def test_changed_dtype_is_rejected(self, art):
         source, _, out_dir = art
@@ -301,7 +304,7 @@ class TestReloadRejectsWrongModel:
 
     def test_different_architecture_is_rejected(self, art):
         _, _, out_dir = art
-        self._expect_rejected(_model(_NestedModel), out_dir, match='not the model')
+        self._expect_rejected(_model(_NestedModel), out_dir)
 
     def test_different_model_type_is_rejected(self, art):
         source, _, out_dir = art

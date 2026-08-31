@@ -43,6 +43,7 @@ class GPTQuant(BaseQuantizeModule):
     # weight and the scales. Dropping it would silently deploy the un-optimized
     # weight after a reload.
     _quant_param_keys = ('scale_w', 'offset_w', 'weight')
+    supports_quant_result = True
 
     def __init__(self, ori_module, layer_name, quant_config):
         """
