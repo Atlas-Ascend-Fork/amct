@@ -171,7 +171,7 @@ class TestBcp(unittest.TestCase):
 
     @patch.object(bcp_op.LOGGER, 'loge')
     def test_tensor_and_prune_axis_counts_must_match(self, mock_loge):
-        with self.assertRaisesRegex(RuntimeError, 'Inner Error'):
+        with self.assertRaisesRegex(RuntimeError, 'BCP parameter validation failed'):
             bcp_op.check_params([], [0], 0.3, 1, True)
 
         mock_loge.assert_called_once_with(
@@ -180,7 +180,7 @@ class TestBcp(unittest.TestCase):
 
     @patch.object(bcp_op.LOGGER, 'loge')
     def test_channel_count_must_cover_prune_groups(self, mock_loge):
-        with self.assertRaisesRegex(RuntimeError, 'Inner Error'):
+        with self.assertRaisesRegex(RuntimeError, 'BCP parameter validation failed'):
             bcp_op.check_params([torch.empty(1)], [0], 0.3, 2, True)
 
         mock_loge.assert_called_once_with(
@@ -189,7 +189,7 @@ class TestBcp(unittest.TestCase):
 
     @patch.object(bcp_op.LOGGER, 'loge')
     def test_prune_axis_must_be_within_tensor_rank(self, mock_loge):
-        with self.assertRaisesRegex(RuntimeError, 'Inner Error'):
+        with self.assertRaisesRegex(RuntimeError, 'BCP parameter validation failed'):
             bcp_op.check_params([torch.empty(1)], [5], 0.3, 1, True)
 
         mock_loge.assert_called_once_with(
