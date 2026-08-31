@@ -20,7 +20,7 @@ import torch.nn as nn
 from safetensors.torch import load_file
 
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
-from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
+from amct_pytorch.quantization.dtypes.fp_impl import weight_dequant
 from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
 
 
