@@ -95,15 +95,13 @@ def weight_dequant(
     # Get the original dimensions of weight
     M, N = weight.shape
     weight = weight.to(torch.float32)
-    # Integer scales are MX E8M0 block exponents: 2 ** (e - 127); 0xff (NaN) is rejected.
-    # Float scales (e.g. NVFP4's decoded E4M3) pass through unchanged.
+    # Integer scales are MX E8M0 exponents: 2 ** (e - 127); 0xff (NaN) makes the
+    # whole block NaN per OCP MX. Float scales pass through unchanged.
     if not torch.is_floating_point(scale):
-        if torch.any(scale == 0xFF):
-            raise ValueError(
-                "E8M0 scale contains the reserved NaN encoding 0xFF; "
-                "refusing to decode it as 2 ** 128."
-            )
-        scale = torch.exp2(scale.to(torch.float32) - FP32_EXPONENT_BIAS)
+        scale = scale.to(torch.float32)
+        scale = torch.where(
+            scale == 0xFF, torch.nan, torch.exp2(scale - FP32_EXPONENT_BIAS)
+        )
     else:
         scale = scale.to(torch.float32)
     if block_size != 1:

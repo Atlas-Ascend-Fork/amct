@@ -465,13 +465,18 @@ def test_weight_dequant_decodes_e8m0_integer_scale():
     assert out[1, 0] == 0.0
 
 
-def test_weight_dequant_rejects_e8m0_reserved_0xff():
+def test_weight_dequant_e8m0_0xff_scale_poisons_block_with_nan():
     from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
 
-    w8 = torch.zeros(1, 32, dtype=torch.float8_e4m3fn)
-    bad = torch.full((1, 1), 255, dtype=torch.uint8)
-    with pytest.raises(ValueError, match="0xFF"):
-        weight_dequant(w8, bad, block_size=32, is_mx=True)
+    w8 = torch.zeros(2, 64, dtype=torch.float8_e4m3fn)
+    w8[0, 0] = torch.finfo(torch.float8_e4m3fn).max  # 448 in fp32
+    # Block 0: e=127 -> scale 1.0; block 1: 0xff -> NaN scale -> whole block NaN
+    # per OCP MX, regardless of the element bits (even zeros).
+    scale = torch.tensor([[127, 255]], dtype=torch.uint8).expand(2, -1)
+    out = weight_dequant(w8, scale, block_size=32, is_mx=True)
+    assert out[0, 0] == 448.0  # 448 * 2^(127-127)
+    assert out[0, 1] == 0.0
+    assert torch.isnan(out[:, 32:]).all()
 
 
 def test_weight_dequant_float_scale_passes_through():
