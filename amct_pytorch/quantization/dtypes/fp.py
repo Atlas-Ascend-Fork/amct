@@ -25,7 +25,7 @@ from amct_pytorch.quantization.dtypes.fp_impl import (
     f32_to_f4_unpacked,
     pack_uint4,
     quantize_elewise,
-    shared_exponents
+    shared_exponents,
 )
 
 
@@ -35,19 +35,21 @@ class QuantDequantFP(torch.nn.Module):
         super(QuantDequantFP, self).__init__()
         self.bits = bits
         if self.bits != 8 and self.bits != 16:
-            if scale_dtype!="e8m0":
-                raise ValueError(f"Block fp quant currently supports only 8-bits quantization, but got bits={self.bits}")
+            if scale_dtype != "e8m0":
+                raise ValueError(
+                    f"Block fp quant currently supports only 8-bits quantization, but got bits={self.bits}"
+                )
         self.is_act = is_act
         self.is_observe = False
         self._get_format_params()
         self.block_size_col = block_size_col
         self.scale_dtype = scale_dtype
-    
+
     def reshape_block(self, x):
         M, N = x.shape
 
         block_m = self.block_size_col
-        block_n = 128 # amct only support [1x128, 128x128] two quantization block shape
+        block_n = 128  # amct only support [1x128, 128x128] two quantization block shape
 
         pad_m = (block_m - M % block_m) % block_m
         pad_n = (block_n - N % block_n) % block_n
@@ -56,10 +58,11 @@ class QuantDequantFP(torch.nn.Module):
         pad_shape = W_pad.shape
 
         Mp, Np = W_pad.shape
-        W_blocks = W_pad.reshape(Mp // block_n, block_n, Np // block_m, block_m).permute(0, 2, 1, 3)
+        W_blocks = W_pad.reshape(
+            Mp // block_n, block_n, Np // block_m, block_m
+        ).permute(0, 2, 1, 3)
 
         return W_blocks, pad_shape
-
 
     def quantize_fp_block(self, x, fp8_min=-448.0, fp8_max=448.0):
         ori_shape = x.shape
@@ -68,11 +71,10 @@ class QuantDequantFP(torch.nn.Module):
         M, N = x.shape
 
         W_blocks, pad_shape = self.reshape_block(x)
-        
 
         amax = torch.amax(torch.abs(W_blocks), dim=(-1, -2), keepdim=True)
 
-        if self.scale_dtype=="e8m0":
+        if self.scale_dtype == "e8m0":
             scale = shared_exponents(W_blocks, self.emax)
         else:
             scale = amax / fp8_max

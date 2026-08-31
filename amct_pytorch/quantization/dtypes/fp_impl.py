@@ -176,6 +176,7 @@ def f4_unpacked_to_f32(x: torch.Tensor):
     """
     return _floatx_unpacked_to_f32(x, EBITS_F4_E2M1, MBITS_F4_E2M1)
 
+
 def shared_exponents(x: Tensor, emax):
     shared_exp, _ = torch.max(torch.abs(x), dim=-1, keepdim=True)
     shared_exp = shared_exp + FP32_MIN_NORMAL * (shared_exp == 0).type(shared_exp.dtype)
@@ -183,6 +184,7 @@ def shared_exponents(x: Tensor, emax):
     shared_exp = shared_exp - emax
     shared_exp = shared_exp.clamp(min=-127, max=1e10)
     return shared_exp
+
 
 def round_to_decimal(x):
     exponent = torch.floor(torch.log2(x))
@@ -194,6 +196,7 @@ def round_to_decimal(x):
 def round_ste(x: torch.Tensor) -> torch.Tensor:
     rounded = torch.sign(x) * torch.floor(torch.abs(x) + 0.5)
     return (rounded - x).detach() + x
+
 
 def quantize_elewise(x, min_exp, max_norm, shift_val, v=0.0):
     private_exp = torch.floor(torch.log2(torch.abs(x) + (x == 0).type(x.dtype)))
