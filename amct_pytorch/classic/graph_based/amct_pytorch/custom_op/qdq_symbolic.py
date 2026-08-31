@@ -85,6 +85,16 @@ def _restore_input_device(output, input_tensor):
     return output
 
 
+def _prepare_zero_point(zero_point, num_bits):
+    """Convert Q/DQ zero points to the integer dtype required by ONNX."""
+    if not isinstance(zero_point, torch.Tensor):
+        return zero_point
+    target_dtype = torch.int16 if num_bits == 16 else torch.int8
+    if zero_point.dtype == target_dtype:
+        return zero_point
+    return zero_point.round().to(dtype=target_dtype)
+
+
 def add_qdq(g, tensor, scale, zero_point, num_bits, axis=None):
     """Add standard ONNX Q/DQ nodes for an AMCT QAT weight tensor."""
     attributes = {}
@@ -115,6 +125,7 @@ def add_qdq_dynamo(tensor, scale, zero_point, num_bits, axis=None, shape=None):
 
     if shape is None:
         shape = tensor.shape
+    zero_point = _prepare_zero_point(zero_point, num_bits)
     quant_attrs = {'output_dtype': TensorProto.INT4} if num_bits == 4 else {}
     if axis is not None:
         quant_attrs['axis'] = axis

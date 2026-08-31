@@ -166,6 +166,20 @@ class TestQdqSymbolic(unittest.TestCase):
             (mock.sentinel.quant, mock.sentinel.scale, mock.sentinel.zero_point),
         )
 
+    def test_add_qdq_dynamo_casts_float_zero_point_to_integer(self):
+        ops = mock.MagicMock()
+        ops.symbolic.side_effect = [mock.sentinel.quant, mock.sentinel.dequant]
+        tensor = mock.Mock(dtype='float32')
+        float_zero_point = torch.tensor([-3.0, 0.0, 7.0])
+        with mock.patch('torch.onnx.ops', ops, create=True):
+            add_qdq_dynamo(tensor, mock.sentinel.scale, float_zero_point, 8)
+
+        quant_inputs = ops.symbolic.call_args_list[0].args[1]
+        self.assertEqual(quant_inputs[2].dtype, torch.int8)
+        self.assertTrue(
+            torch.equal(quant_inputs[2], torch.tensor([-3, 0, 7], dtype=torch.int8))
+        )
+
     def test_add_qdq_dynamo_uses_int16_for_int16_quantization(self):
         ops = mock.MagicMock()
         ops.symbolic.side_effect = [mock.sentinel.quant, mock.sentinel.dequant]
