@@ -146,7 +146,6 @@ def add_qdq_dynamo(tensor, scale, zero_point, num_bits, axis=None, shape=None):
         shape=shape,
         version=21,
     )
-    quant = _restore_input_device(quant, tensor)
 
     dequant_attrs = {'axis': axis} if axis is not None else {}
     dequant_inputs = (quant, scale) if num_bits == 4 else (quant, scale, zero_point)
