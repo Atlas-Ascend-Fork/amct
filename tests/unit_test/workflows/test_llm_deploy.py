@@ -599,13 +599,16 @@ def test_run_tensorwise_copies_and_rewrites_weight_index(monkeypatch, tmp_path):
 
     saved_index = json.loads((dst / SAFETENSORS_INDEX_JSON).read_text())
     refreshed = json.loads((dst / CONFIG_JSON).read_text())
+    saved = load_file(dst / KEY_SHARD1_SAFETENSORS)
     assert result["index_path"] == str(dst / SAFETENSORS_INDEX_JSON)
     assert result["num_output_files"] == 1
     assert saved_index[METADATA_KEY]["foo"] == "bar"
     assert saved_index["weight_map"] == {
         MODEL_LAYERS_0_MLP_UP_PROJ_WEIGHT: KEY_SHARD1_SAFETENSORS,
     }
-    assert refreshed[QUANTIZATION_CONFIG]["ignore"] == ["lm_head"]
+    assert saved[MODEL_LAYERS_0_MLP_UP_PROJ_WEIGHT].dtype == torch.bfloat16
+    assert refreshed["torch_dtype"] == "bfloat16"
+    assert QUANTIZATION_CONFIG not in refreshed
 
 
 def test_deploy_parser_accepts_tensorwise_bf16(monkeypatch):
@@ -661,7 +664,7 @@ def test_run_tensorwise_bf16_dequantizes_without_quant_config(monkeypatch, tmp_p
 
     def fake_convert_state_dict(weight, weight_name, *args, **kwargs):
         if weight_name.endswith(".weight_packed"):
-            return torch.ones(1, 4, dtype=torch.bfloat16)
+            return torch.ones(1, 4, dtype=torch.float32)
         return weight
 
     monkeypatch.setattr(

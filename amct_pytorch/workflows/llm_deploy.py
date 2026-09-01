@@ -291,6 +291,8 @@ class LlmDeployWorkflow:
                     model_dir, loaded_files, block_size,
                     compute_device=compute_device,
                 )
+                if self.quant_dtype == "bf16":
+                    weight = self._convert_tensor(output_weight_name, weight)
                 if should_quantize:
                     weight = weight.to(compute_device)
                     quant_cls = DTYPE_REGISTRY.get(self.quant_dtype)
