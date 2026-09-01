@@ -59,11 +59,12 @@ class ArqRetrainFunction(Function):
         if is_dynamo_export():
             if wts_param.get('num_bits', 8) == 4:
                 check_int4_dynamo_export(wts_param)
+            zero_point = offset_deploy if offset_deploy is not None else offset
             return (
                 add_weight_qdq_dynamo(
                     weight_tensor,
                     scale,
-                    offset,
+                    zero_point,
                     wts_param.get('num_bits', 8),
                     wts_param.get('module_type'),
                     wts_param.get('channel_wise', False),

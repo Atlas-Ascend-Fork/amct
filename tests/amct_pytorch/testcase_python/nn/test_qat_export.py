@@ -43,6 +43,7 @@ class TestQatExport(unittest.TestCase):
         self.assertEqual(len(result), 2)
         add_act.assert_called_once()
         add_weight.assert_called_once()
+        self.assertIs(add_weight.call_args.args[2], module.wts_offsets_deploy)
 
     def test_forward_qat_dynamo_requires_initialized_model(self):
         module = self._make_module()

@@ -74,6 +74,7 @@ def _make_inputs(
 class TestUlqScaleRetrainSymbolic(unittest.TestCase):
     def test_forward_dynamo_bypasses_eager_quantization(self):
         wts_param = _make_inputs('Linear', num_bits=4)[3]
+        offset_deploy = torch.tensor([0], dtype=torch.int8)
         with (
             mock.patch(
                 'amct_pytorch.classic.graph_based.amct_pytorch.custom_op.ulq_scale_retrain.ulq_scale_retrain.is_dynamo_export',
@@ -88,10 +89,17 @@ class TestUlqScaleRetrainSymbolic(unittest.TestCase):
             ) as add_qdq,
         ):
             result = UlqScaleRetrainFunction.forward(
-                None, torch.randn(4, 4), torch.ones(4), torch.zeros(4), wts_param, 0
+                None,
+                torch.randn(4, 4),
+                torch.ones(4),
+                torch.zeros(4),
+                wts_param,
+                0,
+                offset_deploy,
             )
         self.assertEqual(len(result), 3)
         add_qdq.assert_called_once()
+        self.assertIs(add_qdq.call_args.args[2], offset_deploy)
 
     def test_symbolic_conv_transpose(self):
         self._run("ConvTranspose1d")

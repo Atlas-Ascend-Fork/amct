@@ -63,11 +63,12 @@ class UlqScaleRetrainFunction(Function):
         if is_dynamo_export():
             if wts_qat_param.get('num_bits', 8) == 4:
                 check_int4_dynamo_export(wts_qat_param)
+            zero_point = offset_deploy if offset_deploy is not None else offset
             return (
                 add_weight_qdq_dynamo(
                     inputs,
                     scale,
-                    offset,
+                    zero_point,
                     wts_qat_param.get('num_bits', 8),
                     wts_qat_param.get(MODULE_TYPE),
                     wts_qat_param.get('channel_wise', False),

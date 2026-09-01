@@ -375,7 +375,7 @@ class QATBase(metaclass=ABCMeta):
         quantized_weights = add_weight_qdq_dynamo(
             self.weight,
             self.wts_scales,
-            self.wts_offsets,
+            self.wts_offsets_deploy,
             self.wts_num_bits,
             self.layer_type,
             wts_config.get('channel_wise', True),
