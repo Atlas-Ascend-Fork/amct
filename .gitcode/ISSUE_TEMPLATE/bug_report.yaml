@@ -25,4 +25,4 @@ body:
       label: Related log / screenshot / 日志 / 截图 (Optional / 选填)
       description: 请提供尽可能多的日志/结果信息
     validations:
-      required: false
+      required: false  

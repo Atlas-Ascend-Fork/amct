@@ -120,3 +120,4 @@ compressed_retrain_model = amct.create_compressed_retrain_model(
 落盘文件说明：
 
 保存的静态组合压缩记录文件record\_file，如果简易配置文件中含有稀疏配置，则在该函数完成后，record\_file中含有稀疏记录信息。
+

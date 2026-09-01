@@ -238,3 +238,4 @@
     conv_transpose2d_op = torch.nn.ConvTranspose2d(in_channels=1, out_channels=1, kernel_size=1, stride=1, padding=0, dilation=1, groups=1, bias=True, padding_mode='zeros', device=None, dtype=None)
     ConvTranspose2dQAT.from_float(mod=conv_transpose2d_op, config=None)
     ```
+

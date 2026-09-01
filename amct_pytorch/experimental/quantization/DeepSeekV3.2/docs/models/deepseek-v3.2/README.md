@@ -29,3 +29,5 @@ KVCache C8：表示KVCache 使用动态Per-Token-Head-Tile-128 Int8量化；**
 其次，MLAProlog KVCache的量化策略使用了动态存8算16。在超长序列情况下，W8A8C8量化精度接近无损，同时权重内存占用优化2倍。MLA C8算16获取内存收益，可以打高吞吐量。另一方面，LightningIndexer的A8C8获取计算收益，降低LI计算时延，TTFT和TPOT也同步优化。
 
 W4A8C8量化版本针对`DeepSeek-V3.2`使用基于学习的量化算法优化Clamp参数，缓解W4A8离群值量化困难的问题，实现了较优的量化模型精度。同时，W4A8C8版本比W8A8C8节约MoE权重显存2x，因此在大EP场景下，利用W4A8 MoEGMM算子，同一张卡可以装下更多的专家，节约资源，优化计算访存比，实现单机部署。
+
+

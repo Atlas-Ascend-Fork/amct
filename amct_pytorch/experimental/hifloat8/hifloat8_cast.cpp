@@ -42,31 +42,31 @@ constexpr int FP16 = 1;
 constexpr int BF16 = 2;
 
 const std::map<uint8_t, std::tuple<uint8_t, uint8_t, uint8_t, uint8_t, uint8_t>> HIF8_DOT_MAP = {
-    // mask, /*dot value,*/ exp mask, frac bits, exp sign shift, exp bits, frac mask
-    // dml: dotbits | expbits | fracbits
-    // dml:    4    |    0    |    3
+  // mask, /*dot value,*/ exp mask, frac bits, exp sign shift, exp bits, frac mask
+  // dml: dotbits | expbits | fracbits
+  // dml:    4    |    0    |    3
     {0b0000, /*0x0,*/ std::make_tuple(0x00, 0x3, 0x0, 0x0, 0x7)},
-    // d0: dotbits | expbits | fracbits
-    // d0:    4    |    0    |    3
+ // d0: dotbits | expbits | fracbits
+  // d0:    4    |    0    |    3
     {0b0001, /*0x0,*/ std::make_tuple(0x00, 0x3, 0x1, 0x0, 0x7)},
-    //  d1: dotbits | expbits | fracbits
-    //  d1:    3    |    1    |    3
+ //  d1: dotbits | expbits | fracbits
+  //  d1:    3    |    1    |    3
     {0b0010, /*0x1,*/ std::make_tuple(0x08, 0x3, 0x3, 0x1, 0x7)},
     {0b0011,          std::make_tuple(0x08, 0x3, 0x3, 0x1, 0x7)},
-    //  d2: dotbits | expbits | fracbits
-    //  d2:    2    |    2    |    3
+ //  d2: dotbits | expbits | fracbits
+  //  d2:    2    |    2    |    3
     {0b0100, /*0x2,*/ std::make_tuple(0x18, 0x3, 0x4, 0x2, 0x7)},
     {0b0101,          std::make_tuple(0x18, 0x3, 0x4, 0x2, 0x7)},
     {0b0110,          std::make_tuple(0x18, 0x3, 0x4, 0x2, 0x7)},
     {0b0111,          std::make_tuple(0x18, 0x3, 0x4, 0x2, 0x7)},
-    // d3: dotbits | expbits | fracbits
-    // d3:    2    |    3    |    2
+ // d3: dotbits | expbits | fracbits
+  // d3:    2    |    3    |    2
     {0b1000, /*0x3,*/ std::make_tuple(0x1c, 0x2, 0x4, 0x3, 0x3)},
     {0b1001,          std::make_tuple(0x1c, 0x2, 0x4, 0x3, 0x3)},
     {0b1010,          std::make_tuple(0x1c, 0x2, 0x4, 0x3, 0x3)},
     {0b1011,          std::make_tuple(0x1c, 0x2, 0x4, 0x3, 0x3)},
-    // d4: dotbits | expbits | fracbits
-    // d4:    2    |    4    |    1
+ // d4: dotbits | expbits | fracbits
+  // d4:    2    |    4    |    1
     {0b1100, /*0x4,*/ std::make_tuple(0x1e, 0x1, 0x4, 0x4, 0x1)},
     {0b1101,          std::make_tuple(0x1e, 0x1, 0x4, 0x4, 0x1)},
     {0b1110,          std::make_tuple(0x1e, 0x1, 0x4, 0x4, 0x1)},
@@ -160,9 +160,9 @@ T HiF8ToFpN(uint8_t inData, uint32_t expBits, uint32_t fracBits) {
     T outData = 0;
     if (inData == 0) {
         outData = 0;
-    } else if (inData == 0x80) { // nan 10000000
+    } else if (inData == 0x80) {                          // nan 10000000
         outData = (1 << (expBits + fracBits)) - 1;
-    } else if (inData == 0x6F) { // +inf exp all 1
+    } else if (inData == 0x6F) {                          // +inf exp all 1
         outData = ((1 << expBits) - 1) << fracBits;
     } else if (inData == 0xEF) {                          //-inf
         outData = ((1 << (expBits + 1)) - 1) << fracBits; // s 1 exp expBits*1 frac 0
@@ -201,7 +201,7 @@ uint8_t FpNToHiF8(T inData, uint32_t expBits, uint32_t fracBits) {
         return 0x00;
     }
     if (expFpN == ((1U << expBits) - 1) && fracFpN > 0) {
-        outData = 0x80; // nan 0b10000000
+        outData = 0x80;                             // nan 0b10000000
     } else if (expFpN == ((1U << expBits) - 1) && fracFpN == 0) {
         outData = (sign << HIF8_SIGN_SHIFT) | 0x6F; // inf S1101111
     } else {
