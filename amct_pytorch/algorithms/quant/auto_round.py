@@ -22,6 +22,25 @@ import torch.nn as nn
 
 from amct_pytorch.algorithms.quant.base import QuantAlgorithmBase
 from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
+from amct_pytorch.quantization.dtypes.hifp_impl import (
+    _STE_PRIMS,
+    _hifx_three_level_quantize,
+)
+
+
+def _quant_hifp(x, qdim, k=None, v=None):
+    """HiAutoRound HiF4 fake-quant aligned with the repo's canonical HiF4 grid.
+
+    Thin wrapper over hifp_impl._hifx_three_level_quantize with the
+    straight-through primitive set: same three-level quant_hifx math as
+    hifloat4_fake_quant/hif4_pack, but torch.log2/exp2 + STE floor/round so
+    gradients reach the learnable `k` (per innermost 4-element group) and `v`
+    (per element) compensation terms. Both are clamped (_K_MAX/_V_MAX inside
+    _hifx_three_level_quantize) to stop unbounded drift under gradient descent
+    once downstream clamps kill their gradient. Passing k=v=None reproduces the
+    canonical grid up to the log2/exp2-vs-bit-exact primitive swap.
+    """
+    return _hifx_three_level_quantize(x, qdim, prims=_STE_PRIMS, k=k, v=v).to(x.dtype)
 
 
 def _reshape_pad_tensor_by_group_size(
@@ -70,6 +89,8 @@ def _get_scale_shape(weight_shape, group_size: int):
     targets=("weight",),
 )
 class AutoRound(QuantAlgorithmBase):
+    HIFX4_GROUP_SIZE = 64
+
     def __init__(self, args, w_bits):
         super().__init__()
         self.args = args
@@ -78,6 +99,33 @@ class AutoRound(QuantAlgorithmBase):
         self.q_scale_thresh = 1e-5
 
         weight_shape = tuple(args.w_size)
+        self.rows, self.columns = weight_shape
+        self.is_hif4 = args.quant_dtype == "hifp"
+        if self.is_hif4 and w_bits != 4:
+            raise ValueError(
+                f"AutoRound: only HiFloat4 (w_bits=4) is currently supported for "
+                f"quant_dtype='hifp', got w_bits={w_bits!r}"
+            )
+        if self.is_hif4 and self.columns % self.HIFX4_GROUP_SIZE != 0:
+            raise ValueError(
+                "AutoRound: HiFloat4 requires the weight's column count to be a "
+                "multiple of {}, got {}.".format(self.HIFX4_GROUP_SIZE, self.columns)
+            )
+
+        if self.is_hif4:
+            # HiAutoRound: per-element mantissa compensation v + per-4-column-group
+            # exponent compensation k. No separate learnable clip range like
+            # min_scale/max_scale below -- HiF4 self-scales; k/v themselves are
+            # bounded to [-_K_MAX, _K_MAX] / [-_V_MAX, _V_MAX] inside
+            # hifp_impl._hifx_three_level_quantize.
+            self.value = nn.Parameter(
+                torch.zeros(self.rows, self.columns), requires_grad=True
+            )
+            self.k = nn.Parameter(
+                torch.zeros(self.rows, self.columns // 4), requires_grad=True
+            )
+            return
+
         dummy_weight = torch.zeros(weight_shape)
         grouped_weight, _, _ = _reshape_pad_tensor_by_group_size(
             dummy_weight, self.group_size
@@ -101,9 +149,10 @@ class AutoRound(QuantAlgorithmBase):
             group_size = -1
         elif args.quant_dtype == "mxfp":
             group_size = 32
-        else:
+        elif args.quant_dtype == "hifp":
             group_size = 64
-            raise ValueError("Not supported hifx for now")
+        else:
+            raise ValueError(f"Not supported quant_dtype: {args.quant_dtype!r}")
         return group_size
 
     def prepare_deploy_weight(self, weight: torch.Tensor):
@@ -119,10 +168,15 @@ class AutoRound(QuantAlgorithmBase):
         return clipped_weight, v
 
     def export_deploy(self, weight: torch.Tensor, quant_obj):
+        if self.is_hif4:
+            weight_q = _quant_hifp(weight, -1, self.k, self.value)
+            return quant_obj.export_deploy(weight_q)
         clipped_weight, v = self.prepare_deploy_weight(weight)
         return quant_obj.export_deploy(clipped_weight, v=v)
 
     def quantize(self, weight: torch.Tensor, quant_obj):
+        if self.is_hif4:
+            return _quant_hifp(weight, -1, self.k, self.value)
         clipped_weight, v = self.prepare_deploy_weight(weight)
         return quant_obj(clipped_weight, v=v)
 

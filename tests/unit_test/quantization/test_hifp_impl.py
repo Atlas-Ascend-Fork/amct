@@ -26,11 +26,14 @@ from amct_pytorch.quantization.dtypes import hifp_impl
 from amct_pytorch.quantization.dtypes.hifp_impl import (
     _amct_ops_hifloat8_fake_quant as amct_ops_hifloat8_fake_quant,
     _floor_log2_fp32 as floor_log2_fp32,
+    _hif4_reference_quantize as hif4_reference_quantize,
+    _hifx_three_level_quantize as hifx_three_level_quantize,
     _ldexp_fp32 as ldexp_fp32,
     _load_amct_ops_cast as load_amct_ops_cast,
     _load_amct_ops_hif4_cast as load_amct_ops_hif4_cast,
     _native_hifloat8_fake_quant as native_hifloat8_fake_quant,
     _pow2 as pow2_exact,
+    _STE_PRIMS as ste_prims,
     _to_bf16 as to_bf16_exact,
 )
 
@@ -662,6 +665,36 @@ def test_hifloat4_fake_quant_hand_computed_golden():
     x = torch.full((1, 64), 2.0, dtype=torch.bfloat16)
     out = hifp_impl.hifloat4_fake_quant(x)
     assert torch.equal(out, torch.full((1, 64), 1.875, dtype=torch.bfloat16))
+
+
+# ---- shared three-level core: STE path tracks the bit-exact reference ----
+
+
+def test_ste_core_matches_reference_grid_without_compensation():
+    # _quant_hifp (STE prims, k=v=None) is not bit-exact vs the reference
+    # (log2/exp2 vs IEEE-754 bit extraction) but must stay on the same grid.
+    torch.manual_seed(31)
+    x = torch.randn(4, 256, dtype=torch.float32) * 3.0
+    ref = hif4_reference_quantize(x, -1)
+    ste = hifx_three_level_quantize(x, -1, prims=ste_prims)
+    assert ste.shape == ref.shape
+    torch.testing.assert_close(ste, ref, rtol=0, atol=1e-3)
+
+
+def test_ste_core_propagates_gradient_and_nan_blocks():
+    x = torch.randn(2, 128, dtype=torch.float32, requires_grad=True)
+    k = torch.zeros(2, 128 // 4, requires_grad=True)
+    v = torch.zeros(2, 128, requires_grad=True)
+    out = hifx_three_level_quantize(x, -1, prims=ste_prims, k=k, v=v)
+    out.sum().backward()
+    assert x.grad is not None and torch.isfinite(x.grad).all()
+    assert k.grad is not None and v.grad is not None
+
+    with torch.no_grad():
+        xb = torch.ones(1, 64, dtype=torch.float32)
+        xb[0, 3] = float("nan")
+        poisoned = hifx_three_level_quantize(xb, -1, prims=ste_prims)
+    assert torch.isnan(poisoned).all()
 
 
 # ---- hifloat4_fake_quant: NPU dispatch ----

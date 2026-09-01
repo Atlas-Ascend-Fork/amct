@@ -452,6 +452,70 @@ def test_hifp_deploy_and_export_deploy_are_unsupported():
         qdq.deploy(x)
 
 
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16, torch.float32])
+def test_hifp_fake_quant_bits4_preserves_shape_and_dtype(dtype):
+    x = torch.randn(2, 64, dtype=dtype)
+    qdq = QuantDequantHifp(bits=4)
+
+    out = qdq.fake_quant(x)
+
+    assert out.shape == x.shape
+    assert out.dtype == x.dtype
+
+
+def test_hifp_forward_bits4_passes_gradient_through_ste():
+    x = torch.randn(2, 64, dtype=torch.float32, requires_grad=True)
+    qdq = QuantDequantHifp(bits=4)
+
+    out = qdq(x)
+    out.sum().backward()
+
+    assert x.grad is not None
+    assert torch.equal(x.grad, torch.ones_like(x))
+
+
+def test_hifp_fake_quant_unsupported_bits_raises():
+    qdq = QuantDequantHifp(bits=4)
+    qdq.bits = 32
+    x = torch.randn(2, 8)
+
+    with pytest.raises(ValueError, match="not supported"):
+        qdq.fake_quant(x)
+
+
+def test_hifp_forward_unsupported_bits_raises():
+    qdq = QuantDequantHifp(bits=32)
+    x = torch.randn(2, 8)
+
+    with pytest.raises(ValueError, match="only supports 16/8/4-bit"):
+        qdq(x)
+
+
+def test_hifp_deploy_bits4_returns_packed_value_and_scale():
+    torch.manual_seed(0)
+    qdq = QuantDequantHifp(bits=4)
+    x = torch.randn(2, 64)
+
+    value, scale = qdq.deploy(x)
+
+    assert value.dtype == torch.uint8
+    assert value.shape == (2, 32)
+    assert scale.dtype == torch.uint8
+    assert value.device.type == "cpu"
+    assert scale.device.type == "cpu"
+
+
+def test_hifp_export_deploy_bits4_returns_qweight_and_scale():
+    torch.manual_seed(0)
+    qdq = QuantDequantHifp(bits=4)
+    x = torch.randn(2, 64)
+
+    out = qdq.export_deploy(x)
+
+    assert set(out) == {"qweight", "scale"}
+    assert out["qweight"].shape == (2, 32)
+
+
 def test_weight_dequant_decodes_e8m0_integer_scale():
     from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
 

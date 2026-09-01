@@ -380,10 +380,85 @@ def _hif4_fake_quant_reference(fp_tensor, qdim=-1):
     return out.to(dtype_ori)
 
 
-@torch.no_grad()
-def _hif4_reference_quantize(x, qdim):
-    """quant_hifx three-level block quantization on the padded fp32 tensor."""
-    # Match quant_hifx algorithm exactly (HiFloat4-private QFuncs/hifx.py)
+def _ste_floor(x):
+    """floor with a straight-through gradient (identity on the backward pass)."""
+    return (torch.floor(x) - x).detach() + x
+
+
+def _ste_round(x):
+    """round with a straight-through gradient."""
+    return (torch.round(x) - x).detach() + x
+
+
+def _ste_clamp(x, min_val, max_val):
+    """clamp with a straight-through gradient."""
+    return (torch.clamp(x, min_val, max_val) - x).detach() + x
+
+
+# HiAutoRound compensation-term bounds: k shifts the level-3 exponent input,
+# v shifts the mantissa. Both are clamped so they cannot run away once a
+# downstream clamp kills their gradient.
+_K_MAX = 2.0
+_V_MAX = 2.0 - 2.0 ** (-NG)
+
+
+class _HifxPrims(NamedTuple):
+    """Arithmetic primitives that differ between the two HiF4 quant paths.
+
+    The deploy/reference path uses bit-exact, non-differentiable ops (IEEE-754
+    bit extraction + ldexp) so it matches the NPU kernel exactly. The
+    HiAutoRound training path swaps in torch.log2/exp2 plus straight-through
+    estimators so gradients reach the learnable k/v terms.
+    """
+
+    floor_log2: object
+    round: object
+    floor: object
+    clamp: object
+    pow2: object
+    mul_pow2: object  # a * 2**e
+
+
+def _exact_mul_pow2(a, e):
+    if not torch.is_tensor(e):
+        e = torch.full_like(a, float(e))
+    return _ldexp_fp32(a, e)
+
+
+def _ste_mul_pow2(a, e):
+    if torch.is_tensor(e):
+        return a * torch.exp2(e)
+    return a * (2.0**e)
+
+
+_EXACT_PRIMS = _HifxPrims(
+    floor_log2=_floor_log2_fp32,
+    round=torch.round,
+    floor=torch.floor,
+    clamp=torch.clamp,
+    pow2=_pow2,
+    mul_pow2=_exact_mul_pow2,
+)
+
+_STE_PRIMS = _HifxPrims(
+    floor_log2=lambda x: _ste_floor(torch.log2(x)),
+    round=_ste_round,
+    floor=_ste_floor,
+    clamp=_ste_clamp,
+    pow2=torch.exp2,
+    mul_pow2=_ste_mul_pow2,
+)
+
+
+def _hifx_three_level_quantize(x, qdim, *, prims, k=None, v=None):
+    """quant_hifx three-level block quantization (HiFloat4-private QFuncs/hifx.py).
+
+    Shared by the bit-exact reference (``prims=_EXACT_PRIMS``, k=v=None, matches
+    the NPU kernel) and HiAutoRound's STE fake-quant (``prims=_STE_PRIMS`` with a
+    learnable ``k`` per innermost 4-element group and ``v`` per element). ``qdim``
+    must be negative and the quant-dim length a multiple of 64.
+    """
+    x = x.to(torch.float32)
     xg = x.unflatten(qdim, (-1, 8, 2, 4))
     special_mask = ~torch.isfinite(xg)
     x_finite = torch.where(special_mask, torch.zeros_like(xg), xg)
@@ -400,14 +475,14 @@ def _hif4_reference_quantize(x, qdim):
     safe_scale = torch.where(
         scale_factor > 0, scale_factor, torch.ones_like(scale_factor)
     )
-    e_sf = _floor_log2_fp32(safe_scale)
-    mant_sf = _ldexp_fp32(safe_scale, -e_sf + 7.0)
-    scale_factor = _ldexp_fp32(torch.round(mant_sf), e_sf - 7.0)
+    e_sf = prims.floor_log2(safe_scale)
+    mant_sf = prims.mul_pow2(safe_scale, -e_sf + 7.0)
+    scale_factor = prims.mul_pow2(prims.round(mant_sf), e_sf - 7.0)
     scale_factor = scale_factor.clamp(min=2.0 ** (-48), max=49152.0)
 
-    e_sf = _floor_log2_fp32(scale_factor)
-    scale_factor = _ldexp_fp32(
-        torch.round(_ldexp_fp32(scale_factor, 2.0 - e_sf)), e_sf - 2.0
+    e_sf = prims.floor_log2(scale_factor)
+    scale_factor = prims.mul_pow2(
+        prims.round(prims.mul_pow2(scale_factor, 2.0 - e_sf)), e_sf - 2.0
     )
     scale_factor = torch.where(
         zero_group, torch.full_like(scale_factor, 2.0 ** (-48)), scale_factor
@@ -415,19 +490,22 @@ def _hif4_reference_quantize(x, qdim):
 
     rec_sf = (1.0 / scale_factor).to(torch.bfloat16).to(x.dtype)
 
-    scale_lv2_exp = torch.floor((max_lv2 * rec_sf).clamp(0, 4) * 0.25)
-    scale_lv2 = _pow2(scale_lv2_exp)
-    scale_lv3_input = _ldexp_fp32(max_lv3 * rec_sf, -scale_lv2_exp)
-    scale_lv3_exp = torch.floor(scale_lv3_input.clamp(0, 2) * 0.5)
-    scale_lv3 = _pow2(scale_lv3_exp)
+    scale_lv2_exp = prims.floor((max_lv2 * rec_sf).clamp(0, 4) * 0.25)
+    scale_lv2 = prims.pow2(scale_lv2_exp)
+    scale_lv3_input = prims.mul_pow2(max_lv3 * rec_sf, -scale_lv2_exp)
+    if k is not None:
+        k = _ste_clamp(k, -_K_MAX, _K_MAX)
+        scale_lv3_input = scale_lv3_input + k.reshape(scale_lv3_input.shape)
+    scale_lv3_exp = prims.floor(scale_lv3_input.clamp(0, 2) * 0.5)
+    scale_lv3 = prims.pow2(scale_lv3_exp)
 
-    mant = _ldexp_fp32(x_unsigned * rec_sf, -scale_lv2_exp - scale_lv3_exp)
+    mant = prims.mul_pow2(x_unsigned * rec_sf, -scale_lv2_exp - scale_lv3_exp)
     mant = _to_bf16(mant)
-    mant = _ldexp_fp32(
-        torch.floor(_ldexp_fp32(mant, torch.full_like(mant, NG)) + 0.5),
-        torch.full_like(mant, -float(NG)),
-    )
-    mant = mant.clamp(min=-2.0 + 2.0 ** (-NG), max=2.0 - 2.0 ** (-NG))
+    if v is not None:
+        v = _ste_clamp(v, -_V_MAX, _V_MAX)
+        mant = mant + v.reshape(mant.shape)
+    mant = prims.mul_pow2(prims.floor(prims.mul_pow2(mant, NG) + 0.5), -NG)
+    mant = prims.clamp(mant, -2.0 + 2.0 ** (-NG), 2.0 - 2.0 ** (-NG))
 
     out = sign * mant * scale_lv2 * scale_lv3 * scale_factor
 
@@ -439,3 +517,9 @@ def _hif4_reference_quantize(x, qdim):
     )
 
     return out.flatten(qdim - 3, qdim)
+
+
+@torch.no_grad()
+def _hif4_reference_quantize(x, qdim):
+    """Bit-exact quant_hifx three-level block quantization on padded fp32 input."""
+    return _hifx_three_level_quantize(x, qdim, prims=_EXACT_PRIMS)
