@@ -242,4 +242,3 @@ max_prune_ratio: 0.8
 test_iteration: 1
 override_prune_cfg: 'your/path/to/override_channel_prune.cfg'
 ```
-
