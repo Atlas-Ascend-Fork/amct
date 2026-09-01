@@ -108,7 +108,10 @@ def convert_to_mxfp4_qat(
     """Recursively replace every ``nn.Linear`` in *module* with an MXFP4 QAT one.
 
     The replacement happens in place; the returned reference is the same object,
-    provided only for chaining.
+    provided only for chaining. Subclasses of ``nn.Linear`` are included so
+    framework wrappers (Megatron-style Linear subclasses, etc.) are converted
+    rather than left in float. Already converted ``MXFP4QATLinear`` layers are
+    skipped, so calling this twice is a no-op.
 
     Args:
         module: Root module to rewrite.
@@ -133,7 +136,9 @@ def _convert(
         path = f"{prefix}{name}"
         if any(pattern in path for pattern in skip_names):
             continue
-        if type(child) is nn.Linear:
+        if isinstance(child, MXFP4QATLinear):
+            continue
+        if isinstance(child, nn.Linear):
             setattr(module, name, MXFP4QATLinear.from_linear(child, config))
         else:
             _convert(child, config, skip_names, prefix=f"{path}.")
