@@ -95,7 +95,15 @@ def weight_dequant(
     # Get the original dimensions of weight
     M, N = weight.shape
     weight = weight.to(torch.float32)
-    scale = scale.to(torch.float32)
+    # Integer scales are MX E8M0 exponents: 2 ** (e - 127); 0xff (NaN) makes the
+    # whole block NaN per OCP MX. Float scales pass through unchanged.
+    if not torch.is_floating_point(scale):
+        scale = scale.to(torch.float32)
+        scale = torch.where(
+            scale == 0xFF, torch.nan, torch.exp2(scale - FP32_EXPONENT_BIAS)
+        )
+    else:
+        scale = scale.to(torch.float32)
     if block_size != 1:
         if is_mx:
             scale_expanded = scale.repeat_interleave(block_size, dim=1)

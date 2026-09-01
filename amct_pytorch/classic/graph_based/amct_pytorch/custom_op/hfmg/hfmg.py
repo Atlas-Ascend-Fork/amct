@@ -62,7 +62,7 @@ class HFMG(nn.Module):
 
     def forward(self, inputs):
         """
-        Function: HFMG foward funtion.
+        Function: HFMG forward function.
         """
         self.cur_batch += 1
         if inputs.dtype is torch.float16:
@@ -73,7 +73,7 @@ class HFMG(nn.Module):
         else:
             self._merge_histogram([inputs])
         LOGGER.logd(
-            "Accumulated {} batch to do layer {} data calibration.".format(
+            "Accumulated batch {} for layer {} data calibration.".format(
                 self.cur_batch, self.layers_name
             )
         )
@@ -97,7 +97,7 @@ class HFMG(nn.Module):
             )
 
         LOGGER.logi(
-            "Use {} batch to do layer {} data calibration.".format(
+            "Use {}-batch data calibration for layer {}.".format(
                 hfmg_param.get('batch_num'), self.layers_name
             )
         )
@@ -117,7 +117,7 @@ class HFMG(nn.Module):
         self.hfmg_data = []
         self.calibrated_flag = True
         LOGGER.logi(
-            "Do layer {} data calibration succeeded!".format(self.layers_name), 'HFMG'
+            "Data calibration for layer {} succeeded!".format(self.layers_name), 'HFMG'
         )
 
         return QuantInfo._make(
@@ -176,7 +176,7 @@ class HFMG(nn.Module):
             )
 
         LOGGER.logi(
-            "Doing layer {} data calibration: data already preprocess {}/{}".format(
+            "Calibrating data for layer {}: preprocessed {}/{} batches".format(
                 self.layers_name, self.cur_batch, self.param.get('batch_num')
             ),
             'HFMG',

@@ -17,6 +17,8 @@
 # ----------------------------------------------------------------------------
 import csv
 
+from ...utils.log import LOGGER  # pylint: disable=E0402
+
 DEFAULT_CAPACITY_TYPE = 'default'
 ASCEND_CAPACITY_TYPE = 'ascend'
 SUPPORTED_CAPACITY_TYPES = [DEFAULT_CAPACITY_TYPE, ASCEND_CAPACITY_TYPE]
@@ -52,9 +54,7 @@ class Capacity:
         '''get current capacity's type'''
         if capacity_type not in SUPPORTED_CAPACITY_TYPES:
             raise ValueError(
-                'capacity_type {} is unsupported, only support types {}'.format(
-                    capacity_type, SUPPORTED_CAPACITY_TYPES
-                )
+                f'capacity_type {capacity_type} is unsupported, only support types {SUPPORTED_CAPACITY_TYPES}'
             )
         self.capacity_type = capacity_type
 
@@ -72,7 +72,7 @@ class Capacity:
 
     def show_capacities(self):
         """show all capacities and values"""
-        print(self.capacity)
+        LOGGER.logi(str(self.capacity))
 
     def _parser_entry(self, config):
         with open(config) as fid:
@@ -93,7 +93,7 @@ class Capacity:
                     'string': self._parser_string,
                 }
                 if item_type not in type2func:
-                    raise ValueError('Unknown type {}'.format(item_type))
+                    raise ValueError(f'Unknown type {item_type}')
                 type2func[item_type](item, line[2:])
 
     def _parser_bool(self, item, values):
@@ -104,7 +104,7 @@ class Capacity:
         elif value.upper() == 'False'.upper():
             self.capacity[item] = False
         else:
-            raise ValueError('Unknown value {} for {}'.format(value, item))
+            raise ValueError(f'Unknown value {value} for {item}')
 
     def _parser_list(self, item, values):
         self.capacity[item] = [value.strip() for value in values]

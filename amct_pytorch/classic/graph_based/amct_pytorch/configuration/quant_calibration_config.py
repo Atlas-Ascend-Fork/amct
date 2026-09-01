@@ -35,7 +35,7 @@ def inner_create_quant_calibration_config(
     if config_defination is None:
         CONFIGURER.create_default_config(config_file, model, quant_layers)
         LOGGER.logi(
-            'Create quant calibration config file {} without config defination success'.format(
+            'Create quant calibration config file {} without config definition success'.format(
                 config_file
             )
         )
@@ -49,7 +49,7 @@ def inner_create_quant_calibration_config(
     CONFIGURER.create_config_from_proto(config_file, model, config_defination)
     LOGGER.logi(
         'Create quant calibration config file {} '
-        'with config defination {} success'.format(config_file, config_defination)
+        'with config definition {} success'.format(config_file, config_defination)
     )
 
 

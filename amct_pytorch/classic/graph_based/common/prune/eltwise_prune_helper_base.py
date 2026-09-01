@@ -41,7 +41,7 @@ class EltwisePruneHelperBase(PruneHelperBase):
         if prune_record_in0 is None:
             record_helper.delete_record_list(prune_record_in1)
             LOGGER.logd(
-                "disable Add {} for only input[1] is to do prune".format(
+                "Disable Add {} because only input[1] is pruned.".format(
                     self.node.name
                 ),
                 MODULE_NAME,
@@ -51,7 +51,7 @@ class EltwisePruneHelperBase(PruneHelperBase):
         if prune_record_in1 is None:
             record_helper.delete_record_list(prune_record_in0)
             LOGGER.logd(
-                "disable Add {} for only input[0] is to do prune".format(
+                "Disable Add {} because only input[0] is pruned.".format(
                     self.node.name
                 ),
                 MODULE_NAME,
@@ -62,7 +62,7 @@ class EltwisePruneHelperBase(PruneHelperBase):
             record_helper.delete_record_list(prune_record_in1)
             record_helper.delete_record_list(prune_record_in0)
             LOGGER.logd(
-                "disable Add {} for input[0] or input[1] has more than one prune_record".format(
+                "Disable Add {} because input[0] or input[1] has more than one prune_record.".format(
                     self.node.name
                 ),
                 MODULE_NAME,
@@ -75,7 +75,7 @@ class EltwisePruneHelperBase(PruneHelperBase):
             record_helper.delete_record(prune_record_in0[0])
             record_helper.delete_record(prune_record_in1[0])
             LOGGER.logd(
-                "disable Add {} for input[0] or input[1] has different prune axis".format(
+                "Disable Add {} because input[0] and input[1] have different prune axes.".format(
                     self.node.name
                 ),
                 MODULE_NAME,
