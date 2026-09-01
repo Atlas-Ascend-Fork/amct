@@ -1,25 +1,19 @@
 # -*- coding: UTF-8 -*-
 # ----------------------------------------------------------------------------
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: Apache-2.0 AND BSD-3-Clause
 #
-# Portions of this file are adapted from third-party open-source projects;
-# the remainder is Huawei-authored.
+# Adapted from Intel auto-round v0.13.1:
+#     https://github.com/intel/auto-round/blob/v0.13.1/auto_round/algorithms/quantization/sign_round/sign_sgd.py
+#     Copyright (c) 2023 Intel Corporation -- Apache-2.0
 #
-# - SignSGD / _sign_sgd (sign-based parameter update):
-#     adapted from Intel auto-round
-#     https://github.com/intel/auto-round/blob/main/auto_round/algorithms/quantization/sign_round/sign_sgd.py
-#     Copyright (c) 2023 Intel Corporation
-#     SPDX-License-Identifier: Apache-2.0
+# The upstream auto-round file is itself derived from PyTorch's
+# torch/optim/sgd.py (Optimizer subclass, step(), momentum / weight-decay /
+# nesterov handling, _RequiredParameter, _use_grad_for_differentiable):
+#     Copyright (c) 2016 Facebook, Inc. (Adam Paszke) and affiliates -- BSD-3-Clause
 #
-# - SGD scaffolding (Optimizer subclass, step(), momentum / weight-decay /
-#   nesterov handling, _RequiredParameter, _use_grad_for_differentiable):
-#     adapted from PyTorch
-#     https://github.com/pytorch/pytorch/blob/main/torch/optim/sgd.py
-#     Copyright (c) 2016 Facebook, Inc. and affiliates.
-#     SPDX-License-Identifier: BSD-3-Clause
-#     Full BSD-3-Clause text and disclaimer:
-#     https://github.com/pytorch/pytorch/blob/main/LICENSE
+# Full Apache-2.0 and BSD-3-Clause license texts are provided in
+# Third_Party_Open_Source_Software_Notice at the repository root.
 # ----------------------------------------------------------------------------
 
 from typing import List, Optional
