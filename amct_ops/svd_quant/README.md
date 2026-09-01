@@ -120,7 +120,7 @@ svd_quant/            # SVDQuant components
 | ----------- | ----------------------- | ----------------- |
 | `ascend950` | Ascend950PR/Ascend950DT | 512 KB+           |
 
-- CANN 9.0.0
+- CANN ≥ 9.0.0
 - Python ≥ 3.9
 - PyTorch + torch_npu（适配对应 CANN 版本）
 
