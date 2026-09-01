@@ -189,6 +189,7 @@ amct/
 **Solution**:
 
 ```bash
+  
 # Solution 1: Lower pip version
 pip install pip==25.2
 
