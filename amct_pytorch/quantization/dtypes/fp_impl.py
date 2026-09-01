@@ -31,6 +31,7 @@ FP32_EXPONENT_BIAS = 127
 FP32_MIN_NORMAL = 2 ** (-FP32_EXPONENT_BIAS + 1)
 EBITS_F4_E2M1, MBITS_F4_E2M1 = 2, 1
 
+
 def unpack_mxfloat4_to_fp32(packed_tensor):
     e2m1_values = torch.tensor(
         [
@@ -90,7 +91,7 @@ def weight_dequant(
         AssertionError: If `scale` dimensions do not align with `weight` shape after scaling.
     """
     if is_packed:
-        weight = unpack_float4_to_fp32(weight.view(torch.uint8))
+        weight = unpack_mxfloat4_to_fp32(weight.view(torch.uint8))
     # Get the original dimensions of weight
     M, N = weight.shape
     weight = weight.to(torch.float32)
@@ -176,6 +177,13 @@ def f4_unpacked_to_f32(x: torch.Tensor):
     return _floatx_unpacked_to_f32(x, EBITS_F4_E2M1, MBITS_F4_E2M1)
 
 
+def round_to_decimal(x):
+    exponent = torch.floor(torch.log2(x))
+    mantissa = x / (2**exponent)
+    exponent = torch.where(mantissa > 1.75, exponent + 1, exponent)
+    return exponent
+
+
 def shared_exponents(x: Tensor, emax):
     shared_exp, _ = torch.max(torch.abs(x), dim=-1, keepdim=True)
     shared_exp = shared_exp + FP32_MIN_NORMAL * (shared_exp == 0).type(shared_exp.dtype)
@@ -183,13 +191,6 @@ def shared_exponents(x: Tensor, emax):
     shared_exp = shared_exp - emax
     shared_exp = shared_exp.clamp(min=-127, max=1e10)
     return shared_exp
-
-
-def round_to_decimal(x):
-    exponent = torch.floor(torch.log2(x))
-    mantissa = x / (2**exponent)
-    exponent = torch.where(mantissa > 1.75, exponent + 1, exponent)
-    return exponent
 
 
 def round_ste(x: torch.Tensor) -> torch.Tensor:
