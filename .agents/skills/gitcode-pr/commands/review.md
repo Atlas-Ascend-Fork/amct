@@ -270,4 +270,3 @@ curl -s -H "PRIVATE-TOKEN: $GITCODE_API_TOKEN" \
 ```
 
 **完整 API 格式（包括多行行内评论）详见**：`../references/gitcode_api.md`
-
