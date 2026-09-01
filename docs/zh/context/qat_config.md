@@ -631,7 +631,7 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
     regular_prune_skip_layers: "Opname"
     regular_prune_skip_layers: "Opname"
     
-    # overide specific layers
+    # override specific layers
     override_layer_configs: {
         layer_name: "Opname"
         prune_config : {
@@ -662,7 +662,7 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
     regular_prune_skip_layers: "Opname"
     regular_prune_skip_layers: "Opname"
     
-    # overide specific layers
+    # override specific layers
     override_layer_configs: {
         layer_name: "Opname"
         prune_config : {

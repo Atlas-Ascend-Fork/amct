@@ -47,5 +47,6 @@ quote-style = "preserve"
 
 [tool.codespell]
 # CANN/cann: Huawei product name / org in URLs; nd: tensor dim count variable;
-# CopyIn/vor: AscendC intrinsic names.
-ignore-words-list = "cann,nd,copyin,vor"
+# CopyIn/vor: AscendC intrinsic names; abl: libc_sec directory name;
+# vectorIn: C++ parameter name; EnQue: AscendC queue method; commiter: CI classify schema key.
+ignore-words-list = "cann,nd,copyin,vor,abl,vectorin,enque,commiter"
