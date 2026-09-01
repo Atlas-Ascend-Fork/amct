@@ -102,7 +102,7 @@ class AutoRound(QuantAlgorithmBase):
         elif args.quant_dtype == "mxfp":
             group_size = 32
         elif args.quant_dtype == "fp":
-            group_size = 32
+            group_size = 128
         else:
             group_size = 64
             raise ValueError("Not supported hifx for now")
