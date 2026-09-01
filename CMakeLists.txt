@@ -21,7 +21,7 @@ include(CMakePrintHelpers)
 
 message("CMAKE_SOURCE_DIR === ${CMAKE_SOURCE_DIR}")
 message("PROJECT_SOURCE_DIR === ${PROJECT_SOURCE_DIR}")
-
+# test
 include(cmake/config.cmake)
 
 cmake_print_variables(VERSION)
