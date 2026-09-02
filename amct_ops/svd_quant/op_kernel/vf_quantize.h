@@ -25,7 +25,7 @@
 #include "kernel_operator.h"
 
 #define ALIGN_DOWN(x, y) ((x) / (y) * (y))
-#define CEIL_DIV(x, y) (((x) + (y)-1) / (y))
+#define CEIL_DIV(x, y) (((x) + (y) - 1) / (y))
 
 using namespace AscendC;
 
