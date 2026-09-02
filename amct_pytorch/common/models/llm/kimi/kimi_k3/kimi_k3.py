@@ -296,6 +296,18 @@ class KimiK3(BaseModel):
             if weight_name.endswith(".weight_packed") or weight_name.endswith(".weight_scale"):
                 continue
             state_dict[weight_name[len(prefix):]] = tensor
+
+        a_log_key = "self_attn.A_log"
+        a_log = state_dict.get(a_log_key)
+        if a_log is not None:
+            linear_attn_config = self.config.linear_attn_config
+            num_heads = linear_attn_config["num_heads"]
+            head_dim = linear_attn_config["head_dim"]
+            if a_log.shape == (head_dim,):
+                padding = a_log[num_heads:]
+                if torch.count_nonzero(padding).item() != 0:
+                    raise RuntimeError("Kimi K3 self_attn.A_log contains non-zero padding")
+                state_dict[a_log_key] = a_log[:num_heads].contiguous()
         return state_dict
 
     def get_scale_name(self, weight_name):

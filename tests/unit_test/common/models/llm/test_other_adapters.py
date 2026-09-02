@@ -221,6 +221,58 @@ def test_kimi_k3_load_layer_weight_skips_packed_mxfp4_without_dequant(monkeypatc
     assert state["input_layernorm.weight"] is norm
 
 
+def _load_kimi_k3_a_log(monkeypatch, tmp_path, a_log):
+    prefix = "language_model.model.layers.0."
+    weight_name = f"{prefix}self_attn.A_log"
+    model = KimiK3.__new__(KimiK3)
+    model.model_path = str(tmp_path)
+    model.config = SimpleNamespace(
+        linear_attn_config={"num_heads": 96, "head_dim": 128},
+    )
+    model._weight_map = {weight_name: "shard.safetensors"}
+
+    class FakeSafeOpen:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def get_tensor(self, name):
+            assert name == weight_name
+            return a_log
+
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.kimi.kimi_k3.kimi_k3.safe_open",
+        lambda *args, **kwargs: FakeSafeOpen(),
+    )
+    return model.load_layer_weight(prefix)
+
+
+def test_kimi_k3_load_layer_weight_trims_zero_padded_a_log(monkeypatch, tmp_path):
+    a_log = torch.cat([torch.arange(96), torch.zeros(32)])
+
+    state = _load_kimi_k3_a_log(monkeypatch, tmp_path, a_log)
+
+    assert state["self_attn.A_log"].shape == (96,)
+    torch.testing.assert_close(state["self_attn.A_log"], a_log[:96])
+
+
+def test_kimi_k3_load_layer_weight_rejects_nonzero_a_log_padding(monkeypatch, tmp_path):
+    a_log = torch.cat([torch.arange(96), torch.ones(32)])
+
+    with pytest.raises(RuntimeError, match="non-zero padding"):
+        _load_kimi_k3_a_log(monkeypatch, tmp_path, a_log)
+
+
+def test_kimi_k3_load_layer_weight_keeps_native_a_log(monkeypatch, tmp_path):
+    a_log = torch.arange(96)
+
+    state = _load_kimi_k3_a_log(monkeypatch, tmp_path, a_log)
+
+    assert state["self_attn.A_log"] is a_log
+
+
 def test_kimi_k3_get_embed_load_specs_uses_language_model_prefixes():
     model = KimiK3.__new__(KimiK3)
     text_model = SimpleNamespace(
