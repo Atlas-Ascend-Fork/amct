@@ -31,7 +31,7 @@ from amct_pytorch.quantization.dtypes.int_impl import (
     weight_quant,
 )
 from amct_pytorch.quantization.dtypes.mxfp import QuantDequantMx
-from amct_pytorch.quantization.dtypes.mxfp_impl import (
+from amct_pytorch.quantization.dtypes.fp_impl import (
     down_size,
     f4_unpacked_to_f32,
     pack_uint4 as mx_pack_uint4,

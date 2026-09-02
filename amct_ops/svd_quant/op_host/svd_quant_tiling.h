@@ -44,7 +44,7 @@ struct SvdQuantCompileInfo {};
 
 class SvdQuantTiling {
 public:
-    explicit SvdQuantTiling(gert::TilingContext *context) : context_(context){};
+    explicit SvdQuantTiling(gert::TilingContext *context) : context_(context) {};
     ~SvdQuantTiling() = default;
 
     ge::graphStatus GetTiling();

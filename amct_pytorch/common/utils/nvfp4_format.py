@@ -24,7 +24,7 @@ per-tensor FP32 scale. Folding those two into the single FP32 block scale
 
 import torch
 
-from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
+from amct_pytorch.quantization.dtypes.fp_impl import weight_dequant
 
 NVFP4_BLOCK_SIZE = 16
 NVFP4_PACKED_DTYPES = (torch.uint8, torch.int8)

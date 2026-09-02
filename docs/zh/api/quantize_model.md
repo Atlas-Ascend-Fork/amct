@@ -128,4 +128,3 @@ calibration_model = amct.quantize_model(config_json_file,
                                         dynamic_axes={'input':{0: 'batch_size'},
                                                       'output':{0: 'batch_size'}})
 ```
-

@@ -23,7 +23,7 @@ from amct_pytorch.common.utils.nvfp4_format import (
     is_nvfp4_scale,
     nvfp4_weight_dequant,
 )
-from amct_pytorch.quantization.dtypes.mxfp_impl import unpack_mxfloat4_to_fp32
+from amct_pytorch.quantization.dtypes.fp_impl import unpack_mxfloat4_to_fp32
 
 
 def _packed_weight(rows, cols):

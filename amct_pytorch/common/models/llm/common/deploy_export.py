@@ -19,13 +19,13 @@ import torch.nn as nn
 from loguru import logger
 from safetensors.torch import load_file
 
+from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+from amct_pytorch.quantization.dtypes.fp_impl import weight_dequant
 from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
 from amct_pytorch.common.models.llm.common.weight_path_validation import (
     collect_safetensors_files,
     resolve_safetensors_path,
 )
-from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
-from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
 def generate_quant_group(a_bits=8, w_bits=8, qtype="float", activation_use_clip=False):
@@ -219,29 +219,13 @@ def convert_state_dict(
 
             weight = hif4_unpack(scale_inv, weight)
 
-        # MXFP4 (E2M1 packed into int8, E8M0 block scale)
+        # MXFP4
         elif weight.dtype == torch.int8:
             weight = weight_dequant(
                 weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True
             )
 
-        # MXFP8 (FP8 weight, E8M0 block scale). An integer scale marks MX; the last-dim
-        # group size is derived from the scale and must tile the weight's last dim exactly.
-        elif not torch.is_floating_point(scale_inv):
-            n = weight.shape[-1]
-            scale_cols = scale_inv.shape[-1] if scale_inv.dim() == weight.dim() else 0
-            if scale_cols <= 0 or n % scale_cols != 0:
-                raise ValueError(
-                    f"MXFP8 weight '{weight_name}': E8M0 scale shape "
-                    f"{tuple(scale_inv.shape)} does not tile weight last dim {n} "
-                    f"(need a 2-D scale whose last dim divides {n}, e.g. OCP MX group "
-                    f"size 32)."
-                )
-            weight = weight_dequant(
-                weight, scale_inv, block_size=n // scale_cols, is_mx=True
-            )
-
-        # FP8 (float block scale)
+        # FP8 / MXFP8
         else:
             weight = weight_dequant(weight, scale_inv, block_size=block_size)
 

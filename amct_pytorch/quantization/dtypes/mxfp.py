@@ -20,7 +20,7 @@ from __future__ import annotations
 import torch
 from torch import Tensor
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY
-from amct_pytorch.quantization.dtypes.mxfp_impl import (
+from amct_pytorch.quantization.dtypes.fp_impl import (
     f32_to_f4_unpacked,
     pack_uint4,
     quantize_elewise,
