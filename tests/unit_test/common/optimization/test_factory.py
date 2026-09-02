@@ -22,6 +22,7 @@ import torch
 import torch.nn as nn
 
 from amct_pytorch.common.optimization import factory
+from amct_pytorch.common.optimization.sign_sgd import SignSGD
 
 # ---- get_n_set_parameters_byname / set_require_grad_all -----------------
 
@@ -90,6 +91,13 @@ def test_build_optimizer_sgd_uses_momentum_default_when_missing():
     args = SimpleNamespace(optimizer="sgd", base_lr=1e-3)
     opt = factory.build_optimizer(args, _params())
     assert isinstance(opt, torch.optim.SGD)
+    assert opt.defaults["momentum"] == pytest.approx(0.9)
+
+
+def test_build_optimizer_signsgd_uses_momentum_default_when_missing():
+    args = SimpleNamespace(optimizer="signsgd", base_lr=1e-3)
+    opt = factory.build_optimizer(args, _params())
+    assert isinstance(opt, SignSGD)
     assert opt.defaults["momentum"] == pytest.approx(0.9)
 
 
