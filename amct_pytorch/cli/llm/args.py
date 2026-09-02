@@ -119,6 +119,12 @@ def parser_gen(command=None):
         '--epochs', type=int, default=15, help='Number of training epochs.'
     )
 
+    parser.add_argument("--block_size_col", type=int, default=128, choices=[1, 128])
+    
+    parser.add_argument(
+        "--scale_dtype", type=str, default='fp32', choices=['fp32', 'e8m0']
+    )
+
     parser.add_argument(
         '--algos',
         nargs="*",
