@@ -95,7 +95,9 @@ class ActivationQuantizer(torch.nn.Module):
             kwargs["block_size_col"] = args.block_size_col
             kwargs["scale_dtype"] = args.scale_dtype
 
-        self.quant_obj = DTYPE_REGISTRY.get(args.quant_dtype)(**kwargs)
+        self.quant_obj = DTYPE_REGISTRY.get(args.quant_dtype)(
+            self.bits, True, args.block_size_col, args.scale_dtype
+        )
         self.is_observe = False
 
     def deploy(self):
@@ -132,15 +134,10 @@ class WeightQuantizer(torch.nn.Module):
         self.bits = w_bits if w_bits is not None else args.w_bits
         self.algorithms = nn.ModuleDict()
         self._init_algo()
-        kwargs = {
-            "bits": self.bits,
-            "is_act": True,
-        }
-        if args.quant_dtype == "fp":
-            kwargs["block_size_col"] = args.block_size_col
-            kwargs["scale_dtype"] = args.scale_dtype
 
-        self.quant_obj = DTYPE_REGISTRY.get(args.quant_dtype)(**kwargs)
+        self.quant_obj = DTYPE_REGISTRY.get(args.quant_dtype)(
+            self.bits, False, args.block_size_col, args.scale_dtype
+        )
         self.is_observe = False
 
     def algo_forward(self, x):

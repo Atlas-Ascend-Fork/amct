@@ -28,7 +28,7 @@ from amct_pytorch.quantization.dtypes.int_impl import (
 
 @DTYPE_REGISTRY.register(name="int", description="quant dequant for int")
 class QuantDequantInt(torch.nn.Module):
-    def __init__(self, bits=8, is_act=False):
+    def __init__(self, bits=8, is_act=False, *args):
         super(QuantDequantInt, self).__init__()
         self.bits = bits
         self.is_act = is_act
