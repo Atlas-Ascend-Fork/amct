@@ -31,7 +31,8 @@ backward:  dL/dx = dL/dy            # 普通 STE
 mxfp4_qat/
 ├── fake_quant.py   # MXFP4 QDQ、STE autograd.Function、量化器模块、配置
 ├── linear.py       # MXFP4QATLinear + convert_to_mxfp4_qat
-└── README.md
+├── README.md
+└── README_en.md
 ```
 
 `fake_quant.py` 只依赖 `torch`，可以单文件拷进任意训练仓使用。

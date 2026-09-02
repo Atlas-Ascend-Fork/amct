@@ -36,7 +36,8 @@ mxfp4_ascendc/
 ├── CMakeLists.txt            # 构建入口
 ├── build.sh                  # 一键编译并 stage .so 到 python/mxfp4/
 ├── tests/                    # 正确性 / inv_scale / benchmark
-└── README.md
+├── README.md
+└── README_en.md
 ```
 
 ## 从源码编译
