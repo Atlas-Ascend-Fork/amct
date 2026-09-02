@@ -130,7 +130,7 @@ bool Vector::CheckValidData(const Vector &vectorIn, bool checkNoZero, bool check
 bool Vector::CheckData(
     const Vector &vectorIn, bool checkNonEmpty, bool checkNoZero, bool checkNonNegative, bool checkValid) {
     if (vectorIn.length == 0) {
-        return !checkNonEmpty; // 为空时，若需判断则返回false，若不需判断则作为正常返回true
+        return !checkNonEmpty;      // 为空时，若需判断则返回false，若不需判断则作为正常返回true
     }
     if (vectorIn.data == nullptr) { // length!=0但data为空，作为异常
         return false;

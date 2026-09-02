@@ -77,3 +77,4 @@ net, changes = decompose_network(                                # 加载分解�
 >1.  当涉及模型训练时，本接口的调用需在将模型参数传递给优化器之前；如使用了torch.nn.parallel.DistributedDataParallel \(DDP\)，则本接口的调用也需在将模型传递给DDP之前。
 >2.  本接口将原地修改传入的模型对象，即分解后会改变用户传入的模型对象本身（例外：传入的模型是一个torch.nn.Conv2d对象，该情况下本接口不会对其进行修改，返回的分解后模型是新构建的torch.nn.Module对象）。
 >3.  本接口仅对模型结构进行修改，不会更新分解后的卷积权重，权重的值为torch.nn.Conv2d\(\)构建的默认值。如需fine-tune，请在调用auto\_decomposition后将分解后的模型权重保存下来，在调用本接口之后加载该权重，再进行fine-tune。
+

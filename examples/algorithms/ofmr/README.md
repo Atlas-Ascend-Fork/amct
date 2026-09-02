@@ -68,4 +68,4 @@ Score:  5.477707
 |QWEN2-7B|pileval|wikitext2|7.137|7.196|
 |QWEN3-8B|pileval|wikitext2|9.715|9.808|
 
-推理成功后，在当前目录会生成量化日志文件 ./amct_log/amct_pytorch.log
+推理成功后，在当前目录会生成量化日志文件./amct_log/amct_pytorch.log

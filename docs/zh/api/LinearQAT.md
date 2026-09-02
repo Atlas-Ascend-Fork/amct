@@ -183,3 +183,4 @@
     linear_op = torch.nn.Linear(in_features=1, out_features=1, bias=True, device=None, dtype=None)
     LinearQAT.from_float(mod=linear_op, config=None)
     ```
+

@@ -30,7 +30,6 @@ from amct_pytorch.quantization.dtypes.fp_impl import (
 
 BLOCK_SIZE_ROW = 128
 
-
 @DTYPE_REGISTRY.register(name="fp", description="quant dequant for block fp")
 class QuantDequantFP(torch.nn.Module):
     def __init__(self, bits=8, is_act=False, block_size_col=128, scale_dtype="fp32"):

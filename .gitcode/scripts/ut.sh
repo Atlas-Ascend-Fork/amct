@@ -72,14 +72,7 @@ DP_ASSERT_EQUAL()
 LOG_HEAD "Start run c++ testcase"
 cd ${WORKSPACE}/ || exit 1
 ut_status=0
-if [ "${GIT_TARGET_BRANCH:-}" = "feature/community-tasks" ];then
-    LOG_HEAD "not need build"
-    mkdir -p build_out
-    touch ${WORKSPACE}/build_out/cann-amct.tar.gz
-    exit 0
-else
-    LOG_DO bash build.sh -u --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} || ut_status=$?
-fi
+LOG_DO bash build.sh -u --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} || ut_status=$?
 DP_ASSERT_EQUAL "${ut_status}" "0" "Run UT TESTCASE"
 
 echo "ut_process=ut_cov" >> "${ATOMGIT_OUTPUT}"

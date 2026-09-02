@@ -150,3 +150,4 @@ amct.save_prune_retrain_model(
     后续通过ATC工具加载压缩后的\*.onnx部署模型文件进行模型转换时，会自动读取同级目录下external data文件中的Tensor数据。
 
 重新执行稀疏特性时，该接口输出的上述文件将会被覆盖。
+

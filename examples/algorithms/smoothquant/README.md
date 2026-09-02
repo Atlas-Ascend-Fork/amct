@@ -138,4 +138,4 @@ Score:  5.477707
 其中2048-token评估下`smooth_strength=0.8`精度优于默认`0.5`；4096-token评估下`smooth_strength=0.5`略优于`0.8`。实际使用时可结合序列长度调整`smooth_strength`。
 
 
-推理成功后，在当前目录会生成量化日志文件 ./amct_log/amct_pytorch.log
+推理成功后，在当前目录会生成量化日志文件./amct_log/amct_pytorch.log
