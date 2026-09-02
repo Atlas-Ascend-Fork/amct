@@ -156,7 +156,7 @@ class KimiK3(BaseModel):
 
         with torch.no_grad():
             for inputs in tqdm(samples, total=len(samples), desc="Embedding Processing..."):
-                hidden_states = embed_tokens(inputs.to(self.args.device)).to(dtype)
+                hidden_states = embed_tokens(inputs.to(self.args.device))
                 outs.append(hidden_states.to("cpu"))
                 if use_attn_residuals:
                     batch_size, seq_len, hidden_size = hidden_states.shape

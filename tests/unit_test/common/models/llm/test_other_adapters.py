@@ -252,7 +252,7 @@ class _FakeToModule:
         return self
 
 
-def test_kimi_k3_embedding_forward_initializes_attn_residuals():
+def test_kimi_k3_embedding_forward_ignores_dtype_and_initializes_attn_residuals():
     model = KimiK3.__new__(KimiK3)
     model.args = SimpleNamespace(device="cpu")
     model.input_ids = None
@@ -270,7 +270,7 @@ def test_kimi_k3_embedding_forward_initializes_attn_residuals():
     )
     samples = [torch.tensor([[1, 2, 3]]), torch.tensor([[4, 5]])]
 
-    outs = model.do_embedding_forward(samples)
+    outs = model.do_embedding_forward(samples, dtype="./outputs")
 
     assert torch.equal(outs[0], torch.tensor([[[1, 1], [2, 2], [3, 3]]], dtype=torch.bfloat16))
     assert torch.equal(outs[1], torch.tensor([[[4, 4], [5, 5]]], dtype=torch.bfloat16))
