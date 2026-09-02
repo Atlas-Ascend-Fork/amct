@@ -36,4 +36,3 @@ python3 ./eval.py \
     --start_block_idx 0 --end_block_idx 61 \
     --mla_param_dir $mla_param_dir \
     --moe_param_dir $moe_param_dir
-
