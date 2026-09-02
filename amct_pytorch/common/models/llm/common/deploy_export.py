@@ -24,7 +24,7 @@ from amct_pytorch.common.models.llm.common.weight_path_validation import (
     collect_safetensors_files,
     resolve_safetensors_path,
 )
-from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
+from amct_pytorch.quantization.dtypes.fp_impl import weight_dequant
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
