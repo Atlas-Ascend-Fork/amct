@@ -53,8 +53,8 @@ class QuantDequantFP(torch.nn.Module):
         block_m = self.block_size_col
         block_n = BLOCK_SIZE_ROW  # amct only support [1x128, 128x128] two quantization block shape
 
-        pad_m = (block_m - M % block_m) % block_m
-        pad_n = (block_n - N % block_n) % block_n
+        pad_m = (block_n - M % block_n) % block_n
+        pad_n = (block_m - N % block_m) % block_m
 
         W_pad = F.pad(x, (0, pad_n, 0, pad_m))
         pad_shape = W_pad.shape
@@ -109,12 +109,14 @@ class QuantDequantFP(torch.nn.Module):
 
     def deploy(self, x: Tensor, qdim: int = -1, v: Tensor | float = 0.0):
         scale, ex_mx = self.quant(x, qdim, v=v)
-        ex_mx = ex_mx.flatten(qdim - 1, qdim).cpu()
+        ex_mx = ex_mx.cpu()
         if self.bits == 8:
             ex_mx = ex_mx.to(torch.float8_e4m3fn)
         else:
             ex_mx = f32_to_f4_unpacked(ex_mx.float().cpu())
             ex_mx = pack_uint4(ex_mx)
+        if self.scale_dtype == "fp32":
+            scale = scale.squeeze(-1).squeeze(-1)
         return ex_mx, scale
 
     def export_deploy(self, x: Tensor, v: Tensor | float = 0.0):
