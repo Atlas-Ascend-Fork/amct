@@ -21,7 +21,7 @@ from transformers.utils import TransformersKwargs, auto_docstring, can_return_tu
 from transformers.utils.generic import OutputRecorder, check_model_inputs
 
 try:
-    from fla.modules import FusedRMSNormGated
+    from fla.modules import FusedRMSNormGated, ShortConvolution
     from fla.ops.kda import chunk_kda, fused_recurrent_kda
     # from fla.ops.kda.gate import fused_kda_gate  # deprecated, gate is now computed inside chunk_kda/fused_recurrent_kda
     from fla.ops.utils.index import prepare_cu_seqlens_from_mask, prepare_lens_from_mask
@@ -30,13 +30,6 @@ except ImportError:
     raise ImportError("Plese run `pip install -U fla-core`")
 
 from .configuration_kimi_k3 import KimiLinearConfig
-from .npu_kda import (
-    KimiShortConvolution,
-    prepare_kda_gates,
-    rms_norm_gated,
-    torch_chunk_kda,
-    torch_recurrent_kda,
-)
 
 assert version.parse(transformers.__version__) >= version.parse("4.56.0"), \
     "Please upgrade transformers to >= 4.56.0"
@@ -552,17 +545,20 @@ class KimiDeltaAttention(nn.Module):
             self.hidden_size, projection_k_size, bias=False)
         self.v_proj = nn.Linear(self.hidden_size, projection_size, bias=False)
 
-        self.q_conv1d = KimiShortConvolution(
+        self.q_conv1d = ShortConvolution(
             hidden_size=projection_k_size,
             kernel_size=self.conv_size,
+            activation='silu',
         )
-        self.k_conv1d = KimiShortConvolution(
+        self.k_conv1d = ShortConvolution(
             hidden_size=projection_k_size,
             kernel_size=self.conv_size,
+            activation='silu',
         )
-        self.v_conv1d = KimiShortConvolution(
+        self.v_conv1d = ShortConvolution(
             hidden_size=projection_size,
             kernel_size=self.conv_size,
+            activation='silu',
         )
 
         self.A_log = torch.nn.Parameter(torch.log(torch.empty(
@@ -654,20 +650,7 @@ class KimiDeltaAttention(nn.Module):
             x, '... (h d) -> ... h d', d=self.head_k_dim), (q, k))
         v = rearrange(v, '... (h d) -> ... h d', d=self.head_dim)
 
-        use_npu_kda = q.device.type == "npu"
-        if use_npu_kda:
-            decay, activated_beta = prepare_kda_gates(
-                g, beta, self.A_log, self.dt_bias, self.gate_lower_bound,
-            )
-            if mode == 'chunk':
-                o, recurrent_state = torch_chunk_kda(
-                    q, k, v, decay, activated_beta, recurrent_state, cu_seqlens,
-                )
-            else:
-                o, recurrent_state = torch_recurrent_kda(
-                    q, k, v, decay, activated_beta, recurrent_state, cu_seqlens,
-                )
-        elif mode == 'chunk':
+        if mode == 'chunk':
             o, recurrent_state = chunk_kda(
                 q=q,
                 k=k,
@@ -714,10 +697,7 @@ class KimiDeltaAttention(nn.Module):
         else:
             g = self.g_b_proj(self.g_a_proj(hidden_states))
         g = rearrange(g, '... (h d) -> ... h d', d=self.head_dim)
-        if use_npu_kda:
-            o = rms_norm_gated(o, g, self.o_norm)
-        else:
-            o = self.o_norm(o, g)
+        o = self.o_norm(o, g)
 
         o = rearrange(o, 'b t h d -> b t (h d)')
         o = self.o_proj(o)
