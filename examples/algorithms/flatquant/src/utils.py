@@ -85,11 +85,15 @@ def get_qwen(model_path, hf_token=None):
 
 def get_wikitext2(nsamples, seed, seqlen, tokenizer, eval_mode=False):
     if eval_mode:
-        testdata = datasets.load_dataset('wikitext', 'wikitext-2-raw-v1')["test"]
+        testdata = datasets.load_dataset('Salesforce/wikitext', 'wikitext-2-raw-v1')[
+            "test"
+        ]
         testenc = tokenizer("\n\n".join(testdata['text']), return_tensors='pt')
         return testenc
     else:
-        traindata = datasets.load_dataset('wikitext', 'wikitext-2-raw-v1')["train"]
+        traindata = datasets.load_dataset('Salesforce/wikitext', 'wikitext-2-raw-v1')[
+            "train"
+        ]
         traindata = traindata.filter(lambda x: len(x) > 0)
         traindata = traindata.map(lambda x: {'text': x['text'].strip()})
         trainenc = tokenizer("\n\n".join(traindata['text']), return_tensors='pt')

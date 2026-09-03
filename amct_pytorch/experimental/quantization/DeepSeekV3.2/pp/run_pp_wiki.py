@@ -22,7 +22,7 @@ from datasets import load_dataset
 
 
 def get_wikitext2(tokenizer):
-    testdata = load_dataset('wikitext', 'wikitext-2-raw-v1', split='test')
+    testdata = load_dataset('Salesforce/wikitext', 'wikitext-2-raw-v1', split='test')
 
     testenc = tokenizer('\n\n'.join(testdata['text']), return_tensors='pt')
     return testenc.input_ids
