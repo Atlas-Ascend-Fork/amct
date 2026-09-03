@@ -145,7 +145,14 @@ After inference succeeds, a quantization log file ./amct_log/amct_pytorch.log is
 ### 3.1 Prerequisites
 
 - The model has been quantized by AMCT and is the quantized deploy model produced by `amct.convert` (see [2.1 Invoking via the API](#21-invoking-via-the-api) for the quantization workflow);
-- CANN, torch_npu and torchair are installed with matching versions.
+- CANN, torch_npu and torchair are installed with matching versions;
+- Source the CANN environment before running the script (adjust to your actual installation path):
+
+```bash
+source /usr/local/Ascend/ascend-toolkit/set_env.sh
+```
+
+- Python dependencies (`torch`/`torch_npu`/`torchair`/`transformers`/`amct_pytorch`) are installed with matching versions; if the tokenizer needs to be downloaded online but the network is blocked, set the mirror via `export HF_ENDPOINT=https://hf-mirror.com`.
 
 **How to save the quantized deploy model**: the model after `amct.convert` contains AMCT custom quantization modules (e.g. `NpuQuantizationLinear`) and cannot be restored via `save_pretrained`/`AutoModel.from_pretrained`. Save the whole model with `torch.save` right after `amct.convert`, and keep the tokenizer files of the original model:
 

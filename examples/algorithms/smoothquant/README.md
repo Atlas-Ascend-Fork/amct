@@ -145,7 +145,14 @@ Score:  5.477707
 ### 3.1 前置条件
 
 - 模型已完成AMCT量化，且为`amct.convert`后的量化deploy模型（量化流程参见[2.1 使用接口方式调用](#21-使用接口方式调用)）；
-- 已安装CANN、torch_npu及torchair，且版本匹配。
+- 已安装CANN、torch_npu及torchair，且版本匹配；
+- 执行脚本前需先source CANN环境变量（按实际安装路径调整）：
+
+```bash
+source /usr/local/Ascend/ascend-toolkit/set_env.sh
+```
+
+- Python依赖（`torch`/`torch_npu`/`torchair`/`transformers`/`amct_pytorch`）已安装且版本匹配；若tokenizer需在线下载而网络不通，设置镜像`export HF_ENDPOINT=https://hf-mirror.com`。
 
 **量化deploy模型的保存方式**：`amct.convert`后的模型包含AMCT自定义量化模块（如`NpuQuantizationLinear`），无法通过`save_pretrained`/`AutoModel.from_pretrained`还原，需在`amct.convert`后立即使用`torch.save`保存整模型，并保留原模型的tokenizer等文件：
 
