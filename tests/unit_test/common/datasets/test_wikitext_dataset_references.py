@@ -13,6 +13,7 @@ def test_wikitext_loads_use_namespaced_dataset_id():
     short_id = re.compile(r"load_dataset\(\s*['\"]wikitext['\"]")
     references = []
     for root in source_roots:
+        assert root.is_dir(), f"source root does not exist: {root}"
         for path in root.rglob("*.py"):
             content = path.read_text(encoding="utf-8")
             if short_id.search(content):
