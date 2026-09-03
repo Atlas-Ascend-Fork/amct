@@ -114,6 +114,11 @@ class Parser:
             export_setting = {}
         else:
             Parser.validate_export_setting(export_setting)
+        # QuantIdentity relies on the legacy exporter symbolic path to keep
+        # marker nodes that are consumed by the internal graph parser. Torch
+        # 2.10 defaults torch.onnx.export to Dynamo, so preserve the legacy
+        # behavior unless the caller explicitly selects another exporter.
+        export_setting.setdefault('dynamo', False)
         if torch.__version__ == '2.1.0':
             export_setting['opset_version'] = 16
         else:
