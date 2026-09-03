@@ -27,9 +27,14 @@ Usage:
     python3 src/export_torchair_sample.py --model_path /path/to/quantized_llm \
         --seqlen 2048
 
-    # VLM (CLIP-ViT like):
+    # VLM (CLIP-ViT like, image-only input):
     python3 src/export_torchair_sample.py --model_type vlm \
         --model_path /path/to/quantized_clip --image_path /path/to/img.jpg
+
+    # VLM (Qwen2-VL/Qwen2.5-VL/LLaVA like, text+image input):
+    python3 src/export_torchair_sample.py --model_type vlm \
+        --model_path /path/to/quantized_qwen2vl --image_path /path/to/img.jpg \
+        --prompt "Describe this image."
 
 Note: the quantized deploy model must be saved with ``torch.save(quant_model,
 <path>/model.pth)`` right after ``amct.convert`` (see README), because the
@@ -79,9 +84,11 @@ def load_llm(model_path):
 
 
 def load_vlm(model_path):
-    """Load an AMCT-quantized CLIP-ViT model saved by torch.save (model.pth).
+    """Load an AMCT-quantized VLM saved by torch.save (model.pth).
 
-    Modify me if needed.
+    The pickled whole model preserves its original class (CLIPModel,
+    Qwen2VLForConditionalGeneration, ...), so no class-specific loading is
+    needed. Modify me if needed.
     """
     pth_path = model_path
     if os.path.isdir(model_path):
@@ -120,19 +127,80 @@ def build_llm_input(enc, input_file, seqlen):
     export_input = token_ids[:, :seqlen].npu()
     print(f"LLM export input shape: {tuple(export_input.shape)}, "
           f"dtype: {export_input.dtype}")
-    return export_input
+    return (export_input,)
 
 
-def build_vlm_input(processor, image_path, batch_size, dtype):
-    """Preprocess one real image into the export input [bs, 3, H, W]."""
+def _detect_vlm_kind(model):
+    """Detect the VLM kind from the model class/config.
+
+    Returns 'clip' for CLIPModel (image-only forward) or 'multimodal' for
+    Qwen2-VL / Qwen2.5-VL / LLaVA / InternVL ... (text+image forward).
+    """
+    cls_name = type(model).__name__.lower()
+    if "clip" in cls_name and "vision" not in cls_name:
+        return "clip"
+    model_type = getattr(getattr(model, "config", None), "model_type", "") or ""
+    if "clip" in model_type:
+        return "clip"
+    return "multimodal"
+
+
+def _ordered_forward_input_names(model):
+    """Return the parameter names of ``model.forward`` in declaration order,
+    filtered to tensor inputs produced by the processor."""
+    import inspect
+
+    sig = inspect.signature(model.forward)
+    return [p.name for p in sig.parameters.values()
+            if p.name not in ("self", "kwargs", "past_key_values",
+                              "output_attentions", "output_hidden_states",
+                              "use_cache", "return_dict", "labels",
+                              "cache_position", "position_ids",
+                              "inputs_embeds", "logits_to_keep",
+                              "loss_kwargs")]
+
+
+def build_vlm_input(model, processor, image_path, prompt, batch_size, dtype,
+                    device):
+    """Build the VLM export inputs by preprocessing one real image.
+
+    - CLIP (image-only): returns a tuple with a single [bs, 3, H, W] tensor.
+    - Multimodal (Qwen2-VL / LLaVA ...): processor(text, images) produces
+      multiple tensors (input_ids, attention_mask, pixel_values, ...); they
+      are ordered after ``model.forward``'s signature and all moved to NPU.
+
+    Returns a tuple of tensors to be splatted into ``tng.dynamo_export``.
+    """
     from PIL import Image
 
     image = Image.open(image_path).convert("RGB")
-    inputs = processor(images=image, return_tensors="pt")
-    pixel_values = inputs["pixel_values"]
-    export_input = pixel_values.repeat(batch_size, 1, 1, 1).to(dtype).npu()
-    print(f"VLM export input shape: {tuple(export_input.shape)}, "
-          f"dtype: {export_input.dtype}")
+
+    if _detect_vlm_kind(model) == "clip":
+        inputs = processor(images=image, return_tensors="pt")
+        pixel_values = inputs["pixel_values"]
+        if batch_size > 1:
+            pixel_values = pixel_values.repeat(batch_size, 1, 1, 1)
+        export_input = (pixel_values.to(dtype).to(device),)
+        print(f"VLM(clip) export input: "
+              f"{[(tuple(t.shape), str(t.dtype)) for t in export_input]}")
+        return export_input
+
+    # text + image multimodal VLMs
+    text = prompt if prompt is not None else "Describe this image."
+    inputs = processor(text=[text] * max(1, batch_size),
+                       images=image if batch_size <= 1 else [image] * batch_size,
+                       return_tensors="pt")
+    inputs = {k: v.to(device) for k, v in inputs.items()}
+
+    forward_names = _ordered_forward_input_names(model)
+    tensor_keys = [k for k, v in inputs.items() if torch.is_tensor(v)]
+    ordered_keys = [k for k in forward_names if k in tensor_keys]
+    ordered_keys += [k for k in tensor_keys if k not in ordered_keys]
+
+    export_input = tuple(inputs[k] for k in ordered_keys)
+    print(f"VLM(multimodal) export input keys (in forward order): {ordered_keys}")
+    print(f"VLM(multimodal) export input: "
+          f"{[(tuple(t.shape), str(t.dtype)) for t in export_input]}")
     return export_input
 
 
@@ -172,8 +240,12 @@ def _patch_weight_subdir():
         return
 
 
-def export_torchair_air(model, export_input, output_dir, export_name):
+def export_torchair_air(model, export_inputs, output_dir, export_name):
     """torch.compile with the torchair npu backend, then export the AIR graph.
+
+    ``export_inputs`` is a sequence of tensors splatted into
+    ``tng.dynamo_export`` (LLM: 1 tensor; multimodal VLM: several, ordered
+    after the model's forward signature).
 
     ``torch.compile`` wraps the model as ``OptimizedModule`` whose
     ``named_buffers`` carry an ``_orig_mod.`` prefix. torchair uses those names
@@ -190,20 +262,23 @@ def export_torchair_air(model, export_input, output_dir, export_name):
     config.export.experimental.enable_lite_export = True
 
     os.makedirs(output_dir, exist_ok=True)
-    input_bin = os.path.join(output_dir, "input.bin")
-    export_input.cpu().numpy().tofile(input_bin)
-    print(f"input.bin written ({os.path.getsize(input_bin)} B)")
+    for i, tensor in enumerate(export_inputs):
+        suffix = f"_{i}" if len(export_inputs) > 1 else ""
+        input_bin = os.path.join(output_dir, f"input{suffix}.bin")
+        tensor.cpu().numpy().tofile(input_bin)
+        print(f"input{suffix}.bin written ({os.path.getsize(input_bin)} B)")
 
     print(f"=== Exporting {export_name} to {output_dir} ===")
     tng.dynamo_export(
-        export_input,
+        *export_inputs,
         model=model,
         export_path=output_dir,
         export_name=export_name,
         dynamic=False,
         config=config,
     )
-    artifacts = [f"{export_name}.air", "input.bin"]
+    artifacts = [f"{export_name}.air"]
+    artifacts += (["input_<i>.bin"] if len(export_inputs) > 1 else ["input.bin"])
     if os.path.isdir(os.path.join(output_dir, "weights")):
         artifacts.append("weights/dynamo.pbtxt + weight files")
     else:
@@ -219,7 +294,8 @@ def main():
                         help="Path of the AMCT-quantized deploy model "
                              "(already converted by amct.convert)")
     parser.add_argument("--model_type", type=str, choices=["llm", "vlm"],
-                        default="llm", help="llm: causal LM; vlm: CLIP-ViT like")
+                        default="llm",
+                        help="llm: causal LM; vlm: CLIP / Qwen2-VL / LLaVA ...")
     parser.add_argument("--output_dir", type=str, default="./torchair_output",
                         help="Directory for exported artifacts")
     parser.add_argument("--export_name", type=str, default=None,
@@ -232,6 +308,9 @@ def main():
                              "(default: built-in sample text)")
     parser.add_argument("--image_path", type=str, default=None,
                         help="Real image used to trace the VLM forward (vlm only)")
+    parser.add_argument("--prompt", type=str, default=None,
+                        help="Text prompt for multimodal VLM export "
+                             "(default: built-in sample prompt)")
     parser.add_argument("--batch_size", type=int, default=1,
                         help="Batch size of the VLM export input")
     parser.add_argument("--dtype", type=str,
@@ -248,15 +327,17 @@ def main():
     if args.model_type == "llm":
         model, enc = load_llm(args.model_path)
         model = to_npu(model.eval())
-        export_input = build_llm_input(enc, args.input_file, args.seqlen)
+        export_inputs = build_llm_input(enc, args.input_file, args.seqlen)
     else:
         dtype = getattr(torch, args.dtype)
         model, processor = load_vlm(args.model_path)
         model = to_npu(model.eval())
-        export_input = build_vlm_input(processor, args.image_path,
-                                       args.batch_size, dtype)
+        device = next(model.parameters()).device
+        export_inputs = build_vlm_input(model, processor, args.image_path,
+                                         args.prompt, args.batch_size, dtype,
+                                         device)
 
-    export_torchair_air(model, export_input, args.output_dir, export_name)
+    export_torchair_air(model, export_inputs, args.output_dir, export_name)
 
 
 if __name__ == "__main__":
