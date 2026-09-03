@@ -333,9 +333,8 @@ class ConfigBase:
                 layer_cfg['retrain_enable'] = False
             skipped_layers.append(layer)
             LOGGER.logw(
-                "Layer '{}' is kept in floating point because its final "
-                "Deploy weight pack axis is odd; A8W4 is not downgraded to "
-                "A8W8.".format(layer),
+                "Cannot quantize layer '{}' as A8W4: its final Deploy weight "
+                "pack axis is odd; the layer remains in floating point.".format(layer),
                 module_name=_MODULE_NAME,
             )
 

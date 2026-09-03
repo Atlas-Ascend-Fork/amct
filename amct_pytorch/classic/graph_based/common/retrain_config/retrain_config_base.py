@@ -244,9 +244,10 @@ class RetrainConfigBase:
             if not self.graph_querier.is_int4_weight_pack_axis_even(graph, layer):
                 layer_cfg[RETRAIN_ENABLE] = False
                 LOGGER.logw(
-                    "Layer '{}' is kept in floating point because its final "
-                    "Deploy weight pack axis is odd; A8W4 is not downgraded to "
-                    "A8W8.".format(layer),
+                    "Cannot quantize layer '{}' as A8W4: its final Deploy weight "
+                    "pack axis is odd; the layer remains in floating point.".format(
+                        layer
+                    ),
                     module_name=_MODULE_NAME,
                 )
 
