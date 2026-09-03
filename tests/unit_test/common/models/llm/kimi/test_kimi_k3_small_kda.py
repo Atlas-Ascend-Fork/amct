@@ -19,6 +19,7 @@
 
 import importlib
 import importlib.util
+import math
 from types import SimpleNamespace
 
 import torch
@@ -73,6 +74,111 @@ def test_short_convolution_keeps_packed_requests_independent():
     )
 
 
+def test_npu_chunk_kda_pads_each_packed_request_and_restores_layout(monkeypatch):
+    small_kda = _load_small_kda()
+    calls = []
+
+    def fake_flash_kda(
+        q, k, v, *, g, beta, scale, initial_state,
+        A_log, dt_bias, lower_bound, layout_qkv,
+    ):
+        valid_tokens = (2, 3)[len(calls)]
+        assert q.shape == k.shape == v.shape == g.shape == (1, 64, 1, 2)
+        assert beta.shape == (1, 64, 1)
+        assert torch.count_nonzero(q[:, valid_tokens:]) == 0
+        assert torch.isneginf(g[:, valid_tokens:]).all()
+        assert torch.isneginf(beta[:, valid_tokens:]).all()
+        assert math.isclose(scale, 2 ** -0.5)
+        assert A_log.shape == (1,)
+        assert dt_bias.shape == (1, 2)
+        assert lower_bound == -5.0
+        assert layout_qkv == "BSND"
+        calls.append(q.shape[1])
+        return v + 10, initial_state + len(calls)
+
+    monkeypatch.setattr(
+        small_kda, "_flash_kda_impl", fake_flash_kda, raising=False,
+    )
+    query = torch.arange(10, dtype=torch.float32).view(1, 5, 1, 2)
+    initial_state = torch.zeros(2, 1, 2, 2)
+
+    output, state = small_kda.chunk_kda(
+        q=query,
+        k=query,
+        v=query,
+        g=query,
+        beta=torch.zeros(1, 5, 1),
+        A_log=torch.zeros(1),
+        dt_bias=torch.zeros(2),
+        initial_state=initial_state,
+        output_final_state=True,
+        use_qk_l2norm_in_kernel=True,
+        use_gate_in_kernel=True,
+        use_beta_sigmoid_in_kernel=True,
+        safe_gate=True,
+        lower_bound=-5.0,
+        transpose_state_layout=True,
+        cu_seqlens=torch.tensor([0, 2, 5], dtype=torch.int32),
+    )
+
+    torch.testing.assert_close(output, query + 10)
+    torch.testing.assert_close(state[0], torch.ones(1, 2, 2))
+    torch.testing.assert_close(state[1], torch.full((1, 2, 2), 2.0))
+    assert calls == [64, 64]
+
+
+def test_npu_fused_recurrent_kda_updates_existing_state(monkeypatch):
+    small_kda = _load_small_kda()
+
+    def fake_recurrent_kda(
+        q, k, v, *, state, beta, g, scale, A_log, dt_bias,
+        lower_bound, layout_qkv, ssm_state_indices, num_accepted_tokens,
+    ):
+        assert q.shape == k.shape == v.shape == g.shape == (2, 1, 1, 2)
+        assert beta.shape == (2, 1, 1, 1)
+        assert math.isclose(scale, 2 ** -0.5)
+        assert A_log.shape == (1,)
+        assert dt_bias.shape == (1, 2)
+        assert lower_bound == -5.0
+        assert layout_qkv == "BSND"
+        assert num_accepted_tokens is None
+        torch.testing.assert_close(
+            ssm_state_indices, torch.tensor([0, 1], dtype=torch.int32),
+        )
+        state.index_add_(
+            0, ssm_state_indices, torch.ones(2, 1, 2, 2),
+        )
+        return v + 20
+
+    monkeypatch.setattr(
+        small_kda, "_recurrent_kda_impl", fake_recurrent_kda, raising=False,
+    )
+    query = torch.arange(4, dtype=torch.float32).view(2, 1, 1, 2)
+    initial_state = torch.zeros(2, 1, 2, 2)
+
+    output, state = small_kda.fused_recurrent_kda(
+        q=query,
+        k=query,
+        v=query,
+        g=query,
+        beta=torch.zeros(2, 1, 1),
+        A_log=torch.zeros(1),
+        dt_bias=torch.zeros(2),
+        initial_state=initial_state,
+        output_final_state=True,
+        use_qk_l2norm_in_kernel=True,
+        use_gate_in_kernel=True,
+        use_beta_sigmoid_in_kernel=True,
+        lower_bound=-5.0,
+        transpose_state_layout=True,
+        cu_seqlens=None,
+    )
+
+    torch.testing.assert_close(output, query + 20)
+    torch.testing.assert_close(state, torch.ones_like(initial_state))
+    assert state.data_ptr() == initial_state.data_ptr()
+
+
 def test_delta_attention_uses_chunk_for_prefill_and_fused_for_decode(monkeypatch):
     modeling = importlib.import_module(
         "amct_pytorch.common.models.llm.kimi.kimi_k3.modeling.modeling_kimi",
@@ -97,10 +203,12 @@ def test_delta_attention_uses_chunk_for_prefill_and_fused_for_decode(monkeypatch
 
     def fake_chunk_kda(*, v, **kwargs):
         assert kwargs["initial_state"] is None
+        assert kwargs["beta"].dtype == torch.bfloat16
         state = torch.full((1, 2, 3, 3), 3.0)
         return v, state
 
     def fake_fused_recurrent_kda(*, v, **kwargs):
+        assert kwargs["beta"].dtype == torch.bfloat16
         torch.testing.assert_close(
             kwargs["initial_state"], torch.full((1, 2, 3, 3), 3.0),
         )

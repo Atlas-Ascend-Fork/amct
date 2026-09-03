@@ -20,14 +20,8 @@ from transformers.pytorch_utils import ALL_LAYERNORM_LAYERS
 from transformers.utils import TransformersKwargs, auto_docstring, can_return_tuple, logging
 from transformers.utils.generic import OutputRecorder, check_model_inputs
 
-try:
-    from fla.ops.kda import chunk_kda, fused_recurrent_kda
-except ImportError:
-    chunk_kda = None
-    fused_recurrent_kda = None
-
 from .configuration_kimi_k3 import KimiLinearConfig
-from .small_kda import KimiShortConvolution
+from .small_kda import KimiShortConvolution, chunk_kda, fused_recurrent_kda
 
 assert version.parse(transformers.__version__) >= version.parse("4.56.0"), \
     "Please upgrade transformers to >= 4.56.0"
@@ -641,17 +635,13 @@ class KimiDeltaAttention(nn.Module):
             x, '... (h d) -> ... h d', d=self.head_k_dim), (q, k))
         v = rearrange(v, '... (h d) -> ... h d', d=self.head_dim)
 
-        if chunk_kda is None or fused_recurrent_kda is None:
-            raise ImportError(
-                "KimiDeltaAttention requires fla-core with KDA operators.",
-            )
         if use_fused_recurrent:
             o, recurrent_state = fused_recurrent_kda(
                 q=q,
                 k=k,
                 v=v,
                 g=raw_decay,
-                beta=raw_beta.float(),
+                beta=raw_beta,
                 A_log=self.A_log,
                 dt_bias=self.dt_bias,
                 initial_state=recurrent_state,
@@ -669,7 +659,7 @@ class KimiDeltaAttention(nn.Module):
                 k=k,
                 v=v,
                 g=raw_decay,
-                beta=raw_beta.float(),
+                beta=raw_beta,
                 A_log=self.A_log,
                 dt_bias=self.dt_bias,
                 initial_state=recurrent_state,
