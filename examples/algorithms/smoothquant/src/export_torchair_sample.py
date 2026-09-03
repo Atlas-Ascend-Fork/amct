@@ -136,8 +136,53 @@ def build_vlm_input(processor, image_path, batch_size, dtype):
     return export_input
 
 
+def _patch_weight_subdir():
+    """Make torchair dump externalized weights into ``<export_dir>/weights``
+    instead of scattered alongside the ``.air`` file.
+
+    torchair writes externalized weight files (and ``dynamo.pbtxt``) to the
+    path returned by ``_get_subpath``. The stock implementation returns the
+    export dir itself (only adding ``rank_N`` under distributed mode), so large
+    models (e.g. >2G protobuf) scatter hundreds of weight files next to the
+    ``.air``. We patch it to append a ``weights`` subdirectory so the export
+    dir stays clean and ``.air`` / ``input.bin`` stand alone.
+    """
+    import importlib
+
+    targets = (
+        "torchair._utils.export_utils",
+        "torch_npu.dynamo.torchair._utils.export_utils",
+    )
+    for mod_name in targets:
+        try:
+            mod = importlib.import_module(mod_name)
+        except ModuleNotFoundError:
+            continue
+        if getattr(mod, "_weight_subdir_patched", False):
+            return
+        orig_get_subpath = mod._get_subpath
+
+        def patched(export_path_dir, _orig=orig_get_subpath):
+            return _orig(export_path_dir) + "/weights"
+
+        mod._get_subpath = patched
+        mod._weight_subdir_patched = True
+        print(f"weight files will be dumped to <export_dir>/weights "
+              f"(patched {mod_name})")
+        return
+
+
 def export_torchair_air(model, export_input, output_dir, export_name):
-    """torch.compile with the torchair npu backend, then export the AIR graph."""
+    """torch.compile with the torchair npu backend, then export the AIR graph.
+
+    ``torch.compile`` wraps the model as ``OptimizedModule`` whose
+    ``named_buffers`` carry an ``_orig_mod.`` prefix. torchair uses those names
+    as exported weight file names, producing ``_orig_mod_xxxx_weight`` files.
+    Unwrap to the original module before compile so the names stay clean.
+    """
+    if hasattr(model, "_orig_mod"):
+        model = model._orig_mod
+    _patch_weight_subdir()
     config = CompilerConfig()
     npu_backend = tng.get_npu_backend(compiler_config=config)
     torch.npu.config.allow_internal_format = True
@@ -158,7 +203,12 @@ def export_torchair_air(model, export_input, output_dir, export_name):
         dynamic=False,
         config=config,
     )
-    print(f"=== Export DONE: ['{export_name}.air', 'dynamo.pbtxt', 'input.bin'] ===")
+    artifacts = [f"{export_name}.air", "input.bin"]
+    if os.path.isdir(os.path.join(output_dir, "weights")):
+        artifacts.append("weights/dynamo.pbtxt + weight files")
+    else:
+        artifacts.append("dynamo.pbtxt")
+    print(f"=== Export DONE: {artifacts} ===")
 
 
 def main():

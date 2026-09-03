@@ -202,13 +202,25 @@ Common parameters:
 
 ### 3.3 Exported artifacts
 
-After a successful export, three files are generated under `--output_dir`:
+After a successful export, the layout under `--output_dir` is:
+
+```
+output_dir/
+├── <export_name>.air      # AIR offline graph (weights embedded)
+├── input.bin              # export input binary
+└── weights/               # generated automatically for large models (total weights over ~1.8G)
+    ├── dynamo.pbtxt       # TorchDynamo intermediate representation (text)
+    └── xxx_weight ...     # externalized weight files (referenced by .air via FileConstant)
+```
 
 | File | Description |
 |:--|:--|
-|`<export_name>.air`|AIR offline graph exported by torchair, for offline inference|
-|`dynamo.pbtxt`|TorchDynamo intermediate representation (text format)|
+|`<export_name>.air`|AIR offline graph exported by torchair, for offline inference; weights are embedded when small, or referenced from `weights/` via FileConstant when large|
+|`weights/dynamo.pbtxt`|TorchDynamo intermediate representation (text format)|
+|`weights/xxx_weight`|Externalized weight binary files; must be delivered together with the `.air` and must not be moved or renamed independently|
 |`input.bin`|Binary file of the export input, for downstream offline inference framing|
+
+**Note**: when the `weights/` directory is generated, keep the relative layout between `.air` and `weights/` when copying for offline inference deployment.
 
 ### 3.4 Notes
 

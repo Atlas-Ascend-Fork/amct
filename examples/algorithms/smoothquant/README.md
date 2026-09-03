@@ -202,13 +202,25 @@ python3 src/export_torchair_sample.py --model_type=vlm --model_path=/path/to/qua
 
 ### 3.3 导出产物
 
-导出成功后，`--output_dir`目录下生成三个文件：
+导出成功后，`--output_dir`目录下的产物布局如下：
+
+```
+output_dir/
+├── <export_name>.air      # AIR离线计算图（权重内嵌）
+├── input.bin              # 导出输入二进制
+└── weights/               # 大模型（权重总量超过约1.8G）时自动生成
+    ├── dynamo.pbtxt       # TorchDynamo中间表示（文本格式）
+    └── xxx_weight ...     # 外置权重文件（.air通过FileConstant引用）
+```
 
 | 文件 | 说明 |
 |:--|:--|
-|`<export_name>.air`|torchair导出的AIR离线计算图，供离线推理使用|
-|`dynamo.pbtxt`|TorchDynamo中间表示（文本格式）|
+|`<export_name>.air`|torchair导出的AIR离线计算图，供离线推理使用；权重总量较小时内嵌全部权重，较大时通过FileConstant引用`weights/`下的外置文件|
+|`weights/dynamo.pbtxt`|TorchDynamo中间表示（文本格式）|
+|`weights/xxx_weight`|外置权重二进制文件，与`.air`需一起交付，不可单独移动或改名|
 |`input.bin`|导出输入的二进制文件，供下游离线推理对帧使用|
+
+**注意**：若生成`weights/`目录，离线推理部署时须保持`.air`与`weights/`的相对目录结构一并拷贝。
 
 ### 3.4 注意事项
 
