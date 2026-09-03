@@ -17,21 +17,67 @@
 # ----------------------------------------------------------------------------
 """Tests for the Kimi-K3 pure Torch small-operator KDA path."""
 
+import builtins
 import importlib
 import importlib.util
 import math
-from types import SimpleNamespace
+import sys
+from types import ModuleType, SimpleNamespace
 
+import pytest
 import torch
 import torch.nn.functional as F
 
 _MODULE_NAME = "amct_pytorch.common.models.llm.kimi.kimi_k3.modeling.small_kda"
 
 
+@pytest.fixture(autouse=True)
+def _stub_npu_kda_modules(monkeypatch):
+    def unavailable_kernel(*args, **kwargs):
+        raise AssertionError("NPU kernel must be replaced by the test")
+
+    ops = ModuleType("ops")
+    ops.__path__ = []
+    cannbot_dsl = ModuleType("ops.cannbot_dsl")
+    cannbot_dsl.__path__ = []
+    flash_kda = ModuleType("ops.cannbot_dsl.flash_kda")
+    flash_kda.flash_kda = unavailable_kernel
+    recurrent_kda = ModuleType("ops.cannbot_dsl.fused_recurrent_kda")
+    recurrent_kda.fused_recurrent_kda_op = unavailable_kernel
+
+    monkeypatch.setitem(sys.modules, "ops", ops)
+    monkeypatch.setitem(sys.modules, "ops.cannbot_dsl", cannbot_dsl)
+    monkeypatch.setitem(sys.modules, "ops.cannbot_dsl.flash_kda", flash_kda)
+    monkeypatch.setitem(
+        sys.modules,
+        "ops.cannbot_dsl.fused_recurrent_kda",
+        recurrent_kda,
+    )
+
+
 def _load_small_kda():
     spec = importlib.util.find_spec(_MODULE_NAME)
     assert spec is not None, "Kimi-K3 small-operator KDA module is missing"
     return importlib.import_module(_MODULE_NAME)
+
+
+def test_npu_kda_dependency_import_error_is_not_suppressed(monkeypatch):
+    small_kda = _load_small_kda()
+    spec = importlib.util.spec_from_file_location(
+        "_small_kda_import_probe", small_kda.__file__,
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    original_import = builtins.__import__
+
+    def fail_flash_import(name, *args, **kwargs):
+        if name == "ops.cannbot_dsl.flash_kda":
+            raise ImportError("flash kernel root cause")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fail_flash_import)
+    with pytest.raises(ImportError, match="flash kernel root cause"):
+        spec.loader.exec_module(module)
 
 
 def test_short_convolution_split_run_matches_full_run():

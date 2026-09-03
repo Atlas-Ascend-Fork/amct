@@ -24,28 +24,12 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-try:
-    from ops.cannbot_dsl.flash_kda import flash_kda as _flash_kda_impl
-except ImportError:
-    _flash_kda_impl = None
-
-try:
-    from ops.cannbot_dsl.fused_recurrent_kda import (
-        fused_recurrent_kda_op as _recurrent_kda_impl,
-    )
-except ImportError:
-    _recurrent_kda_impl = None
-
+from ops.cannbot_dsl.flash_kda import flash_kda as _flash_kda_impl
+from ops.cannbot_dsl.fused_recurrent_kda import (
+    fused_recurrent_kda_op as _recurrent_kda_impl,
+)
 
 _KDA_CHUNK_SIZE = 64
-
-
-def _require_impl(impl, name: str):
-    if impl is None:
-        raise ImportError(
-            f"Kimi-K3 NPU KDA requires {name}; add its package to PYTHONPATH.",
-        )
-    return impl
 
 
 def _request_ranges(
@@ -132,9 +116,6 @@ def chunk_kda(
     )
     if safe_gate != (lower_bound is not None):
         raise ValueError("safe_gate and lower_bound must select the same gate path.")
-    flash_kda = _require_impl(
-        _flash_kda_impl, "ops.cannbot_dsl.flash_kda.flash_kda",
-    )
     ranges, packed = _request_ranges(q, cu_seqlens)
     state = _initial_state(q, v, len(ranges), initial_state)
     gate_bias = dt_bias.reshape(q.shape[2], q.shape[-1]).contiguous()
@@ -170,7 +151,7 @@ def chunk_kda(
         q_i, k_i, v_i, g_i, beta_i = (
             tensor.contiguous() for tensor in (q_i, k_i, v_i, g_i, beta_i)
         )
-        output, request_state = flash_kda(
+        output, request_state = _flash_kda_impl(
             q_i,
             k_i,
             v_i,
@@ -216,10 +197,6 @@ def fused_recurrent_kda(
         use_beta_sigmoid_in_kernel,
         transpose_state_layout,
     )
-    recurrent_kda = _require_impl(
-        _recurrent_kda_impl,
-        "ops.cannbot_dsl.fused_recurrent_kda.fused_recurrent_kda_op",
-    )
     ranges, packed = _request_ranges(q, cu_seqlens)
     state = _initial_state(q, v, len(ranges), initial_state)
     gate_bias = dt_bias.reshape(q.shape[2], q.shape[-1]).contiguous()
@@ -230,7 +207,7 @@ def fused_recurrent_kda(
         state_indices = torch.arange(
             batch, device=q.device, dtype=torch.int32,
         ).repeat_interleave(tokens)
-        output = recurrent_kda(
+        output = _recurrent_kda_impl(
             q.contiguous(),
             k.contiguous(),
             v.contiguous(),
@@ -254,7 +231,7 @@ def fused_recurrent_kda(
         state_indices = torch.full(
             (end - start,), request, device=q.device, dtype=torch.int32,
         )
-        outputs.append(recurrent_kda(
+        outputs.append(_recurrent_kda_impl(
             q[:, start:end].contiguous(),
             k[:, start:end].contiguous(),
             v[:, start:end].contiguous(),
