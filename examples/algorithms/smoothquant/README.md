@@ -139,3 +139,72 @@ Score:  5.477707
 
 
 推理成功后，在当前目录会生成量化日志文件./amct_log/amct_pytorch.log
+
+## 3 torchair离线模型导出
+
+### 3.1 前置条件
+
+- 模型已完成AMCT量化，且为`amct.convert`后的量化deploy模型（量化流程参见[2.1 使用接口方式调用](#21-使用接口方式调用)）；
+- 已安装CANN、torch_npu及torchair，且版本匹配。
+
+**量化deploy模型的保存方式**：`amct.convert`后的模型包含AMCT自定义量化模块（如`NpuQuantizationLinear`），无法通过`save_pretrained`/`AutoModel.from_pretrained`还原，需在`amct.convert`后立即使用`torch.save`保存整模型，并保留原模型的tokenizer等文件：
+
+```python
+amct.convert(quant_model)
+torch.save(quant_model.cpu(), '/path/to/quantized_llm/model.pth')
+enc.save_pretrained('/path/to/quantized_llm/')  # tokenizer文件，供导出脚本构造输入
+```
+
+`--model_path`需指向该目录（目录内含`model.pth`），或直接指向`model.pth`文件。目录结构要求如下：
+
+```
+/path/to/quantized_llm/
+├── model.pth              # torch.save保存的量化deploy模型
+├── tokenizer.json         # enc.save_pretrained保存的tokenizer文件
+├── tokenizer_config.json
+└── ...                    # 其他tokenizer文件（vocab.json/merges.txt等，视模型而定）
+```
+
+### 3.2 使用方式
+
+LLM网络（如Qwen/Llama类模型），导出输入为真实文本token化后的`[1, seqlen]` int64张量，文本默认使用脚本内置样例，也可通过`--input_file`指定本地文本文件：
+
+```python
+python3 src/export_torchair_sample.py --model_path=/path/to/quantized_llm/ --seqlen=2048
+```
+
+VLM网络（如CLIP-ViT类模型），导出输入为真实图片预处理后的`[batch_size, 3, H, W]`张量：
+
+```python
+python3 src/export_torchair_sample.py --model_type=vlm --model_path=/path/to/quantized_clip/ --image_path=/path/to/image.jpg --batch_size=1 --dtype=float16
+```
+
+常用参数说明：
+
+| 参数 | 必填 | 默认值 | 说明 |
+|:--|:--:|:--:|:--|
+|--model_path|是|/|已量化deploy模型目录（内含`model.pth`）或pth文件路径|
+|--model_type|否|llm|`llm`/`vlm`，vlm走CLIP-ViT路径|
+|--output_dir|否|./torchair_output|导出产物目录|
+|--export_name|否|模型目录名|AIR文件名（不含.air后缀）|
+|--seqlen|否|2048|LLM导出输入序列长度|
+|--input_file|否|内置样例文本|LLM导出输入文本文件|
+|--image_path|vlm必填|/|VLM导出用真实图片路径|
+|--batch_size|否|1|VLM导出输入batch大小|
+|--dtype|否|float16|VLM图像输入精度（float16/bfloat16）|
+
+### 3.3 导出产物
+
+导出成功后，`--output_dir`目录下生成三个文件：
+
+| 文件 | 说明 |
+|:--|:--|
+|`<export_name>.air`|torchair导出的AIR离线计算图，供离线推理使用|
+|`dynamo.pbtxt`|TorchDynamo中间表示（文本格式）|
+|`input.bin`|导出输入的二进制文件，供下游离线推理对帧使用|
+
+### 3.4 注意事项
+
+- 导出输入的shape和dtype需与下游离线推理保持一致，请通过`--seqlen`/`--batch_size`/`--dtype`控制；
+- LLM导出默认强制eager注意力实现（脚本内自动设置`config._attn_implementation='eager'`）：sdpa注意力在torch_npu上会被重派发为`npu_fusion_attention_v3`算子，当前torchair版本暂无该算子的AscendIR转换器；
+- 加载后脚本会自动将量化模块中未随`.npu()`迁移的张量（如`bias`/`offset_bias`）迁移至NPU；

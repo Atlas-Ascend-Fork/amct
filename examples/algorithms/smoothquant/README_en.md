@@ -139,3 +139,72 @@ Under 2048-token evaluation, `smooth_strength=0.8` is more accurate than the def
 
 
 After inference succeeds, a quantization log file ./amct_log/amct_pytorch.log is generated in the current directory
+
+## 3 Exporting an offline torchair model
+
+### 3.1 Prerequisites
+
+- The model has been quantized by AMCT and is the quantized deploy model produced by `amct.convert` (see [2.1 Invoking via the API](#21-invoking-via-the-api) for the quantization workflow);
+- CANN, torch_npu and torchair are installed with matching versions.
+
+**How to save the quantized deploy model**: the model after `amct.convert` contains AMCT custom quantization modules (e.g. `NpuQuantizationLinear`) and cannot be restored via `save_pretrained`/`AutoModel.from_pretrained`. Save the whole model with `torch.save` right after `amct.convert`, and keep the tokenizer files of the original model:
+
+```python
+amct.convert(quant_model)
+torch.save(quant_model.cpu(), '/path/to/quantized_llm/model.pth')
+enc.save_pretrained('/path/to/quantized_llm/')  # tokenizer files, used by the export script to build the input
+```
+
+`--model_path` should point to that directory (containing `model.pth`), or directly to the `model.pth` file. The required directory structure is:
+
+```
+/path/to/quantized_llm/
+├── model.pth              # quantized deploy model saved by torch.save
+├── tokenizer.json         # tokenizer files saved by enc.save_pretrained
+├── tokenizer_config.json
+└── ...                    # other tokenizer files (vocab.json/merges.txt etc., depending on the model)
+```
+
+### 3.2 Usage
+
+For LLM networks (e.g. Qwen/Llama-like models), the export input is a `[1, seqlen]` int64 tensor tokenized from real text; by default a built-in sample text is used, or specify a local text file via `--input_file`:
+
+```python
+python3 src/export_torchair_sample.py --model_path=/path/to/quantized_llm/ --seqlen=2048
+```
+
+For VLM networks (e.g. CLIP-ViT-like models), the export input is a `[batch_size, 3, H, W]` tensor preprocessed from a real image:
+
+```python
+python3 src/export_torchair_sample.py --model_type=vlm --model_path=/path/to/quantized_clip/ --image_path=/path/to/image.jpg --batch_size=1 --dtype=float16
+```
+
+Common parameters:
+
+| Parameter | Required | Default | Description |
+|:--|:--:|:--:|:--|
+|--model_path|Yes|/|Quantized deploy model directory (containing `model.pth`) or the pth file path|
+|--model_type|No|llm|`llm`/`vlm`; vlm uses the CLIP-ViT path|
+|--output_dir|No|./torchair_output|Directory for exported artifacts|
+|--export_name|No|Model directory name|AIR file name (without the .air suffix)|
+|--seqlen|No|2048|Sequence length of the LLM export input|
+|--input_file|No|Built-in sample text|Text file tokenized as the LLM export input|
+|--image_path|Required for vlm|/|Path of the real image used to trace the VLM forward|
+|--batch_size|No|1|Batch size of the VLM export input|
+|--dtype|No|float16|Dtype of the VLM image input (float16/bfloat16)|
+
+### 3.3 Exported artifacts
+
+After a successful export, three files are generated under `--output_dir`:
+
+| File | Description |
+|:--|:--|
+|`<export_name>.air`|AIR offline graph exported by torchair, for offline inference|
+|`dynamo.pbtxt`|TorchDynamo intermediate representation (text format)|
+|`input.bin`|Binary file of the export input, for downstream offline inference framing|
+
+### 3.4 Notes
+
+- The shape and dtype of the export input must be consistent with downstream offline inference; control them via `--seqlen`/`--batch_size`/`--dtype`;
+- LLM export forces the eager attention implementation (the script sets `config._attn_implementation='eager'` automatically): sdpa attention is redispatched by torch_npu to the `npu_fusion_attention_v3` op, for which the current torchair release has no AscendIR converter yet;
+- After loading, the script automatically moves tensors not migrated by `.npu()` in quantization modules (e.g. `bias`/`offset_bias`) to NPU;
