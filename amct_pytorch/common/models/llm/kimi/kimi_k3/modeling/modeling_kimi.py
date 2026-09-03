@@ -20,16 +20,8 @@ from transformers.pytorch_utils import ALL_LAYERNORM_LAYERS
 from transformers.utils import TransformersKwargs, auto_docstring, can_return_tuple, logging
 from transformers.utils.generic import OutputRecorder, check_model_inputs
 
-try:
-    from fla.modules import FusedRMSNormGated, ShortConvolution
-    from fla.ops.kda import chunk_kda, fused_recurrent_kda
-    # from fla.ops.kda.gate import fused_kda_gate  # deprecated, gate is now computed inside chunk_kda/fused_recurrent_kda
-    from fla.ops.utils.index import prepare_cu_seqlens_from_mask, prepare_lens_from_mask
-    from fla.utils import tensor_cache
-except ImportError:
-    raise ImportError("Plese run `pip install -U fla-core`")
-
 from .configuration_kimi_k3 import KimiLinearConfig
+from .small_kda import KimiShortConvolution, prepare_kda_gates, recurrent_kda
 
 assert version.parse(transformers.__version__) >= version.parse("4.56.0"), \
     "Please upgrade transformers to >= 4.56.0"
@@ -84,14 +76,15 @@ def index_put_first_axis(x, indices, first_axis_dim):
     return y
 
 
-@tensor_cache
 def get_unpad_data(
     attention_mask: torch.Tensor,
 ) -> tuple[torch.Tensor, torch.Tensor, int]:
-    lens = prepare_lens_from_mask(attention_mask)
+    lens = attention_mask.sum(dim=-1, dtype=torch.int32)
     indices = torch.nonzero(attention_mask.flatten(), as_tuple=False).flatten()
     max_seqlen_in_batch = lens.max().item()
-    cu_seqlens = prepare_cu_seqlens_from_mask(attention_mask)
+    cu_seqlens = torch.cat(
+        (lens.new_zeros(1), lens.cumsum(dim=0, dtype=torch.int32)),
+    )
     return indices, cu_seqlens, max_seqlen_in_batch
 
 
@@ -522,7 +515,6 @@ class KimiDeltaAttention(nn.Module):
     def __init__(self, config: KimiLinearConfig, layer_idx: int):
         super().__init__()
         self.config = config
-        self.mode = "chunk"
 
         self.hidden_size = config.hidden_size
         self.conv_size = config.linear_attn_config["short_conv_kernel_size"]
@@ -533,9 +525,6 @@ class KimiDeltaAttention(nn.Module):
 
         self.layer_idx = layer_idx
 
-        assert self.mode in [
-            'chunk', 'fused_recurrent'], f"Not suppoerted mode `{self.mode}`."
-
         projection_k_size = self.head_k_dim * self.num_k_heads
         projection_size = self.head_dim * self.num_heads
 
@@ -545,20 +534,17 @@ class KimiDeltaAttention(nn.Module):
             self.hidden_size, projection_k_size, bias=False)
         self.v_proj = nn.Linear(self.hidden_size, projection_size, bias=False)
 
-        self.q_conv1d = ShortConvolution(
+        self.q_conv1d = KimiShortConvolution(
             hidden_size=projection_k_size,
             kernel_size=self.conv_size,
-            activation='silu',
         )
-        self.k_conv1d = ShortConvolution(
+        self.k_conv1d = KimiShortConvolution(
             hidden_size=projection_k_size,
             kernel_size=self.conv_size,
-            activation='silu',
         )
-        self.v_conv1d = ShortConvolution(
+        self.v_conv1d = KimiShortConvolution(
             hidden_size=projection_size,
             kernel_size=self.conv_size,
-            activation='silu',
         )
 
         self.A_log = torch.nn.Parameter(torch.log(torch.empty(
@@ -580,8 +566,7 @@ class KimiDeltaAttention(nn.Module):
             self.g_a_proj = nn.Linear(self.hidden_size, self.head_dim, bias=False)
             self.g_b_proj = nn.Linear(self.head_dim, projection_size, bias=False)
 
-        self.o_norm = FusedRMSNormGated(
-            self.head_dim, eps=config.rms_norm_eps, activation='sigmoid')
+        self.o_norm = KimiRMSNorm(self.head_dim, eps=config.rms_norm_eps)
         self.o_proj = nn.Linear(projection_size, self.hidden_size, bias=False)
 
     def forward(
@@ -602,9 +587,6 @@ class KimiDeltaAttention(nn.Module):
                 )
         use_cache = cache_params is not None
         batch_size, q_len, _ = hidden_states.shape
-        mode = 'fused_recurrent' if use_cache and q_len == 1 else self.mode
-        if self.training:
-            assert mode == 'chunk', "Only chunk mode is supported in training."
 
         cu_seqlens = kwargs.get('cu_seqlens')
         indices = None
@@ -642,51 +624,32 @@ class KimiDeltaAttention(nn.Module):
             output_final_state=use_cache,
             cu_seqlens=cu_seqlens,
         )
-        g = self.f_b_proj(self.f_a_proj(hidden_states))
-        g = rearrange(g, '... (h d) -> ... h d', d=self.head_dim)
-        beta = self.b_proj(hidden_states).float()
+        raw_decay = self.f_b_proj(self.f_a_proj(hidden_states))
+        raw_decay = rearrange(
+            raw_decay, '... (h d) -> ... h d', d=self.head_dim,
+        )
+        raw_beta = self.b_proj(hidden_states)
 
         q, k = map(lambda x: rearrange(
             x, '... (h d) -> ... h d', d=self.head_k_dim), (q, k))
         v = rearrange(v, '... (h d) -> ... h d', d=self.head_dim)
 
-        if mode == 'chunk':
-            o, recurrent_state = chunk_kda(
-                q=q,
-                k=k,
-                v=v,
-                g=g,
-                beta=beta,
-                A_log=self.A_log,
-                dt_bias=self.dt_bias,
-                initial_state=recurrent_state,
-                output_final_state=True,
-                use_qk_l2norm_in_kernel=True,
-                use_gate_in_kernel=True,
-                use_beta_sigmoid_in_kernel=True,
-                safe_gate=self.gate_lower_bound is not None,
-                lower_bound=self.gate_lower_bound,
-                transpose_state_layout=True,
-                cu_seqlens=cu_seqlens,
-            )
-        else:
-            o, recurrent_state = fused_recurrent_kda(
-                q=q,
-                k=k,
-                v=v,
-                g=g,
-                beta=beta,
-                A_log=self.A_log,
-                dt_bias=self.dt_bias,
-                initial_state=recurrent_state,
-                output_final_state=True,
-                use_qk_l2norm_in_kernel=True,
-                use_gate_in_kernel=True,
-                use_beta_sigmoid_in_kernel=True,
-                lower_bound=self.gate_lower_bound,
-                transpose_state_layout=True,
-                cu_seqlens=cu_seqlens,
-            )
+        decay, beta = prepare_kda_gates(
+            raw_decay,
+            raw_beta,
+            self.A_log,
+            self.dt_bias,
+            self.gate_lower_bound,
+        )
+        o, recurrent_state = recurrent_kda(
+            q,
+            k,
+            v,
+            decay,
+            beta,
+            initial_state=recurrent_state,
+            cu_seqlens=cu_seqlens,
+        )
         if cache_params is not None:
             cache_params.recurrent_states[self.layer_idx] = recurrent_state
             cache_params.conv_states[self.layer_idx] = (
@@ -697,7 +660,7 @@ class KimiDeltaAttention(nn.Module):
         else:
             g = self.g_b_proj(self.g_a_proj(hidden_states))
         g = rearrange(g, '... (h d) -> ... h d', d=self.head_dim)
-        o = self.o_norm(o, g)
+        o = self.o_norm(o) * torch.sigmoid(g.float()).to(o.dtype)
 
         o = rearrange(o, 'b t h d -> b t (h d)')
         o = self.o_proj(o)
