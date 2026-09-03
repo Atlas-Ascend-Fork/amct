@@ -15,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-"""Pure Torch small-operator implementation for Kimi-K3 KDA."""
+"""Pure Torch short-convolution implementation for Kimi-K3 KDA."""
 
 import math
 from itertools import pairwise
@@ -23,14 +23,6 @@ from itertools import pairwise
 import torch
 import torch.nn.functional as F
 from torch import nn
-
-
-def _softplus(x: torch.Tensor) -> torch.Tensor:
-    return torch.relu(x) + torch.log1p(torch.exp(-torch.abs(x)))
-
-
-def _l2_normalize(x: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
-    return x * torch.rsqrt(x.float().square().sum(dim=-1, keepdim=True) + eps)
 
 
 class KimiShortConvolution(nn.Module):
@@ -108,96 +100,3 @@ class KimiShortConvolution(nn.Module):
             outputs.append(output)
             states.append(state)
         return torch.cat(outputs, dim=1), torch.cat(states, dim=0)
-
-
-def recurrent_kda(
-    query: torch.Tensor,
-    key: torch.Tensor,
-    value: torch.Tensor,
-    decay: torch.Tensor,
-    beta: torch.Tensor,
-    initial_state: torch.Tensor | None = None,
-    cu_seqlens: torch.Tensor | None = None,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """Run KDA using small Torch ops and return ``[B, H, Dv, Dk]`` state."""
-    if cu_seqlens is not None:
-        if query.shape[0] != 1:
-            raise ValueError("Packed KDA input must have batch size 1.")
-        outputs = []
-        states = []
-        for request, (start, end) in enumerate(pairwise(cu_seqlens.tolist())):
-            request_state = (
-                None if initial_state is None else initial_state[request : request + 1]
-            )
-            output, state = recurrent_kda(
-                query[:, start:end],
-                key[:, start:end],
-                value[:, start:end],
-                decay[:, start:end],
-                beta[:, start:end],
-                initial_state=request_state,
-            )
-            outputs.append(output)
-            states.append(state)
-        return torch.cat(outputs, dim=1), torch.cat(states, dim=0)
-
-    batch, tokens, heads, key_dim = query.shape
-    value_dim = value.shape[-1]
-    q = _l2_normalize(query).transpose(1, 2).float() / math.sqrt(key_dim)
-    k = _l2_normalize(key).transpose(1, 2).float()
-    v = value.transpose(1, 2).float()
-    g = decay.transpose(1, 2).float()
-    b = beta.transpose(1, 2).float()
-    if initial_state is None:
-        state = torch.zeros(
-            batch, heads, key_dim, value_dim,
-            dtype=torch.float32,
-            device=query.device,
-        )
-    else:
-        expected_shape = (batch, heads, value_dim, key_dim)
-        if initial_state.shape != expected_shape:
-            raise ValueError(
-                f"Expected recurrent state shape {expected_shape}, "
-                f"got {tuple(initial_state.shape)}.",
-            )
-        state = initial_state.transpose(-1, -2).float()
-
-    outputs = []
-    for token_index in range(tokens):
-        q_t = q[:, :, token_index]
-        k_t = k[:, :, token_index]
-        v_t = v[:, :, token_index]
-        state = state * g[:, :, token_index].exp().unsqueeze(-1)
-        memory = (state * k_t.unsqueeze(-1)).sum(dim=-2)
-        delta = (v_t - memory) * b[:, :, token_index].unsqueeze(-1)
-        state = state + k_t.unsqueeze(-1) * delta.unsqueeze(-2)
-        outputs.append((state * q_t.unsqueeze(-1)).sum(dim=-2))
-
-    if outputs:
-        output = torch.stack(outputs, dim=2).transpose(1, 2).to(value.dtype)
-    else:
-        output = value.new_empty(batch, 0, heads, value_dim)
-    return output, state.transpose(-1, -2).contiguous()
-
-
-def prepare_kda_gates(
-    raw_decay: torch.Tensor,
-    raw_beta: torch.Tensor,
-    a_log: torch.Tensor,
-    dt_bias: torch.Tensor,
-    lower_bound: float | None,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """Activate KDA decay per head and beta per token/head."""
-    heads, head_dim = raw_decay.shape[-2:]
-    if a_log.shape != (heads,):
-        raise ValueError(
-            f"Expected A_log shape ({heads},), got {tuple(a_log.shape)}.",
-        )
-    gate_input = raw_decay.float() + dt_bias.float().view(1, 1, heads, head_dim)
-    gate_scale = a_log.float().exp().view(1, 1, heads, 1)
-    if lower_bound is None:
-        decay = -gate_scale * _softplus(gate_input)
-    else:
-        decay = float(lower_bound) * torch.sigmoid(gate_scale * gate_input)
-    return decay, raw_beta.float().sigmoid()

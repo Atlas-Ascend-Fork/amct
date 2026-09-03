@@ -20,8 +20,14 @@ from transformers.pytorch_utils import ALL_LAYERNORM_LAYERS
 from transformers.utils import TransformersKwargs, auto_docstring, can_return_tuple, logging
 from transformers.utils.generic import OutputRecorder, check_model_inputs
 
+try:
+    from fla.ops.kda import chunk_kda, fused_recurrent_kda
+except ImportError:
+    chunk_kda = None
+    fused_recurrent_kda = None
+
 from .configuration_kimi_k3 import KimiLinearConfig
-from .small_kda import KimiShortConvolution, prepare_kda_gates, recurrent_kda
+from .small_kda import KimiShortConvolution
 
 assert version.parse(transformers.__version__) >= version.parse("4.56.0"), \
     "Please upgrade transformers to >= 4.56.0"
@@ -587,6 +593,7 @@ class KimiDeltaAttention(nn.Module):
                 )
         use_cache = cache_params is not None
         batch_size, q_len, _ = hidden_states.shape
+        use_fused_recurrent = use_cache and q_len == 1
 
         cu_seqlens = kwargs.get('cu_seqlens')
         indices = None
@@ -634,22 +641,47 @@ class KimiDeltaAttention(nn.Module):
             x, '... (h d) -> ... h d', d=self.head_k_dim), (q, k))
         v = rearrange(v, '... (h d) -> ... h d', d=self.head_dim)
 
-        decay, beta = prepare_kda_gates(
-            raw_decay,
-            raw_beta,
-            self.A_log,
-            self.dt_bias,
-            self.gate_lower_bound,
-        )
-        o, recurrent_state = recurrent_kda(
-            q,
-            k,
-            v,
-            decay,
-            beta,
-            initial_state=recurrent_state,
-            cu_seqlens=cu_seqlens,
-        )
+        if chunk_kda is None or fused_recurrent_kda is None:
+            raise ImportError(
+                "KimiDeltaAttention requires fla-core with KDA operators.",
+            )
+        if use_fused_recurrent:
+            o, recurrent_state = fused_recurrent_kda(
+                q=q,
+                k=k,
+                v=v,
+                g=raw_decay,
+                beta=raw_beta.float(),
+                A_log=self.A_log,
+                dt_bias=self.dt_bias,
+                initial_state=recurrent_state,
+                output_final_state=True,
+                use_qk_l2norm_in_kernel=True,
+                use_gate_in_kernel=True,
+                use_beta_sigmoid_in_kernel=True,
+                lower_bound=self.gate_lower_bound,
+                transpose_state_layout=True,
+                cu_seqlens=cu_seqlens,
+            )
+        else:
+            o, recurrent_state = chunk_kda(
+                q=q,
+                k=k,
+                v=v,
+                g=raw_decay,
+                beta=raw_beta.float(),
+                A_log=self.A_log,
+                dt_bias=self.dt_bias,
+                initial_state=recurrent_state,
+                output_final_state=True,
+                use_qk_l2norm_in_kernel=True,
+                use_gate_in_kernel=True,
+                use_beta_sigmoid_in_kernel=True,
+                safe_gate=self.gate_lower_bound is not None,
+                lower_bound=self.gate_lower_bound,
+                transpose_state_layout=True,
+                cu_seqlens=cu_seqlens,
+            )
         if cache_params is not None:
             cache_params.recurrent_states[self.layer_idx] = recurrent_state
             cache_params.conv_states[self.layer_idx] = (

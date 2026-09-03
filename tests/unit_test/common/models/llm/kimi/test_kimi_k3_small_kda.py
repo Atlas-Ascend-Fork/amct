@@ -73,79 +73,7 @@ def test_short_convolution_keeps_packed_requests_independent():
     )
 
 
-def test_recurrent_kda_split_run_uses_previous_state():
-    small_kda = _load_small_kda()
-    torch.manual_seed(7)
-    query = torch.randn(1, 5, 2, 3)
-    key = torch.randn_like(query)
-    value = torch.randn_like(query)
-    decay = -torch.rand_like(query)
-    beta = torch.sigmoid(torch.randn(1, 5, 2))
-
-    full_output, full_state = small_kda.recurrent_kda(
-        query, key, value, decay, beta,
-    )
-    first_output, first_state = small_kda.recurrent_kda(
-        query[:, :3], key[:, :3], value[:, :3], decay[:, :3], beta[:, :3],
-    )
-    second_output, second_state = small_kda.recurrent_kda(
-        query[:, 3:], key[:, 3:], value[:, 3:], decay[:, 3:], beta[:, 3:],
-        initial_state=first_state,
-    )
-
-    torch.testing.assert_close(
-        torch.cat((first_output, second_output), dim=1), full_output,
-    )
-    torch.testing.assert_close(second_state, full_state)
-
-
-def test_recurrent_kda_keeps_packed_requests_independent():
-    small_kda = _load_small_kda()
-    torch.manual_seed(11)
-    query = torch.randn(1, 5, 1, 2)
-    key = torch.randn_like(query)
-    value = torch.randn_like(query)
-    decay = -torch.rand_like(query)
-    beta = torch.sigmoid(torch.randn(1, 5, 1))
-    cu_seqlens = torch.tensor([0, 2, 5], dtype=torch.int32)
-
-    packed_output, packed_state = small_kda.recurrent_kda(
-        query, key, value, decay, beta, cu_seqlens=cu_seqlens,
-    )
-    expected = [
-        small_kda.recurrent_kda(
-            query[:, start:end], key[:, start:end], value[:, start:end],
-            decay[:, start:end], beta[:, start:end],
-        )
-        for start, end in ((0, 2), (2, 5))
-    ]
-
-    torch.testing.assert_close(
-        packed_output, torch.cat([item[0] for item in expected], dim=1),
-    )
-    torch.testing.assert_close(
-        packed_state, torch.cat([item[1] for item in expected], dim=0),
-    )
-
-
-def test_prepare_kda_gates_broadcasts_a_log_by_head():
-    small_kda = _load_small_kda()
-    raw_decay = torch.tensor([[[[0.5, -0.5], [1.0, -1.0]]]])
-    raw_beta = torch.tensor([[[0.0, 1.0]]])
-    a_log = torch.log(torch.tensor([2.0, 3.0]))
-    dt_bias = torch.tensor([0.1, 0.2, 0.3, 0.4])
-
-    decay, beta = small_kda.prepare_kda_gates(
-        raw_decay, raw_beta, a_log, dt_bias, lower_bound=None,
-    )
-
-    gate_input = raw_decay + dt_bias.view(1, 1, 2, 2)
-    expected_decay = -a_log.exp().view(1, 1, 2, 1) * F.softplus(gate_input)
-    torch.testing.assert_close(decay, expected_decay)
-    torch.testing.assert_close(beta, raw_beta.sigmoid())
-
-
-def test_delta_attention_split_run_preserves_internal_states():
+def test_delta_attention_uses_chunk_for_prefill_and_fused_for_decode(monkeypatch):
     modeling = importlib.import_module(
         "amct_pytorch.common.models.llm.kimi.kimi_k3.modeling.modeling_kimi",
     )
@@ -164,24 +92,42 @@ def test_delta_attention_split_run_preserves_internal_states():
     )
     torch.manual_seed(17)
     attention = modeling.KimiDeltaAttention(config, layer_idx=0).eval().bfloat16()
-    hidden_states = torch.randn(1, 5, 6, dtype=torch.bfloat16)
+    hidden_states = torch.randn(1, 3, 6, dtype=torch.bfloat16)
     assert attention.A_log.shape == (2,)
 
-    with torch.no_grad():
-        full_output = attention(hidden_states)
-        cache = modeling.KimiDynamicCache(config)
-        first_output = attention(hidden_states[:, :3], cache_params=cache)
-        second_output = attention(hidden_states[:, 3:], cache_params=cache)
+    def fake_chunk_kda(*, v, **kwargs):
+        assert kwargs["initial_state"] is None
+        state = torch.full((1, 2, 3, 3), 3.0)
+        return v, state
 
-    torch.testing.assert_close(
-        torch.cat((first_output, second_output), dim=1),
-        full_output,
-        rtol=1e-2,
-        atol=1e-2,
+    def fake_fused_recurrent_kda(*, v, **kwargs):
+        torch.testing.assert_close(
+            kwargs["initial_state"], torch.full((1, 2, 3, 3), 3.0),
+        )
+        state = torch.full((1, 2, 3, 3), 7.0)
+        return v, state
+
+    monkeypatch.setattr(modeling, "chunk_kda", fake_chunk_kda)
+    monkeypatch.setattr(
+        modeling, "fused_recurrent_kda", fake_fused_recurrent_kda,
     )
-    assert full_output.dtype == torch.bfloat16
+    cache = modeling.KimiDynamicCache(config)
+
+    with torch.no_grad():
+        prefill_output = attention(hidden_states[:, :2], cache_params=cache)
+        torch.testing.assert_close(
+            cache.recurrent_states[0], torch.full((1, 2, 3, 3), 3.0),
+        )
+        decode_output = attention(hidden_states[:, 2:], cache_params=cache)
+
+    assert prefill_output.shape == (1, 2, 6)
+    assert decode_output.shape == (1, 1, 6)
+    assert prefill_output.dtype == torch.bfloat16
+    assert decode_output.dtype == torch.bfloat16
     assert cache.conv_states[0] is not None
-    assert cache.recurrent_states[0] is not None
+    torch.testing.assert_close(
+        cache.recurrent_states[0], torch.full((1, 2, 3, 3), 7.0),
+    )
 
 
 def test_get_unpad_data_does_not_require_fla_helpers():
@@ -199,7 +145,7 @@ def test_get_unpad_data_does_not_require_fla_helpers():
     assert max_length == 2
 
 
-def test_delta_attention_padding_does_not_mix_request_states():
+def test_delta_attention_padding_does_not_mix_request_states(monkeypatch):
     modeling = importlib.import_module(
         "amct_pytorch.common.models.llm.kimi.kimi_k3.modeling.modeling_kimi",
     )
@@ -220,6 +166,14 @@ def test_delta_attention_padding_does_not_mix_request_states():
     attention = modeling.KimiDeltaAttention(config, layer_idx=0).eval()
     hidden_states = torch.randn(2, 3, 6)
     attention_mask = torch.tensor([[1, 1, 0], [1, 1, 1]])
+
+    def fake_kda(*, v, cu_seqlens=None, **kwargs):
+        requests = 1 if cu_seqlens is None else len(cu_seqlens) - 1
+        state = v.new_zeros(requests, 2, 3, 3)
+        return v, state
+
+    monkeypatch.setattr(modeling, "chunk_kda", fake_kda)
+    monkeypatch.setattr(modeling, "fused_recurrent_kda", fake_kda)
 
     with torch.no_grad():
         batched_output = attention(hidden_states, attention_mask=attention_mask)
