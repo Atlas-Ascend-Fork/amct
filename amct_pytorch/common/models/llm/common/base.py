@@ -16,6 +16,7 @@
 # ----------------------------------------------------------------------------
 
 import os
+import time
 from abc import ABCMeta
 import gc
 import torch
@@ -144,10 +145,27 @@ class BaseModel(metaclass=ABCMeta):
 
 
     def block(self, layer_idx):
+        # Temporary CPU-side diagnostics for block construction and loading.
+        prefix = f"[PERF] layer={layer_idx}"
+        print(f"{prefix} BEGIN construct", flush=True)
+        start = time.perf_counter()
         decoder_layer = self.cls(self.config, layer_idx)
+        print(f"{prefix} END construct: {time.perf_counter() - start:.3f}s", flush=True)
+
+        print(f"{prefix} BEGIN read_weights", flush=True)
+        start = time.perf_counter()
         state_dict = self.load_layer_weight(self.get_layer_weight_prefix(layer_idx))
+        print(f"{prefix} END read_weights: {time.perf_counter() - start:.3f}s", flush=True)
+
+        print(f"{prefix} BEGIN copy_weights", flush=True)
+        start = time.perf_counter()
         decoder_layer.load_state_dict(state_dict, strict=True)
+        print(f"{prefix} END copy_weights: {time.perf_counter() - start:.3f}s", flush=True)
+
+        print(f"{prefix} BEGIN cast_bf16", flush=True)
+        start = time.perf_counter()
         decoder_layer.eval().bfloat16()
+        print(f"{prefix} END cast_bf16: {time.perf_counter() - start:.3f}s", flush=True)
         return decoder_layer
 
     def get_block_forward_kwargs(self):

@@ -20,7 +20,6 @@ import json
 import re
 import time
 from collections import defaultdict
-from contextlib import contextmanager
 from pathlib import Path
 
 import torch
@@ -47,18 +46,6 @@ def _perf_sync(device):
         torch.npu.synchronize(device)
     elif device.type == "cuda":
         torch.cuda.synchronize(device)
-
-
-@contextmanager
-def _perf_stage(name, device):
-    print(f"[PERF] BEGIN {name}", flush=True)
-    _perf_sync(device)
-    start = time.perf_counter()
-    try:
-        yield
-    finally:
-        _perf_sync(device)
-        print(f"[PERF] END {name}: {time.perf_counter() - start:.3f}s", flush=True)
 
 
 def _attach_perf_timer(module, name, device, handles):
@@ -245,8 +232,7 @@ class KimiK3(BaseModel):
     def do_block_forward(self, layer_idx, samples, hook_name=None, use_quant_block=False, enable_quant=False):
         act_stat = {}
         outs, hooks = [], []
-        with _perf_stage(f"layer={layer_idx} build_and_load", self.args.device):
-            block = self._build_block_for_forward(layer_idx, use_quant_block=use_quant_block)
+        block = self._build_block_for_forward(layer_idx, use_quant_block=use_quant_block)
         if use_quant_block:
             from amct_pytorch.common.models.llm.common.quant_apply import (
                 set_model_act_quant_state,
@@ -255,20 +241,12 @@ class KimiK3(BaseModel):
             set_model_weight_quant_state(block, enable_quant)
             set_model_act_quant_state(block, enable_quant)
 
-        with _perf_stage(f"layer={layer_idx} dispatch", self.args.device):
-            block = self._dispatch_block(block).eval()
+        block = self._dispatch_block(block).eval()
 
         perf_handles = []
-        _attach_perf_timer(block, f"layer={layer_idx} block_forward", self.args.device, perf_handles)
-        _attach_perf_timer(block.self_attn, f"layer={layer_idx} attention", self.args.device, perf_handles)
-        for name in ("q_conv1d", "k_conv1d", "v_conv1d"):
-            module = getattr(block.self_attn, name, None)
-            if module is not None:
-                _attach_perf_timer(module, f"layer={layer_idx} {name}", self.args.device, perf_handles)
-        for name in ("mlp", "block_sparse_moe"):
-            module = getattr(block, name, None)
-            if module is not None:
-                _attach_perf_timer(module, f"layer={layer_idx} {name}", self.args.device, perf_handles)
+        module = getattr(block, "block_sparse_moe", None)
+        if module is not None:
+            _attach_perf_timer(module, f"layer={layer_idx} block_sparse_moe", self.args.device, perf_handles)
         if use_quant_block and hook_name is None:
             for mod in block.modules():
                 if isinstance(mod, QuantLinear):
