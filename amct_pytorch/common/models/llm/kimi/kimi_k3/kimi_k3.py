@@ -24,6 +24,7 @@ from pathlib import Path
 
 import torch
 from accelerate import init_empty_weights
+from accelerate.utils import set_module_tensor_to_device
 from safetensors import safe_open
 from tqdm import tqdm
 from transformers import AutoConfig, AutoTokenizer
@@ -31,7 +32,10 @@ from transformers import AutoConfig, AutoTokenizer
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm.common.base import BaseModel
 from amct_pytorch.common.models.llm.common.capture import register_forward_hooks
-from amct_pytorch.common.models.llm.common.ptq_params import PtqParamHandler, PtqParamStore
+from amct_pytorch.common.models.llm.common.ptq_params import (
+    PtqParamHandler,
+    PtqParamStore,
+)
 from amct_pytorch.common.models.llm.kimi.kimi_k3.modeling.configuration_kimi_k3 import (
     KimiK3Config,
     KimiLinearConfig,
@@ -112,6 +116,10 @@ class KimiK3(BaseModel):
         self.cls = self._load_text_modeling().KimiDecoderLayer
         self.model = self.empty_weights_model()
         self._weight_map = None
+        # Existing eval/extraction workflows enable this shared V4 switch.
+        # K3 only uses it for streaming onto args.device, not multi-NPU sharding.
+        # PTQ retains the CPU-staged BaseModel.block path.
+        self.sharded_block = False
 
     @staticmethod
     def block_size(weight):
@@ -143,6 +151,87 @@ class KimiK3(BaseModel):
 
     def get_layer_weight_prefix(self, layer_idx: int) -> str:
         return f"language_model.model.layers.{layer_idx}."
+
+    def block(self, layer_idx):
+        if getattr(self, "sharded_block", False):
+            return self._block_sharded(layer_idx)
+        return super().block(layer_idx)
+
+    def _block_sharded(self, layer_idx):
+        """Build on meta and stream a floating checkpoint onto one device.
+
+        Unlike CPU staging, this never holds a full layer state_dict or a
+        randomly initialized CPU copy of all experts. Buffers stay real during
+        construction so non-persistent derived values can be preserved.
+        """
+        print(f"[PERF] layer={layer_idx} BEGIN construct_meta", flush=True)
+        start = time.perf_counter()
+        with init_empty_weights(include_buffers=False):
+            block = self.cls(self.config, layer_idx)
+        print(f"[PERF] layer={layer_idx} END construct_meta: {time.perf_counter() - start:.3f}s", flush=True)
+
+        prefix = self.get_layer_weight_prefix(layer_idx)
+        # state_dict includes persistent buffers but excludes derived buffers.
+        expected = {name: (value.shape, value.dtype) for name, value in block.state_dict().items()}
+        weights_by_file = defaultdict(list)
+        present = set()
+        for full_name, file_name in self._load_weight_map().items():
+            if not full_name.startswith(prefix):
+                continue
+            local_name = full_name[len(prefix):]
+            if local_name.endswith((".weight_packed", ".weight_scale")):
+                raise RuntimeError(
+                    f"Layer {layer_idx}: {full_name} is a quantized checkpoint entry; "
+                    "direct BF16 loading requires ordinary .weight tensors without scales."
+                )
+            present.add(local_name)
+            weights_by_file[file_name].append((full_name, local_name))
+        missing = sorted(expected.keys() - present)
+        unexpected = sorted(present - expected.keys())
+        if missing or unexpected:
+            raise RuntimeError(
+                f"Layer {layer_idx}: checkpoint key mismatch under {prefix}; "
+                f"missing ({len(missing)}): {missing[:5]}; "
+                f"unexpected ({len(unexpected)}): {unexpected[:5]}"
+            )
+
+        print(f"[PERF] layer={layer_idx} BEGIN load_to_device", flush=True)
+        start = time.perf_counter()
+        for file_name, names in weights_by_file.items():
+            with safe_open(str(Path(self.model_path) / file_name), framework="pt", device="cpu") as f:
+                for full_name, local_name in names:
+                    tensor = self._prepare_layer_tensor(local_name, f.get_tensor(full_name))
+                    shape, dtype = expected[local_name]
+                    if tensor.shape != shape:
+                        raise RuntimeError(
+                            f"Layer {layer_idx}: shape mismatch for {full_name}: "
+                            f"checkpoint {tuple(tensor.shape)}, model {tuple(shape)}"
+                        )
+                    if dtype.is_floating_point:
+                        if not tensor.is_floating_point():
+                            raise RuntimeError(f"Layer {layer_idx}: {full_name} must be a floating tensor")
+                        dtype = torch.bfloat16
+                    tensor = tensor.to(dtype=dtype)
+                    # Explicit dtype is essential: meta parameters default to
+                    # FP32 and Accelerate otherwise casts the value back to it.
+                    set_module_tensor_to_device(
+                        block, local_name, self.args.device, value=tensor, dtype=dtype,
+                    )
+                    del tensor
+
+        unresolved = [
+            name for name, value in list(block.named_parameters()) + list(block.named_buffers())
+            if value.is_meta
+        ]
+        if unresolved:
+            raise RuntimeError(f"Layer {layer_idx}: tensors still on meta after loading: {unresolved[:5]}")
+        # Includes non-persistent buffers initialized outside meta above.
+        for name, buffer in list(block.named_buffers()):
+            dtype = torch.bfloat16 if buffer.is_floating_point() else buffer.dtype
+            set_module_tensor_to_device(block, name, self.args.device, value=buffer, dtype=dtype)
+        _perf_sync(self.args.device)
+        print(f"[PERF] layer={layer_idx} END load_to_device: {time.perf_counter() - start:.3f}s", flush=True)
+        return block.eval()
 
     def _embed_base_prefix(self) -> str:
         return "language_model.model."
@@ -336,20 +425,22 @@ class KimiK3(BaseModel):
         for weight_name, tensor in raw_tensors.items():
             if weight_name.endswith(".weight_packed") or weight_name.endswith(".weight_scale"):
                 continue
-            state_dict[weight_name[len(prefix):]] = tensor
+            local_name = weight_name[len(prefix):]
+            state_dict[local_name] = self._prepare_layer_tensor(local_name, tensor)
+        return state_dict
 
-        a_log_key = "self_attn.A_log"
-        a_log = state_dict.get(a_log_key)
-        if a_log is not None:
+    def _prepare_layer_tensor(self, local_name, tensor):
+        """Apply the same K3 checkpoint normalization in both loading paths."""
+        if local_name == "self_attn.A_log":
             linear_attn_config = self.config.linear_attn_config
             num_heads = linear_attn_config["num_heads"]
             head_dim = linear_attn_config["head_dim"]
-            if a_log.shape == (head_dim,):
-                padding = a_log[num_heads:]
+            if tensor.shape == (head_dim,):
+                padding = tensor[num_heads:]
                 if torch.count_nonzero(padding).item() != 0:
                     raise RuntimeError("Kimi K3 self_attn.A_log contains non-zero padding")
-                state_dict[a_log_key] = a_log[:num_heads].contiguous()
-        return state_dict
+                tensor = tensor[:num_heads].contiguous()
+        return tensor
 
     def get_scale_name(self, weight_name):
         if weight_name.endswith(".weight_packed"):
