@@ -156,7 +156,6 @@ def test_direct_load_routes_every_tensor_to_args_device(tmp_path, monkeypatch):
         real_set_tensor(module, name, "cpu", value=value, dtype=dtype)
 
     monkeypatch.setattr(adapter, "set_module_tensor_to_device", cpu_transport)
-    monkeypatch.setattr(adapter, "_perf_sync", lambda device: None)
     result = pipeline.block(1)
     expected_names = set(dict(result.named_parameters())) | set(dict(result.named_buffers()))
     assert set(transfers) == expected_names

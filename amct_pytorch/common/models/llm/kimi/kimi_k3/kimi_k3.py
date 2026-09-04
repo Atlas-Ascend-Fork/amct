@@ -18,7 +18,6 @@
 import gc
 import json
 import re
-import time
 from collections import defaultdict
 from pathlib import Path
 
@@ -41,35 +40,6 @@ from amct_pytorch.common.models.llm.kimi.kimi_k3.modeling.configuration_kimi_k3 
     KimiLinearConfig,
 )
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
-
-
-# Temporary eval diagnostics; remove after locating the performance bottleneck.
-def _perf_sync(device):
-    device = torch.device(device)
-    if device.type == "npu":
-        torch.npu.synchronize(device)
-    elif device.type == "cuda":
-        torch.cuda.synchronize(device)
-
-
-def _attach_perf_timer(module, name, device, handles):
-    state = {"count": 0}
-
-    def before(_module, _args):
-        if state["count"] < 2:
-            print(f"[PERF] BEGIN {name} sample={state['count']}", flush=True)
-            _perf_sync(device)
-            state["start"] = time.perf_counter()
-
-    def after(_module, _args, _output):
-        if state["count"] < 2:
-            _perf_sync(device)
-            elapsed = time.perf_counter() - state["start"]
-            print(f"[PERF] END {name} sample={state['count']}: {elapsed:.3f}s", flush=True)
-        state["count"] += 1
-
-    handles.append(module.register_forward_pre_hook(before))
-    handles.append(module.register_forward_hook(after))
 
 
 @MODEL_REGISTRY.register(
@@ -164,11 +134,8 @@ class KimiK3(BaseModel):
         randomly initialized CPU copy of all experts. Buffers stay real during
         construction so non-persistent derived values can be preserved.
         """
-        print(f"[PERF] layer={layer_idx} BEGIN construct_meta", flush=True)
-        start = time.perf_counter()
         with init_empty_weights(include_buffers=False):
             block = self.cls(self.config, layer_idx)
-        print(f"[PERF] layer={layer_idx} END construct_meta: {time.perf_counter() - start:.3f}s", flush=True)
 
         prefix = self.get_layer_weight_prefix(layer_idx)
         # state_dict includes persistent buffers but excludes derived buffers.
@@ -195,8 +162,6 @@ class KimiK3(BaseModel):
                 f"unexpected ({len(unexpected)}): {unexpected[:5]}"
             )
 
-        print(f"[PERF] layer={layer_idx} BEGIN load_to_device", flush=True)
-        start = time.perf_counter()
         for file_name, names in weights_by_file.items():
             with safe_open(str(Path(self.model_path) / file_name), framework="pt", device="cpu") as f:
                 for full_name, local_name in names:
@@ -229,8 +194,6 @@ class KimiK3(BaseModel):
         for name, buffer in list(block.named_buffers()):
             dtype = torch.bfloat16 if buffer.is_floating_point() else buffer.dtype
             set_module_tensor_to_device(block, name, self.args.device, value=buffer, dtype=dtype)
-        _perf_sync(self.args.device)
-        print(f"[PERF] layer={layer_idx} END load_to_device: {time.perf_counter() - start:.3f}s", flush=True)
         return block.eval()
 
     def _embed_base_prefix(self) -> str:
@@ -332,10 +295,6 @@ class KimiK3(BaseModel):
 
         block = self._dispatch_block(block).eval()
 
-        perf_handles = []
-        module = getattr(block, "block_sparse_moe", None)
-        if module is not None:
-            _attach_perf_timer(module, f"layer={layer_idx} block_sparse_moe", self.args.device, perf_handles)
         if use_quant_block and hook_name is None:
             for mod in block.modules():
                 if isinstance(mod, QuantLinear):
@@ -364,8 +323,6 @@ class KimiK3(BaseModel):
                     out = out[0] if isinstance(out, (tuple, list)) else out
                 outs.append(out.to("cpu"))
 
-        for handle in perf_handles:
-            handle.remove()
         if use_attn_residuals:
             self._block_residuals = next_residuals
 
