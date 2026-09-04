@@ -165,7 +165,7 @@ Required parameter explanation:
 - attn_linear_param_dir: When `quant_target` is `attn-linear`, quantization algorithm parameter save path
 
 ### Quantized Weight Exporting
-After all the preceding steps are complete, export the quantized weigths for loading. The weight_map corresponding to the weigths is consistent with taht on the huggingface official website.
+After all the preceding steps are complete, export the quantized weights for loading. The weight_map corresponding to the weights is consistent with taht on the huggingface official website.
   ```shell
 python -m amct_pytorch.deploy \
   --model /data/models/Qwen3.6-35B-A3B \
