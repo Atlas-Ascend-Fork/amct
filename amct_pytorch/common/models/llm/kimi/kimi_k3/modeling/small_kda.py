@@ -118,7 +118,8 @@ def chunk_kda(
         raise ValueError("safe_gate and lower_bound must select the same gate path.")
     ranges, packed = _request_ranges(q, cu_seqlens)
     state = _initial_state(q, v, len(ranges), initial_state)
-    gate_bias = dt_bias.reshape(q.shape[2], q.shape[-1]).contiguous()
+    gate_bias = dt_bias.reshape(q.shape[2], q.shape[-1]).float().contiguous()
+    a_log = A_log.detach().float().contiguous()
     outputs = []
     final_states = []
 
@@ -159,7 +160,7 @@ def chunk_kda(
             beta=beta_i,
             scale=1.0 / math.sqrt(q.shape[-1]),
             initial_state=state[request : request + 1],
-            A_log=A_log.detach(),
+            A_log=a_log,
             dt_bias=gate_bias,
             lower_bound=lower_bound,
             layout_qkv="BSND",
@@ -199,7 +200,8 @@ def fused_recurrent_kda(
     )
     ranges, packed = _request_ranges(q, cu_seqlens)
     state = _initial_state(q, v, len(ranges), initial_state)
-    gate_bias = dt_bias.reshape(q.shape[2], q.shape[-1]).contiguous()
+    gate_bias = dt_bias.reshape(q.shape[2], q.shape[-1]).float().contiguous()
+    a_log = A_log.detach().float().contiguous()
     outputs = []
 
     if not packed:
@@ -215,7 +217,7 @@ def fused_recurrent_kda(
             beta=beta.unsqueeze(-1).contiguous(),
             g=g.contiguous(),
             scale=1.0 / math.sqrt(q.shape[-1]),
-            A_log=A_log.detach(),
+            A_log=a_log,
             dt_bias=gate_bias,
             lower_bound=lower_bound,
             layout_qkv="BSND",
@@ -239,7 +241,7 @@ def fused_recurrent_kda(
             beta=beta[:, start:end].unsqueeze(-1).contiguous(),
             g=g[:, start:end].contiguous(),
             scale=1.0 / math.sqrt(q.shape[-1]),
-            A_log=A_log.detach(),
+            A_log=a_log,
             dt_bias=gate_bias,
             lower_bound=lower_bound,
             layout_qkv="BSND",

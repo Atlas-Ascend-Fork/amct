@@ -80,6 +80,72 @@ def test_npu_kda_dependency_import_error_is_not_suppressed(monkeypatch):
         spec.loader.exec_module(module)
 
 
+def test_embedding_emits_bf16_with_legacy_output_dir_argument(monkeypatch):
+    from amct_pytorch.common.models.llm.kimi.kimi_k3.kimi_k3 import KimiK3
+
+    pipeline = KimiK3.__new__(KimiK3)
+    pipeline.args = SimpleNamespace(device="cpu")
+    pipeline.model = SimpleNamespace(
+        model=SimpleNamespace(
+            embed_tokens=torch.nn.Embedding(4, 2, device="meta"),
+            norm=torch.nn.Linear(2, 2, bias=False, device="meta"),
+            use_attn_residuals=True,
+        ),
+        lm_head=torch.nn.Linear(2, 4, bias=False, device="meta"),
+    )
+    weights = {
+        "language_model.model.embed_tokens.": torch.arange(8).reshape(4, 2).bfloat16(),
+        "language_model.model.norm.": torch.ones(2, 2, dtype=torch.bfloat16),
+        "language_model.lm_head.": torch.ones(4, 2, dtype=torch.bfloat16),
+    }
+    monkeypatch.setattr(pipeline, "load_layer_weight", lambda prefix: {"weight": weights[prefix]})
+
+    outputs = pipeline.do_embedding_forward([torch.tensor([[1, 3]])], "./outputs")
+
+    torch.testing.assert_close(
+        outputs[0], torch.tensor([[[2, 3], [6, 7]]], dtype=torch.bfloat16),
+    )
+    assert pipeline.model.model.embed_tokens.weight.dtype == torch.bfloat16
+    assert pipeline._block_residuals[0].dtype == torch.bfloat16
+
+
+@pytest.mark.parametrize("mode", ["chunk", "decode_dense", "decode_packed"])
+def test_npu_kda_promotes_gate_parameters_to_fp32(monkeypatch, mode):
+    small_kda = _load_small_kda()
+    calls = []
+
+    def kernel(q, k, v, *, A_log, dt_bias, g, beta, **kwargs):
+        assert all(t.dtype == torch.bfloat16 for t in (q, k, v, g, beta))
+        assert A_log.dtype == dt_bias.dtype == torch.float32
+        assert A_log.is_contiguous() and dt_bias.is_contiguous()
+        torch.testing.assert_close(A_log, torch.tensor([1.0, 3.0]))
+        torch.testing.assert_close(dt_bias, torch.tensor([[0.0, 2.0], [4.0, 6.0]]))
+        state = kwargs.get("initial_state", kwargs.get("state"))
+        assert state.dtype == torch.float32
+        calls.append(True)
+        return (v, state) if mode == "chunk" else v
+
+    monkeypatch.setattr(small_kda, "_flash_kda_impl", kernel)
+    monkeypatch.setattr(small_kda, "_recurrent_kda_impl", kernel)
+    q = torch.ones(1, 1, 2, 2, dtype=torch.bfloat16)
+    kwargs = dict(
+        q=q, k=q, v=q, g=q, beta=torch.ones(1, 1, 2, dtype=torch.bfloat16),
+        A_log=torch.arange(1, 5, dtype=torch.bfloat16)[::2],
+        dt_bias=torch.arange(8, dtype=torch.bfloat16)[::2],
+        initial_state=None, output_final_state=True,
+        use_qk_l2norm_in_kernel=True, use_gate_in_kernel=True,
+        use_beta_sigmoid_in_kernel=True, lower_bound=-5.0,
+        transpose_state_layout=True,
+        cu_seqlens=torch.tensor([0, 1]) if mode == "decode_packed" else None,
+    )
+    if mode == "chunk":
+        output, _ = small_kda.chunk_kda(**kwargs, safe_gate=True)
+    else:
+        output, _ = small_kda.fused_recurrent_kda(**kwargs)
+    torch.testing.assert_close(output, q)
+    assert len(calls) == 1
+
+
 def test_short_convolution_split_run_matches_full_run():
     small_kda = _load_small_kda()
     conv = small_kda.KimiShortConvolution(hidden_size=1, kernel_size=3)

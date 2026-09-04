@@ -151,7 +151,11 @@ class KimiK3(BaseModel):
         outs = []
         block_residuals = []
         self.load_embed_state_dict()
-        embed_tokens = self.model.model.embed_tokens.to(self.args.device)
+        # The legacy eval caller passes output_dir as the second argument;
+        # keep BF16 explicit instead of using the dtype argument here.
+        embed_tokens = self.model.model.embed_tokens.to(
+            device=self.args.device, dtype=torch.bfloat16,
+        )
         use_attn_residuals = bool(getattr(self.model.model, "use_attn_residuals", False))
 
         with torch.no_grad():
