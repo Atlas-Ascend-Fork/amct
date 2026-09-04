@@ -18,7 +18,9 @@
 import gc
 import json
 import re
+import time
 from collections import defaultdict
+from contextlib import contextmanager
 from pathlib import Path
 
 import torch
@@ -36,6 +38,47 @@ from amct_pytorch.common.models.llm.kimi.kimi_k3.modeling.configuration_kimi_k3 
     KimiLinearConfig,
 )
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+
+
+# Temporary eval diagnostics; remove after locating the performance bottleneck.
+def _perf_sync(device):
+    device = torch.device(device)
+    if device.type == "npu":
+        torch.npu.synchronize(device)
+    elif device.type == "cuda":
+        torch.cuda.synchronize(device)
+
+
+@contextmanager
+def _perf_stage(name, device):
+    print(f"[PERF] BEGIN {name}", flush=True)
+    _perf_sync(device)
+    start = time.perf_counter()
+    try:
+        yield
+    finally:
+        _perf_sync(device)
+        print(f"[PERF] END {name}: {time.perf_counter() - start:.3f}s", flush=True)
+
+
+def _attach_perf_timer(module, name, device, handles):
+    state = {"count": 0}
+
+    def before(_module, _args):
+        if state["count"] < 2:
+            print(f"[PERF] BEGIN {name} sample={state['count']}", flush=True)
+            _perf_sync(device)
+            state["start"] = time.perf_counter()
+
+    def after(_module, _args, _output):
+        if state["count"] < 2:
+            _perf_sync(device)
+            elapsed = time.perf_counter() - state["start"]
+            print(f"[PERF] END {name} sample={state['count']}: {elapsed:.3f}s", flush=True)
+        state["count"] += 1
+
+    handles.append(module.register_forward_pre_hook(before))
+    handles.append(module.register_forward_hook(after))
 
 
 @MODEL_REGISTRY.register(
@@ -202,7 +245,8 @@ class KimiK3(BaseModel):
     def do_block_forward(self, layer_idx, samples, hook_name=None, use_quant_block=False, enable_quant=False):
         act_stat = {}
         outs, hooks = [], []
-        block = self._build_block_for_forward(layer_idx, use_quant_block=use_quant_block)
+        with _perf_stage(f"layer={layer_idx} build_and_load", self.args.device):
+            block = self._build_block_for_forward(layer_idx, use_quant_block=use_quant_block)
         if use_quant_block:
             from amct_pytorch.common.models.llm.common.quant_apply import (
                 set_model_act_quant_state,
@@ -211,7 +255,20 @@ class KimiK3(BaseModel):
             set_model_weight_quant_state(block, enable_quant)
             set_model_act_quant_state(block, enable_quant)
 
-        block = self._dispatch_block(block).eval()
+        with _perf_stage(f"layer={layer_idx} dispatch", self.args.device):
+            block = self._dispatch_block(block).eval()
+
+        perf_handles = []
+        _attach_perf_timer(block, f"layer={layer_idx} block_forward", self.args.device, perf_handles)
+        _attach_perf_timer(block.self_attn, f"layer={layer_idx} attention", self.args.device, perf_handles)
+        for name in ("q_conv1d", "k_conv1d", "v_conv1d"):
+            module = getattr(block.self_attn, name, None)
+            if module is not None:
+                _attach_perf_timer(module, f"layer={layer_idx} {name}", self.args.device, perf_handles)
+        for name in ("mlp", "block_sparse_moe"):
+            module = getattr(block, name, None)
+            if module is not None:
+                _attach_perf_timer(module, f"layer={layer_idx} {name}", self.args.device, perf_handles)
         if use_quant_block and hook_name is None:
             for mod in block.modules():
                 if isinstance(mod, QuantLinear):
@@ -240,6 +297,8 @@ class KimiK3(BaseModel):
                     out = out[0] if isinstance(out, (tuple, list)) else out
                 outs.append(out.to("cpu"))
 
+        for handle in perf_handles:
+            handle.remove()
         if use_attn_residuals:
             self._block_residuals = next_residuals
 

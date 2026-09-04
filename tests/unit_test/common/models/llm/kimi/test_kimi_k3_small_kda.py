@@ -128,16 +128,17 @@ def test_npu_kda_promotes_gate_parameters_to_fp32(monkeypatch, mode):
     monkeypatch.setattr(small_kda, "_flash_kda_impl", kernel)
     monkeypatch.setattr(small_kda, "_recurrent_kda_impl", kernel)
     q = torch.ones(1, 1, 2, 2, dtype=torch.bfloat16)
-    kwargs = dict(
-        q=q, k=q, v=q, g=q, beta=torch.ones(1, 1, 2, dtype=torch.bfloat16),
-        A_log=torch.arange(1, 5, dtype=torch.bfloat16)[::2],
-        dt_bias=torch.arange(8, dtype=torch.bfloat16)[::2],
-        initial_state=None, output_final_state=True,
-        use_qk_l2norm_in_kernel=True, use_gate_in_kernel=True,
-        use_beta_sigmoid_in_kernel=True, lower_bound=-5.0,
-        transpose_state_layout=True,
-        cu_seqlens=torch.tensor([0, 1]) if mode == "decode_packed" else None,
-    )
+    kwargs = {
+        "q": q, "k": q, "v": q, "g": q,
+        "beta": torch.ones(1, 1, 2, dtype=torch.bfloat16),
+        "A_log": torch.arange(1, 5, dtype=torch.bfloat16)[::2],
+        "dt_bias": torch.arange(8, dtype=torch.bfloat16)[::2],
+        "initial_state": None, "output_final_state": True,
+        "use_qk_l2norm_in_kernel": True, "use_gate_in_kernel": True,
+        "use_beta_sigmoid_in_kernel": True, "lower_bound": -5.0,
+        "transpose_state_layout": True,
+        "cu_seqlens": torch.tensor([0, 1]) if mode == "decode_packed" else None,
+    }
     if mode == "chunk":
         output, _ = small_kda.chunk_kda(**kwargs, safe_gate=True)
     else:
