@@ -30,8 +30,6 @@ from amct_pytorch.quantization.dtypes.hifp_impl import (
 
 @DTYPE_REGISTRY.register(name="hifp", description="quant dequant for hifloat")
 class QuantDequantHifp(torch.nn.Module):
-    extra_config = ()
-
     def __init__(self, bits=8, is_act=False):
         super(QuantDequantHifp, self).__init__()
         self.bits = bits
