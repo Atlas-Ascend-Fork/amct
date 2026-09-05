@@ -1,7 +1,8 @@
 # AMCT 结构化剪枝样例
 
 演示 `amct_pytorch.pruning` 接口在三种域上的调用：dense FFN（剪中间维）/ CNN（剪通道）/
-MoE（剪专家）。样例使用随机初始化的微型模型，纯 CPU 运行，不下载任何权重。
+MoE（剪专家）。目录里既有随机初始化的微型模型演示，也有面向社区任务的 Qwen3.6-35B-A3B
+MoE 剪枝样例。
 
 > 接口详见 [`amct_pytorch/pruning/README.md`](../../../amct_pytorch/pruning/README.md)。
 
@@ -47,3 +48,91 @@ python3 src/run_moe_samples.py     # moe：activation_count vs mass_variance 专
 ```
 
 每个样例打印剪枝前后参数量、削减比例并做一次前向校验。
+
+## 3 社区任务样例：Qwen3.6-35B-A3B MoE 专家剪枝
+
+本节对应 issue 183 的任务 1：`activation_count` + `tolerance`。
+
+### 3.1 运行说明
+
+- 校准集：Pileval，默认 `1` 个样本，`seq_len=512`
+- 评估集：WikiText2 test split，固定 `seq_len=4096`，默认取前 `1` 个 batch 做评测
+- 搜索模式：`tolerance`
+- 输出目录：相对路径占位，脚本会保存剪枝后的模型、`PruneReport` 和运行参数
+- 剪枝在 CPU 上执行，Qwen3.6-35B-A3B 需要充足的主机内存
+- 数据集通过 `datasets` 在线拉取：Pileval 校准集与 WikiText2 test split
+
+运行命令：
+
+```bash
+python3 src/run_qwen3_6_35b_a3b_pruning_activation_count_tolerance.py \
+  --model-path ./path/to/Qwen3.6-35B-A3B \
+  --save-dir ./outputs/qwen3.6_activation_count_tolerance/t0_1 \
+  --tolerance 0.1 \
+  --calib-samples 1 \
+  --calib-seq-len 512 \
+  --eval-batches 1
+
+python3 src/run_qwen3_6_35b_a3b_pruning_activation_count_tolerance.py \
+  --model-path ./path/to/Qwen3.6-35B-A3B \
+  --save-dir ./outputs/qwen3.6_activation_count_tolerance/t0_2 \
+  --tolerance 0.2 \
+  --calib-samples 1 \
+  --calib-seq-len 512 \
+  --eval-batches 1
+
+python3 src/run_qwen3_6_35b_a3b_pruning_activation_count_tolerance.py \
+  --model-path ./path/to/Qwen3.6-35B-A3B \
+  --save-dir ./outputs/qwen3.6_activation_count_tolerance/t0_5 \
+  --tolerance 0.5 \
+  --calib-samples 1 \
+  --calib-seq-len 512 \
+  --eval-batches 1
+```
+
+`--preview-prune-ratio` 只用于 `prune_diagnose()` 的 dry-run，默认 `0.1`。搜索网格使用库内默认值
+`0.1/0.2/0.3/0.4/0.5/0.6/0.7/0.8`；若需要自定义，可额外传 `--ratio-grid`。
+
+如果要把剪枝结果接到 amct 的 eval / quantization 流程，`config.json` 的 VL 结构处理见
+[Qwen3.6-Moe-Pruning.md](../../models/qwen3.6/Qwen3.6-Moe-Pruning.md)。
+
+### 3.2 诊断与报告
+
+脚本启动后会依次打印：
+
+1. 完整运行参数
+2. `prune_diagnose()` 的诊断摘要
+3. 正式剪枝后的 `PruneReport`
+4. baseline / pruned PPL 与参数量变化
+
+`tolerance=0.1` 的实测结果如下：
+
+```text
+[prune-diagnose]
+[prune-diagnose] prunable targets: cnn=0, dense=40, moe=40
+  fixed-ratio prune: available (cut 9.4%, forward OK)
+  acc binary search: available (chosen prune_ratio=0.7)
+
+[PruneReport]
+{
+  "backend": "ModelBackend(name='huggingface')",
+  "params_before": 34660610688,
+  "params_after": 34660610688,
+  "events": [],
+  "budget_unreachable": false,
+  "prunable_fraction": null,
+  "warnings": [
+    "no prune ratio met tolerance 0.100 across 3 candidates; model left unchanged. Relax the tolerance or add a smaller prune ratio to ratio_grid."
+  ],
+  "per_layer_sparsity": {},
+  "allocation_choice": null
+}
+```
+
+### 3.3 结果表
+
+| 模型 | 方法 | 实验设置 | 基线 PPL | 剪枝后 PPL | 后处理 PPL | 参数量（前 → 后） | 参数削减率 | 剪枝时长（min） |
+| --- | --- | --- | ---: | ---: | ---: | --- | ---: | ---: |
+| Qwen3.6-35B-A3B | `activation_count` | `tolerance=0.1` | 5.405949 | 5.405949 | N/A | 34660610688 -> 34660610688 | 0.00% | 4.94 |
+| Qwen3.6-35B-A3B | `activation_count` | `tolerance=0.2` | 5.405949 | 5.405949 | N/A | 34660610688 -> 34660610688 | 0.00% | 2.54 |
+| Qwen3.6-35B-A3B | `activation_count` | `tolerance=0.5` | 5.405949 | 5.754602 | N/A | 34660610688 -> 31386923648 | 9.44% | 2.80 |
