@@ -170,9 +170,9 @@ def count_params(m):
 def _disable_torchaudio_for_transformers():
     """Make transformers treat torchaudio as unavailable in this process.
 
-    The local environment ships a broken torchaudio build whose import crashes
-    while transformers is importing RNNT losses. Qwen3.6 does not need
-    torchaudio, so we mask it out instead of touching the system package.
+    Some environments ship a torchaudio build whose import crashes while
+    transformers is importing RNNT losses. Qwen3.6 does not need torchaudio,
+    so we mask it out instead of touching the system package.
     """
 
     if getattr(importlib.util.find_spec, "_amct_torchaudio_patched", False):
@@ -189,7 +189,12 @@ def _disable_torchaudio_for_transformers():
     importlib.util.find_spec = _find_spec
 
 
-def load_qwen36_moe(model_path, torch_dtype=torch.bfloat16, trust_remote_code=True):
+def load_qwen36_moe(
+    model_path,
+    torch_dtype=torch.bfloat16,
+    trust_remote_code=True,
+    device_map=None,
+):
     _disable_torchaudio_for_transformers()
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -201,6 +206,7 @@ def load_qwen36_moe(model_path, torch_dtype=torch.bfloat16, trust_remote_code=Tr
         torch_dtype=torch_dtype,
         trust_remote_code=trust_remote_code,
         low_cpu_mem_usage=True,
+        device_map=device_map,
     ).eval()
     return model, tokenizer
 

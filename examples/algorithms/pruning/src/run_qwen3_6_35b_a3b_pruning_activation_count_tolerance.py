@@ -30,9 +30,15 @@ from __future__ import annotations
 
 import argparse
 import copy
+import gc
 import json
+import os
+import shlex
+import sys
 import time
 from pathlib import Path
+
+import torch_npu
 
 from utils import (
     NegativePplEvaluator,
@@ -47,8 +53,8 @@ from utils import (
 
 _disable_torchaudio_for_transformers()
 
-import amct_pytorch as amct
-from amct_pytorch.pruning import PruneReport, prune_diagnose
+import amct_pytorch as amct  # noqa: E402  (must import after the torchaudio patch)
+from amct_pytorch.pruning import PruneReport, prune_diagnose  # noqa: E402
 
 
 def _parse_ratio(text):
@@ -68,13 +74,17 @@ def _runtime_args(args):
         "model_path": args.model_path,
         "save_dir": args.save_dir,
         "save_model": args.save_model,
+        "device_map": args.device_map,
+        "device": args.device,
         "tolerance": args.tolerance,
         "preview_prune_ratio": args.preview_prune_ratio,
         "calib_samples": args.calib_samples,
         "calib_seq_len": args.calib_seq_len,
-        "eval_batches": args.eval_batches,
+        "eval_batches": args.eval_batches if args.eval_batches is not None else "all",
         "seq_len": args.seq_len,
-        "ratio_grid": args.ratio_grid if args.ratio_grid is not None else "builtin_default",
+        "ratio_grid": args.ratio_grid
+        if args.ratio_grid is not None
+        else "builtin_default",
     }
 
 
@@ -88,6 +98,33 @@ def _prune_cfg():
         },
         "missing_data_policy": "warn_skip",
     }
+
+
+def dump_repro_metadata(save_dir):
+    """Persist the exact invocation and accelerator-related environment."""
+    save_dir = Path(save_dir)
+    save_dir.mkdir(parents=True, exist_ok=True)
+    (save_dir / "run_command.txt").write_text(
+        shlex.join([sys.executable, *sys.argv]) + "\n"
+    )
+    env_keys = (
+        "PYTHONPATH",
+        "PATH",
+        "ASCEND_VISIBLE_DEVICES",
+        "NPU_VISIBLE_DEVICES",
+        "NPU-VISIBLE-DEVICES",
+        "ASCEND_TOOLKIT_HOME",
+        "ASCEND_HOME_PATH",
+        "ASCEND_OPP_PATH",
+        "ASCEND_RUNTIME_OPTIONS",
+        "LD_LIBRARY_PATH",
+        "HF_DATASETS_OFFLINE",
+        "TRANSFORMERS_OFFLINE",
+    )
+    env = {key: os.environ[key] for key in env_keys if key in os.environ}
+    (save_dir / "run_environment.txt").write_text(
+        json.dumps(env, ensure_ascii=False, indent=2) + "\n"
+    )
 
 
 def parse_args():
@@ -108,6 +145,17 @@ def parse_args():
         "--save-model",
         action="store_true",
         help="Save the pruned model/tokenizer shards in save_dir",
+    )
+    parser.add_argument(
+        "--device-map",
+        default="auto",
+        choices=("auto", "single"),
+        help="Model placement mode; auto shards across visible NPU cards, single keeps one device",
+    )
+    parser.add_argument(
+        "--device",
+        default="npu:0",
+        help="Single-device fallback, or the first input device when device_map=auto",
     )
     parser.add_argument(
         "--tolerance",
@@ -142,8 +190,8 @@ def parse_args():
     parser.add_argument(
         "--eval-batches",
         type=int,
-        default=1,
-        help="Number of WikiText2 4096-token batches to evaluate",
+        default=None,
+        help="Optional cap on WikiText2 4096-token batches; omit to use the full test split",
     )
     parser.add_argument(
         "--ratio-grid",
@@ -158,17 +206,27 @@ def main():
     args = parse_args()
     print("[qwen3.6.activation_count.tolerance] runtime args:")
     print(json.dumps(_runtime_args(args), ensure_ascii=False, indent=2))
+    save_dir = Path(args.save_dir)
+    dump_repro_metadata(save_dir)
 
-    model, tokenizer = load_qwen36_moe(args.model_path)
+    model, tokenizer = load_qwen36_moe(
+        args.model_path, device_map="auto" if args.device_map == "auto" else None
+    )
+    runtime_device = str(next(model.parameters()).device)
+    if args.device_map == "single":
+        model = model.to(args.device)
+        runtime_device = args.device
     calib_batches = build_pileval_batches(
         tokenizer, n_samples=args.calib_samples, seq_len=args.calib_seq_len
     )
     eval_batches = build_wikitext2_batches(tokenizer, seq_len=args.seq_len)
     eval_batches = eval_batches[: args.eval_batches]
 
-    print(f"[qwen3.6.activation_count.tolerance] parameters before: {count_params(model):,}")
+    print(
+        f"[qwen3.6.activation_count.tolerance] parameters before: {count_params(model):,}"
+    )
     baseline_ppl = eval_wikitext2_ppl(
-        model, eval_batches, seq_len=args.seq_len, device="cpu"
+        model, eval_batches, seq_len=args.seq_len, device=runtime_device
     )
     print(f"[qwen3.6.activation_count.tolerance] baseline ppl: {baseline_ppl:.6f}")
 
@@ -184,13 +242,20 @@ def main():
     diagnose_summary = diagnose.summary()
     print(diagnose_summary)
 
+    # Release leftovers of the diagnose dry-run (a failed full-model copy can
+    # leave cyclic garbage alive on a 2-card 35B deployment) before searching.
+    gc.collect()
+    if torch_npu.npu.is_available():
+        torch_npu.npu.empty_cache()
+
     report = PruneReport()
-    eval_metric = NegativePplEvaluator(eval_batches, seq_len=args.seq_len, device="cpu")
+    eval_metric = NegativePplEvaluator(
+        eval_batches, seq_len=args.seq_len, device=runtime_device
+    )
     prune_kwargs = {
         "data": calib_batches,
         "tolerance": args.tolerance,
         "evaluator": eval_metric,
-        "eval_data": eval_batches,
         "report": report,
     }
     if args.ratio_grid is not None:
@@ -200,7 +265,7 @@ def main():
     prune_seconds = time.perf_counter() - prune_t0
 
     pruned_ppl = eval_wikitext2_ppl(
-        model, eval_batches, seq_len=args.seq_len, device="cpu"
+        model, eval_batches, seq_len=args.seq_len, device=runtime_device
     )
     print("[qwen3.6.activation_count.tolerance] PruneReport:")
     print(json.dumps(report.as_dict(), ensure_ascii=False, indent=2))
@@ -216,7 +281,6 @@ def main():
         f"[qwen3.6.activation_count.tolerance] prune time: {prune_seconds / 60:.2f} min"
     )
 
-    save_dir = Path(args.save_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
     if args.save_model:
         try:
@@ -240,13 +304,19 @@ def main():
             "param_cut_ratio": 1 - report.params_after / report.params_before,
             "prune_time_seconds": prune_seconds,
             "prune_time_minutes": prune_seconds / 60,
+            "device_map": args.device_map,
+            "device": runtime_device,
             "tolerance": args.tolerance,
             "preview_prune_ratio": args.preview_prune_ratio,
             "calib_samples": args.calib_samples,
             "calib_seq_len": args.calib_seq_len,
-            "eval_batches": args.eval_batches,
+            "eval_batches": args.eval_batches
+            if args.eval_batches is not None
+            else "all",
             "seq_len": args.seq_len,
-            "ratio_grid": args.ratio_grid if args.ratio_grid is not None else "builtin_default",
+            "ratio_grid": args.ratio_grid
+            if args.ratio_grid is not None
+            else "builtin_default",
         },
     )
     print(f"[qwen3.6.activation_count.tolerance] saved to {save_dir}")
