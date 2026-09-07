@@ -95,8 +95,30 @@ def load_vlm(model_path):
         pth_path = os.path.join(model_path, "model.pth")
     print(f"Loading quantized VLM from {pth_path}")
     model = torch.load(pth_path, map_location="cpu", weights_only=False)
+    # eager attention avoids sdpa, which torch_npu redispatches to
+    # npu_fusion_attention_v3 (no AscendIR converter in torchair yet);
+    # applies to CLIP vision tower and multimodal LLM backbones alike
+    for cfg_name in ("config", "text_config", "vision_config"):
+        cfg = getattr(model, cfg_name, None)
+        if cfg is not None:
+            cfg._attn_implementation = "eager"
     processor = AutoProcessor.from_pretrained(model_path)
     return model, processor
+
+
+class CLIPImageFeaturesModule(torch.nn.Module):
+    """Wrap ``CLIPModel.get_image_features`` as a callable nn.Module so that
+    ``dynamo_export`` traces only the vision tower with a single
+    ``pixel_values`` input (CLIPModel.forward itself requires both
+    ``input_ids`` and ``pixel_values`` and is not what downstream image
+    embedding inference wants)."""
+
+    def __init__(self, clip_model):
+        super().__init__()
+        self.clip = clip_model
+
+    def forward(self, pixel_values):
+        return self.clip.get_image_features(pixel_values=pixel_values)
 
 
 def to_npu(model):
@@ -164,26 +186,29 @@ def build_vlm_input(model, processor, image_path, prompt, batch_size, dtype,
                     device):
     """Build the VLM export inputs by preprocessing one real image.
 
-    - CLIP (image-only): returns a tuple with a single [bs, 3, H, W] tensor.
+    - CLIP (image-only): the model is wrapped in CLIPImageFeaturesModule so
+      only the vision tower is traced; returns (wrapped_model, (tensor,)).
     - Multimodal (Qwen2-VL / LLaVA ...): processor(text, images) produces
       multiple tensors (input_ids, attention_mask, pixel_values, ...); they
       are ordered after ``model.forward``'s signature and all moved to NPU.
+      Returns (model, tensors).
 
-    Returns a tuple of tensors to be splatted into ``tng.dynamo_export``.
+    Returns (model, tuple_of_tensors); the model may be replaced by a wrapper.
     """
     from PIL import Image
 
     image = Image.open(image_path).convert("RGB")
 
     if _detect_vlm_kind(model) == "clip":
+        model = CLIPImageFeaturesModule(model)
         inputs = processor(images=image, return_tensors="pt")
         pixel_values = inputs["pixel_values"]
         if batch_size > 1:
             pixel_values = pixel_values.repeat(batch_size, 1, 1, 1)
         export_input = (pixel_values.to(dtype).to(device),)
-        print(f"VLM(clip) export input: "
+        print(f"VLM(clip image tower) export input: "
               f"{[(tuple(t.shape), str(t.dtype)) for t in export_input]}")
-        return export_input
+        return model, export_input
 
     # text + image multimodal VLMs
     text = prompt if prompt is not None else "Describe this image."
@@ -201,7 +226,7 @@ def build_vlm_input(model, processor, image_path, prompt, batch_size, dtype,
     print(f"VLM(multimodal) export input keys (in forward order): {ordered_keys}")
     print(f"VLM(multimodal) export input: "
           f"{[(tuple(t.shape), str(t.dtype)) for t in export_input]}")
-    return export_input
+    return model, export_input
 
 
 def _patch_weight_subdir():
@@ -333,9 +358,9 @@ def main():
         model, processor = load_vlm(args.model_path)
         model = to_npu(model.eval())
         device = next(model.parameters()).device
-        export_inputs = build_vlm_input(model, processor, args.image_path,
-                                         args.prompt, args.batch_size, dtype,
-                                         device)
+        model, export_inputs = build_vlm_input(model, processor,
+                                                args.image_path, args.prompt,
+                                                args.batch_size, dtype, device)
 
     export_torchair_air(model, export_inputs, args.output_dir, export_name)
 
