@@ -35,9 +35,18 @@ from amct_pytorch.common.models.llm.common.ptq_params import (
     PtqParamHandler,
     PtqParamStore,
 )
+from amct_pytorch.common.models.llm.common.ptq_units import (
+    iter_indexed_units,
+    make_ptq_unit,
+)
+from amct_pytorch.common.models.llm.common.quant_apply import build_no_algo_args
 from amct_pytorch.common.models.llm.kimi.kimi_k3.modeling.configuration_kimi_k3 import (
     KimiK3Config,
     KimiLinearConfig,
+)
+from amct_pytorch.common.models.llm.kimi.kimi_k3.quant_module import (
+    QuantKimiMLP,
+    quantize_kimi_attention,
 )
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
@@ -398,6 +407,56 @@ class KimiK3(BaseModel):
                     raise RuntimeError("Kimi K3 self_attn.A_log contains non-zero padding")
                 tensor = tensor[:num_heads].contiguous()
         return tensor
+
+    def build_quant_block(self, layer_idx):
+        decoder_layer = self.block(layer_idx)
+        if "attn-linear" in self.quant_target:
+            decoder_layer.self_attn = quantize_kimi_attention(
+                self.args, decoder_layer.self_attn,
+            )
+
+        if "mlp" in self.quant_target and hasattr(decoder_layer, "mlp"):
+            decoder_layer.mlp = QuantKimiMLP(
+                self.args, decoder_layer.mlp, group="mlp",
+            )
+
+        if "moe" in self.quant_target and hasattr(decoder_layer, "block_sparse_moe"):
+            moe = decoder_layer.block_sparse_moe
+            for expert_idx, expert in enumerate(moe.experts):
+                if expert is not None and not isinstance(expert, QuantKimiMLP):
+                    moe.experts[expert_idx] = QuantKimiMLP(
+                        self.args, expert, group="moe.routed",
+                    )
+            shared_experts = getattr(moe, "shared_experts", None)
+            if shared_experts is not None and not isinstance(shared_experts, QuantKimiMLP):
+                moe.shared_experts = QuantKimiMLP(
+                    build_no_algo_args(self.args),
+                    shared_experts,
+                    group="moe.shared",
+                )
+        return decoder_layer
+
+    def iter_ptq_units(self, layer_idx, block):
+        if "attn-linear" in self.quant_target:
+            yield make_ptq_unit(
+                "attn", "self_attn", layer_idx, getattr(block, "self_attn", None),
+            )
+
+        if "mlp" in self.quant_target:
+            mlp = getattr(block, "mlp", None)
+            if mlp is not None:
+                yield make_ptq_unit("mlp", "mlp", layer_idx, mlp)
+
+        if "moe" in self.quant_target:
+            moe = getattr(block, "block_sparse_moe", None)
+            experts = getattr(moe, "experts", []) if moe is not None else []
+            yield from iter_indexed_units(
+                kind="moe",
+                name_prefix="expert",
+                layer_idx=layer_idx,
+                items=experts,
+                metadata_fn=lambda expert_idx, _: {"expert_idx": expert_idx},
+            )
 
     def get_scale_name(self, weight_name):
         if weight_name.endswith(".weight_packed"):
