@@ -2,9 +2,9 @@
 
 # AMCT
 
-**Ascend Model Compression Toolkit**
+English | [简体中文](./README.md)
 
-_Ascend NPU Native Model Compression Toolkit_
+**Ascend Model Compression Toolkit**
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![CANN](https://img.shields.io/badge/CANN-%E2%89%A58.5.0-green.svg)](docs/zh/quick_install.md)

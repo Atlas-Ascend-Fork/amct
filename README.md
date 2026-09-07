@@ -2,9 +2,9 @@
 
 # AMCT
 
-**Ascend Model Compression Toolkit**
+简体中文 | [English](./README_en.md)
 
-_昇腾 NPU 原生模型压缩工具包_
+_昇腾模型压缩工具_
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![CANN](https://img.shields.io/badge/CANN-%E2%89%A58.5.0-green.svg)](docs/zh/quick_install.md)
