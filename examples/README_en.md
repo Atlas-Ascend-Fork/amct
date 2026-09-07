@@ -1,5 +1,7 @@
 # Introduction
 
+English | [简体中文](./README.md)
+
 This project provides calling samples for different scenarios. After setting up the environment, you can try to run them according to actual scenarios:
 
 | Sample | Algorithm | Description |

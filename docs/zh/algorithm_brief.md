@@ -210,9 +210,11 @@ OFMR（Output FeatureMap Reconstruct）算法在某个数据分布下，通过�
 **图 1**  OFMR算法原理<a name="fig1393075517419"></a>  
 ![](./figures/OFMRquant.png "OFMR算法原理")
 
-### OmniQuant
+### LET
 
-OmniQuant是面向LLM的轻量级、可微分训练后量化算法，核心是风格结构变换，学习通道缩放：在可学习裁剪外加入通道缩放类结构变换，增强低比特W/A量化精度。
+LET（Learnable Equivalent Transformation，可学习等价变换）是面向LLM训练后量化的可微分结构变换技术：为每个通道学习缩放因子，校准阶段以激活幅值初始化，随后通过分块优化最小化重建误差，将激活的量化难度等价迁移至权重侧，增强低比特W/A量化精度。
+
+说明：LET 源自 OmniQuant 论文，论文完整方法为 LWC 与 LET 联合训练。如需复现论文完整的 OmniQuant 效果，请组合使用 `--algos let lwc`。
 
 算法详细介绍请参见： [OmniQuant: Omnidirectionally Calibrated Quantization for Large Language Models](https://arxiv.org/abs/2308.13137) 。
 
