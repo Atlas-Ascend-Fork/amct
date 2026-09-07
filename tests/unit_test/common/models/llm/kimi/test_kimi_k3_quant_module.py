@@ -18,6 +18,7 @@
 
 from types import SimpleNamespace
 
+import pytest
 import torch
 import torch.nn as nn
 
@@ -79,6 +80,19 @@ class _Attention(nn.Module):
 
     def forward(self, x):
         return self.o_proj(self.q_proj(x))
+
+
+class _MoeBlock(nn.Module):
+    def __init__(self, num_experts):
+        super().__init__()
+        self.self_attn = nn.Linear(2, 2, bias=False)
+        self.input_layernorm = nn.Identity()
+        self.block_sparse_moe = nn.Module()
+        self.block_sparse_moe.gate = nn.Linear(2, num_experts, bias=False)
+        self.block_sparse_moe.shared_experts = nn.Linear(2, 2, bias=False)
+        self.block_sparse_moe.experts = nn.ModuleList(
+            [nn.Linear(2, 2, bias=False) for _ in range(num_experts)]
+        )
 
 
 def _args(target):
@@ -191,3 +205,101 @@ def test_kimi_adapter_builds_dense_and_moe_targets_without_cross_wrapping():
         ("moe", "expert_1"),
     ]
 
+
+@pytest.mark.parametrize("n_npu", [4, 8])
+def test_kimi_device_map_evenly_distributes_all_routed_experts(monkeypatch, n_npu):
+    from amct_pytorch.common.models.llm.kimi.kimi_k3.kimi_k3 import KimiK3
+
+    monkeypatch.setattr(
+        torch, "npu", SimpleNamespace(device_count=lambda: n_npu), raising=False,
+    )
+    pipeline = KimiK3.__new__(KimiK3)
+    pipeline.args = SimpleNamespace(device="npu:0")
+
+    device_map = pipeline._build_block_device_map(_MoeBlock(896))
+
+    assert device_map[""] == "npu:0"
+    counts = [0] * n_npu
+    for expert_idx in range(896):
+        device = device_map[f"block_sparse_moe.experts.{expert_idx}"]
+        counts[int(device.split(":")[1])] += 1
+    assert counts == [896 // n_npu] * n_npu
+    assert pipeline._resolve_param_device(
+        "self_attn.weight", device_map,
+    ) == "npu:0"
+    assert pipeline._resolve_param_device(
+        "block_sparse_moe.shared_experts.weight", device_map,
+    ) == "npu:0"
+
+
+def test_kimi_single_npu_keeps_existing_dispatch(monkeypatch):
+    from amct_pytorch.common.models.llm.kimi.kimi_k3.kimi_k3 import KimiK3
+
+    monkeypatch.setattr(
+        torch, "npu", SimpleNamespace(device_count=lambda: 1), raising=False,
+    )
+    pipeline = KimiK3.__new__(KimiK3)
+    pipeline.args = SimpleNamespace(device="npu:0")
+
+    assert pipeline._build_block_device_map(_MoeBlock(8)) is None
+
+
+def test_kimi_multi_npu_dispatch_pins_experts_and_returns_outputs_to_root(monkeypatch):
+    from amct_pytorch.common.models.llm.kimi.kimi_k3.kimi_k3 import KimiK3
+
+    monkeypatch.setattr(
+        torch, "npu", SimpleNamespace(device_count=lambda: 4), raising=False,
+    )
+    pipeline = KimiK3.__new__(KimiK3)
+    pipeline.args = SimpleNamespace(device="npu:0")
+    block = _MoeBlock(8)
+
+    result = pipeline._dispatch_block(block)
+
+    assert result is block
+    assert block._hf_hook.execution_device == "npu:0"
+    for expert_idx, expert in enumerate(block.block_sparse_moe.experts):
+        assert expert._hf_hook.execution_device == f"npu:{expert_idx % 4}"
+        assert expert._hf_hook.io_same_device is True
+
+
+def test_kimi_dispatch_places_quant_wrappers_on_their_owner_devices(monkeypatch):
+    from amct_pytorch.common.models.llm.kimi.kimi_k3.kimi_k3 import KimiK3
+    from amct_pytorch.common.models.llm.kimi.kimi_k3.quant_module import (
+        QuantKimiLinear,
+        QuantKimiMLP,
+        quantize_kimi_attention,
+    )
+
+    monkeypatch.setattr(
+        torch, "npu", SimpleNamespace(device_count=lambda: 4), raising=False,
+    )
+    pipeline = KimiK3.__new__(KimiK3)
+    pipeline.args = _args(["attn-linear", "moe"])
+    pipeline.args.device = "npu:0"
+    block = nn.Module()
+    block.self_attn = quantize_kimi_attention(pipeline.args, _Attention())
+    block.block_sparse_moe = nn.Module()
+    block.block_sparse_moe.experts = nn.ModuleList(
+        [QuantKimiMLP(pipeline.args, _Expert(), group="moe.routed") for _ in range(4)]
+    )
+    block.block_sparse_moe.shared_experts = QuantKimiMLP(
+        pipeline.args, _DenseMLP(), group="moe.shared",
+    )
+    placements = {}
+
+    def record_placement(module, device):
+        placements[id(module)] = device
+        return module
+
+    monkeypatch.setattr(QuantKimiMLP, "to", record_placement)
+    monkeypatch.setattr(QuantKimiLinear, "to", record_placement)
+
+    pipeline._dispatch_block(block)
+
+    assert placements[id(block.block_sparse_moe.shared_experts)] == "npu:0"
+    for expert_idx, expert in enumerate(block.block_sparse_moe.experts):
+        assert placements[id(expert)] == f"npu:{expert_idx}"
+    for module in block.self_attn.modules():
+        if isinstance(module, QuantKimiLinear):
+            assert placements[id(module)] == "npu:0"

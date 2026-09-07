@@ -23,6 +23,7 @@ from pathlib import Path
 
 import torch
 from accelerate import init_empty_weights
+from accelerate.hooks import AlignDevicesHook, add_hook_to_module
 from accelerate.utils import set_module_tensor_to_device
 from safetensors import safe_open
 from tqdm import tqdm
@@ -45,10 +46,18 @@ from amct_pytorch.common.models.llm.kimi.kimi_k3.modeling.configuration_kimi_k3 
     KimiLinearConfig,
 )
 from amct_pytorch.common.models.llm.kimi.kimi_k3.quant_module import (
+    QuantKimiLinear,
     QuantKimiMLP,
     quantize_kimi_attention,
 )
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+
+
+class _NoMoveAlignDevicesHook(AlignDevicesHook):
+    """Move module inputs/outputs without relocating pre-sharded weights."""
+
+    def init_hook(self, module):
+        return module
 
 
 @MODEL_REGISTRY.register(
@@ -118,6 +127,35 @@ class KimiK3(BaseModel):
     def _is_kimi_moe_weight_packed(weight_name: str) -> bool:
         return bool(KimiK3._MOE_WEIGHT_RE.match(weight_name))
 
+    @staticmethod
+    def _resolve_param_device(local_name, device_map):
+        best_path = None
+        for path in device_map:
+            if path and (local_name == path or local_name.startswith(path + ".")):
+                if best_path is None or len(path) > len(best_path):
+                    best_path = path
+        if best_path is not None:
+            return device_map[best_path]
+        return device_map.get("", "cpu")
+
+    @staticmethod
+    def _retag_descendant_hooks(root, device_map):
+        sorted_entries = sorted(
+            ((path, device) for path, device in device_map.items() if path),
+            key=lambda item: item[0].count("."),
+        )
+        for path, device in sorted_entries:
+            target = root
+            for part in path.split("."):
+                target = getattr(target, part)
+            for submodule in target.modules():
+                hook = getattr(submodule, "_hf_hook", None)
+                if hook is None:
+                    continue
+                hook.execution_device = device
+                if submodule is target:
+                    hook.io_same_device = True
+
     def _load_weight_map(self):
         if self._weight_map is not None:
             return self._weight_map
@@ -137,14 +175,20 @@ class KimiK3(BaseModel):
         return super().block(layer_idx)
 
     def _block_sharded(self, layer_idx):
-        """Build on meta and stream a floating checkpoint onto one device.
+        """Build on meta and stream a floating checkpoint onto target NPUs.
 
         Unlike CPU staging, this never holds a full layer state_dict or a
-        randomly initialized CPU copy of all experts. Buffers stay real during
-        construction so non-persistent derived values can be preserved.
+        randomly initialized CPU copy of all experts. Routed experts are
+        evenly distributed across visible NPUs; all other modules stay on the
+        root device. Buffers stay real during construction so non-persistent
+        derived values can be preserved.
         """
         with init_empty_weights(include_buffers=False):
             block = self.cls(self.config, layer_idx)
+
+        device_map = self._build_block_device_map(block)
+        if device_map is None:
+            device_map = {"": str(self.args.device)}
 
         prefix = self.get_layer_weight_prefix(layer_idx)
         # state_dict includes persistent buffers but excludes derived buffers.
@@ -186,10 +230,11 @@ class KimiK3(BaseModel):
                             raise RuntimeError(f"Layer {layer_idx}: {full_name} must be a floating tensor")
                         dtype = torch.bfloat16
                     tensor = tensor.to(dtype=dtype)
+                    target_device = self._resolve_param_device(local_name, device_map)
                     # Explicit dtype is essential: meta parameters default to
                     # FP32 and Accelerate otherwise casts the value back to it.
                     set_module_tensor_to_device(
-                        block, local_name, self.args.device, value=tensor, dtype=dtype,
+                        block, local_name, target_device, value=tensor, dtype=dtype,
                     )
                     del tensor
 
@@ -202,8 +247,55 @@ class KimiK3(BaseModel):
         # Includes non-persistent buffers initialized outside meta above.
         for name, buffer in list(block.named_buffers()):
             dtype = torch.bfloat16 if buffer.is_floating_point() else buffer.dtype
-            set_module_tensor_to_device(block, name, self.args.device, value=buffer, dtype=dtype)
+            target_device = self._resolve_param_device(name, device_map)
+            set_module_tensor_to_device(
+                block, name, target_device, value=buffer, dtype=dtype,
+            )
         return block.eval()
+
+    def _build_block_device_map(self, block):
+        """Keep non-expert modules on the root and shard routed experts."""
+        n_npu = max(1, int(torch.npu.device_count()))
+        moe = getattr(block, "block_sparse_moe", None)
+        experts = getattr(moe, "experts", None) if moe is not None else None
+        if n_npu <= 1 or experts is None or len(experts) == 0:
+            return None
+
+        device_map = {"": str(self.args.device)}
+        for expert_idx in range(len(experts)):
+            device_map[
+                f"block_sparse_moe.experts.{expert_idx}"
+            ] = f"npu:{expert_idx % n_npu}"
+        return device_map
+
+    def _dispatch_block(self, module):
+        device_map = self._build_block_device_map(module)
+        if device_map is None:
+            return super()._dispatch_block(module)
+
+        # Quant wrappers are created after the sharded checkpoint load. Move
+        # their newly created quantizers/algorithm state to the same device as
+        # the wrapped projection without ever moving the whole MoE container.
+        for name, submodule in module.named_modules():
+            if isinstance(submodule, (QuantKimiMLP, QuantKimiLinear)):
+                device = self._resolve_param_device(name, device_map)
+                submodule.to(device)
+
+        for path, device in sorted(
+            device_map.items(), key=lambda item: item[0].count("."),
+        ):
+            target = module
+            if path:
+                for part in path.split("."):
+                    target = getattr(target, part)
+            hook = _NoMoveAlignDevicesHook(
+                execution_device=device,
+                io_same_device=(path == ""),
+                place_submodules=True,
+            )
+            add_hook_to_module(target, hook)
+        self._retag_descendant_hooks(module, device_map)
+        return module
 
     def _embed_base_prefix(self) -> str:
         return "language_model.model."

@@ -161,6 +161,30 @@ def test_direct_load_routes_every_tensor_to_args_device(tmp_path, monkeypatch):
     assert set(transfers) == expected_names
 
 
+def test_direct_load_shards_expert_weights_across_visible_npus(tmp_path, monkeypatch):
+    from amct_pytorch.common.models.llm.kimi.kimi_k3 import kimi_k3 as adapter
+
+    pipeline = make_checkpoint(tmp_path)
+    pipeline.args.device = "npu:0"
+    monkeypatch.setattr(
+        torch, "npu", SimpleNamespace(device_count=lambda: 2), raising=False,
+    )
+    real_set_tensor = adapter.set_module_tensor_to_device
+    transfers = {}
+
+    def cpu_transport(module, name, device, *, value, dtype):
+        transfers[name] = device
+        real_set_tensor(module, name, "cpu", value=value, dtype=dtype)
+
+    monkeypatch.setattr(adapter, "set_module_tensor_to_device", cpu_transport)
+    pipeline.block(1)
+
+    assert transfers["block_sparse_moe.experts.0.w1.weight"] == "npu:0"
+    assert transfers["block_sparse_moe.experts.1.w1.weight"] == "npu:1"
+    assert transfers["self_attn.A_log"] == "npu:0"
+    assert transfers["counter"] == "npu:0"
+
+
 @pytest.mark.parametrize("layer_idx", [0, 1, 2])
 def test_real_kimi_dense_moe_and_mla_weights_match_cpu_loading(tmp_path, monkeypatch, layer_idx):
     # Only external NPU kernels are unavailable here; construct the real K3 modules.
