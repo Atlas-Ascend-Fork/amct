@@ -231,12 +231,28 @@ def iter_model_logits(model, batches, device="cpu"):
 
 
 def eval_wikitext2_ppl(model, batches, seq_len=4096, device="cpu"):
+    """Evaluate WikiText2 PPL on the device where logits actually land.
+
+    ``device`` is where model inputs are placed. For accelerate-dispatched
+    models outputs come back on the same device, but for sharded models
+    without dispatch hooks logits may stay on the lm_head device; the first
+    logits chunk is probed and the evaluation then runs on that device.
+    """
     from amct_pytorch.common.evaluate.eval_ppl import wikitext2_ppl
 
+    logits_iter = iter_model_logits(model, batches, device=device)
+    first = next(logits_iter, None)
+
+    def _chained():
+        if first is not None:
+            yield first
+        yield from logits_iter
+
+    eval_device = str(first.device) if first is not None else device
     return wikitext2_ppl(
-        iter_model_logits(model, batches, device=device),
+        _chained(),
         batches,
-        device=device,
+        device=eval_device,
         seq_len=seq_len,
     )
 
