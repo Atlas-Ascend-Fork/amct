@@ -26,6 +26,7 @@ from amct_pytorch.quantization.dtypes.fp_impl import (
     pack_uint4,
     quantize_elewise,
     shared_exponents,
+    weight_dequant,
 )
 
 BLOCK_SIZE_ROW = 128
@@ -94,20 +95,17 @@ class QuantDequantFP(torch.nn.Module):
 
     def dequantize_fp_block(self, x, scale, fp8_min=-448.0, fp8_max=448.0):
         ori_shape = x.shape
-        N = x.shape[-1]
-        x = x.reshape(-1, N)
-        M, N = x.shape
-
-        W_blocks, pad_shape = self.reshape_block(x)
-        Mp, Np = pad_shape
-
-        W_dequant = W_blocks * scale
-        W_dequant = W_dequant.permute(0, 2, 1, 3).reshape(Mp, Np)
-        W_dequant = W_dequant[:M, :N]
-
-        W_dequant = W_dequant.reshape(ori_shape)
-
-        return W_dequant
+        x = x.reshape(-1, ori_shape[-1])
+        scale = scale.reshape(scale.shape[0], scale.shape[1])
+        if self.block_size_col == BLOCK_SIZE_ROW:
+            out = weight_dequant(x, scale, block_size=BLOCK_SIZE_ROW)
+        else:
+            # block_size_col == 1 -> 128x1 blocks; transpose so weight_dequant's
+            # is_mx path repeats the 128-grouping along the columns.
+            out = weight_dequant(
+                x.t(), scale.t(), block_size=BLOCK_SIZE_ROW, is_mx=True
+            ).t()
+        return out.reshape(ori_shape)
 
     def deploy(self, x: Tensor, qdim: int = -1, v: Tensor | float = 0.0):
         scale, ex_mx = self.quant(x, qdim, v=v)
