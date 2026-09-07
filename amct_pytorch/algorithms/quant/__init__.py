@@ -38,7 +38,7 @@ def register_algorithms():
     # Import algorithms for registration side effects.
     from .auto_clip import LAC, LWC  # noqa: F401
     from .auto_round import AutoRound  # noqa: F401
-    from .omniquant import OmniQuant  # noqa: F401
+    from .let import LET  # noqa: F401
     from .flatquant import FlatQuant  # noqa: F401
     from .gptq import GPTQ  # noqa: F401
 
