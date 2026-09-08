@@ -27,14 +27,16 @@ Usage:
     python3 src/export_torchair_sample.py --model_path /path/to/quantized_llm \
         --seqlen 2048
 
-    # VLM (CLIP-ViT like, image-only input):
+    # VLM (CLIP-ViT like, image-only input), image_path can be an image file
+    # or a directory containing one/multiple images:
     python3 src/export_torchair_sample.py --model_type vlm \
         --model_path /path/to/quantized_clip --image_path /path/to/img.jpg
 
-    # VLM (Qwen2-VL/Qwen2.5-VL/LLaVA like, text+image input):
     python3 src/export_torchair_sample.py --model_type vlm \
-        --model_path /path/to/quantized_qwen2vl --image_path /path/to/img.jpg \
-        --prompt "Describe this image."
+        --model_path /path/to/quantized_clip --image_path /path/to/img_dir
+
+Note: this script only supports image-only VLM models (e.g. CLIP); text+image
+multimodal VLMs (Qwen2-VL / Qwen2.5-VL / LLaVA ...) are not supported.
 
 Note: the quantized deploy model must be saved with ``torch.save(quant_model,
 <path>/model.pth)`` right after ``amct.convert`` (see README), because the
@@ -84,11 +86,10 @@ def load_llm(model_path):
 
 
 def load_vlm(model_path):
-    """Load an AMCT-quantized VLM saved by torch.save (model.pth).
+    """Load an AMCT-quantized image-only VLM saved by torch.save (model.pth).
 
-    The pickled whole model preserves its original class (CLIPModel,
-    Qwen2VLForConditionalGeneration, ...), so no class-specific loading is
-    needed. Modify me if needed.
+    The pickled whole model preserves its original class (CLIPModel, ...), so
+    no class-specific loading is needed. Modify me if needed.
     """
     pth_path = model_path
     if os.path.isdir(model_path):
@@ -97,7 +98,7 @@ def load_vlm(model_path):
     model = torch.load(pth_path, map_location="cpu", weights_only=False)
     # eager attention avoids sdpa, which torch_npu redispatches to
     # npu_fusion_attention_v3 (no AscendIR converter in torchair yet);
-    # applies to CLIP vision tower and multimodal LLM backbones alike
+    # applies to CLIP vision tower alike
     for cfg_name in ("config", "text_config", "vision_config"):
         cfg = getattr(model, cfg_name, None)
         if cfg is not None:
@@ -118,7 +119,13 @@ class CLIPImageFeaturesModule(torch.nn.Module):
         self.clip = clip_model
 
     def forward(self, pixel_values):
-        return self.clip.get_image_features(pixel_values=pixel_values)
+        # Inline ``CLIPModel.get_image_features`` (vision tower -> pooled [CLS]
+        # -> visual projection) so the traced output is a plain tensor that is
+        # stable across transformers versions (>= 4.x may return a
+        # BaseModelOutputWithPooling instead of a tensor).
+        vision_outputs = self.clip.vision_model(pixel_values=pixel_values)
+        pooled_output = vision_outputs.pooler_output
+        return self.clip.visual_projection(pooled_output)
 
 
 def to_npu(model):
@@ -153,10 +160,10 @@ def build_llm_input(enc, input_file, seqlen):
 
 
 def _detect_vlm_kind(model):
-    """Detect the VLM kind from the model class/config.
+    """Verify the model is an image-only VLM (CLIP-like).
 
-    Returns 'clip' for CLIPModel (image-only forward) or 'multimodal' for
-    Qwen2-VL / Qwen2.5-VL / LLaVA / InternVL ... (text+image forward).
+    Returns 'clip' for CLIPModel (image-only forward). Raises a clear error
+    for text+image multimodal VLMs (Qwen2-VL / Qwen2.5-VL / LLaVA ...).
     """
     cls_name = type(model).__name__.lower()
     if "clip" in cls_name and "vision" not in cls_name:
@@ -164,67 +171,67 @@ def _detect_vlm_kind(model):
     model_type = getattr(getattr(model, "config", None), "model_type", "") or ""
     if "clip" in model_type:
         return "clip"
-    return "multimodal"
+    raise NotImplementedError(
+        "当前脚本仅支持纯图输入的VLM模型（如CLIP/CLIPModel）。"
+        f"检测到不支持的模型类型: {type(model).__name__ or model_type or 'unknown'}，"
+        "图文混合输入的多模态VLM（Qwen2-VL/LLaVA等）暂不支持。")
 
 
-def _ordered_forward_input_names(model):
-    """Return the parameter names of ``model.forward`` in declaration order,
-    filtered to tensor inputs produced by the processor."""
-    import inspect
+def _load_images(image_path):
+    """Load images from a file or directory.
 
-    sig = inspect.signature(model.forward)
-    return [p.name for p in sig.parameters.values()
-            if p.name not in ("self", "kwargs", "past_key_values",
-                              "output_attentions", "output_hidden_states",
-                              "use_cache", "return_dict", "labels",
-                              "cache_position", "position_ids",
-                              "inputs_embeds", "logits_to_keep",
-                              "loss_kwargs")]
-
-
-def build_vlm_input(model, processor, image_path, prompt, batch_size, dtype,
-                    device):
-    """Build the VLM export inputs by preprocessing one real image.
-
-    - CLIP (image-only): the model is wrapped in CLIPImageFeaturesModule so
-      only the vision tower is traced; returns (wrapped_model, (tensor,)).
-    - Multimodal (Qwen2-VL / LLaVA ...): processor(text, images) produces
-      multiple tensors (input_ids, attention_mask, pixel_values, ...); they
-      are ordered after ``model.forward``'s signature and all moved to NPU.
-      Returns (model, tensors).
-
-    Returns (model, tuple_of_tensors); the model may be replaced by a wrapper.
+    Returns a list of PIL Image objects.
     """
     from PIL import Image
 
-    image = Image.open(image_path).convert("RGB")
+    if os.path.isfile(image_path):
+        return [Image.open(image_path).convert("RGB")]
+    elif os.path.isdir(image_path):
+        image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif', '.webp'}
+        images = []
+        for filename in sorted(os.listdir(image_path)):
+            if os.path.splitext(filename)[1].lower() in image_extensions:
+                img = Image.open(os.path.join(image_path, filename)).convert("RGB")
+                images.append(img)
+        if not images:
+            raise ValueError(f"目录中未找到图片文件: {image_path}")
+        print(f"从目录 {image_path} 加载了 {len(images)} 张图片")
+        return images
+    else:
+        raise ValueError(f"image_path 必须是文件或目录: {image_path}")
 
-    if _detect_vlm_kind(model) == "clip":
-        model = CLIPImageFeaturesModule(model)
-        inputs = processor(images=image, return_tensors="pt")
-        pixel_values = inputs["pixel_values"]
-        if batch_size > 1:
-            pixel_values = pixel_values.repeat(batch_size, 1, 1, 1)
-        export_input = (pixel_values.to(dtype).to(device),)
-        print(f"VLM(clip image tower) export input: "
-              f"{[(tuple(t.shape), str(t.dtype)) for t in export_input]}")
-        return model, export_input
 
-    # text + image multimodal VLMs
-    text = prompt if prompt is not None else "Describe this image."
-    inputs = processor(text=[text] * max(1, batch_size),
-                       images=image if batch_size <= 1 else [image] * batch_size,
-                       return_tensors="pt")
-    inputs = {k: v.to(device) for k, v in inputs.items()}
+def build_vlm_input(model, processor, image_path, batch_size, dtype, device):
+    """Build the VLM export inputs by preprocessing images.
 
-    forward_names = _ordered_forward_input_names(model)
-    tensor_keys = [k for k, v in inputs.items() if torch.is_tensor(v)]
-    ordered_keys = [k for k in forward_names if k in tensor_keys]
-    ordered_keys += [k for k in tensor_keys if k not in ordered_keys]
+    Only image-only VLMs (CLIP-like) are supported. ``image_path`` may be a
+    single image file or a directory containing one/multiple images; the
+    images are turned into a batched ``pixel_values`` tensor. The model is
+    wrapped in ``CLIPImageFeaturesModule`` so only the vision tower is
+    traced.
 
-    export_input = tuple(inputs[k] for k in ordered_keys)
-    print(f"VLM(multimodal) export input keys (in forward order): {ordered_keys}")
-    print(f"VLM(multimodal) export input: "
+    Returns (model, tuple_of_tensors); the model is replaced by the wrapper.
+    """
+    images = _load_images(image_path)
+    _detect_vlm_kind(model)
+    model = CLIPImageFeaturesModule(model)
+
+    if batch_size > len(images):
+        raise ValueError(
+            f"batch_size ({batch_size}) 大于图片数量 ({len(images)})，"
+            "请提供足够多的图片或减小 batch_size")
+    pixel_values_list = []
+    for img in images[:batch_size]:
+        inputs = processor(images=img, return_tensors="pt")
+        pixel_values_list.append(inputs["pixel_values"])
+
+    if len(pixel_values_list) == 1:
+        pixel_values = pixel_values_list[0]
+    else:
+        pixel_values = torch.cat(pixel_values_list, dim=0)
+
+    export_input = (pixel_values.to(dtype).to(device),)
+    print(f"VLM(clip image tower) export input: "
           f"{[(tuple(t.shape), str(t.dtype)) for t in export_input]}")
     return model, export_input
 
@@ -269,8 +276,8 @@ def export_torchair_air(model, export_inputs, output_dir, export_name):
     """torch.compile with the torchair npu backend, then export the AIR graph.
 
     ``export_inputs`` is a sequence of tensors splatted into
-    ``tng.dynamo_export`` (LLM: 1 tensor; multimodal VLM: several, ordered
-    after the model's forward signature).
+    ``tng.dynamo_export`` (LLM: 1 tensor; image-only VLM: 1 pixel_values
+    tensor).
 
     ``torch.compile`` wraps the model as ``OptimizedModule`` whose
     ``named_buffers`` carry an ``_orig_mod.`` prefix. torchair uses those names
@@ -320,7 +327,7 @@ def main():
                              "(already converted by amct.convert)")
     parser.add_argument("--model_type", type=str, choices=["llm", "vlm"],
                         default="llm",
-                        help="llm: causal LM; vlm: CLIP / Qwen2-VL / LLaVA ...")
+                        help="llm: causal LM; vlm: image-only VLM (e.g. CLIP)")
     parser.add_argument("--output_dir", type=str, default="./torchair_output",
                         help="Directory for exported artifacts")
     parser.add_argument("--export_name", type=str, default=None,
@@ -332,12 +339,11 @@ def main():
                         help="Text file tokenized as the LLM export input "
                              "(default: built-in sample text)")
     parser.add_argument("--image_path", type=str, default=None,
-                        help="Real image used to trace the VLM forward (vlm only)")
-    parser.add_argument("--prompt", type=str, default=None,
-                        help="Text prompt for multimodal VLM export "
-                             "(default: built-in sample prompt)")
+                        help="Image file or a directory of images used to "
+                             "trace the VLM forward (vlm only)")
     parser.add_argument("--batch_size", type=int, default=1,
-                        help="Batch size of the VLM export input")
+                        help="Batch size of the VLM export input; must be <= "
+                             "the number of images under --image_path")
     parser.add_argument("--dtype", type=str,
                         choices=["float16", "bfloat16"], default="float16",
                         help="Dtype of the VLM image input")
@@ -345,6 +351,8 @@ def main():
 
     if args.model_type == "vlm" and not args.image_path:
         parser.error("--image_path is required when --model_type is vlm")
+    if args.model_type == "vlm" and not os.path.exists(args.image_path):
+        parser.error(f"--image_path does not exist: {args.image_path}")
 
     export_name = args.export_name or os.path.basename(
         args.model_path.rstrip("/"))
@@ -359,7 +367,7 @@ def main():
         model = to_npu(model.eval())
         device = next(model.parameters()).device
         model, export_inputs = build_vlm_input(model, processor,
-                                                args.image_path, args.prompt,
+                                                args.image_path,
                                                 args.batch_size, dtype, device)
 
     export_torchair_air(model, export_inputs, args.output_dir, export_name)

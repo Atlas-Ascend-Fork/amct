@@ -180,31 +180,28 @@ LLM网络（如Qwen/Llama类模型），导出输入为真实文本token化后�
 python3 src/export_torchair_sample.py --model_path=/path/to/quantized_llm/ --seqlen=2048
 ```
 
-VLM网络（CLIP-ViT类，输入为真实图片预处理后的`[batch_size, 3, H, W]`张量）：
+VLM网络（CLIP-ViT类，纯图输入，`--image_path`可为单张图片文件或含多张图片的目录，脚本将图片预处理为`[batch_size, 3, H, W]`张量）：
 
 ```python
 python3 src/export_torchair_sample.py --model_type=vlm --model_path=/path/to/quantized_clip/ --image_path=/path/to/image.jpg --batch_size=1 --dtype=float16
+
+python3 src/export_torchair_sample.py --model_type=vlm --model_path=/path/to/quantized_clip/ --image_path=/path/to/image_dir/ --batch_size=1 --dtype=float16
 ```
 
-VLM网络（Qwen2-VL/Qwen2.5-VL/LLaVA类多模态模型，输入为文本+图片，processor产出多个张量，脚本按模型forward签名顺序自动传入导出）：
-
-```python
-python3 src/export_torchair_sample.py --model_type=vlm --model_path=/path/to/quantized_qwen2vl/ --image_path=/path/to/image.jpg --prompt "描述这张图片"
-```
+> 说明：当前脚本仅支持纯图输入的VLM模型（如CLIP），不支持图文混合输入的多模态模型（Qwen2-VL/Qwen2.5-VL/LLaVA类）。
 
 常用参数说明：
 
 | 参数 | 必填 | 默认值 | 说明 |
 |:--|:--:|:--:|:--|
 |--model_path|是|/|已量化deploy模型目录（内含`model.pth`）或pth文件路径|
-|--model_type|否|llm|`llm`/`vlm`，vlm支持CLIP及Qwen2-VL/LLaVA类多模态模型|
+|--model_type|否|llm|`llm`/`vlm`，vlm仅支持纯图输入的CLIP类模型|
 |--output_dir|否|./torchair_output|导出产物目录|
 |--export_name|否|模型目录名|AIR文件名（不含.air后缀）|
 |--seqlen|否|2048|LLM导出输入序列长度|
 |--input_file|否|内置样例文本|LLM导出输入文本文件|
-|--image_path|vlm必填|/|VLM导出用真实图片路径|
-|--prompt|否|内置样例提示词|多模态VLM的文本输入|
-|--batch_size|否|1|VLM导出输入batch大小|
+|--image_path|vlm必填|/|VLM导出用图片文件或图片目录（支持jpg/jpeg/png/bmp/tiff/webp）|
+|--batch_size|否|1|VLM导出输入batch大小（须不大于图片数量）|
 |--dtype|否|float16|VLM图像输入精度（float16/bfloat16）|
 
 ### 3.3 导出产物

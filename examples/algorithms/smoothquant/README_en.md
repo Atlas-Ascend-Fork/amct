@@ -180,31 +180,28 @@ For LLM networks (e.g. Qwen/Llama-like models), the export input is a `[1, seqle
 python3 src/export_torchair_sample.py --model_path=/path/to/quantized_llm/ --seqlen=2048
 ```
 
-For VLM networks (e.g. CLIP-ViT-like models, image-only input), the export input is a `[batch_size, 3, H, W]` tensor preprocessed from a real image:
+For VLM networks (e.g. CLIP-ViT-like, image-only input), `--image_path` may be a single image file or a directory containing multiple images; the script preprocesses them into a `[batch_size, 3, H, W]` tensor:
 
 ```python
 python3 src/export_torchair_sample.py --model_type=vlm --model_path=/path/to/quantized_clip/ --image_path=/path/to/image.jpg --batch_size=1 --dtype=float16
+
+python3 src/export_torchair_sample.py --model_type=vlm --model_path=/path/to/quantized_clip/ --image_path=/path/to/image_dir/ --batch_size=1 --dtype=float16
 ```
 
-For multimodal VLM networks (e.g. Qwen2-VL / Qwen2.5-VL / LLaVA, text+image input), the processor produces multiple tensors; the script feeds them to ``dynamo_export`` in the model's forward-signature order automatically:
-
-```python
-python3 src/export_torchair_sample.py --model_type=vlm --model_path=/path/to/quantized_qwen2vl/ --image_path=/path/to/image.jpg --prompt "Describe this image."
-```
+> Note: this script only supports image-only VLM models (e.g. CLIP); multimodal text+image VLMs (Qwen2-VL/LLaVA...) are not supported.
 
 Common parameters:
 
 | Parameter | Required | Default | Description |
 |:--|:--:|:--:|:--|
 |--model_path|Yes|/|Quantized deploy model directory (containing `model.pth`) or the pth file path|
-|--model_type|No|llm|`llm`/`vlm`; vlm supports CLIP and multimodal models (Qwen2-VL/LLaVA...)|
+|--model_type|No|llm|`llm`/`vlm`; vlm only supports image-only CLIP-like models|
 |--output_dir|No|./torchair_output|Directory for exported artifacts|
 |--export_name|No|Model directory name|AIR file name (without the .air suffix)|
 |--seqlen|No|2048|Sequence length of the LLM export input|
 |--input_file|No|Built-in sample text|Text file tokenized as the LLM export input|
-|--image_path|Required for vlm|/|Path of the real image used to trace the VLM forward|
-|--prompt|No|Built-in sample prompt|Text input for multimodal VLMs|
-|--batch_size|No|1|Batch size of the VLM export input|
+|--image_path|Required for vlm|/|Image file or directory of images (jpg/jpeg/png/bmp/tiff/webp) used to trace the VLM forward|
+|--batch_size|No|1|Batch size of the VLM export input (must be <= number of images)|
 |--dtype|No|float16|Dtype of the VLM image input (float16/bfloat16)|
 
 ### 3.3 Exported artifacts
