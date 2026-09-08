@@ -1,3 +1,8 @@
-torch==2.7.1
-torch_npu
-transformers
+torch==2.7.1+cpu
+torch_npu==2.7.1.post4
+transformers==5.12.1
+datasets==4.8.4
+accelerate
+safetensors
+sentencepiece
+modelscope
