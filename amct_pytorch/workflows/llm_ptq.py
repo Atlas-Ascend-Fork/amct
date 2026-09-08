@@ -34,6 +34,7 @@ from amct_pytorch.common.models.llm.common.quant_apply import set_model_to_obser
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.optimization import SOLVER_REGISTRY
 from amct_pytorch.common.utils.run_logging import setup_run_logging
+from amct_pytorch.common.utils.seed_utils import seed_everything
 
 
 class LlmPtqWorkflow:
@@ -48,6 +49,8 @@ class LlmPtqWorkflow:
         self.data_provider = None
         self.model_name = self.args.model_name
         self.solver_key = getattr(args, "solver", "blockwise")
+        self.seed = args.seed
+        seed_everything(self.seed)
 
     @staticmethod
     def _register_components():

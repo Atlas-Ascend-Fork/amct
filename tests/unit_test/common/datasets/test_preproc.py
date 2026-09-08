@@ -37,7 +37,12 @@ class _StubTokenizer:
 class _FakeDataset(list):
     """Iterable with a deterministic shuffle so we control sample order."""
 
+    def __init__(self, *args):
+        super().__init__(*args)
+        self.shuffle_seed = None
+
     def shuffle(self, seed):
+        self.shuffle_seed = seed
         return self
 
 
@@ -153,3 +158,30 @@ def test_get_wiki_inputs_returns_empty_when_seq_len_exceeds_tokens(monkeypatch):
     monkeypatch.setattr(preproc, "get_wikitext2", lambda tokenizer: fake_enc)
     chunks = preproc.get_wiki_inputs(tokenizer=None, seq_len=8)
     assert not chunks
+
+
+# ---- seed injection --------------------------------------------------------
+
+
+def test_pileval_awq_passes_seed_to_shuffle():
+    ds = _texts_to_dataset(["a a a a"])
+    preproc.pileval_awq(ds, _StubTokenizer(), n_samples=1, seq_len=4, seed=7)
+    assert ds.shuffle_seed == 7
+
+
+def test_pileval_awq_defaults_to_seed_42():
+    ds = _texts_to_dataset(["a a a a"])
+    preproc.pileval_awq(ds, _StubTokenizer(), n_samples=1, seq_len=4)
+    assert ds.shuffle_seed == 42
+
+
+def test_get_pileval_forwards_seed_to_shuffle(monkeypatch):
+    holder = {}
+
+    def fake_load_dataset(name, *args, **kwargs):
+        holder["ds"] = _texts_to_dataset(["a a a a"])
+        return holder["ds"]
+
+    monkeypatch.setattr(preproc, "load_dataset", fake_load_dataset)
+    preproc.get_pileval(_StubTokenizer(), n_samples=1, seq_len=4, seed=13)
+    assert holder["ds"].shuffle_seed == 13

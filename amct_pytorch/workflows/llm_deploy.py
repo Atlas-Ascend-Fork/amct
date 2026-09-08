@@ -45,6 +45,7 @@ from amct_pytorch.common.models.llm.common.weight_path_validation import (
     validate_weight_map,
 )
 from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
+from amct_pytorch.common.utils.seed_utils import seed_everything
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY, register_dtype
 
 
@@ -63,6 +64,8 @@ class LlmDeployWorkflow:
         self.is_mx = self.quant_dtype.startswith("mx")
         self.is_int = self.quant_dtype.startswith("int")
         self.is_hif = self.quant_dtype.startswith("hif")
+        self.seed = args.seed
+        seed_everything(self.seed)
 
     @staticmethod
     def _is_weight_file(path: Path) -> bool:
