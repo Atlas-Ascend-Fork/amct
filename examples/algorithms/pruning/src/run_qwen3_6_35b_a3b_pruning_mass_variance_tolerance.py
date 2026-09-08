@@ -22,6 +22,10 @@ Mode: tolerance (run independently for 0.1 / 0.2 / 0.5)
 
 Pruning runs on CPU (full BF16 model does not fit one NPU card).
 Final WikiText2 PPL uses AMCT blockwise eval on NPU (seq_len=4096).
+
+Note: official ~10% expert prune raises WikiText2 PPL by ~0.33. With the
+default ratio_grid starting at 0.1, tolerance=0.1/0.2 may leave the model
+unchanged; that is a valid outcome to report.
 """
 
 from __future__ import annotations
@@ -29,6 +33,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import shutil
 import subprocess
 import sys
 import time
@@ -38,8 +43,9 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 import amct_pytorch as amct
-from amct_pytorch.common.datasets.preproc import get_pileval
+from amct_pytorch.common.datasets.preproc import get_pileval, get_wiki_inputs
 from amct_pytorch.pruning import MOE_MASSVAR_PRUNE_CFG, PruneReport, prune_diagnose
+from amct_pytorch.pruning.accuracy_based_auto_prune import DEFAULT_RATIO_GRID
 
 
 def parse_args() -> argparse.Namespace:
@@ -105,6 +111,18 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip post-prune WikiText2 PPL (debug only)",
     )
+    parser.add_argument(
+        "--proxy-batches",
+        type=int,
+        default=4,
+        help="WikiText2 chunks for search-time -PPL proxy evaluator",
+    )
+    parser.add_argument(
+        "--proxy-seq-len",
+        type=int,
+        default=512,
+        help="Sequence length for search-time proxy evaluator",
+    )
     return parser.parse_args()
 
 
@@ -113,6 +131,7 @@ def print_run_config(args: argparse.Namespace) -> None:
     print("Full run parameters:")
     for key, value in sorted(vars(args).items()):
         print(f"  {key}={value!r}")
+    print(f"  ratio_grid={DEFAULT_RATIO_GRID!r}")
     print("=" * 72)
 
 
@@ -142,10 +161,15 @@ def run_amct_ppl(model_dir: str, *, seq_len: int, device: str) -> float:
         "--bit_config",
         "amct_pytorch/configs/bf16.yaml",
     ]
-    print("Running:", " ".join(cmd))
-    proc = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    print("Running:", " ".join(cmd), flush=True)
+    proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
     combined = (proc.stdout or "") + "\n" + (proc.stderr or "")
     print(combined)
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"amct_pytorch.eval failed with exit={proc.returncode}. "
+            "See stdout/stderr above."
+        )
     marker = "Wikitext2-ppl="
     for line in combined.splitlines():
         if marker in line:
@@ -153,23 +177,67 @@ def run_amct_ppl(model_dir: str, *, seq_len: int, device: str) -> float:
     raise RuntimeError("Failed to parse Wikitext2-ppl from amct_pytorch.eval output")
 
 
+def _read_num_experts(model: torch.nn.Module) -> int | None:
+    cfg = getattr(model, "config", None)
+    if cfg is None:
+        return None
+    text_cfg = getattr(cfg, "text_config", None)
+    for obj in (text_cfg, cfg):
+        if obj is None:
+            continue
+        for key in ("num_experts", "num_local_experts", "n_routed_experts"):
+            val = getattr(obj, key, None)
+            if isinstance(val, int) and val > 0:
+                return val
+    return None
+
+
+def restore_vl_config(src_model_dir: str, pruned_dir: Path, model: torch.nn.Module) -> None:
+    """Rewrite saved config.json back to VL nesting for amct qwen3_6_moe eval.
+
+    AutoModelForCausalLM.save_pretrained emits a flat language-only config, while
+    AMCT qwen3_6_moe expects the original VL layout with text_config.num_experts.
+    """
+    src = Path(src_model_dir) / "config.json"
+    dst = pruned_dir / "config.json"
+    with src.open("r", encoding="utf-8") as f:
+        cfg = json.load(f)
+
+    num_experts = _read_num_experts(model)
+    if "text_config" in cfg and isinstance(cfg["text_config"], dict) and num_experts:
+        cfg["text_config"]["num_experts"] = num_experts
+        print(f"Restored VL config.json with text_config.num_experts={num_experts}")
+    else:
+        print(
+            "WARNING: could not update text_config.num_experts; "
+            f"num_experts={num_experts}, keys={list(cfg.keys())}"
+        )
+
+    with dst.open("w", encoding="utf-8") as f:
+        json.dump(cfg, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+
+
 class NegPplEvaluator:
     """Search-mode evaluator: larger is better, so return -PPL.
 
-    Uses a short CPU forward proxy on a few WikiText2 chunks for search speed.
+    Uses a short CPU forward proxy on WikiText2 chunks for search speed.
     Final acceptance numbers must still come from AMCT blockwise eval (seq_len=4096).
     """
 
-    def __init__(self, batches: list[torch.Tensor], max_batches: int = 2):
-        self.batches = batches[:max_batches]
+    def __init__(self, batches: list[torch.Tensor]):
+        self.batches = list(batches)
+        self._call = 0
 
     @torch.no_grad()
     def evaluate(self, model: torch.nn.Module) -> float:
+        self._call += 1
         loss_fn = torch.nn.CrossEntropyLoss()
         nll_sum = 0.0
         tokens = 0
         was_training = model.training
         model.eval()
+        t0 = time.time()
         for batch in self.batches:
             input_ids = batch if batch.dim() == 2 else batch.unsqueeze(0)
             logits = model(input_ids=input_ids).logits
@@ -185,6 +253,11 @@ class NegPplEvaluator:
         if was_training:
             model.train()
         ppl = torch.exp(torch.tensor(nll_sum / max(tokens, 1))).item()
+        print(
+            f"[evaluator] call={self._call} proxy_ppl={ppl:.6f} "
+            f"score={-ppl:.6f} elapsed={time.time() - t0:.1f}s",
+            flush=True,
+        )
         return -ppl
 
 
@@ -201,6 +274,8 @@ def main() -> None:
     print_run_config(args)
 
     out_root = Path(args.output_dir) / f"tolerance_{args.tolerance}"
+    if out_root.exists():
+        shutil.rmtree(out_root)
     out_root.mkdir(parents=True, exist_ok=True)
 
     if args.eval_seq_len != 4096:
@@ -215,30 +290,35 @@ def main() -> None:
         baseline_ppl = run_amct_ppl(
             args.model, seq_len=args.eval_seq_len, device=args.device
         )
-    print(f"baseline_ppl={baseline_ppl}")
+    print(f"baseline_ppl={baseline_ppl}", flush=True)
 
-    print("[2/5] Load model on CPU for pruning...")
+    print("[2/5] Load model on CPU for pruning...", flush=True)
     tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
         trust_remote_code=True,
         torch_dtype=torch.bfloat16,
     ).eval()
+    params_loaded = count_params(model)
+    print(f"loaded_params={params_loaded}", flush=True)
 
-    print("[3/5] Prepare Pileval calibration + diagnose...")
+    print("[3/5] Prepare Pileval calibration + diagnose...", flush=True)
     calib = get_pileval(tokenizer, args.calib_nsamples, seq_len=args.calib_seq_len)
     cfg = build_config()
     diagnose = prune_diagnose(model, data=calib, config=cfg)
-    print("prune_diagnose():")
-    print(diagnose)
+    print("prune_diagnose():", flush=True)
+    print(diagnose, flush=True)
 
-    # Lightweight proxy batches for search-time evaluator (not the final metric).
-    from amct_pytorch.common.datasets.preproc import get_wiki_inputs
-
-    proxy_batches = get_wiki_inputs(tokenizer, seq_len=min(512, args.eval_seq_len))[:2]
+    proxy_batches = get_wiki_inputs(tokenizer, seq_len=args.proxy_seq_len)[
+        : args.proxy_batches
+    ]
     evaluator = NegPplEvaluator(proxy_batches)
 
-    print(f"[4/5] Tolerance search prune: tolerance={args.tolerance} ...")
+    print(
+        f"[4/5] Tolerance search prune: tolerance={args.tolerance} "
+        f"ratio_grid={DEFAULT_RATIO_GRID} ...",
+        flush=True,
+    )
     t0 = time.time()
     report = PruneReport()
     amct.prune(
@@ -247,31 +327,43 @@ def main() -> None:
         data=calib,
         tolerance=args.tolerance,
         evaluator=evaluator,
+        ratio_grid=DEFAULT_RATIO_GRID,
         report=report,
     )
     prune_minutes = (time.time() - t0) / 60.0
     report_dict = report.as_dict()
-    print("PruneReport:")
-    print(json.dumps(report_dict, indent=2, default=str))
+    print("PruneReport:", flush=True)
+    print(json.dumps(report_dict, indent=2, default=str), flush=True)
 
-    params_before = report.params_before or count_params(model)
+    params_before = report.params_before or params_loaded
     params_after = report.params_after or count_params(model)
     cut_rate = 1.0 - (params_after / params_before) if params_before else 0.0
+    unchanged = cut_rate < 1e-6
+    if unchanged:
+        print(
+            "NOTE: no ratio met this tolerance on DEFAULT_RATIO_GRID; "
+            "model left unchanged. This can be expected for tight tolerances "
+            "(official ~10% prune already raises PPL by ~0.33).",
+            flush=True,
+        )
 
     pruned_dir = out_root / "pruned_model"
     pruned_dir.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(str(pruned_dir))
     tokenizer.save_pretrained(str(pruned_dir))
-    print(
-        "NOTE: If loading with qwen3_6_moe AMCT path, restore VL text_config nesting "
-        "and set text_config.num_experts to the pruned expert count. "
-        "See examples/models/qwen3.6/Qwen3.6-Moe-Pruning.md"
-    )
+    restore_vl_config(args.model, pruned_dir, model)
 
     if args.skip_post_eval:
         pruned_ppl = None
+    elif unchanged:
+        print(
+            "[5/5] Model unchanged -> reuse baseline WikiText2 PPL "
+            "(skip redundant blockwise eval).",
+            flush=True,
+        )
+        pruned_ppl = baseline_ppl
     else:
-        print("[5/5] Post-prune WikiText2 PPL (blockwise on NPU)...")
+        print("[5/5] Post-prune WikiText2 PPL (blockwise on NPU)...", flush=True)
         pruned_ppl = run_amct_ppl(
             str(pruned_dir), seq_len=args.eval_seq_len, device=args.device
         )
@@ -287,20 +379,23 @@ def main() -> None:
         "params_before": params_before,
         "params_after": params_after,
         "param_cut_rate": cut_rate,
+        "model_unchanged": unchanged,
         "prune_minutes": prune_minutes,
         "calib_nsamples": args.calib_nsamples,
         "calib_seq_len": args.calib_seq_len,
         "eval_seq_len": args.eval_seq_len,
+        "ratio_grid": list(DEFAULT_RATIO_GRID),
         "diagnose": str(diagnose),
         "report": report_dict,
     }
     result_path = out_root / "result.json"
     result_path.write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")
-    print("Saved:", result_path)
+    print("Saved:", result_path, flush=True)
     print(
         f"RESULT_ROW\tQwen3.6-35B-A3B\tmass_variance\ttolerance={args.tolerance}\t"
         f"{baseline_ppl}\t{pruned_ppl}\tN/A\t"
-        f"{params_before} -> {params_after}\t{cut_rate:.4f}\t{prune_minutes:.2f}"
+        f"{params_before} -> {params_after}\t{cut_rate:.4f}\t{prune_minutes:.2f}",
+        flush=True,
     )
 
 
