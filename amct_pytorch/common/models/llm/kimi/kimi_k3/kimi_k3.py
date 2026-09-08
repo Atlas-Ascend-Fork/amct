@@ -47,8 +47,8 @@ from amct_pytorch.common.models.llm.kimi.kimi_k3.modeling.configuration_kimi_k3 
 )
 from amct_pytorch.common.models.llm.kimi.kimi_k3.quant_module import (
     QuantKimiLinear,
+    QuantKimiMLAAttention,
     QuantKimiMLP,
-    quantize_kimi_attention,
 )
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
@@ -277,7 +277,10 @@ class KimiK3(BaseModel):
         # their newly created quantizers/algorithm state to the same device as
         # the wrapped projection without ever moving the whole MoE container.
         for name, submodule in module.named_modules():
-            if isinstance(submodule, (QuantKimiMLP, QuantKimiLinear)):
+            if isinstance(
+                submodule,
+                (QuantKimiMLP, QuantKimiLinear, QuantKimiMLAAttention),
+            ):
                 device = self._resolve_param_device(name, device_map)
                 submodule.to(device)
 
@@ -502,8 +505,11 @@ class KimiK3(BaseModel):
 
     def build_quant_block(self, layer_idx):
         decoder_layer = self.block(layer_idx)
-        if "attn-linear" in self.quant_target:
-            decoder_layer.self_attn = quantize_kimi_attention(
+        if any(
+            target in self.quant_target
+            for target in ("attn-linear", "attn-cache")
+        ) and not getattr(decoder_layer, "is_linear_attn", False):
+            decoder_layer.self_attn = QuantKimiMLAAttention(
                 self.args, decoder_layer.self_attn,
             )
 
@@ -529,7 +535,10 @@ class KimiK3(BaseModel):
         return decoder_layer
 
     def iter_ptq_units(self, layer_idx, block):
-        if "attn-linear" in self.quant_target:
+        if any(
+            target in self.quant_target
+            for target in ("attn-linear", "attn-cache")
+        ) and isinstance(getattr(block, "self_attn", None), QuantKimiMLAAttention):
             yield make_ptq_unit(
                 "attn", "self_attn", layer_idx, getattr(block, "self_attn", None),
             )
