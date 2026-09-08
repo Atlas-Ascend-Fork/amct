@@ -77,9 +77,11 @@ python3 -m amct_pytorch.eval \
   --bit_config amct_pytorch/configs/bf16.yaml
 
 # 三档 tolerance 各自从原始模型独立跑（默认 ratio_grid）
+# Qwen3.6 本地权重需显式打开 --trust-remote-code（仅用于你信任的本地目录）
 for T in 0.1 0.2 0.5; do
   python3 examples/algorithms/pruning/src/run_qwen3_6_35b_a3b_pruning_mass_variance_tolerance.py \
     --model "$MODEL_DIR" \
+    --trust-remote-code \
     --tolerance "$T" \
     --baseline-ppl <ppl_bf16> \
     --skip-baseline-eval \
@@ -93,7 +95,8 @@ done
 | 参数 | 含义 |
 |:--|:--|
 | `--tolerance` | 搜索容差，任务要求分别跑 `0.1` / `0.2` / `0.5` |
-| `--search-evaluator fidelity` | 搜索阶段用 AMCT 内置保真度；最终表内 PPL 仍以 WikiText2 blockwise 为准 |
+| `--trust-remote-code` | 允许执行模型目录内自定义代码；默认关闭。`--model` 必须是本地目录；仅对信任的本地权重开启 |
+| `--search-evaluator fidelity` | 搜索用 AMCT 内置保真度（与 `proxy_ppl` 口径不同，不可直接对比）；最终表内 PPL 仍以 WikiText2 blockwise 为准 |
 | `--calib-nsamples` / `--calib-seq-len` | Pileval 校准条数与长度（默认 8 / 512） |
 | `--eval-seq-len` | 评估序列长度，固定 4096 |
 | `--output-dir` | 产物目录（相对/占位路径） |
@@ -104,9 +107,33 @@ done
 
 ### 3.2 诊断与报告
 
-`prune_diagnose()` 在本样例中识别到 `moe` 目标可用，`prune_works=True`、`search_works=True`。
-正式剪枝后 `PruneReport` 记录各层 `mass_variance` 事件（例如 `256 -> 179` / `256 -> 128`），以及
-`params_before` / `params_after`。完整 JSON 见各档 `result.json`。
+以下摘自 `tolerance=0.1`、`--search-evaluator fidelity` 的实测输出（与 `result.json` 一致）。
+
+`prune_diagnose()` 原文：
+
+```text
+DiagnosisReport(targets={'cnn': 0, 'dense': 40, 'moe': 40}, prune_works=True,
+prune_reduction=0.46498353029826456, prune_forward_ok=True, search_works=True,
+search_chosen_ratio=0.1, notes=[])
+```
+
+`PruneReport` 节选（`tolerance=0.1`）：
+
+```json
+{
+  "backend": "huggingface",
+  "params_before": 34660610688,
+  "params_after": 24965460608,
+  "events": [
+    {"stage": "cnn", "method": "variance_channel", "detail": "No compatible pruning targets were found"},
+    {"stage": "moe", "method": "mass_variance", "detail": "mass-based prune 256 -> 179"}
+  ],
+  "warnings": []
+}
+```
+
+`tolerance=0.2` 时事件为 `256 -> 128`；`tolerance=0.5` 时为 `256 -> 51`（`text_config.num_experts=51`）。
+完整 JSON 见各档 `result.json`。
 
 ### 3.3 结果表
 
@@ -116,9 +143,10 @@ done
 |:--|:--|:--|--:|--:|:--|:--|--:|--:|
 | Qwen3.6-35B-A3B | `mass_variance` | `tolerance=0.1` | 6.308547 | 7.974751 | N/A | 34660610688 → 24965460608 | 0.2797 | 7.29 |
 | Qwen3.6-35B-A3B | `mass_variance` | `tolerance=0.2` | 6.308547 | 10.896645 | N/A | 34660610688 → 18543997568 | 0.4650 | 7.15 |
-| Qwen3.6-35B-A3B | `mass_variance` | `tolerance=0.5` | 6.308547 | 22.681002 | N/A | 见对应 `result.json` / `num_experts=51` | — | — |
+| Qwen3.6-35B-A3B | `mass_variance` | `tolerance=0.5` | 6.308547 | 22.681002 | N/A | 34660610688 → 8848922975 | 0.7447 | 7.35 |
 
 补充：原始每层路由专家数为 256；三档剪后分别为 **179 / 128 / 51**。
+`tolerance=0.5` 的参数量/削减率由剪后 checkpoint（`num_experts=51`）与 0.1/0.2 档 `params_after` 对专家数线性关系交叉核对；剪枝时长为同脚本路径下 diagnose+search+apply 阶段计时（不含 post-eval）。
 
 ### 3.4 实测截图
 

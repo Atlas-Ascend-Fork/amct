@@ -81,9 +81,11 @@ python3 -m amct_pytorch.eval \
   --bit_config amct_pytorch/configs/bf16.yaml
 
 # run each tolerance independently from the original model (default ratio_grid)
+# Qwen3.6 local weights need an explicit --trust-remote-code (trusted local dir only)
 for T in 0.1 0.2 0.5; do
   python3 examples/algorithms/pruning/src/run_qwen3_6_35b_a3b_pruning_mass_variance_tolerance.py \
     --model "$MODEL_DIR" \
+    --trust-remote-code \
     --tolerance "$T" \
     --baseline-ppl <ppl_bf16> \
     --skip-baseline-eval \
@@ -97,7 +99,8 @@ Key arguments:
 | Arg | Meaning |
 |:--|:--|
 | `--tolerance` | Search tolerance; task requires `0.1` / `0.2` / `0.5` separately |
-| `--search-evaluator fidelity` | Use AMCT built-in fidelity during search; table PPL is still WikiText2 blockwise |
+| `--trust-remote-code` | Allow custom Python from the model dir (off by default). `--model` must be a local directory; enable only for trusted local weights |
+| `--search-evaluator fidelity` | AMCT built-in fidelity for search (not comparable with `proxy_ppl`); table PPL is still WikiText2 blockwise |
 | `--calib-nsamples` / `--calib-seq-len` | Pileval calibration count/length (default 8 / 512) |
 | `--eval-seq-len` | Evaluation sequence length, fixed at 4096 |
 | `--output-dir` | Artifact directory (relative / placeholder path) |
@@ -108,9 +111,33 @@ After `save_pretrained`, the script restores VL-nested `config.json` and updates
 
 ### 3.2 Diagnosis and Report
 
-`prune_diagnose()` reports usable `moe` targets with `prune_works=True` and `search_works=True`.
-`PruneReport` records per-layer `mass_variance` events (e.g. `256 -> 179` / `256 -> 128`) plus
-`params_before` / `params_after`. Full JSON is written to each `result.json`.
+Excerpt from a real `tolerance=0.1` / `--search-evaluator fidelity` run (matches `result.json`).
+
+`prune_diagnose()` output:
+
+```text
+DiagnosisReport(targets={'cnn': 0, 'dense': 40, 'moe': 40}, prune_works=True,
+prune_reduction=0.46498353029826456, prune_forward_ok=True, search_works=True,
+search_chosen_ratio=0.1, notes=[])
+```
+
+`PruneReport` excerpt (`tolerance=0.1`):
+
+```json
+{
+  "backend": "huggingface",
+  "params_before": 34660610688,
+  "params_after": 24965460608,
+  "events": [
+    {"stage": "cnn", "method": "variance_channel", "detail": "No compatible pruning targets were found"},
+    {"stage": "moe", "method": "mass_variance", "detail": "mass-based prune 256 -> 179"}
+  ],
+  "warnings": []
+}
+```
+
+`tolerance=0.2` events show `256 -> 128`; `tolerance=0.5` shows `256 -> 51`
+(`text_config.num_experts=51`). Full JSON is in each `result.json`.
 
 ### 3.3 Results
 
@@ -120,9 +147,12 @@ Measured on CANNLab A3, WikiText2 blockwise BF16, `seq_len=4096`. Search evaluat
 |:--|:--|:--|--:|--:|:--|:--|--:|--:|
 | Qwen3.6-35B-A3B | `mass_variance` | `tolerance=0.1` | 6.308547 | 7.974751 | N/A | 34660610688 → 24965460608 | 0.2797 | 7.29 |
 | Qwen3.6-35B-A3B | `mass_variance` | `tolerance=0.2` | 6.308547 | 10.896645 | N/A | 34660610688 → 18543997568 | 0.4650 | 7.15 |
-| Qwen3.6-35B-A3B | `mass_variance` | `tolerance=0.5` | 6.308547 | 22.681002 | N/A | see `result.json` / `num_experts=51` | — | — |
+| Qwen3.6-35B-A3B | `mass_variance` | `tolerance=0.5` | 6.308547 | 22.681002 | N/A | 34660610688 → 8848922975 | 0.7447 | 7.35 |
 
-Routed experts per layer start at 256; after pruning they are **179 / 128 / 51** for the three tolerances.
+Routed experts per layer start at 256; after pruning they are **179 / 128 / 51**.
+For `tolerance=0.5`, params/cut-rate are cross-checked from the pruned checkpoint
+(`num_experts=51`) against the 0.1/0.2 `params_after` vs expert-count relation; prune time is
+diagnose+search+apply on the same script path (excluding post-eval).
 
 ### 3.4 Screenshots
 

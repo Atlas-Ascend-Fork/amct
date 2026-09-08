@@ -57,7 +57,19 @@ def parse_args() -> argparse.Namespace:
         "--model",
         type=str,
         default="/data/models/Qwen3.6-35B-A3B",
-        help="Local path to Qwen3.6-35B-A3B weights (placeholder path)",
+        help=(
+            "Local directory of Qwen3.6-35B-A3B weights (placeholder path). "
+            "Must exist on disk; remote Hub IDs are rejected."
+        ),
+    )
+    parser.add_argument(
+        "--trust-remote-code",
+        action="store_true",
+        help=(
+            "Allow transformers to execute custom Python shipped with the model. "
+            "Off by default. Only enable for a local checkpoint you trust; "
+            "this sample's Qwen3.6 weights require the flag."
+        ),
     )
     parser.add_argument(
         "--tolerance",
@@ -130,13 +142,43 @@ def parse_args() -> argparse.Namespace:
         default="fidelity",
         choices=["fidelity", "proxy_ppl"],
         help=(
-            "Tolerance-search metric. 'fidelity' uses AMCT built-in score "
-            "(recommended; short CPU proxy_ppl over-penalizes and may reject "
-            "all DEFAULT_RATIO_GRID points even when WikiText2 PPL would pass). "
-            "Final reported PPL always comes from AMCT blockwise WikiText2 eval."
+            "Tolerance-search metric. 'fidelity' = AMCT built-in top-1 fidelity "
+            "(default; matches README result table). 'proxy_ppl' = short-seq CPU "
+            "WikiText2 proxy (-PPL). The two criteria are not comparable: the same "
+            "tolerance can stop at different prune ratios; do not mix rows across "
+            "modes. Reproduce README numbers with fidelity. Final reported PPL is "
+            "always AMCT blockwise WikiText2 eval."
         ),
     )
     return parser.parse_args()
+
+
+def resolve_local_model_dir(model: str) -> Path:
+    """Require a local model directory; reject remote Hub IDs."""
+    path = Path(model).expanduser()
+    if not path.exists() or not path.is_dir():
+        raise ValueError(
+            f"--model must be an existing local directory, got {model!r}. "
+            "Remote Hub repo IDs are rejected so untrusted remote code cannot run."
+        )
+    if not (path / "config.json").is_file():
+        raise ValueError(
+            f"--model directory {path} has no config.json; "
+            "point to a complete local checkpoint."
+        )
+    return path.resolve()
+
+
+def model_load_kwargs(trust_remote_code: bool) -> dict:
+    if trust_remote_code:
+        print(
+            "WARNING: --trust-remote-code is enabled. Custom Python from the "
+            "model directory may execute under the current user. Use only with "
+            "checkpoints you trust.",
+            flush=True,
+        )
+        return {"trust_remote_code": True}
+    return {"trust_remote_code": False}
 
 
 def print_run_config(args: argparse.Namespace) -> None:
@@ -169,13 +211,14 @@ def parse_ppl_from_text(text: str) -> float:
     )
 
 
-def run_amct_ppl(model_dir: str, *, seq_len: int, device: str) -> float:
+def run_amct_ppl(
+    model_dir: str, *, seq_len: int, device: str, trust_remote_code: bool
+) -> float:
     """Run official AMCT blockwise BF16 eval and parse WikiText2 PPL."""
     cmd = [
         sys.executable,
         "-m",
         "amct_pytorch.eval",
-        "--trust_remote_code",
         "--model",
         model_dir,
         "--model_name",
@@ -191,6 +234,8 @@ def run_amct_ppl(model_dir: str, *, seq_len: int, device: str) -> float:
         "--bit_config",
         "amct_pytorch/configs/bf16.yaml",
     ]
+    if trust_remote_code:
+        cmd.append("--trust_remote_code")
     print("Running:", " ".join(cmd), flush=True)
     proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
     combined = (proc.stdout or "") + "\n" + (proc.stderr or "")
@@ -301,6 +346,10 @@ def main() -> None:
     args = parse_args()
     print_run_config(args)
 
+    model_dir = resolve_local_model_dir(args.model)
+    args.model = str(model_dir)
+    load_kwargs = model_load_kwargs(args.trust_remote_code)
+
     out_root = Path(args.output_dir) / f"tolerance_{args.tolerance}"
     if out_root.exists():
         shutil.rmtree(out_root)
@@ -316,16 +365,19 @@ def main() -> None:
     else:
         print("[1/5] Baseline WikiText2 PPL (original model, blockwise on NPU)...")
         baseline_ppl = run_amct_ppl(
-            args.model, seq_len=args.eval_seq_len, device=args.device
+            args.model,
+            seq_len=args.eval_seq_len,
+            device=args.device,
+            trust_remote_code=args.trust_remote_code,
         )
     print(f"baseline_ppl={baseline_ppl}", flush=True)
 
     print("[2/5] Load model on CPU for pruning...", flush=True)
-    tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(args.model, **load_kwargs)
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
-        trust_remote_code=True,
         torch_dtype=torch.bfloat16,
+        **load_kwargs,
     ).eval()
     params_loaded = count_params(model)
     print(f"loaded_params={params_loaded}", flush=True)
@@ -399,21 +451,8 @@ def main() -> None:
         restore_vl_config(args.model, pruned_dir, model)
         pruned_dir_str = str(pruned_dir)
 
-    if args.skip_post_eval:
-        pruned_ppl = None
-    elif unchanged:
-        print(
-            "[5/5] Model unchanged -> reuse baseline WikiText2 PPL "
-            "(skip redundant blockwise eval).",
-            flush=True,
-        )
-        pruned_ppl = baseline_ppl
-    else:
-        print("[5/5] Post-prune WikiText2 PPL (blockwise on NPU)...", flush=True)
-        pruned_ppl = run_amct_ppl(
-            pruned_dir_str, seq_len=args.eval_seq_len, device=args.device
-        )
-
+    # Persist prune metrics before post-eval so a later eval failure still leaves
+    # params / cut_rate / prune_minutes for the README result table.
     result = {
         "model": "Qwen3.6-35B-A3B",
         "method": "mass_variance",
@@ -421,7 +460,7 @@ def main() -> None:
         "tolerance": args.tolerance,
         "search_evaluator": args.search_evaluator,
         "baseline_ppl": baseline_ppl,
-        "pruned_ppl": pruned_ppl,
+        "pruned_ppl": None,
         "post_process_ppl": "N/A",
         "params_before": params_before,
         "params_after": params_after,
@@ -436,6 +475,28 @@ def main() -> None:
         "report": report_dict,
     }
     result_path = out_root / "result.json"
+    result_path.write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")
+    print("Saved prune metrics:", result_path, flush=True)
+
+    if args.skip_post_eval:
+        pruned_ppl = None
+    elif unchanged:
+        print(
+            "[5/5] Model unchanged -> reuse baseline WikiText2 PPL "
+            "(skip redundant blockwise eval).",
+            flush=True,
+        )
+        pruned_ppl = baseline_ppl
+    else:
+        print("[5/5] Post-prune WikiText2 PPL (blockwise on NPU)...", flush=True)
+        pruned_ppl = run_amct_ppl(
+            pruned_dir_str,
+            seq_len=args.eval_seq_len,
+            device=args.device,
+            trust_remote_code=args.trust_remote_code,
+        )
+
+    result["pruned_ppl"] = pruned_ppl
     result_path.write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")
     print("Saved:", result_path, flush=True)
     print(
