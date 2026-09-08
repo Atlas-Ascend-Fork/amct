@@ -333,8 +333,10 @@ class ConfigBase:
                 layer_cfg['retrain_enable'] = False
             skipped_layers.append(layer)
             LOGGER.logw(
-                "Cannot quantize layer '{}' as A8W4: its final Deploy weight "
-                "pack axis is odd; the layer remains in floating point.".format(layer),
+                "Cannot quantize layer '{}' with INT4 weights: its final Deploy "
+                "weight pack axis is invalid or odd; the layer remains in floating point.".format(
+                    layer
+                ),
                 module_name=_MODULE_NAME,
             )
 

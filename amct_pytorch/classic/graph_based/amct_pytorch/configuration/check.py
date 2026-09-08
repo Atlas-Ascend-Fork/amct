@@ -326,19 +326,19 @@ class GraphQuerier:
 
     @staticmethod
     def is_int4_weight_pack_axis_even(graph, layer_name):
-        """Return whether all weights have an even final Deploy pack axis."""
+        """Check the final Deploy pack axis of weights for RETRAIN_ONNX_TYPES.
+
+        Check both main and recurrence weights. The pack axis is the last
+        dimension, except Gemm with transB=1, whose final layout uses axis 0.
+        Empty shapes, invalid axes and odd axis sizes cannot be packed.
+        Operators outside the weight-check capacity do not need this check.
+        """
         node = graph.get_node_by_name(layer_name)
-        if node.type not in (
-            'Conv',
-            'ConvTranspose',
-            'Gemm',
-            'MatMul',
-            'LSTM',
-            'GRU',
-        ):
+        if node.type not in RETRAIN_ONNX_TYPES:
             return True
 
         pack_axis = -1
+        min_rank = 2 if node.type in ('Gemm', 'MatMul') else 3
         if node.type == 'Gemm':
             attr_helper = AttributeProtoHelper(node.proto)
             if (
@@ -354,12 +354,24 @@ class GraphQuerier:
             if wnode is None:
                 continue
             dims = QuantOpInfo.get_node_tensor(wnode).dims
-            if dims and dims[pack_axis] % 2 == 1:
-                actual_axis = pack_axis if pack_axis >= 0 else len(dims) + pack_axis
+            if (
+                not dims
+                or len(dims) < min_rank
+                or not -len(dims) <= pack_axis < len(dims)
+            ):
                 LOGGER.logw(
-                    "Skip A8W4 layer '{}': ONNX weight shape {} has odd Deploy "
+                    "Cannot pack INT4 weights for layer '{}': weight shape {} "
+                    "is invalid for {} Deploy pack axis {} (minimum rank {}).".format(
+                        layer_name, dims, node.type, pack_axis, min_rank
+                    ),
+                    module_name='Configuration',
+                )
+                return False
+            if dims[pack_axis] % 2 == 1:
+                LOGGER.logw(
+                    "Skip INT4 weights for layer '{}': ONNX weight shape {} has odd Deploy "
                     "pack axis {} (size {}).".format(
-                        layer_name, list(dims), actual_axis, dims[pack_axis]
+                        layer_name, list(dims), pack_axis, dims[pack_axis]
                     ),
                     module_name='Configuration',
                 )

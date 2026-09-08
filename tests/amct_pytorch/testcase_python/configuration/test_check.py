@@ -926,6 +926,20 @@ class TestIsInt4WeightPackAxisEven(unittest.TestCase):
             )
         self.assertTrue(ret)
 
+    def test_missing_weight_dimensions_rejected(self):
+        node = mock.MagicMock()
+        node.type = 'Conv'
+        with mock.patch(self._QOI) as m_qoi:
+            m_qoi.get_recurrence_weight_node.return_value = None
+            for dims in (None, [], [2], [2, 2]):
+                with self.subTest(dims=dims):
+                    m_qoi.get_node_tensor.return_value.dims = dims
+                    self.assertFalse(
+                        GraphQuerier.is_int4_weight_pack_axis_even(
+                            self._graph_with(node), 'conv'
+                        )
+                    )
+
     def test_group_conv_with_even_last_axis_supported(self):
         node = mock.MagicMock()
         node.type = 'Conv'
@@ -957,7 +971,7 @@ class TestIsInt4WeightPackAxisEven(unittest.TestCase):
                 self._graph_with(node), 'conv'
             )
         self.assertFalse(ret)
-        self.assertIn('axis 3', logger.logw.call_args.args[0])
+        self.assertIn('axis -1', logger.logw.call_args.args[0])
 
     def test_conv_with_odd_cin_and_even_last_axis_supported(self):
         node = mock.MagicMock()

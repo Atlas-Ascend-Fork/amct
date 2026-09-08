@@ -43,6 +43,11 @@ def is_dynamo_export():
 
 
 def check_int4_export(wts_param):
+    """Validate the opset selected by the caller of torch.onnx.export.
+
+    Native INT4 QAT Q/DQ export requires the user to pass opset_version=21.
+    This check does not select the opset or change Parser's internal export.
+    """
     if not hasattr(TensorProto, 'INT4'):
         raise RuntimeError('INT4 export requires ONNX native TensorProto.INT4.')
     if _globals.GLOBALS.export_onnx_opset_version != 21:

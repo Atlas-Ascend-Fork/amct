@@ -103,6 +103,22 @@ class TestParser(unittest.TestCase):
 
         self.assertTrue(mock_export.call_args.args[3]['dynamo'])
 
+    @patch(
+        'amct_pytorch.classic.graph_based.amct_pytorch.parser.parser._export_to_onnx'
+    )
+    def test_export_onnx_legacy_api_omits_dynamo(self, mock_export):
+        def legacy_export(model, args, path, opset_version=16):
+            pass
+
+        with patch('torch.onnx.export', new=legacy_export):
+            for settings in (None, {'dynamo': False}):
+                Parser.export_onnx(torch.nn.Identity(), self.args, BytesIO(), settings)
+                self.assertNotIn('dynamo', mock_export.call_args.args[3])
+            with self.assertRaisesRegex(ValueError, 'does not support dynamo'):
+                Parser.export_onnx(
+                    torch.nn.Identity(), self.args, BytesIO(), {'dynamo': True}
+                )
+
     @patch('torch.onnx.export')
     def test_parse_unsupport_bn(self, mock_export):
         mock_export.side_effect = RuntimeError()

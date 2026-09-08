@@ -105,6 +105,14 @@ class TestQdqSymbolic(unittest.TestCase):
                 mock.Mock(),
             )
 
+    def test_is_dynamo_export_in_onnx_compilation_context(self):
+        with (
+            mock.patch('torch.compiler.is_compiling', return_value=True),
+            mock.patch('torch.onnx.is_in_onnx_export', return_value=True),
+            mock.patch('torch.onnx.ops', mock.Mock(symbolic=mock.Mock()), create=True),
+        ):
+            self.assertTrue(is_dynamo_export())
+
     def test_is_dynamo_export_requires_onnx_export_context(self):
         with (
             mock.patch('torch.compiler.is_compiling', return_value=True),
