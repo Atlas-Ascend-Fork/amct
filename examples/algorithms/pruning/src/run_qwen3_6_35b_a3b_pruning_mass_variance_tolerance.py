@@ -33,6 +33,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -151,6 +152,23 @@ def count_params(model: torch.nn.Module) -> int:
     return sum(p.numel() for p in model.parameters())
 
 
+def parse_ppl_from_text(text: str) -> float:
+    """Parse PPL from amct_pytorch.eval / loguru output."""
+    patterns = [
+        r"PPL evaluation completed:\s*([0-9]+(?:\.[0-9]+)?)",
+        r"\bPPL:\s*([0-9]+(?:\.[0-9]+)?)",
+        r"Wikitext2-ppl=\s*([0-9]+(?:\.[0-9]+)?)",
+    ]
+    for pattern in patterns:
+        matches = re.findall(pattern, text)
+        if matches:
+            return float(matches[-1])
+    raise RuntimeError(
+        "Failed to parse PPL from amct_pytorch.eval output. "
+        "Expected 'PPL evaluation completed:' or 'PPL:'."
+    )
+
+
 def run_amct_ppl(model_dir: str, *, seq_len: int, device: str) -> float:
     """Run official AMCT blockwise BF16 eval and parse WikiText2 PPL."""
     cmd = [
@@ -182,11 +200,7 @@ def run_amct_ppl(model_dir: str, *, seq_len: int, device: str) -> float:
             f"amct_pytorch.eval failed with exit={proc.returncode}. "
             "See stdout/stderr above."
         )
-    marker = "Wikitext2-ppl="
-    for line in combined.splitlines():
-        if marker in line:
-            return float(line.split(marker, 1)[1].strip().split()[0])
-    raise RuntimeError("Failed to parse Wikitext2-ppl from amct_pytorch.eval output")
+    return parse_ppl_from_text(combined)
 
 
 def _read_num_experts(model: torch.nn.Module) -> int | None:
