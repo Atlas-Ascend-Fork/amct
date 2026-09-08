@@ -123,6 +123,18 @@ def parse_args() -> argparse.Namespace:
         default=512,
         help="Sequence length for search-time proxy evaluator",
     )
+    parser.add_argument(
+        "--search-evaluator",
+        type=str,
+        default="fidelity",
+        choices=["fidelity", "proxy_ppl"],
+        help=(
+            "Tolerance-search metric. 'fidelity' uses AMCT built-in score "
+            "(recommended; short CPU proxy_ppl over-penalizes and may reject "
+            "all DEFAULT_RATIO_GRID points even when WikiText2 PPL would pass). "
+            "Final reported PPL always comes from AMCT blockwise WikiText2 eval."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -309,13 +321,22 @@ def main() -> None:
     print("prune_diagnose():", flush=True)
     print(diagnose, flush=True)
 
-    proxy_batches = get_wiki_inputs(tokenizer, seq_len=args.proxy_seq_len)[
-        : args.proxy_batches
-    ]
-    evaluator = NegPplEvaluator(proxy_batches)
+    if args.search_evaluator == "proxy_ppl":
+        proxy_batches = get_wiki_inputs(tokenizer, seq_len=args.proxy_seq_len)[
+            : args.proxy_batches
+        ]
+        evaluator = NegPplEvaluator(proxy_batches)
+    else:
+        evaluator = None
+        print(
+            "Using AMCT built-in fidelity evaluator for tolerance search. "
+            "Final WikiText2 PPL is still measured by blockwise eval.",
+            flush=True,
+        )
 
     print(
         f"[4/5] Tolerance search prune: tolerance={args.tolerance} "
+        f"search_evaluator={args.search_evaluator} "
         f"ratio_grid={DEFAULT_RATIO_GRID} ...",
         flush=True,
     )
@@ -348,10 +369,19 @@ def main() -> None:
         )
 
     pruned_dir = out_root / "pruned_model"
-    pruned_dir.mkdir(parents=True, exist_ok=True)
-    model.save_pretrained(str(pruned_dir))
-    tokenizer.save_pretrained(str(pruned_dir))
-    restore_vl_config(args.model, pruned_dir, model)
+    if unchanged:
+        print(
+            "Skip save_pretrained (model unchanged) to avoid duplicating ~67G weights.",
+            flush=True,
+        )
+        pruned_dir_str = args.model
+    else:
+        pruned_dir.mkdir(parents=True, exist_ok=True)
+        print(f"Saving pruned model to {pruned_dir} ...", flush=True)
+        model.save_pretrained(str(pruned_dir))
+        tokenizer.save_pretrained(str(pruned_dir))
+        restore_vl_config(args.model, pruned_dir, model)
+        pruned_dir_str = str(pruned_dir)
 
     if args.skip_post_eval:
         pruned_ppl = None
@@ -365,7 +395,7 @@ def main() -> None:
     else:
         print("[5/5] Post-prune WikiText2 PPL (blockwise on NPU)...", flush=True)
         pruned_ppl = run_amct_ppl(
-            str(pruned_dir), seq_len=args.eval_seq_len, device=args.device
+            pruned_dir_str, seq_len=args.eval_seq_len, device=args.device
         )
 
     result = {
@@ -373,6 +403,7 @@ def main() -> None:
         "method": "mass_variance",
         "mode": "tolerance",
         "tolerance": args.tolerance,
+        "search_evaluator": args.search_evaluator,
         "baseline_ppl": baseline_ppl,
         "pruned_ppl": pruned_ppl,
         "post_process_ppl": "N/A",
