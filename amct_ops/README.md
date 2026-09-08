@@ -1,12 +1,16 @@
 # amct_ops — AMCT NPU 自定义算子
 
+简体中文 | [English](./README_en.md)
+
 ## 简介
 
 **定位**：
+
 - `amct_ops` 是 AMCT 的 NPU 自定义算子层，负责承载 PyTorch / torch_npu 尚未覆盖的低比特量化、数据类型转换等硬件级算子。
 - 与 `amct_pytorch/` 聚焦的量化算法、压缩流程编排不同，`amct_ops` 更贴近底层硬件实现。
 
 **独立优势**：
+
 - **职责清晰**：`amct_pytorch` 通过 Python 接口或 `torch.ops.amct` 调用算子，无需关注 Ascend C kernel、C++ extension、CMake 编译等细节
 - **独立开发**：算子可按独立模块开发、构建和测试，避免主算法目录混杂 kernel 和构建逻辑
 - **灵活扩展**：新增低比特类型、量化辅助算子或调整 NPU 实现时，互不干扰
@@ -14,13 +18,14 @@
 **与 `amct_pytorch/` 的分工**：
 
 | 维度 | `amct_pytorch/` | `amct_ops/` |
-|------|-----------------|------------|
+| ------ | ----------------- | ------------ |
 | 关注点 | 压缩算法与流程编排 | 算子底层实现 |
 | 语言 | Python | Ascend C kernel & C++ binding & Python 接口 |
-| 产物 | .tar.gz 包（源码压缩包）| wheel 包（含 .so & Python 接口）|
+| 产物 | .tar.gz 包（源码压缩包） | wheel 包（含 .so & Python 接口） |
 | 复用性 | 绑定 AMCT 流程 | 独立的 PyTorch 扩展，不强依赖 AMCT 主流程 |
 
 **使用方式**：
+
 - 可独立安装的 PyTorch 扩展包（wheel 格式）
 - 支持 `amct_ops.<op>` 和 `torch.ops.amct.<op>` 两种接口
 
@@ -52,7 +57,7 @@ amct_ops/
 ### 依赖要求
 
 | 依赖 | 版本 |
-|------|------|
+| ------ | ------ |
 | Python | >=3.9 |
 | PyTorch | 2.7.1 或 2.1.0（需配套 `torch_npu`） |
 | GCC / CMake | ≥ 7.3 / ≥ 3.16（推荐 3.20） |
@@ -153,4 +158,5 @@ static library kineto_LIBRARY-NOTFOUND not found.
 - 算子名在 `amct` 内须唯一，新增前先检索 `torch.ops.amct` 是否已存在同名算子。
 
 ## 参考资料
+
 [cann/ops-nn算子开发指导](https://gitcode.com/cann/ops-nn/blob/master/docs/zh/develop/torch_extension_develop_guide.md)
