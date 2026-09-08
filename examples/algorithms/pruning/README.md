@@ -94,7 +94,7 @@ done
 
 | 参数 | 含义 |
 |:--|:--|
-| `--tolerance` | 搜索容差，任务要求分别跑 `0.1` / `0.2` / `0.5` |
+| `--tolerance` | 搜索容差（默认 `fidelity` 下为 top-1 fidelity / quality-drop 上限，**不是** WikiText2 PPL 增量）；任务要求分别跑 `0.1` / `0.2` / `0.5` |
 | `--trust-remote-code` | 允许执行模型目录内自定义代码；默认关闭。`--model` 必须是本地目录；仅对信任的本地权重开启 |
 | `--search-evaluator fidelity` | 搜索用 AMCT 内置保真度（与 `proxy_ppl` 口径不同，不可直接对比）；最终表内 PPL 仍以 WikiText2 blockwise 为准 |
 | `--calib-nsamples` / `--calib-seq-len` | Pileval 校准条数与长度（默认 8 / 512） |
@@ -147,21 +147,3 @@ search_chosen_ratio=0.1, notes=[])
 
 补充：原始每层路由专家数为 256；三档剪后分别为 **179 / 128 / 51**。
 `tolerance=0.5` 的参数量/削减率由剪后 checkpoint（`num_experts=51`）与 0.1/0.2 档 `params_after` 对专家数线性关系交叉核对；剪枝时长为同脚本路径下 diagnose+search+apply 阶段计时（不含 post-eval）。
-
-### 3.4 实测截图
-
-![基线 PPL](figures/issue183_task2/01_baseline_ppl.png)
-
-![tolerance=0.1 PPL](figures/issue183_task2/04_tolerance_0.1_ppl.png)
-
-![tolerance=0.1 result.json](figures/issue183_task2/06_result_json_0.1.png)
-
-![tolerance=0.2 RESULT_ROW](figures/issue183_task2/03_tolerance_0.2_result_row.png)
-
-![tolerance=0.2 result.json](figures/issue183_task2/07_result_json_0.2.png)
-
-![tolerance=0.5 PPL](figures/issue183_task2/02_tolerance_0.5_ppl.png)
-
-![tolerance=0.5 result.json](figures/issue183_task2/08_result_json_0.5.png)
-
-![专家数核对](figures/issue183_task2/05_num_experts.png)

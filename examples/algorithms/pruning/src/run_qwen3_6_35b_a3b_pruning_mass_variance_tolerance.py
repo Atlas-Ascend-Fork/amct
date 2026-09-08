@@ -76,7 +76,13 @@ def parse_args() -> argparse.Namespace:
         type=float,
         required=True,
         choices=[0.1, 0.2, 0.5],
-        help="Allowed PPL increase vs baseline; run each value as a separate job",
+        help=(
+            "Search tolerance for quality drop under --search-evaluator. "
+            "With default fidelity, this bounds AMCT top-1 fidelity / quality drop "
+            "(not a WikiText2 PPL delta). With proxy_ppl, it bounds the proxy -PPL "
+            "drop. Run each of 0.1 / 0.2 / 0.5 as a separate job; final reported "
+            "PPL always comes from AMCT blockwise WikiText2 eval."
+        ),
     )
     parser.add_argument(
         "--calib-nsamples",
@@ -263,32 +269,97 @@ def _read_num_experts(model: torch.nn.Module) -> int | None:
     return None
 
 
+def _config_to_dict(obj) -> dict:
+    if obj is None:
+        return {}
+    if hasattr(obj, "to_dict"):
+        data = obj.to_dict()
+        return data if isinstance(data, dict) else {}
+    if isinstance(obj, dict):
+        return dict(obj)
+    return {}
+
+
+def _build_text_config(
+    src_cfg: dict, saved_cfg: dict | None, model: torch.nn.Module
+) -> dict:
+    """Build a language text_config dict from VL source, flat save, or model."""
+    if isinstance(src_cfg.get("text_config"), dict):
+        return dict(src_cfg["text_config"])
+
+    model_cfg = getattr(model, "config", None)
+    nested = getattr(model_cfg, "text_config", None) if model_cfg is not None else None
+    text = _config_to_dict(nested)
+    if text:
+        return text
+
+    flat = _config_to_dict(model_cfg)
+    if flat:
+        return flat
+
+    if isinstance(saved_cfg, dict) and isinstance(saved_cfg.get("text_config"), dict):
+        return dict(saved_cfg["text_config"])
+    if isinstance(saved_cfg, dict) and saved_cfg:
+        return dict(saved_cfg)
+    return dict(src_cfg)
+
+
 def restore_vl_config(
     src_model_dir: str, pruned_dir: Path, model: torch.nn.Module
 ) -> None:
     """Rewrite saved config.json back to VL nesting for amct qwen3_6_moe eval.
 
-    AutoModelForCausalLM.save_pretrained emits a flat language-only config, while
-    AMCT qwen3_6_moe expects the original VL layout with text_config.num_experts.
+    AutoModelForCausalLM.save_pretrained may emit a flat language-only config.
+    AMCT qwen3_6_moe expects VL layout with text_config.num_experts. Prefer the
+    original source layout when present; otherwise nest a text_config created from
+    the source / saved / model config.
     """
     src = Path(src_model_dir) / "config.json"
     dst = pruned_dir / "config.json"
     with src.open("r", encoding="utf-8") as f:
-        cfg = json.load(f)
+        src_cfg = json.load(f)
+
+    saved_cfg = None
+    if dst.is_file():
+        with dst.open("r", encoding="utf-8") as f:
+            saved_cfg = json.load(f)
 
     num_experts = _read_num_experts(model)
-    if "text_config" in cfg and isinstance(cfg["text_config"], dict) and num_experts:
-        cfg["text_config"]["num_experts"] = num_experts
-        print(f"Restored VL config.json with text_config.num_experts={num_experts}")
-    else:
-        print(
-            "WARNING: could not update text_config.num_experts; "
-            f"num_experts={num_experts}, keys={list(cfg.keys())}"
+    if not isinstance(num_experts, int) or num_experts <= 0:
+        raise RuntimeError(
+            "Cannot determine pruned num_experts from model.config; "
+            "refusing to write config.json without text_config.num_experts."
         )
+
+    text_config = _build_text_config(src_cfg, saved_cfg, model)
+    text_config["num_experts"] = num_experts
+
+    if isinstance(src_cfg.get("text_config"), dict):
+        cfg = dict(src_cfg)
+        cfg["text_config"] = text_config
+    else:
+        # Flat language-only source: keep top-level keys and add nested text_config
+        # so qwen3_6_moe._update_config can read text_config.num_experts.
+        cfg = dict(src_cfg)
+        cfg["text_config"] = text_config
 
     with dst.open("w", encoding="utf-8") as f:
         json.dump(cfg, f, indent=2, ensure_ascii=False)
         f.write("\n")
+
+    with dst.open("r", encoding="utf-8") as f:
+        written = json.load(f)
+    written_text = written.get("text_config")
+    written_experts = (
+        written_text.get("num_experts") if isinstance(written_text, dict) else None
+    )
+    if written_experts != num_experts:
+        raise RuntimeError(
+            "Post-save config assertion failed: expected "
+            f"text_config.num_experts={num_experts}, got {written_experts!r} "
+            f"in {dst}"
+        )
+    print(f"Restored VL config.json with text_config.num_experts={num_experts}")
 
 
 class NegPplEvaluator:

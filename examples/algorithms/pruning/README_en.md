@@ -98,7 +98,7 @@ Key arguments:
 
 | Arg | Meaning |
 |:--|:--|
-| `--tolerance` | Search tolerance; task requires `0.1` / `0.2` / `0.5` separately |
+| `--tolerance` | Search tolerance (under default `fidelity`: max top-1 fidelity / quality drop, **not** a WikiText2 PPL delta); task requires `0.1` / `0.2` / `0.5` separately |
 | `--trust-remote-code` | Allow custom Python from the model dir (off by default). `--model` must be a local directory; enable only for trusted local weights |
 | `--search-evaluator fidelity` | AMCT built-in fidelity for search (not comparable with `proxy_ppl`); table PPL is still WikiText2 blockwise |
 | `--calib-nsamples` / `--calib-seq-len` | Pileval calibration count/length (default 8 / 512) |
@@ -153,21 +153,3 @@ Routed experts per layer start at 256; after pruning they are **179 / 128 / 51**
 For `tolerance=0.5`, params/cut-rate are cross-checked from the pruned checkpoint
 (`num_experts=51`) against the 0.1/0.2 `params_after` vs expert-count relation; prune time is
 diagnose+search+apply on the same script path (excluding post-eval).
-
-### 3.4 Screenshots
-
-![Baseline PPL](figures/issue183_task2/01_baseline_ppl.png)
-
-![tolerance=0.1 PPL](figures/issue183_task2/04_tolerance_0.1_ppl.png)
-
-![tolerance=0.1 result.json](figures/issue183_task2/06_result_json_0.1.png)
-
-![tolerance=0.2 RESULT_ROW](figures/issue183_task2/03_tolerance_0.2_result_row.png)
-
-![tolerance=0.2 result.json](figures/issue183_task2/07_result_json_0.2.png)
-
-![tolerance=0.5 PPL](figures/issue183_task2/02_tolerance_0.5_ppl.png)
-
-![tolerance=0.5 result.json](figures/issue183_task2/08_result_json_0.5.png)
-
-![Expert count check](figures/issue183_task2/05_num_experts.png)
