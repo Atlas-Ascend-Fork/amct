@@ -1,6 +1,2 @@
 *.png filter=lfs diff=lfs merge=lfs -text
 
-# Issue 183 evidence screenshots: store as normal git blobs (not LFS) for PR embedding
-examples/algorithms/pruning/figures/issue183_task2/** filter=
-examples/algorithms/pruning/figures/issue183_task2/** diff=
-examples/algorithms/pruning/figures/issue183_task2/** merge=

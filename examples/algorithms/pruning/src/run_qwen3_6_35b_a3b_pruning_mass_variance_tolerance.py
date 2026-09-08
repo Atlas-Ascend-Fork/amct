@@ -218,7 +218,9 @@ def _read_num_experts(model: torch.nn.Module) -> int | None:
     return None
 
 
-def restore_vl_config(src_model_dir: str, pruned_dir: Path, model: torch.nn.Module) -> None:
+def restore_vl_config(
+    src_model_dir: str, pruned_dir: Path, model: torch.nn.Module
+) -> None:
     """Rewrite saved config.json back to VL nesting for amct qwen3_6_moe eval.
 
     AutoModelForCausalLM.save_pretrained emits a flat language-only config, while
