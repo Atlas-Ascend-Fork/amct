@@ -119,3 +119,21 @@ done
 | Qwen3.6-35B-A3B | `mass_variance` | `tolerance=0.5` | 6.308547 | 22.681002 | N/A | 见对应 `result.json` / `num_experts=51` | — | — |
 
 补充：原始每层路由专家数为 256；三档剪后分别为 **179 / 128 / 51**。
+
+### 3.4 实测截图
+
+![基线 PPL](figures/issue183_task2/01_baseline_ppl.png)
+
+![tolerance=0.1 PPL](figures/issue183_task2/04_tolerance_0.1_ppl.png)
+
+![tolerance=0.1 result.json](figures/issue183_task2/06_result_json_0.1.png)
+
+![tolerance=0.2 RESULT_ROW](figures/issue183_task2/03_tolerance_0.2_result_row.png)
+
+![tolerance=0.2 result.json](figures/issue183_task2/07_result_json_0.2.png)
+
+![tolerance=0.5 PPL](figures/issue183_task2/02_tolerance_0.5_ppl.png)
+
+![tolerance=0.5 result.json](figures/issue183_task2/08_result_json_0.5.png)
+
+![专家数核对](figures/issue183_task2/05_num_experts.png)
