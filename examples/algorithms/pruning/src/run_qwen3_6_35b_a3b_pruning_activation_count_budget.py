@@ -10,19 +10,16 @@ from pathlib import Path
 # 某些 Transformers 版本在加载模型类时会导入 torchaudio；此处隐藏不兼容的可选安装
 torchaudio_stub = types.ModuleType("torchaudio")
 torchaudio_stub.__version__ = "0.0.0"
-torchaudio_stub.__spec__ = importlib.machinery.ModuleSpec(
-    "torchaudio", loader=None
-)
+torchaudio_stub.__spec__ = importlib.machinery.ModuleSpec("torchaudio", loader=None)
 torchaudio_stub.functional = types.SimpleNamespace()
 sys.modules.setdefault("torchaudio", torchaudio_stub)
 
-import torch
-import torch_npu
-import amct_pytorch as amct
-from datasets import load_dataset
-from modelscope import MsDataset
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from amct_pytorch.pruning import PruneReport
+import torch  # noqa: E402
+import amct_pytorch as amct  # noqa: E402
+from datasets import load_dataset  # noqa: E402
+from modelscope import MsDataset  # noqa: E402
+from transformers import AutoModelForCausalLM, AutoTokenizer  # noqa: E402
+from amct_pytorch.pruning import PruneReport  # noqa: E402
 
 
 DEFAULT_MODEL = "/mnt/workspace/models/Qwen3.6-35B-A3B"
@@ -31,13 +28,9 @@ DEFAULT_REPORT_DIR = "/mnt/workspace/qwen3_6_pruning_results"
 
 def load_pileval(tokenizer, seq_len, sample_count, source):
     if source == "huggingface":
-        dataset = load_dataset(
-            "mit-han-lab/pile-val-backup", split="validation"
-        )
+        dataset = load_dataset("mit-han-lab/pile-val-backup", split="validation")
     else:
-        dataset = MsDataset.load(
-            "swift/pile-val-backup", "default", split="validation"
-        )
+        dataset = MsDataset.load("swift/pile-val-backup", "default", split="validation")
     samples = []
     for row in dataset:
         text = row.get("text", "")
@@ -76,7 +69,7 @@ def save_pruned_model(model, tokenizer, model_path, output_dir):
     model.save_pretrained(output_dir)
     tokenizer.save_pretrained(output_dir)
 
-# AMCT 的 Qwen3.6 评估器期望原始的 VL wrapper 配置，但 AutoModelForCausalLM.save_pretrained 会写出扁平化的纯文本配置。
+    # AMCT 的 Qwen3.6 评估器期望原始的 VL wrapper 配置，但 AutoModelForCausalLM.save_pretrained 会写出扁平化的纯文本配置。
     original_config_path = Path(model_path) / "config.json"
     with original_config_path.open("r", encoding="utf-8") as file:
         original_config = json.load(file)
@@ -145,11 +138,7 @@ def main():
 
     before = count_parameters(model)
     experts_before = count_experts(model)
-    config = {
-        "methods": {
-            "moe": {"name": "activation_count", "kwargs": {}}
-        }
-    }
+    config = {"methods": {"moe": {"name": "activation_count", "kwargs": {}}}}
     report = PruneReport()
 
     amct.prune(
@@ -171,17 +160,15 @@ def main():
     print(f"parameters: {before} -> {after}")
     print(f"parameter_reduction: {1.0 - after / before:.6f}")
     print(f"budget_unreachable: {report.budget_unreachable}")
-    print(f"forward: shape={tuple(logits.shape)}, finite={bool(torch.isfinite(logits).all())}")
     print(
-        "calibration_to_prune_seconds: "
-        f"{prune_finish - workflow_start:.2f}"
+        f"forward: shape={tuple(logits.shape)}, finite={bool(torch.isfinite(logits).all())}"
     )
+    print(f"calibration_to_prune_seconds: {prune_finish - workflow_start:.2f}")
 
     report_dir = Path(args.report_dir)
     report_dir.mkdir(parents=True, exist_ok=True)
     report_path = report_dir / (
-        "qwen3_6_35b_a3b_activation_count_budget_"
-        f"{args.size_budget:.1f}.json"
+        f"qwen3_6_35b_a3b_activation_count_budget_{args.size_budget:.1f}.json"
     )
     with report_path.open("w", encoding="utf-8") as file:
         json.dump(
