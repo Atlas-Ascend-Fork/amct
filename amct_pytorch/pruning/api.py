@@ -205,6 +205,12 @@ def prune(
     Structured pruning of a torch model in-place. Modes: fixed ratio (default), accuracy-driven
     (tolerance=), or size-budget (size_budget=); tolerance and size_budget are mutually exclusive.
     A config carrying a method ``menu`` runs the guarded menu search instead of the fixed ratio.
+    "auto" infers a task from evaluation data and model metadata, else JS.
+    Task presets: "preservation" (fidelity), "causal_lm" (PPL), "classification"
+    (labeled top-1 accuracy; tolerance is an absolute drop from measured baseline).
+    Search evaluator also accepts "js" (default), "fidelity", or "ppl". PPL uses
+    unshifted labels or input_ids, ignoring -100 and attention_mask padding.
+    For 0 <= tolerance < 1, the accepted PPL ratio is at most 1 / (1 - tolerance).
     """
     if tolerance is not None and size_budget is not None:
         raise ValueError(
@@ -215,6 +221,15 @@ def prune(
         _reject_search_args(
             tolerance=tolerance, size_budget=size_budget, ratio_grid=ratio_grid
         )
+    inferred_inputs = evaluator is None or (
+        isinstance(evaluator, str) and evaluator in ("auto", "js")
+    )
+    if inferred_inputs and batch_adapter is None:
+        from .accuracy_based_auto_prune import _metric_inputs
+
+        def batch_adapter(batch):
+            return _metric_inputs(batch, None)[:2]
+
     search_args = {
         "data": data,
         "evaluator": evaluator,
