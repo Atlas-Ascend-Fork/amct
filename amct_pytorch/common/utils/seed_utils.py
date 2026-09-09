@@ -25,8 +25,7 @@ __all__ = ['seed_everything']
 
 
 def seed_everything(seed: int = 0):
-    '''Set random seeds for reproducibility.
-    '''
+    '''Set random seeds for reproducibility.'''
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
