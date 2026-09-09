@@ -24,14 +24,16 @@ from amct_pytorch.cli.llm.args import parser_gen
 
 
 def test_trust_remote_code_defaults_to_false():
-    with patch.object(sys, "argv", ["amct"]):
+    with patch.object(sys, "argv", ["amct", "--model_name", "qwen3_5"]):
         args = parser_gen()
 
     assert args.trust_remote_code is False
 
 
 def test_trust_remote_code_flag_sets_true():
-    with patch.object(sys, "argv", ["amct", "--trust_remote_code"]):
+    with patch.object(
+        sys, "argv", ["amct", "--model_name", "qwen3_5", "--trust_remote_code"]
+    ):
         args = parser_gen()
 
     assert args.trust_remote_code is True
@@ -40,9 +42,207 @@ def test_trust_remote_code_flag_sets_true():
 @pytest.mark.parametrize("value", ["True", "False", "yes"])
 def test_trust_remote_code_rejects_explicit_value(value):
     with (
-        patch.object(sys, "argv", ["amct", "--trust_remote_code", value]),
+        patch.object(
+            sys,
+            "argv",
+            ["amct", "--model_name", "qwen3_5", "--trust_remote_code", value],
+        ),
         pytest.raises(SystemExit) as exc_info,
     ):
         parser_gen()
 
     assert exc_info.value.code == 2
+
+
+# Minimal argv per sub-command to satisfy required arguments.
+REQUIRED_ARGV = {
+    "ptq": ["--model_name", "qwen3_5", "--quant_target", "mlp", "--data_dir", "/tmp/d"],
+    "eval": ["--model_name", "qwen3_5"],
+    "extract_ptq_data": [
+        "--model_name",
+        "qwen3_5",
+        "--quant_target",
+        "mlp",
+        "--data_dir",
+        "/tmp/d",
+    ],
+    "deploy": [
+        "--model_name",
+        "qwen3_5",
+        "--quant_target",
+        "mlp",
+        "--quant_dtype",
+        "int",
+    ],
+    None: ["--model_name", "qwen3_5"],
+}
+
+
+@pytest.mark.parametrize("command", ["ptq", "eval", "extract_ptq_data", "deploy", None])
+def test_granularity_defaults_to_block(command):
+    with patch.object(sys, "argv", ["amct"] + REQUIRED_ARGV[command]):
+        args = parser_gen(command=command)
+
+    assert args.granularity == "block"
+
+
+def _argv_without_model_name(command):
+    # REQUIRED_ARGV minus the --model_name pair, so model_name is the only
+    # missing required argument in the model_name test below.
+    argv = list(REQUIRED_ARGV[command])
+    if "--model_name" in argv:
+        idx = argv.index("--model_name")
+        del argv[idx : idx + 2]
+    return argv
+
+
+@pytest.mark.parametrize("command", ["ptq", "extract_ptq_data", "deploy"])
+def test_granularity_rejects_model_for_non_eval_commands(command):
+    # All required arguments except granularity are provided, so SystemExit(2)
+    # can only come from the invalid granularity choice itself.
+    argv = ["amct", "--granularity", "model"] + REQUIRED_ARGV[command]
+    with (
+        patch.object(sys, "argv", argv),
+        pytest.raises(SystemExit) as exc_info,
+    ):
+        parser_gen(command=command)
+
+    assert exc_info.value.code == 2
+
+
+def test_granularity_accepts_model_for_eval():
+    argv = ["amct", "--model_name", "qwen3_5", "--granularity", "model"]
+    with patch.object(sys, "argv", argv):
+        args = parser_gen(command="eval")
+
+    assert args.granularity == "model"
+
+
+def test_granularity_accepts_tensor_for_deploy():
+    argv = ["amct", "--granularity", "tensor"] + REQUIRED_ARGV["deploy"]
+    with patch.object(sys, "argv", argv):
+        args = parser_gen(command="deploy")
+
+    assert args.granularity == "tensor"
+
+
+@pytest.mark.parametrize("command", ["ptq", "eval", "extract_ptq_data", "deploy", None])
+def test_model_name_required_for_all_commands(command):
+    # Other required arguments are provided, so the failure is solely the
+    # missing --model_name.
+    argv = ["amct"] + _argv_without_model_name(command)
+    with (
+        patch.object(sys, "argv", argv),
+        pytest.raises(SystemExit) as exc_info,
+    ):
+        parser_gen(command=command)
+
+    assert exc_info.value.code == 2
+
+
+@pytest.mark.parametrize("command", ["ptq", "extract_ptq_data"])
+def test_quant_target_required_for_ptq_commands(command):
+    argv = ["amct", "--model_name", "qwen3_5", "--data_dir", "/tmp/some_dir"]
+    with (
+        patch.object(sys, "argv", argv),
+        pytest.raises(SystemExit) as exc_info,
+    ):
+        parser_gen(command=command)
+
+    assert exc_info.value.code == 2
+
+
+@pytest.mark.parametrize("command", ["ptq", "extract_ptq_data"])
+def test_data_dir_required_for_ptq_commands(command):
+    argv = ["amct", "--model_name", "qwen3_5", "--quant_target", "mlp"]
+    with (
+        patch.object(sys, "argv", argv),
+        pytest.raises(SystemExit) as exc_info,
+    ):
+        parser_gen(command=command)
+
+    assert exc_info.value.code == 2
+
+
+def test_quant_dtype_required_for_deploy():
+    # quant_target is provided so the missing quant_dtype is the only failure.
+    argv = ["amct", "--model_name", "qwen3_5", "--quant_target", "mlp"]
+    with (
+        patch.object(sys, "argv", argv),
+        pytest.raises(SystemExit) as exc_info,
+    ):
+        parser_gen(command="deploy")
+
+    assert exc_info.value.code == 2
+
+
+def test_quant_target_required_for_deploy():
+    # quant_dtype is provided so the missing quant_target is the only failure;
+    # without it deploy would silently export unquantized weights.
+    argv = ["amct", "--model_name", "qwen3_5", "--quant_dtype", "int"]
+    with (
+        patch.object(sys, "argv", argv),
+        pytest.raises(SystemExit) as exc_info,
+    ):
+        parser_gen(command="deploy")
+
+    assert exc_info.value.code == 2
+
+
+def test_deploy_accepts_multiple_quant_targets():
+    argv = [
+        "amct",
+        "--model_name",
+        "qwen3_5",
+        "--quant_target",
+        "mlp",
+        "attn-linear",
+        "--quant_dtype",
+        "int",
+    ]
+    with patch.object(sys, "argv", argv):
+        args = parser_gen(command="deploy")
+
+    assert args.quant_target == ["mlp", "attn-linear"]
+
+
+def test_deploy_tensor_path_takes_no_quant_args():
+    # The tensor-wise path (e.g. FP8/FP4 -> BF16 conversion, see the
+    # DeepSeek-V4-Flash walkthrough) runs without quant_target/quant_dtype.
+    argv = [
+        "amct",
+        "--model_name",
+        "deepseek_v4",
+        "--trust_remote_code",
+        "--granularity",
+        "tensor",
+        "--eval_mode",
+        "bf16",
+    ]
+    with patch.object(sys, "argv", argv):
+        args = parser_gen(command="deploy")
+
+    assert args.granularity == "tensor"
+    assert args.quant_target == []
+    assert args.quant_dtype == ""
+
+
+def test_optional_args_stay_optional_for_eval():
+    argv = ["amct", "--model_name", "qwen3_5"]
+    with patch.object(sys, "argv", argv):
+        args = parser_gen(command="eval")
+
+    assert args.quant_target == []
+    assert args.data_dir == ""
+
+
+def test_command_specific_args_not_enforced_without_command():
+    # Without a known command, only the always-required --model_name applies;
+    # the command-specific required arguments stay optional.
+    argv = ["amct", "--model_name", "qwen3_5"]
+    with patch.object(sys, "argv", argv):
+        args = parser_gen()
+
+    assert args.quant_target == []
+    assert args.data_dir == ""
+    assert args.quant_dtype == ""

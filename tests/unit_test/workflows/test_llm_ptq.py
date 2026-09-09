@@ -653,3 +653,39 @@ def test_build_pipeline_uses_registry(monkeypatch):
     workflow = _make_workflow()
     pipeline = workflow._build_pipeline()
     assert pipeline is not None
+
+
+def _make_ptq_data_provider(data_dir="/tmp/_ptq_test_data"):
+    from amct_pytorch.common.datasets.ptq_provider import LlmPtqDataProvider
+
+    args = SimpleNamespace(data_dir=data_dir, device="npu:0")
+    provider = LlmPtqDataProvider.__new__(LlmPtqDataProvider)
+    provider.args = args
+    provider.device = args.device
+    provider.pipeline = MagicMock()
+    return provider
+
+
+def test_ptq_data_provider_raises_on_missing_unit_inputs():
+    provider = _make_ptq_data_provider(data_dir="/tmp/_ptq_missing_dir")
+    provider.pipeline.load_unit_inputs = MagicMock(return_value=(None, {}))
+    unit = make_ptq_unit("mlp", "mlp", 0, nn.Linear(2, 2))
+
+    with pytest.raises(FileNotFoundError, match="extract_ptq_data"):
+        provider.load_unit_inputs(unit)
+    provider.pipeline.load_unit_inputs.assert_called_once_with(
+        "/tmp/_ptq_missing_dir", unit
+    )
+
+
+def test_ptq_data_provider_passes_through_loaded_inputs():
+    provider = _make_ptq_data_provider()
+    inps = torch.randn(2, 4)
+    kwargs = {"position_ids": torch.zeros(1)}
+    provider.pipeline.load_unit_inputs = MagicMock(return_value=(inps, kwargs))
+    unit = make_ptq_unit("mlp", "mlp", 0, nn.Linear(2, 2))
+
+    loaded_inps, loaded_kwargs = provider.load_unit_inputs(unit)
+
+    assert loaded_inps is inps
+    assert loaded_kwargs is kwargs

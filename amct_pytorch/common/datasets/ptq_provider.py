@@ -46,7 +46,14 @@ class LlmPtqDataProvider:
         self.pipeline = pipeline
 
     def load_unit_inputs(self, unit: PtqUnit):
-        return self.pipeline.load_unit_inputs(self.args.data_dir, unit)
+        inps, kwargs = self.pipeline.load_unit_inputs(self.args.data_dir, unit)
+        if inps is None:
+            raise FileNotFoundError(
+                f"PTQ input data for unit '{unit.name}' (kind '{unit.kind}') "
+                f"not found under data_dir '{self.args.data_dir}'. "
+                f"Run extract_ptq_data first."
+            )
+        return inps, kwargs
 
     def build_unit_batch(self, unit: PtqUnit, inps, kwargs, gts=None) -> BlockPtqBatch:
         tensors = [inps]
