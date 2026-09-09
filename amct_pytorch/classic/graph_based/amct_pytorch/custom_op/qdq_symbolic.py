@@ -18,12 +18,6 @@
 from onnx import TensorProto
 import torch
 
-try:
-    from torch.onnx import _globals
-except ImportError:
-    # PyTorch 2.10 moved the legacy TorchScript exporter globals.
-    from torch.onnx._internal.torchscript_exporter import _globals
-
 from ...amct_pytorch.common.utils.vars_util import RNN_TENSOR_NUM
 from ...amct_pytorch.utils.vars import DEQUANTIZE_LINEAR, QUANTIZE_LINEAR
 
@@ -43,16 +37,9 @@ def is_dynamo_export():
 
 
 def check_int4_export(wts_param):
-    """Validate the opset selected by the caller of torch.onnx.export.
-
-    Native INT4 QAT Q/DQ export requires the user to pass opset_version=21.
-    This check does not select the opset or change Parser's internal export.
-    """
+    """Validate prerequisites for native INT4 QAT Q/DQ export."""
     if not hasattr(TensorProto, 'INT4'):
         raise RuntimeError('INT4 export requires ONNX native TensorProto.INT4.')
-    if _globals.GLOBALS.export_onnx_opset_version != 21:
-        raise RuntimeError('INT4 Q/DQ export requires ONNX opset 21.')
-
     if not wts_param.get('channel_wise', False):
         return
     module = wts_param.get('module')

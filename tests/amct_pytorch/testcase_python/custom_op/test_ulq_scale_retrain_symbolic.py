@@ -170,14 +170,6 @@ class TestUlqScaleRetrainSymbolic(unittest.TestCase):
         self.assertNotIn('axis_i', calls[0].kwargs)
         self.assertEqual(len(calls[0].args), 3)
 
-    def test_int4_requires_opset_21(self):
-        with _export_opset(17):
-            with self.assertRaisesRegex(RuntimeError, r'INT4.*opset 21'):
-                UlqScaleRetrainFuncQAT.symbolic(
-                    _make_graph(),
-                    *_make_inputs('Linear', num_bits=4, scale_count=1),
-                )
-
     def test_int4_per_channel_scale_count_matches_output_channels(self):
         with _export_opset(21):
             with self.assertRaisesRegex(ValueError, r'scale count.*out_channels'):

@@ -191,14 +191,6 @@ class TestArqRetrainSymbolic(unittest.TestCase):
         self.assertNotIn('axis_i', calls[0].kwargs)
         self.assertEqual(len(calls[0].args), 3)
 
-    def test_int4_requires_opset_21(self):
-        with _export_opset(17):
-            with self.assertRaisesRegex(RuntimeError, r'INT4.*opset 21'):
-                ArqRetrainFuncQAT.symbolic(
-                    _make_graph(),
-                    *_make_inputs('Linear', num_bits=4, scale_count=1),
-                )
-
     def test_missing_native_int4_only_rejects_int4_export(self):
         tensor_proto_without_int4 = SimpleNamespace()
         with mock.patch(
