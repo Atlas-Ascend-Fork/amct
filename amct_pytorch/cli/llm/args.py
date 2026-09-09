@@ -21,6 +21,24 @@ import os
 
 from amct_pytorch.quantization.bit_policy import BitPolicy
 
+# Granularity choices per sub-command: model (modelwise) is eval-only for now,
+# tensor is deploy-only. Unknown commands fall back to the full set.
+GRANULARITY_CHOICES = {
+    "eval": ("block", "model"),
+    "ptq": ("block",),
+    "extract_ptq_data": ("block",),
+    "deploy": ("block", "tensor"),
+}
+_DEFAULT_GRANULARITY_CHOICES = ("block", "model", "tensor")
+
+# Command-specific arguments without a safe default; eval needs none extra.
+COMMAND_SPECIFIC_REQUIRED_ARGS = {
+    "eval": (),
+    "ptq": ("quant_target", "data_dir"),
+    "extract_ptq_data": ("quant_target", "data_dir"),
+    "deploy": ("quant_dtype",),
+}
+
 
 def _validate_eval_mode(args):
     if args.eval_mode != "bf16":
@@ -34,6 +52,8 @@ def _validate_eval_mode(args):
 
 
 def parser_gen(command=None):
+    granularity_choices = GRANULARITY_CHOICES.get(command, _DEFAULT_GRANULARITY_CHOICES)
+    required_args = COMMAND_SPECIFIC_REQUIRED_ARGS.get(command, ())
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
@@ -45,8 +65,8 @@ def parser_gen(command=None):
     parser.add_argument(
         '--model_name',
         type=str,
-        default='deepseek-ai/DeepSeek-V4-Flash',
-        help='Model to load.',
+        required=True,
+        help='Model registry name, e.g. qwen3_5, deepseek_v4.',
     )
     parser.add_argument(
         '--trust_remote_code',
@@ -58,8 +78,13 @@ def parser_gen(command=None):
     parser.add_argument(
         '--granularity',
         type=str,
-        default='model',
-        help='eval for block-wise or global.',
+        default='block',
+        choices=granularity_choices,
+        help='Granularity used by the sub-command. Choices: {}. Defaults to '
+        'block. "model" (eval only) loads the whole model for PPL; "tensor" '
+        '(deploy only) converts weights tensor-wise (dequant/direct quant).'.format(
+            ', '.join(granularity_choices)
+        ),
     )
     parser.add_argument(
         '--seed', type=int, default=0, help='Random seed for HuggingFace and PyTorch.'
@@ -68,12 +93,18 @@ def parser_gen(command=None):
         '--quant_target',
         nargs="+",
         default=[],
+        required='quant_target' in required_args,
         choices=["mlp", "moe", "attn-linear", "attn-cache"],
         help='Only support [mlp, moe, attn-linear, attn-cache]',
     )
     parser.add_argument("--seq_len", type=int, default=4096)
 
-    parser.add_argument('--data_dir', default="")
+    parser.add_argument(
+        '--data_dir',
+        default="",
+        required='data_dir' in required_args,
+        help='Directory holding extract_ptq_data outputs; required by ptq.',
+    )
 
     parser.add_argument(
         '--output_dir', type=str, default="./outputs", help='Output directory path.'
@@ -95,6 +126,7 @@ def parser_gen(command=None):
         "--quant_dtype",
         type=str,
         default="",
+        required='quant_dtype' in required_args,
         choices=['int', 'mxfp', 'hifp'],
         help='Quantization data type.',
     )
