@@ -165,3 +165,110 @@ batch，逐条前向）；校准集 Pileval 1 个样本、`seq_len=512`。`toler
 
 默认 `ratio_grid` 中最小候选 0.1 的 ΔPPL 已达 0.58，超出全部三档容差，因此三档实验下模型均保持
 原样；如需剪枝生效，可通过 `--ratio-grid` 引入更小的候选（如 `0.02,0.05,0.1`）。
+
+## 4 社区任务样例：Qwen3.6-35B-A3B MoE `mass_variance` + `tolerance`（任务 2）
+
+对应 Issue [#183](https://gitcode.com/cann/amct/issues/183) 任务 2：对真实 MoE 模型做专家结构化剪枝。
+脚本：[`src/run_qwen3_6_35b_a3b_pruning_mass_variance_tolerance.py`](src/run_qwen3_6_35b_a3b_pruning_mass_variance_tolerance.py)。
+
+### 4.1 运行说明
+
+环境：CANNLab **NPU A3**（910C，主机内存建议 ≥150GB）。剪枝在 CPU 上进行。
+**tolerance 搜索与最终验收均使用 WikiText2 PPL**（`seq_len=4096`）：搜索默认
+`NegativePplEvaluator`（`-PPL`，与任务 1 一致）；最终结果表用 `amct_pytorch.eval`
+blockwise 在 `npu:0` 复测。
+
+`tolerance` 语义为允许的 **绝对 PPL 增量**：`剪枝后 PPL − 基线 PPL ≤ tolerance`。
+
+```bash
+# 仓库根目录
+source /home/developer/Ascend/cann/set_env.sh
+export MODEL_DIR=/data/models/Qwen3.6-35B-A3B   # 占位路径，改为本地权重目录
+export HF_ENDPOINT=https://hf-mirror.com
+export HF_HUB_DISABLE_XET=1
+
+# 先跑基线（只需一次）
+python3 -m amct_pytorch.eval \
+  --trust_remote_code \
+  --model "$MODEL_DIR" \
+  --model_name qwen3_6_moe \
+  --seq_len 4096 \
+  --granularity block \
+  --device npu:0 \
+  --eval_mode bf16 \
+  --bit_config amct_pytorch/configs/bf16.yaml
+
+# 三档 tolerance 各自从原始模型独立跑（默认 WikiText2 PPL 搜索 + 默认 ratio_grid）
+# Qwen3.6 本地权重需显式打开 --trust-remote-code（仅用于你信任的本地目录）
+# 将 BASELINE_PPL 换成你测到的基线
+BASELINE_PPL=6.308547
+for T in 0.1 0.2 0.5; do
+  python3 examples/algorithms/pruning/src/run_qwen3_6_35b_a3b_pruning_mass_variance_tolerance.py \
+    --model "$MODEL_DIR" \
+    --trust-remote-code \
+    --tolerance "$T" \
+    --baseline-ppl "$BASELINE_PPL" \
+    --skip-baseline-eval \
+    --search-evaluator wikitext2_ppl \
+    --output-dir ./output/qwen3_6_35b_a3b_mass_variance_tolerance
+done
+```
+
+说明：默认 `ratio_grid` 最小候选为 0.1；若该档 ΔPPL 已超过 0.1/0.2/0.5，则三档均可
+能保持原模型不变（与任务 1 同类现象，属有效结果）。若需剪枝生效，可传更细网格，例如
+`--ratio-grid 0.02,0.05,0.1`。
+
+主要参数：
+
+| 参数 | 含义 |
+|:--|:--|
+| `--tolerance` | 允许的 WikiText2 绝对 PPL 增量；任务要求分别跑 `0.1` / `0.2` / `0.5` |
+| `--trust-remote-code` | 允许执行模型目录内自定义代码；默认关闭。`--model` 必须是本地目录；仅对信任的本地权重开启 |
+| `--search-evaluator wikitext2_ppl` | 默认；搜索与验收口径一致（WikiText2 PPL）。`fidelity` / `proxy_ppl` 仅供对比，不可与结果表混用 |
+| `--eval-batches` | 可选，截断搜索用 WikiText2 batch 数；默认全量 test split |
+| `--ratio-grid` | 可选，逗号分隔剪枝率；默认库内 `DEFAULT_RATIO_GRID` |
+| `--calib-nsamples` / `--calib-seq-len` | Pileval 校准条数与长度（默认 8 / 512） |
+| `--eval-seq-len` | 评估序列长度，固定 4096 |
+| `--output-dir` | 产物目录（相对/占位路径） |
+
+校准集：`mit-han-lab/pile-val-backup`；评估集：WikiText2 `wikitext-2-raw-v1` test。
+保存剪后权重后会把 `config.json` 恢复为 VL 嵌套结构，并更新 `text_config.num_experts`，以便
+`qwen3_6_moe` 评估通路加载。
+
+### 4.2 诊断与报告
+
+脚本会打印完整运行参数、`prune_diagnose()` 与正式剪枝后的 `PruneReport`，并写入各档
+`result.json`。请以 **`--search-evaluator wikitext2_ppl`** 实测输出为准粘贴/核对。
+
+示例（结构示意；数值以你本地 `result.json` 为准）：
+
+```text
+prune_diagnose(): DiagnosisReport(targets={'cnn': 0, 'dense': 40, 'moe': 40}, ...)
+```
+
+```json
+{
+  "backend": "huggingface",
+  "params_before": 34660610688,
+  "params_after": "<from result.json>",
+  "events": [],
+  "warnings": []
+}
+```
+
+若默认网格下无候选均超容差，`params_after` 等于 `params_before`，`events` 可为空，并带有
+“no prune ratio met tolerance …” 类 warning（与任务 1 一致，属可接受结果）。
+
+### 4.3 结果表
+
+实测环境：CANNLab A3；搜索与验收均为 WikiText2 PPL，`seq_len=4096`，
+`--search-evaluator wikitext2_ppl`。请用重跑后的 `result.json` 更新下表。
+
+| 模型 | 方法 | 实验设置 | 基线 PPL | 剪枝后 PPL | 后处理 PPL | 参数量（前 → 后） | 参数削减率 | 剪枝时长（min） |
+|:--|:--|:--|--:|--:|:--|:--|--:|--:|
+| Qwen3.6-35B-A3B | `mass_variance` | `tolerance=0.1` | （重测填入） | （重测填入） | N/A | （重测填入） | （重测） | （重测） |
+| Qwen3.6-35B-A3B | `mass_variance` | `tolerance=0.2` | （重测填入） | （重测填入） | N/A | （重测填入） | （重测） | （重测） |
+| Qwen3.6-35B-A3B | `mass_variance` | `tolerance=0.5` | （重测填入） | （重测填入） | N/A | （重测填入） | （重测） | （重测） |
+
+字段来源：各档 `output/.../tolerance_<T>/result.json` 的 `baseline_ppl` / `pruned_ppl` /
+`params_before` / `params_after` / `param_cut_rate` / `prune_minutes`。
