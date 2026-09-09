@@ -1,16 +1,16 @@
 ---
 name: amct-coder
 description: |
-  AMCT 仓源代码编码、实现规划、行为诊断与代码 review 等辅助编码的入口：用于定位 workflow/CLI、solver、dtype、通用 quant module、LLM PTQ 算法、deploy 实现、classic graph、public API、tests、docs 和 examples 的修改落点，检查分层、越层、活跃调用链和上下游契约，并完成相应实现与最小验证。
+  AMCT 仓源码级编码辅助入口。用于实现规划、代码修改、源码行为诊断和代码 review，覆盖 LLM PTQ CLI 及相关 workflow/solver/data、量化模块（dtype/quant module）与 LLM PTQ 算法、deploy、public API 及其测试/文档的落点、调用链和契约检查。不用于量化实验执行、精度/算法收益判读、模型结构适配、classic/graph_based 或 NPU 算子实现。
 ---
 
 # AMCT Coder
 
 ## 定位
 
-把 `amct-coder` 作为 AMCT 编码、实现规划、行为诊断与代码 review 等辅助编码的入口。先判断任务职责归属，再选择操作手册，最后交付并核对证据。
+把 `amct-coder` 作为 AMCT 源码级编码、实现规划、源码行为诊断与代码 review 的路由入口。进入后先判断任务职责归属，再选择对应场景 reference，最后完成交付并核对验证证据。
 
-不要把本 skill 当成量化实验或模型适配编排器。任务实质属于更专门 skill 时，实际加载并遵循它，由它形成职责范围内的实现或计划，不要模仿它写完模型结构、算子或实验方案后口头声称已经委派，也不要只回复“应使用某 skill”后结束。
+不要把本 skill 当成量化实验执行、模型适配实现或 NPU 算子开发编排器。任务如果已被更专门 skill 覆盖，应直接切换并遵循那个 skill；不要只在回复里说“应使用某 skill”后就结束。
 
 默认使用中文。修改代码前，简短说明主落点层和允许改动范围。
 
@@ -20,7 +20,7 @@ description: |
 用户请求
   -> 1. 按动作和当前已发现 skill 判断职责归属
   -> 2. 声明仓库边界，按 Reference 导航选择一个主场景手册
-  -> 3. 读取源码锚点，完成编码、规划、诊断或 review
+  -> 3. 按主要入口和关键符号定位源码，完成编码、规划、诊断或 review
   -> 4. 执行或核对验证证据并汇总
 ```
 
@@ -28,14 +28,14 @@ description: |
 
 先根据用户要执行的动作和当前会话已发现 skill 的 `name + description` 判断职责，不维护外部 skill 的完整副本。任务实质已被更专门 skill 覆盖时，不要为外部职责预读 amct-coder 的 repo-map 或场景手册，直接加载并遵循该 skill，后续加载和交付由它决定。
 
-修改 eval/deploy 等**实现代码**仍属于 amct-coder；运行命令拿结果或生成交付产物属于操作流程。不要只看 `eval`、`deploy`、`attention`、`校准` 等关键词，必须结合动作、代码体系和被修改契约判断。用户点名 skill 时，只有不违反仓库边界和该 skill 的“不适用”条件才遵从。
+修改 eval/deploy 等**实现代码**仍属于 amct-coder；运行命令拿结果或生成交付产物属于操作流程。不要只看 `eval`、`deploy`、`attention`、`校准` 等关键词，必须结合动作、代码体系和被修改契约判断。用户明确指定 skill 或动作时，按用户目标执行；若涉及多个职责，加载相关专门 skill 协作，并由本 skill 负责源码级部分和共享契约收口。
 
 混合任务按职责归属拆分：本 skill 处理辅助编码范围内的部分，其余部分进入对应 skill；全部完成后统一检查契约并汇总。
 
 ### 区分实现与落点 review
 
 - 用户要求**新增或结构性实现**属于专门 skill 的职责时，第一步直接进入对应 skill。
-- 用户要求**评审一个明确文件或拟议方案是否合理**时，由 amct-coder 审查当前落点：只读取该落点所需的 repo-map 切片、一个主操作手册和源码锚点，判断是否越层或错误复用；确认正确实现属于外部职责后，再进入对应 skill 继续。
+- 用户要求**评审一个明确文件或拟议方案是否合理**时，由 amct-coder 审查当前落点：只读取该落点所需的 repo-map 切片、一个主操作手册以及由主要入口和关键符号定位到的源码，判断是否越层或错误复用；确认正确实现属于外部职责后，再进入对应 skill 继续。
 - 用户报告局部 bug 时，先核验现象和根因。若最终需要新增模型结构、NPU kernel 或执行实验，再按核验结果路由；不要只因题面出现模型名、算子名或 eval 关键词提前改判。
 
 ### 事实门禁
@@ -73,7 +73,7 @@ description: |
 实际编码、实现规划、行为诊断、架构或代码行为 review 都要先声明边界；只检查代码风格、版权、贡献门槛和模板的纯规范合规 review 默认跳过本节，一旦结论涉及实现行为、架构落点、调用链或上下游契约，就不再是纯合规检查，必须回到本节补齐资料。
 
 1. 读取 [repo-map.md](../../docs/repo-map.md) 的「分层边界」和「更新规则」。
-2. 抽查候选落点直接相关的源码锚点，确认 map 与当前实现一致。
+2. 按候选落点的主要入口和关键符号抽查直接相关源码，确认 map 与当前实现一致。
 3. 在内部形成边界声明：主落点层、允许范围、禁止事项、必要辅助层、是否需要写回 repo-map。
 
 repo-map 是稳定架构契约，源码是当前行为事实。repo-map 前置读取不代表默认写回，写回判据以已读的 repo-map「更新规则」为准。两者冲突时，先判断源码是否越层；源码代表预期的新边界或核心流程时，把 repo-map 修正纳入本次任务。
@@ -86,29 +86,22 @@ repo-map 是稳定架构契约，源码是当前行为事实。repo-map 前置�
 | --- | --- | --- |
 | 项目规范 | [project-rules.md](references/project-rules.md) | AMCT 代码风格、版权、贡献门槛、模板和 GitCode 操作规范；编码前必读，规范合规 review 必读 |
 | 职责辅助 | [delegation.md](references/delegation.md) | 编码与专门流程的职责交界不清时读取；只解释稳定的高歧义交界，不是外部 skill 清单 |
-| 定位辅助 | [repo-scenarios.md](references/repo-scenarios.md) | 无法确定代码体系或入口时读取 |
-| 主场景 | [dtype-quant-module.md](references/dtype-quant-module.md) | 量化 dtype 和通用 quant module 相关开发与 review |
+| 架构辅助 | [llm-cli-architecture.md](references/llm-cli-architecture.md) | 需要理解 LLM CLI 整体组成、组件职责和命令间产物关系时读取 |
+| 主场景 | [quant-dtype-modules.md](references/quant-dtype-modules.md) | 量化 dtype 和通用 quant module 相关开发与 review |
 | 主场景 | [llm-algorithm.md](references/llm-algorithm.md) | LLM 量化算法相关开发与 review |
-| 主场景 | [llm-model-unit.md](references/llm-model-unit.md) | LLM 模型层相关开发与 review |
-| 主场景 | [llm-data-workflow.md](references/llm-data-workflow.md) | LLM 数据与 workflow 相关开发与 review |
+| 主场景 | [model-adapter.md](references/model-adapter.md) | 已有模型 adapter 的局部非结构修复与契约 review；新增适配按专门 skill 处理 |
+| 主场景 | [llm-data-workflow.md](references/llm-data-workflow.md) | LLM 数据与 workflow 相关开发、源码定位与 review |
 | 主场景 | [ptq-solver-params.md](references/ptq-solver-params.md) | PTQ solver 和参数生命周期相关开发与 review |
-| 主场景 | [deploy-export-code.md](references/deploy-export-code.md) | 量化模型导出代码相关开发与 review |
-| 主场景 | [classic-graph.md](references/classic-graph.md) | classic 量化与 graph_based 相关开发与 review |
-| 主场景 | [ops-boundary.md](references/ops-boundary.md) | `amct_pytorch` 调用 `amct_ops` 的 Python 侧边界开发与 review |
-| 主场景 | [public-api-tests.md](references/public-api-tests.md) | 公共接口、打包、测试和用户资料相关开发与 review |
-| 阶段辅助 | [stage-impact.md](references/stage-impact.md) | 修改 LLM workflow、数据流转、阶段产物或跨阶段契约时读取 |
-| 分层辅助 | [layer-rules.md](references/layer-rules.md) | 落点、越层或上下游边界仍不明确时读取 |
-| 模型辅助 | [attention-rules.md](references/attention-rules.md) | attention 相关 review 或局部非结构修复时读取 |
-| 模型辅助 | [wrapper-rules.md](references/wrapper-rules.md) | MLP、MoE 或 wrapper 相关 review 和局部非结构修复时读取 |
+| 主场景 | [deploy-export-impl.md](references/deploy-export-impl.md) | 量化模型导出代码相关开发与 review |
 | 交付验证 | [validation.md](references/validation.md) | 选择静态检查、测试或构建；实际编码在修改后读取并执行匹配的最小验证，只做规划或 review 时按需读取相关部分 |
 
-主场景描述只提供粗粒度导航。具体触发、源码锚点、执行步骤和 BLOCKER 以对应 reference 为准；不要在本表继续枚举算法、参数、文件或未来可能出现的全部需求。
+主场景描述只提供粗粒度导航。具体触发、实现定位、执行步骤和 BLOCKER 以对应 reference 为准；不要在本表继续枚举算法、参数、文件或未来可能出现的全部需求。
 
-多个主场景同时可能命中时，先根据用户动作、目标入口、被修改契约和活跃调用方确定主手册。仍无法唯一确定时，读取 `repo-scenarios.md` 定位代码体系；只有确认存在真实跨契约影响时，才把第二个主场景作为辅助手册加载。主手册选择仍依赖尚未冻结的关键契约时，按「契约缺失时的处理形态」处理。
+多个主场景同时可能命中时，先根据用户动作、目标入口、被修改契约和活跃调用方确定主手册。无法唯一确定时，先搜索公共入口、注册点、调用方和直接测试，再按源码所属层选择主手册；只有确认存在真实跨契约影响时，才把第二个主场景作为辅助手册加载。主手册选择仍依赖尚未冻结的关键契约时，按「契约缺失时的处理形态」处理。
 
-命中时完整读取主 playbook 后再查目标源码和测试。只有实际改变上游契约或下游产物时，才把对应 playbook 作为辅助资料完整读取；不要仅因文件列表相邻而加载。
+命中时完整读取主 playbook 后再查目标源码和测试。实际编码、规划或只读 review 需要核对跨层契约时，可把对应 playbook 作为辅助资料完整读取；不要仅因文件列表相邻而加载。
 
-未命中现有手册时不要强行套入最相近项。先用搜索工具查公共入口、注册点、调用方和直接测试，以 repo-map 判断所属层，并根据相关契约形成任务规划。没有 playbook 兜底时落点判断只靠 repo-map 分层边界，因此实际编码前按「契约缺失时的处理形态」的提问形态与用户确认落点和改动范围再动手；只读规划直接交付该规划，不额外确认。若该场景形成稳定、重复出现的新代码体系，再更新现有手册或新增 reference。
+未命中现有手册时不要强行套入最相近项。先用搜索工具查公共入口、注册点、调用方和直接测试，以 repo-map 判断所属层，并根据相关契约形成任务规划。没有 playbook 兜底时，若源码证据已能确定落点和改动范围即可继续；仅当关键契约仍缺失且不同答案会改变实现时，才按「契约缺失时的处理形态」询问用户。只读规划直接交付条件分支，不额外确认。若该场景形成稳定、重复出现的新代码体系，再更新现有手册或新增 reference。
 
 各场景的详细执行步骤、候选锚点和 BLOCKER 由对应 playbook 定义，不在本文件重复。
 
@@ -116,11 +109,11 @@ repo-map 是稳定架构契约，源码是当前行为事实。repo-map 前置�
 
 阶段只描述 LLM 数据流影响，不决定代码职责归属。仅在修改 LLM CLI/workflow、阶段产物或跨阶段契约时检查；classic、ops 和纯 public API/packaging 标记为“不适用”。
 
-需要逐阶段核对时按 Reference 导航读取 `stage-impact.md`。通用能力可能同时影响多个阶段，不要强行选择单阶段；列出需要闭环的受影响阶段即可。
+需要逐阶段核对时读取 [llm-data-workflow.md 的阶段交接](references/llm-data-workflow.md#二阶段交接)；仅为阶段检查时只读该节。通用能力可能同时影响多个阶段，不要强行选择单阶段；列出需要闭环的受影响阶段即可。
 
 ## 5. 渐进披露与读取预算
 
-reference 是任务规则，源码列表只是候选锚点。不要把 playbook 中列出的源码路径理解为全文必读清单。按以下层级加载：
+reference 是任务规则。场景手册通过少量主要入口和关键符号说明实现定位，路径只是当前工作区的提示；失效时沿符号、注册和调用关系重新定位，不维护完整文件清单。验证入口与实现定位分开，测试路径和命令集中在 `validation.md`，场景手册保留覆盖目标；测试文件中的断言不能替代活跃调用链证据。按以下层级加载：
 
 1. 只加载 §2 要求的 repo-map 切片和一个主 playbook；各 Reference 的用途和加载时机从 §Reference 导航查询，不另行推导。
 2. 用搜索工具定位题目中的符号、调用方和直接测试；首轮默认选择 2～4 个最相关的源码/测试锚点，只读相关定义、调用链和断言切片。
@@ -140,14 +133,14 @@ reference 是任务规则，源码列表只是候选锚点。不要把 playbook 
 
 - 不在 CLI、workflow、solver 或通用 quant module 中加入模型专属分支。
 - 不在本 skill 内新增或结构性修改模型 adapter/wrapper/attention/MLP/MoE；路由 `model-adapter`，回来后只做契约 review。
-- 不混用 LLM new-path `ALGO_REGISTRY` 与 classic `AlgorithmRegistry`。
+- 不混用 LLM CLI path `ALGO_REGISTRY` 与 classic `AlgorithmRegistry`。
 - 新 dtype 要闭环数值语义、注册、支持位宽/粒度和实际消费入口；只有影响持久化或部署格式时才检查导出/回载。
 - 新算法要闭环注册、`targets`、用户选择入口和实际调用链；只有产生可持久化参数时才检查保存/加载。
 - 新 public API 要闭环定义、导出/懒加载、兼容性和用户可见测试；仅在安装或使用方式变化时更新 packaging/docs/examples。
 - `PtqUnit.kind`、extract 文件命名、PTQ 参数保存/加载、eval/deploy `--algos` 和 deploy binding 必须保持一致。
 - 新 NPU 算子实现路由 `amct-ops-dev`；上层调用不得绕过 schema/Meta/import 边界。
 
-按层的详细检查项和落点判断见 [layer-rules.md](references/layer-rules.md)，本文件不复制。
+落点、越层和上下游边界不明确时，先读 `repo-map.md`，再按实际调用关系核对目标层的入口、注册点和直接测试；不要在 workflow、solver 或通用 quant module 中加入模型专属分支。
 
 ## 交付与验证
 

@@ -1,28 +1,47 @@
-# 子能力：deploy-export-code
+# 子能力：deploy-export-impl
 
 ## 简介
 
 解决量化模型导出代码应该怎样修改和验证的问题，确保模型权重、分片索引、量化配置及导出文档彼此一致，并同时覆盖分块导出和逐张量导出路径。本子能力只处理导出功能的编码与审查，不负责实际运行导出任务。
 
-## 触发与边界
+## 职责边界
 
-修改 deploy workflow、safetensors/index、`quantization_config`、blockwise/tensorwise 导出、`export_deploy()` 消费逻辑时使用。实际运行导出并生成交付目录转 `deploy-export`；本子能力只负责实现与 review。
+本文件只负责导出实现与 review；实际运行导出并生成交付目录转 `deploy-export`。
 
-OWN：`amct_pytorch/workflows/llm_deploy.py`、`amct_pytorch/common/models/llm/common/deploy_export.py`。它是 LLM 导出链最下游汇合点，消费 dtype payload、algorithm 导出 hook、adapter binding 和 PTQ 参数，不重新定义这些上游语义。
+## 真实导出链
 
-## 按任务选择源码锚点
+```text
+deploy CLI -> LlmDeployWorkflow -> adapter/dtype/algorithm 状态
+  -> blockwise 或 tensorwise 导出
+  -> 权重分片 + index.json + config.json
+```
+
+## 实现定位
+
+### 主要入口
+
+- `amct_pytorch/workflows/llm_deploy.py`：导出编排。
+- `amct_pytorch/common/models/llm/common/deploy_export.py`：通用导出辅助。
+
+路径仅作首轮提示。文件移动或拆分后，沿下面的关键符号、调用方和实际产物重新定位；dtype、algorithm 和 adapter 仍负责各自的上游语义。
+
+### 关键符号
 
 以下分支互斥起步，不要全文读取所有路径：
 
-| 当前动作 | 首轮锚点 | 确认影响后再读 |
+| 当前动作 | 搜索定义及调用方 | 确认影响后再读 |
 | --- | --- | --- |
-| index metadata、单/多 shard、剩余权重 | `llm_deploy.py` 的 `_load_weight_index()`、`_refresh_weight_index()`、两处调用方；对应 workflow 测试 | `_write_remaining_original_weights()`、下游 loader 契约 |
-| `config.json` / `quantization_config` | `_refresh_config()`、`generate_quant_config()` 及其直接测试 | adapter `cache_scheme()` / `bits_scheme()`；公开字段成立时读 `public-api-tests` |
-| blockwise payload/binding | `_run_blockwise()`、`export_block_deploy()`、`QuantLinear.export_deploy()` | 命中 adapter 的 `iter_deploy_bindings()`、PTQ 参数回载；payload 变化时读 `dtype-quant-module` 或 `llm-algorithm` |
+| index metadata、单/多 shard、剩余权重 | `_load_weight_index()`、`_refresh_weight_index()` | `_write_remaining_original_weights()`、下游 loader 契约 |
+| `config.json` / `quantization_config` | `_refresh_config()`、`generate_quant_config()` | adapter `cache_scheme()` / `bits_scheme()`；公开字段成立时按 `validation.md` 的公共接口检查 |
+| blockwise payload/binding | `_run_blockwise()`、`export_block_deploy()`、`QuantLinear.export_deploy()` | 命中 adapter 的 `iter_deploy_bindings()`、PTQ 参数回载；payload 变化时读 `quant-dtype-modules` 或 `llm-algorithm` |
 | tensorwise 转换 | `_run_tensorwise()`、`convert_state_dict()`、`quant_payload()` | 命中 adapter 的 `generate_tensorwise_*()`、`get_scale_name()`、`block_size()` |
-| 用户文档或交付格式 | 实际产物写入点、`docs/zh/AMCT_Pytorch_LLM.md` 的 deploy 小节 | 命中的 examples 和 `public-api-tests` |
+| 用户文档或交付格式 | 实际产物写入点、`docs/zh/AMCT_Pytorch_LLM.md` 的 deploy 小节 | 命中的 examples 和 `validation.md` 的文档检查 |
 
 先用 `rg` 确认定义和调用方。当前源码中 `_refresh_config_tensor()`、`_convert_tensor()` 只有定义和直接单测，没有运行时调用方；不得把它们描述成当前 bf16/tensorwise 主路径。blockwise 与 tensorwise 当前都在结束时调用 `_refresh_config()`。
+
+### 验证入口
+
+分别核对 workflow 产物组织与 helper 的 payload/binding 语义。测试定位与命令见 [validation.md](validation.md#场景测试索引)，覆盖目标见本文件“产物与测试矩阵”。
 
 ## 当前数据流
 
@@ -62,7 +81,7 @@ tensorwise：
 | config | 原 config 字段保留、quantization_config 格式/bits/cache/ignore 一致、旧 config 缺字段可兼容 |
 | 静态产物 | JSON 可解析、safetensors 文件真实存在、index 中每个文件名可解析到输出目录 |
 
-优先在 `tests/unit_test/workflows/test_llm_deploy.py` 覆盖 workflow，在 `tests/unit_test/common/models/llm/common/test_deploy_export.py` 覆盖纯 helper。真实模型导出未运行时只能声称 mocked/单测覆盖。
+分别用 workflow 测试覆盖产物组织、helper 测试覆盖纯数据转换；不能由 helper 单测推断 workflow 已接通。真实模型导出未运行时只能声称 mocked/单测覆盖。
 
 ## BLOCKER
 
@@ -76,7 +95,6 @@ tensorwise：
 
 ## 自验
 
-- `pytest tests/unit_test/workflows/test_llm_deploy.py`
-- helper 变化：`pytest tests/unit_test/common/models/llm/common/test_deploy_export.py`
+- 测试定位与命令见 [validation.md](validation.md#场景测试索引)；按上面的产物矩阵选择 workflow 或 helper 验证。
 - 新 dtype/algorithm/adapter：再加跑对应子能力测试。
 - 真实导出需要模型权重和目标运行环境；未执行时明确说明。

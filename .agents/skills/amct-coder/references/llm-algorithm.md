@@ -1,30 +1,35 @@
 # 子能力：llm-algorithm
 
-## 触发
+## 真实算法链
 
-用户提到 LLM new-path 算法、LWC、LAC、AutoRound、OmniQuant、FlatQuant、`ALGO_REGISTRY`、`targets`、可训练参数、统计参数、clip、round、structure transform 时使用。
+```text
+CLI --algos -> ALGO_REGISTRY/targets -> quant module 分流
+  -> observe 或 trainable state -> solver/finalize
+  -> PTQ 参数保存、回载或 deploy payload
+```
 
-## 源码锚点（按需选择）
+## 实现定位
 
-以下路径不是全文必读清单。按主 skill 的读取预算，先根据当前改动选择直接定义、调用方和测试锚点，再按已确认的上下游影响扩展。
+### 主要入口
 
-- `amct_pytorch/algorithms/registry_factory.py`
-- `amct_pytorch/algorithms/quant/__init__.py`
-- `amct_pytorch/algorithms/quant/auto_clip.py`
-- `amct_pytorch/algorithms/quant/auto_round.py`
-- `amct_pytorch/algorithms/quant/omniquant.py`
-- `amct_pytorch/algorithms/quant/flatquant.py`
-- `amct_pytorch/quantization/modules/quant_base.py`
-- `amct_pytorch/common/optimization/blockwise_solver.py`
-- `amct_pytorch/common/models/llm/common/ptq_params.py`
-- `tests/unit_test/algorithms/`
-- `tests/unit_test/quantization/modules/test_quant_base.py`
+- `amct_pytorch/algorithms/quant/`：算法实现及注册导入。
+- `amct_pytorch/quantization/modules/quant_base.py`：算法构建与 quantizer 分流。
+
+### 关键符号
+
+按当前动作搜索 `ALGO_REGISTRY`、`register_algorithms`、`build_algorithms_by_target`、`trainable_params`、`observe_input`、`export_ptq_params`、`load_ptq_params` 或 `export_deploy`，沿调用方核对构建、执行和保存回载链。
+
+路径仅作首轮提示；路径或符号迁移时，以当前定义、注册与调用关系重新定位。
+
+### 验证入口
+
+按上述符号查找直接断言，核对注册、targets 分流、数值行为及状态回载。测试定位与命令见 [validation.md](validation.md#场景测试索引)，具体覆盖要求见本文件“自验”。
 
 ## 上下游依赖
 
 - 上游：算法由 CLI `--algos` 传入，经 `ALGO_REGISTRY`、`register_algorithms()` 和 `build_algorithms_by_target()` 构建。
 - 平级：算法只通过 quantizer hook、module buffer/parameter 或 structure transform 影响量化，不直接读取 dataset 或 workflow。
-- 下游：`ptq-solver-params` 消费 `trainable_params()`、buffer 和 PTQ 参数导出；`deploy-export-code` 消费算法的 `export_deploy()` 或已回载状态。
+- 下游：`ptq-solver-params` 消费 `trainable_params()`、buffer 和 PTQ 参数导出；`deploy-export-impl` 消费算法的 `export_deploy()` 或已回载状态。
 - 算法影响 dtype、solver、workflow、CLI 或 deploy 时，先用本手册列出的源码和测试确认真实跨契约影响，再按“跨契约扩张门”选择 owner；不要因题面同时出现多个层名就一次性读取多份 Reference。
 
 ## 执行步骤
@@ -44,15 +49,15 @@
 
 helper、hook 或导出函数存在但找不到 caller 时，明确记为“源码存在但当前未接通”。不能据此声称 solver 会驱动统计、训练结果会递归保存，或 eval/deploy 已能消费状态。
 
-主手册和首轮源码锚点仍不能回答问题时，按未解决契约选择一份 owner Reference：
+主手册和首轮源码定位提示仍不能回答问题时，按未解决契约选择一份 owner Reference：
 
 | 未解决契约 | owner Reference |
 | --- | --- |
-| 数值格式、packing 或 real quant dtype 语义 | `dtype-quant-module` |
+| 数值格式、packing 或 real quant dtype 语义 | `quant-dtype-modules` |
 | 样本遍历、trainable 参数、finalize、保存或回载 | `ptq-solver-params` |
 | unit 输入、GT、阶段数据或 workflow 调度 | `llm-data-workflow` |
-| deploy payload、index、config 或下游消费 | `deploy-export-code` |
-| CLI 公开值、配置兼容性或用户可见接口 | `public-api-tests` |
+| deploy payload、index、config 或下游消费 | `deploy-export-impl` |
+| CLI 公开值、配置兼容性或用户可见接口 | `validation.md` 的公共接口检查 |
 
 默认一次只加载最阻塞的一份辅助 Reference。读取前记录：未解决契约、已经核对的源码/测试和该 owner 的职责。只有第一份辅助资料与新增源码证据仍无法回答另一个会改变方案的问题时，才能加载第二份，并先说明超出默认预算的原因。其它受影响面只标记 `affected` 或条件式验证，不为列全链路而全文预读。
 
@@ -103,7 +108,7 @@ helper、hook 或导出函数存在但找不到 caller 时，明确记为“源�
 - PTQ 参数 key、导出/加载行为和旧参数兼容性。
 - fake quant、real quant 与 deploy payload 是否复用同一路径。
 
-此时输出必须冻结的契约、候选源码锚点、条件分支、阶段依赖和测试范围，不创建或建议先接入一个可由 `--algos` 选中的占位实现。空 `trainable_params()`、空导出/加载 hook、直通 `quantize()` 或伪造 payload 会让注册成功掩盖算法不可用，不是安全的“阶段 0”。
+此时输出必须冻结的契约、候选源码定位提示、条件分支、阶段依赖和测试范围，不创建或建议先接入一个可由 `--algos` 选中的占位实现。空 `trainable_params()`、空导出/加载 hook、直通 `quantize()` 或伪造 payload 会让注册成功掩盖算法不可用，不是安全的“阶段 0”。
 
 只有最小数值语义、状态生命周期和失败行为已经明确，才能把算法导入 `register_algorithms()`；注册、用户选择入口和最小行为测试应在同一可用阶段闭环。
 
@@ -111,14 +116,14 @@ helper、hook 或导出函数存在但找不到 caller 时，明确记为“源�
 
 ## 两套算法系统
 
-LLM new-path 只认 `ALGO_REGISTRY`：
+LLM CLI path 只认 `ALGO_REGISTRY`：
 
 - 注册在 `amct_pytorch/algorithms/quant/*.py`。
 - `register_algorithms()` 必须导入算法类。
 - 通过 `targets=("weight",)`、`("activation",)`、`("structure",)` 分流。
 - `WeightQuantizer` / `ActivationQuantizer` / structure transform 按 target 构建。
 
-classic path 只认 `AlgorithmRegistry`，规则见 [classic-graph.md](classic-graph.md)。不要混用。
+本 skill 只覆盖 LLM CLI path 的 `ALGO_REGISTRY`；classic/graph_based 暂不在支持范围内，不要混用其算法注册机制。
 
 ## 实现规则
 
@@ -151,11 +156,8 @@ classic path 只认 `AlgorithmRegistry`，规则见 [classic-graph.md](classic-g
 
 ## 自验
 
-- 算法注册：`pytest tests/unit_test/algorithms/test_algorithms_registry_factory.py`。
-- 算法自身：新增/更新 `tests/unit_test/algorithms/test_<algo>.py`。
-- 分流与 quantizer：`pytest tests/unit_test/quantization/modules/test_quant_base.py`。
-- 涉及 solver 训练：`pytest tests/unit_test/common/optimization/test_blockwise_solver.py`。
+- 测试定位与命令见 [validation.md](validation.md#场景测试索引)；按改动验证算法注册、本体数值、quantizer 分流，涉及训练时验证参数真实更新。
 - 涉及统计/一次性优化：覆盖 GT 阶段不污染、observe 次数、无 trainable 参数的数据遍历、finalize 幂等和保存回载。
 - 涉及敏感层/跳层：覆盖 score 聚合、决策持久化、续跑、strict load、eval/deploy 的一致语义。
-- 涉及 deploy hook：`pytest tests/unit_test/workflows/test_llm_deploy.py`。
+- 涉及 deploy hook：验证回载状态被导出消费且产物字段正确。
 - Skill 行为回归：记录实际读取资料；默认保持一个主 Reference、一份辅助 Reference 和首轮 2～4 个源码/测试切片，超出前给出扩张凭据，并验证达到停止条件后不再枚举无关实现。

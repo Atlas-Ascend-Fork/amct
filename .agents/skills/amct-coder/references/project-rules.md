@@ -11,6 +11,16 @@
 
 读取本文件只建立约束，不表示立即安装工具。准备提交且环境未安装 pre-commit 时再安装；具体检查命令按 `validation.md` 执行。
 
+## 构建与环境门槛
+
+- `bash build.sh` 不带 `--torch`、`--pkg` 或 `-u` 时不会产出分发包；按任务选择 `bash build.sh --torch`（amct_pytorch）、`bash build.sh --pkg`（完整包）或 `bash build.sh -u`（单元测试构建）。
+- 构建脚本只生成 `build_out/` 中的分发产物，不会自动安装到当前 Python 环境；需要验证安装时，先构建，再使用对应产物执行 `pip3 install`，最后检查 `import amct_pytorch`。
+- pip 版本大于 25.2 时，从源码包安装可能需要追加 `--no-build-isolation`，否则构建隔离环境可能找不到 `torch`。
+- 真实 LLM 量化、部署或 NPU 算子验证依赖 CANN Toolkit/Ops（至少 8.5.0）、匹配的 NPU 驱动与固件，以及模型权重和数据集。缺少这些条件时，只能报告源码、单测或 mocked 验证，不能声称真实模型或硬件验证完成。
+- `amct_ops` 的构建和测试按 `amct-ops-dev` skill 执行；不要在 `amct-coder` 中替代 Ascend C、C++ extension、schema 或 wheel 的实现流程。
+
+涉及构建、安装或真实环境验证时，以仓库 `AGENTS.md` 的命令和环境要求为准；本节只提取与源码编码和验证决策直接相关的门槛。
+
 ## Issue 与 PR 门槛
 
 - 简单 bug 修复可以直接提交 PR。

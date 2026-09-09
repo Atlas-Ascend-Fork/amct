@@ -1,146 +1,138 @@
-# 子能力：llm-data-workflow
+# LLM CLI 数据流
 
-## 触发
+本文直接对应当前 AMCT LLM CLI 源码，用于开发和定位 `extract_ptq_data`、`ptq`、`eval`、`deploy` 的数据问题。它描述当前行为，不把目录存在或未调用的 helper 当成已接通能力。
 
-修改 LLM new-path 的 `eval`、`extract_ptq_data`、PTQ workflow、PPL、Wikitext、Pileval 校准样本、离线输入、GT、hook、dataloader、逐层 forward、`attention_mask`/`position_embeddings` 保存加载时使用。
+## 一、真实主链
 
-“校准”本身不足以决定使用本手册：classic eager/graph_based 调用链内的校准使用 `classic-graph`；LLM 算法内部统计使用 `llm-algorithm`；通用 observe/min-max/scale 语义使用 `dtype-quant-module`。
+```text
+CLI parser_gen
+  -> command workflow
+       |
+       +-- extract_ptq_data
+       |     模型 + Pileval 校准样本
+       |       -> embedding forward / block forward
+       |       -> hook 捕获 norm 输出
+       |       -> data_dir:
+       |            block_<layer>_<target>_in.pkl
+       |            position_ids.pkl / position_embeddings.pkl / attention_mask.pkl
+       |
+       +-- ptq
+       |     同一模型 + data_dir + 单 quant_target
+       |       -> adapter 构建 quant block，拆 PtqUnit
+       |       -> provider 加载 unit 输入和 kwargs
+       |       -> 关闭量化/observe 状态，用原始 module forward 生成 GT
+       |       -> DataLoader 组织输入和 GT
+       |       -> BlockwiseSolver 求解 -> 保存 unit PTQ 参数
+       |
+       +-- eval
+       |     模型 + Wikitext 输入
+       |       -> embedding/block forward -> head -> PPL
+       |       -> bf16：原始 block；quant：重建 quant block，按 bit policy 开关
+       |
+       +-- deploy
+             模型权重 + 量化配置 +（按需）PTQ 参数
+               -> 重建 adapter/dtype/algorithm 状态
+               -> blockwise 或 tensorwise 导出
+               -> safetensors + index.json + config.json
+```
 
-## 源码锚点（按需选择）
+四个 workflow 是独立 CLI 入口，不是强制串行流水线：BF16/直转 eval 不需要 extract 或 ptq；deploy 也不负责重新生成校准数据。
 
-以下路径不是全文必读清单。先按 eval、extract、PTQ 或 data provider 的当前动作选择直接链路，再按保存端/加载端契约扩展。
+## 二、阶段交接
 
-- `amct_pytorch/cli/llm/args.py`
-- `amct_pytorch/workflows/llm_eval.py`
-- `amct_pytorch/workflows/llm_extract_ptq_data.py`
-- `amct_pytorch/workflows/llm_ptq.py`
-- `amct_pytorch/common/datasets/preproc.py`
-- `amct_pytorch/common/datasets/ptq_io.py`
-- `amct_pytorch/common/datasets/ptq_provider.py`
-- `amct_pytorch/common/evaluate/eval_ppl.py`
-- `amct_pytorch/common/models/llm/common/base.py`
-- `tests/unit_test/workflows/`
-- `tests/unit_test/common/datasets/`
-- `tests/unit_test/common/evaluate/`
+| 阶段 | 生产者 | 数据/状态 | 消费者 | 开发时必须保持 |
+| --- | --- | --- | --- | --- |
+| extract | `LlmExtractPtqDataWorkflow` + model adapter | 每层 unit 输入文件；attention 相关 kwargs 文件 | PTQ provider / adapter | hook 位置、`PtqUnit.kind`、文件命名、模型 `seq_len` 一致 |
+| ptq | `LlmPtqWorkflow` + provider | GT、solver 返回的 unit 参数 | eval、deploy 的参数回载 | unit 枚举、输入 shape、GT 状态、参数命名和回载结构一致 |
+| eval | `LlmEvalWorkflow` + Wikitext provider | PPL 和日志 | 精度判读 | BF16/quant 使用相同数据、`seq_len`、模型和评测口径 |
+| deploy | `LlmDeployWorkflow` + deploy helpers | safetensors、index、`quantization_config` | 下游推理仓 | 权重替换、索引、配置和 dtype/algo payload 成对更新 |
 
-## 上下游依赖
+### extract -> ptq 的真实细节
 
-- 上游：数据流依赖 adapter 的 embedding/block forward、hook 名、`PtqUnit.kind` 和需要保存的 kwargs。
-- 平级：workflow 只编排 eval、extract、PTQ，不写模型结构、dtype 或算法分支。
-- 下游：`ptq-solver-params` 消费 `load_unit_inputs()`、`materialize_gt()` 和 PTQ kwargs；`direct-quant-eval` / `algorithm-validation` 依赖 eval 口径一致。
-- 若新增 CLI 参数或用户可见数据格式，要同时读 `public-api-tests`。
+1. extract 从 Pileval 取得 `nsamples` 个 `seq_len` 样本；首层 `Catcher` 截获 embedding 后的 block 输入，并记录首次出现的 `attention_mask`、`position_ids`、`position_embeddings`。
+2. 每层 `do_block_forward(..., hook_name=...)` 对指定 norm 注册 forward hook；hook 保存 norm 输出，文件名由 layer 和 target 组成。保存的是目标 unit 的输入，不是完整 decoder block 输出。
+3. ptq 按 adapter 的 `iter_ptq_units()` 枚举 unit，provider 根据 unit 的 kind/layer 读取对应输入；attention 目标额外读取 kwargs 文件。
+4. PTQ 当前要求单个 `quant_target`，主流程接通 `block` granularity。输入缺失时 provider 返回缺失状态，workflow/solver 不应静默把它当成功。
 
-## 执行步骤
+### 模型与数据流契约
 
-1. 确认任务属于 eval、extract、PTQ 编排还是 data provider；不要把模型特例写入 workflow。
-2. 从 adapter 的 `PtqUnit.kind` 反推需要的输入文件名、kwargs 文件和 GT 生成方式，并区分源码契约、磁盘产物与实际运行证据。
-3. 修改 extract 时，同时检查保存端 `save_ptq_inps()` / `save_ptq_kwargs()` 和加载端 provider。
-4. 修改 PTQ workflow 时，确认 unit 枚举、输入加载、GT materialize、solver 调用、参数保存的顺序不变。
-5. 修改 eval 时，确认 BF16 与 quant 使用相同 `seq_len`、mask/position 传递和 bit policy 口径。
-6. 对缺文件、空输入、NaN/恒 0 loss 等失败信号保留显式错误或日志，不 silent skip。
-7. 补 workflow、data I/O、provider、PPL 或 CLI 的最小测试。
+模型 adapter 是这些数据约定的生产者，workflow/provider 是消费者，修改任一侧都要同步核对：
 
-## 证据等级
+- `PtqUnit.kind` 必须对应 `block_<layer>_<target>_in.pkl` 的命名和 `load_ptq_inps()` 的读取参数。
+- `unit.save_name` 必须与 PTQ 参数文件命名和 eval/deploy 回载结构一致。
+- adapter 的 embedding/block hook 必须保存下游需要的 norm 输入及 `attention_mask`、`position_ids`、`position_embeddings` 等 kwargs。
+- 新增逐样本 kwargs 或复合 unit 时，必须定义字段所有权、shape/dtype、缺失行为和 batch 切分规则。
+- 模型专属的 unit 拆分、输入捕获和 wrapper 逻辑归 `model-adapter`，workflow 只消费稳定契约。
 
-数据流诊断必须把以下证据分开表述：
+### ptq -> eval/deploy 的真实细节
 
-1. **源码契约对齐**：保存端构造的文件名、`PtqUnit.kind` 和加载端期望在当前源码中一致。
-2. **产物存在**：目标 `data_dir` 中确实存在对应 layer、kind 和 kwargs 文件，且来源代码版本与本次分析一致。
-3. **命令口径一致**：extract 与 PTQ 的 `data_dir`、`quant_target`、block 范围、`seq_len`、`nsamples` 等相关参数一致。
-4. **集成闭环**：provider 实际加载输入/kwargs，GT materialize 和 solver 至少一个 batch 成功。
+1. PTQ 对每个 unit 先在关闭量化和 observe 的状态下生成 GT，再恢复量化状态并交给 solver；GT 是 reconstruction 参考，不是 eval 的 PPL 标签。
+2. `DataLoader` 只对输入和 GT 建 batch；当前 provider 传给 solver 的 kwargs 是原对象。新增逐样本 kwargs 时，必须显式设计同步切 batch，不能假定现有逻辑自动完成。
+3. solver 返回的结果由 PTQ workflow 按 unit 保存；eval/deploy 必须用兼容的 adapter、量化模块、算法状态和参数命名回载，不能只检查参数文件存在。
 
-源码中的保存/加载前缀相同，只能排除当前代码里的直接静态命名错位，不能证明已有磁盘目录正确，也不能表述为 extract/PTQ 已跑通。反过来，文件存在也不能证明 kwargs shape、版本或 forward 消费语义正确。
+## 三、稳定入口与源码定位
 
-只读诊断应先给出已达到的证据等级，再列下一等级所需的最小检查。没有真实产物或运行结果时，使用“静态一致”“候选根因”“建议验证”，不使用“已经正确”“完整闭环”。
+阶段级稳定入口只保留：
 
-## 离线格式演进门禁
+- `LlmExtractPtqDataWorkflow`
+- `LlmPtqWorkflow`
+- `LlmEvalWorkflow`
+- `LlmDeployWorkflow`
 
-扩展 kwargs 或 unit 输入格式时，先冻结以下契约，再确定容器、文件布局或实现接口：
+首轮从 `amct_pytorch/cli/llm/` 和 `amct_pytorch/workflows/` 定位四个入口；再沿当前调用关系查找以下**易变实现检查点**：
 
-| 契约 | 必须回答的问题 |
+| 要查的问题 | 当前源码检查方向 |
 | --- | --- |
-| 字段与所有权 | 精确字段集合是什么；由 adapter 捕获/生成，还是通用 I/O 只负责序列化 |
-| 基数与作用域 | 每个 sample、batch、layer、unit 还是全局一份；不同 block 范围如何对应 |
-| shape 与切批 | tensor/tuple/dict 的 shape、dtype；per-sample 字段如何与 hidden states 同步切 batch |
-| 必填与默认 | 哪些 unit 必需、哪些可选；缺失时能否从稳定事实推导默认值 |
-| 容器与版本 | 延续现有文件、结构化容器还是目录布局；是否需要版本标记和迁移 |
-| 旧目录行为 | 旧 tensor-only 数据是无损读取、显式降级、拒绝并要求重新 extract，还是其它已定义策略 |
+| 参数和阶段分派 | `parser_gen`、workflow 的 `run/setup` 和 granularity 分支 |
+| 输入保存/加载 | `common/models/llm/common/base.py` 与 `common/datasets/ptq_io.py` |
+| 捕获点和 kwargs | `common/models/llm/common/capture.py`、adapter 的 embedding/block forward |
+| GT 和 batch | `common/datasets/ptq_provider.py`、PTQ workflow 的 unit 准备逻辑 |
+| unit 边界 | adapter 的 `build_quant_block`、`iter_ptq_units`、`PtqUnit` |
+| 参数求解/回载 | `common/optimization/`、`ptq_params.py`、eval/deploy 的加载逻辑 |
+| PPL 输入 | `common/datasets/preproc.py`、`common/evaluate/eval_ppl.py` |
+| 导出产物 | `llm_deploy.py` 与 `common/models/llm/common/deploy_export.py` |
 
-任一答案会改变布局或回放语义而尚未冻结时，只给条件分支。不得先锁定“任意 kwargs dict”、版本文件、按层/按 unit 文件名、目录 schema 或 CLI flag。per-sample 状态必须进入与输入相同的 batch 切分链，不能把全量 kwargs 原样传给每个 batch。
+这些检查点用于当前源码定位，不是永久 API 名单；入口移动后按四个 workflow 和 producer/consumer 关系重定位。
 
-“兼容旧 tensor-only 目录”不等于为新必填字段静默填空。允许的兼容结果必须明确是继续读取、带可见降级读取，还是报错并提示重新 extract。unit 主输入缺失默认 fail-fast；若产品确需跳过，这会改变输出模型语义，必须先冻结显式 opt-in、结果缺失标记、eval/deploy 回载行为和用户可见接口，不能在规划中自行发明参数名。
+## 四、编码规则
 
-## 复合 unit / 联合校准门禁
+1. 先确定改动属于四个 workflow 的哪一阶段，再画出受影响的生产者、产物和消费者。
+2. 改 extract 或离线格式，必须同时检查 hook 捕获、文件写入、provider 读取和 unit 命名；只改一端会造成静态可写、运行不可读。
+3. 改 PTQ 数据准备，必须同时核对 unit 枚举、原始输入边界、kwargs、GT 状态、batch 维度和参数保存。
+4. 改 eval，先核对 Wikitext 切分、`seq_len`、BF16/quant 状态和 bit policy；不要用 extract 的 Pileval 产物替代 eval 输入。
+5. 改 deploy，先确认上游参数/dtype/algo payload 已冻结，再检查权重替换、index 和 config 的消费者格式。
+6. 不在 workflow 中加入模型专属结构分支；模型输入捕获、norm 名、unit 拆分和 wrapper 逻辑归 adapter。
+7. 新增 kwargs 或复合 unit 时，先定义字段所有权、作用域、shape/dtype、缺失行为和旧目录兼容策略，再改容器或 CLI 参数。
 
-让 attention、MLP 或其它多个目标进入同一个校准 forward，不是简单放宽 `quant_target` 数量，也不能从“完整 block 可 forward”推导数据通路已经成立。形成确定实现前，必须提交以下 producer/consumer 对照：
+## 五、问题定位顺序
 
-| 契约 | 生产者 | 消费者 | 必须核对 |
-| --- | --- | --- | --- |
-| CLI target | parser/配置 | extract、PTQ、eval、deploy | choices、组合/互斥规则、参数目录映射一致 |
-| wrapper 注入 | model adapter | quant block / unit | 所有联合目标都真实命中，不能只新增一个字符串 |
-| `PtqUnit` | adapter `iter_ptq_units()` | provider、solver、param store | `kind/name/layer_idx/module/save_name` 完整且命名可回载 |
-| unit inputs | extract hook | provider / unit forward | 捕获点在 norm 前还是 norm 后；完整 block 不得重复执行已消费的 norm |
-| kwargs | adapter 捕获 + I/O | provider / forward | attention mask、position 等逐 sample 与 batch 同步切分 |
-| GT | `materialize_gt()` | reconstruction loss | 关闭量化、observe 副作用、输出边界与联合 module 一致 |
-| result | solver/finalize | param store、eval、deploy | 单文件还是拆分文件；重建相同 wrapper 与 algorithm 结构 |
+```text
+PPL 异常？
+  -> 先确认 eval 数据集/seq_len/shift
+  -> 再查 BF16 与 quant 的状态和 bit policy
+  -> attention 模型再查 mask/position 是否从 adapter 传到 block
 
-当前 extract/PTQ 只支持单个 `quant_target`。新增类似 `joint` 的单个字符串仍需核对 CLI choices、adapter 分派和目录消费者；删除 `len(...) != 1` 检查本身不能建立联合语义。若捕获的是目标 norm 输出，把它直接作为完整 decoder block 输入会再次执行 norm，必须改用 block 原始输入或定义不会 double norm 的复合 module。
+PTQ loss/输入异常？
+  -> unit 是否被 adapter 枚举
+  -> 对应离线文件是否存在且 shape 对齐
+  -> kwargs 是否适用于当前 batch
+  -> GT 是否在关闭量化/observe 的原始 module 上生成
+  -> solver 是否收到非空 batch 并保存结果
 
-联合与分开校准的精度对照必须保持最终量化集合、dtype/bit policy、样本、block 范围、`seq_len` 和 eval 参数一致。“只量化 attention”与“只量化 MLP”只能做消融，不能替代“分别校准后两者均量化”的公平基线。实验执行和结论分别转对应 workflow skill；本手册只检查实现与计划中的口径。
+Deploy 产物异常？
+  -> 参数是否能按同一 unit/target 回载
+  -> dtype/algo payload 是否与 quant module 一致
+  -> 权重替换、index.json、config.json 是否同时刷新
+```
 
-## 数据流
+证据必须分级：源码调用链、单测覆盖、真实离线产物、真实模型/NPU 运行不是同一结论。只有前两级时，应写“静态链路一致”或“建议验证”，不能写“PTQ 已跑通”。
 
-extract:
+## 六、硬性阻断条件
 
-1. `get_pileval()` 生成 calibration samples。
-2. adapter `do_embedding_forward(..., hook_name=...)` 捕获 layer0 输入上下文。
-3. `do_block_forward(..., hook_name=...)` 逐层保存 hook 输出。
-4. `save_ptq_inps()` 写 `block_<layer>_<target>_in.pkl`。
-5. `save_ptq_kwargs()` 写 `position_ids.pkl`、`position_embeddings.pkl`、`attention_mask.pkl`。
-
-PTQ:
-
-1. workflow 枚举 layer。
-2. adapter `build_quant_block()`。
-3. adapter `iter_ptq_units()`。
-4. data provider `load_unit_inputs()`。
-5. `materialize_gt()` 用关闭量化的 unit 生成 GT。
-6. solver 训练并保存 unit 参数。
-
-eval:
-
-1. `get_wiki_inputs(seq_len=4096)`。
-2. blockwise eval 走 embedding -> 每层 block -> head -> `wikitext2_ppl()`。
-3. `eval_mode=bf16` 要求 bit policy 没有小于 16 的量化项。
-4. `eval_mode=quant` 会重建 quant block，并按 bit policy 决定是否真正开启 quantizer。
-
-## 规则
-
-- PPL 默认口径是 Wikitext `seq_len=4096`。
-- `extract_ptq_data` 和 PTQ 当前只支持单个 `quant_target`。
-- 多目标 eval/deploy 允许组合，但参数目录必须按 target 对齐。
-- attention unit 需要额外 kwargs 时，不要只用 tensor-only provider；要扩展 `ptq_io` / provider 的结构。
-- `load_ptq_inps()` 返回 `None` 表示文件不存在，不能 silent skip 掩盖。
-- 当前源码命名一致不等于真实离线目录或 extract/PTQ 集成已验证。
-
-## BLOCKER
-
-- BF16 PPL 离谱却不检查 mask/position 传递链。
-- unit `kind` 找不到对应离线输入文件。
-- 只有静态保存/加载链证据，却声称真实产物或 PTQ 输入链已经正确。
-- kwargs 格式契约未冻结，却先确定通用 dict、版本标记、文件布局或 CLI 名称。
-- per-sample kwargs 没有与输入同步切 batch，而是整份回放到每个 batch。
-- `materialize_gt()` 未关闭量化或 observe 状态不对。
-- 复合 unit 只增加 target 名或放宽长度检查，没有同时闭环 wrapper 注入、输入捕获、kwargs、GT、保存和回载。
-- norm 输出被当作完整 block 原始输入，导致 forward 重复执行 norm。
-- 联合与分开方案的最终量化模块集合不同，却直接比较并归因于联合校准。
-- eval 和 PTQ 使用不同 `seq_len` 却直接比较结论。
-- workflow 中加入模型专属 hook 名或结构分支。
-
-## 自验
-
-- workflow 逻辑：`pytest tests/unit_test/workflows/test_llm_eval.py tests/unit_test/workflows/test_llm_extract_ptq_data.py tests/unit_test/workflows/test_llm_ptq.py`。
-- 数据 I/O：`pytest tests/unit_test/common/datasets/test_ptq_io.py tests/unit_test/common/datasets/test_ptq_provider.py`。
-- 复合 unit：覆盖 parser/target 分派、block 原始输入、per-sample kwargs 切批、GT observe 状态、保存回载和公平对照配置。
-- PPL：`pytest tests/unit_test/common/evaluate/test_eval_ppl.py`。
-- 真实模型路径受环境限制时，最终回复明确未跑原因。
+- `extract_ptq_data` 与 PTQ 的 `quant_target`、`seq_len`、block 范围或 `data_dir` 不一致。
+- 保存端和加载端的 unit kind/命名不一致，或 unit 输入文件缺失仍继续执行。
+- hook 保存的是 norm 输出，却在完整 block 中再次执行同一 norm。
+- 逐样本 kwargs 未随输入 batch 同步切分。
+- GT 生成时量化或 observe 状态未关闭，或 GT 与量化输出边界不一致。
+- BF16 PPL 异常却未检查 mask/position 传递链。
+- eval/deploy 只发现参数文件存在，未证明 adapter、量化状态和参数结构可回载。

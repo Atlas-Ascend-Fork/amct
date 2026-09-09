@@ -1,14 +1,34 @@
-# 子能力：dtype-quant-module
+# 子能力：quant-dtype-modules
 
 ## 简介
 
 解决一种量化数据类型应该怎样定义、注册并接入通用量化模块的问题，保证数值格式、支持位宽、权重与激活用法、量化粒度以及导出数据格式形成一致契约。本子能力处理跨模型通用能力，不承载具体模型结构。
 
-## 触发与职责
+## 职责边界
 
-新增或修改 `quant_dtype`、INT/MXFP/HiFloat 类数值格式、fake/real quant、activation/weight quantizer、`QuantLinear`/`QuantizedMatmul`、bit policy 或 dtype deploy payload 时使用。
+## 真实量化链
 
-OWN：`amct_pytorch/quantization/dtypes/`、`amct_pytorch/quantization/modules/`、`amct_pytorch/quantization/bit_policy.py`。本层定义跨模型通用的数值语义和 quantizer 契约，不读取模型名。
+```text
+dtype registry -> quant module -> role/bit policy
+  -> algorithm hook -> fake/real quant -> deploy payload
+```
+
+## 实现定位
+
+### 主要入口
+
+- `amct_pytorch/quantization/dtypes/`：数值格式与 dtype 注册。
+- `amct_pytorch/quantization/modules/`：通用量化模块。
+
+本层定义跨模型通用数值语义和 quantizer 契约，不读取模型名。路径仅作首轮提示，迁移后沿关键符号和调用关系重新定位。
+
+### 关键符号
+
+按动作搜索 `DTYPE_REGISTRY`、`register_dtype`、`BitPolicy`、`ActivationQuantizer`、`WeightQuantizer`、`QuantLinear`、`QuantizedMatmul`、`fake_quant` 和 `export_deploy`；确认定义、注册以及实际消费侧。
+
+### 验证入口
+
+核对数值边界、位宽/role/粒度、关量化行为和部署 payload。测试定位与命令见 [validation.md](validation.md#场景测试索引)，覆盖目标见本文件“测试矩阵”。
 
 PRODUCE：`DTYPE_REGISTRY` 条目、quantizer 实例化接口、`export_deploy()` payload 和 bit policy。CLI/public config、deploy、algorithm 兼容和可选 NPU 加速是下游闭环，不自动成为主修改面。
 
@@ -65,16 +85,16 @@ PRODUCE：`DTYPE_REGISTRY` 条目、quantizer 实例化接口、`export_deploy()
 
 冻结新名字前，先用数值格式、block/group 粒度、packing layout、scale 语义和 weight/activation 适用范围，与现有 INT、MXFP、experimental dtype 逐项比较。若已冻结的目标数值语义被现有实现完整覆盖，优先选择零改动、公开别名或复用现有 registry/消费分支；只有至少一项真实语义或用户契约不同，才新增 dtype 类和 deploy format。名称不同、产品称谓不同或题目说“基于 INT4 扩展”都不能单独证明需要新 dtype，也不能把被参考 dtype 的适用范围复制成目标契约。
 
-## 按动作选择源码锚点
+## 按动作选择锚点
 
 | 当前动作 | 首轮锚点 | 契约成立后再读 |
 | --- | --- | --- |
-| 注册或新 dtype 类 | `dtypes/__init__.py`、目标 dtype 类/impl、`test_dtypes.py` | CLI choices；deploy/algorithm 仅按实际支持范围扩展 |
-| fake quant 数值 | dtype `forward()`/`fake_quant()`/impl 与数值测试 | `ActivationQuantizer` 或 `WeightQuantizer` 中实际消费的一侧 |
-| 通用 quant module | `quant_base.py` 与命中的 `quant_linear.py`/`quant_matmul.py`、直接测试 | algorithm hook；模型 wrapper 仅做契约 review，结构实现转 `model-adapter` |
-| bit policy/config | `bit_policy.py`、命中 YAML、policy 测试 | eval/deploy 对 bit policy 的消费者 |
-| deploy payload | dtype `export_deploy()`、`WeightQuantizer.export_deploy()`、deploy payload 消费点 | `deploy-export-code`、下游 config schema |
-| NPU 加速 | Python dtype/impl 的确定语义、上层调用点 | `ops-boundary`；kernel/schema/Meta/CMake 转 `amct-ops-dev` |
+| 注册或新 dtype 类 | `DTYPE_REGISTRY`、`register_dtype()`、目标 dtype 类/impl | CLI choices；deploy/algorithm 仅按实际支持范围扩展 |
+| fake quant 数值 | dtype `forward()`/`fake_quant()`/impl | `ActivationQuantizer` 或 `WeightQuantizer` 中实际消费的一侧 |
+| 通用 quant module | 目标 quantizer、`QuantLinear` 或 `QuantizedMatmul` | algorithm hook；模型 wrapper 仅做契约 review，结构实现转 `model-adapter` |
+| bit policy/config | `BitPolicy`、命中 YAML 及其加载方 | eval/deploy 对 bit policy 的消费者 |
+| deploy payload | dtype `export_deploy()`、`WeightQuantizer.export_deploy()`、deploy payload 消费点 | `deploy-export-impl`、下游 config schema |
+| NPU 加速 | Python dtype/impl 的确定语义、上层调用点 | `amct-ops-dev` 的上层接入边界；kernel/schema/Meta/CMake 转 `amct-ops-dev` |
 
 `rg quant_dtype` 得到的模型或算法分支只是兼容性审计信号，不是默认必改列表。只有新 dtype 真实进入该路径且现有 fallback 语义不成立时才扩展；模型结构性变化转 `model-adapter`。
 
@@ -98,10 +118,10 @@ PRODUCE：`DTYPE_REGISTRY` 条目、quantizer 实例化接口、`export_deploy()
 3. 接入 `register_dtype()`，验证 registry 重复注册、未知名称和 import 顺序。
 4. 只在通用接口不兼容时修改 quant module；registry 构造已经满足时不重复增加 dtype 分支。
 5. 仅在目标 CLI/config 参与状态为 `supported` 时同步 bit policy、CLI choice 和配置样例；只允许真实支持的 bit/activation/weight 组合进入入口。
-6. 仅在目标 deploy 参与状态为 `supported` 时，按已冻结 payload 更新 blockwise/tensorwise 消费和 `quantization_config`；确认存在真实跨契约影响后再读取 `deploy-export-code`。
+6. 仅在目标 deploy 参与状态为 `supported` 时，按已冻结 payload 更新 blockwise/tensorwise 消费和 `quantization_config`；确认存在真实跨契约影响后再读取 `deploy-export-impl`。
 7. 若现有 algorithm 显式区分 dtype，逐个确认支持、拒绝或 fallback；不要无依据扩展所有算法。
 8. 若模型侧显式依赖 dtype 选择 cache/layout，先做兼容性 review；需要模型专属结构实现时转 `model-adapter`。
-9. 仅在目标 NPU 加速状态为 `supported` 时，以 Python 路径作为语义参考或 fallback，上层软依赖由 `ops-boundary` 处理；schema 和目录仍由 `amct-ops-dev` 根据已冻结接口确定。
+9. 仅在目标 NPU 加速状态为 `supported` 时，以 Python 路径作为语义参考或 fallback；上层软依赖、延迟 import 和错误时机按 `amct-ops-dev` 的上层接入边界处理，schema 和目录仍由其根据已冻结接口确定。
 
 ## 消费面强制收口
 
@@ -135,7 +155,7 @@ PRODUCE：`DTYPE_REGISTRY` 条目、quantizer 实例化接口、`export_deploy()
 | bit/CLI | 支持组合可解析，不支持组合显式拒绝，CLI choice 有最小 parser 测试 |
 | deploy | safetensors 字段、tensor route、index、config 和反量化 layout 一致 |
 
-优先运行 `tests/unit_test/quantization/test_dtypes.py`；quant module 变化再跑 `tests/unit_test/quantization/modules/`；CLI、deploy、algorithm 或 adapter 只在对应契约确实变化时追加其测试。
+优先验证 dtype 数值契约；quant module 变化再验证模块消费行为；CLI、deploy、algorithm 或 adapter 只在对应契约确实变化时追加其测试。
 
 ## BLOCKER
 
@@ -154,10 +174,10 @@ PRODUCE：`DTYPE_REGISTRY` 条目、quantizer 实例化接口、`export_deploy()
 
 ## 自验
 
-- `pytest tests/unit_test/quantization/test_dtypes.py`
-- quant module：`pytest tests/unit_test/quantization/modules/`
-- CLI：`pytest tests/unit_test/cli/test_llm_module_entrypoints.py` 或新增的 parser 测试。
-- deploy：`pytest tests/unit_test/workflows/test_llm_deploy.py tests/unit_test/common/models/llm/common/test_deploy_export.py`
+- 测试定位与命令见 [validation.md](validation.md#场景测试索引)。
+- dtype/quant module：覆盖上面的数值与模块测试矩阵。
+- CLI：验证配置解析、支持值和 role 位宽生效。
+- deploy：分别验证 payload、binding 和 workflow 产物消费。
 - Skill 行为回归：用不含既有 dtype 名和 role 暗示的隔离规划题，验证未给出的目标项全程保持 `pending`，且不产生唯一实现落点。
 - 规划一致性回归：检查产品名、CLI、registry、Python 和 ops 命名分别记录；每个改变实现或公开契约的立即动作均能回指非 `pending` 的目标状态。
 - 真实 eval/deploy 或 NPU 数值未执行时，分别说明缺模型/数据/硬件环境。

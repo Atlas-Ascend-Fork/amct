@@ -1,29 +1,36 @@
 # 子能力：ptq-solver-params
 
-## 触发
+## 真实求解链
 
-用户提到 solver、blockwise/global、optimizer、scheduler、epoch loss、`trainable_params()`、PTQ 参数保存/加载、`PtqParamHandler`、`PtqParamStore`、导出回载、unit 调度时使用。
+```text
+workflow -> adapter PtqUnit + provider batch/GT
+  -> solver registry -> solve -> finalize/export_ptq_params
+  -> workflow 保存 -> eval/deploy 回载
+```
 
-## 源码锚点（按需选择）
+## 实现定位
 
-以下路径不是全文必读清单。先按优化循环、factory、参数 store 或回载动作选择直接定义、调用方和测试锚点。
+### 主要入口
 
-- `amct_pytorch/common/optimization/__init__.py`
-- `amct_pytorch/common/optimization/base_solver.py`
-- `amct_pytorch/common/optimization/blockwise_solver.py`
-- `amct_pytorch/common/optimization/factory.py`
-- `amct_pytorch/common/optimization/global_solver.py`
-- `amct_pytorch/common/models/llm/common/ptq_params.py`
-- `amct_pytorch/workflows/llm_ptq.py`
-- `tests/unit_test/common/optimization/`
-- `tests/unit_test/workflows/test_llm_ptq.py`
+- `amct_pytorch/common/optimization/`：solver 注册、优化循环及 optimizer/scheduler 构建。
+- `amct_pytorch/common/models/llm/common/ptq_params.py`：参数导出与回载。
+
+### 关键符号
+
+搜索 `SOLVER_REGISTRY`、`register_solvers`、`BlockwiseSolver`、`trainable_params`、`finalize`、`PtqParamHandler` 和 `PtqParamStore`；沿 `LlmPtqWorkflow` 的调用核对 solver 选择、unit 执行和保存顺序。
+
+路径仅作首轮提示；以当前注册、调用关系和函数体判断通路是否接通，不能由文件或装饰器存在推断可执行。
+
+### 验证入口
+
+核对参数收集与更新、registry 分派、finalize、保存回载和部分结果处理。测试定位与命令见 [validation.md](validation.md#场景测试索引)，具体覆盖要求见本文件“自验”。
 
 ## 上下游依赖
 
 - 上游：solver 消费 adapter 的 quant block / `PtqUnit`、data provider 的输入/GT、algorithm 的 `trainable_params()` 和 PTQ 参数 hook。
 - 平级：solver 只做优化调度和参数收集，不读取模型名、不解析离线输入文件、不决定 dtype payload。
 - 下游：eval/deploy 通过 `PtqParamHandler` / `PtqParamStore` 回载状态，必须用训练时一致的 target、unit 名和 `--algos`。
-- 若新增 solver 或 granularity，要同时读 `llm-data-workflow` 和 `public-api-tests`，同步 CLI 接受值/帮助/默认值、workflow 分支和测试。
+- 若新增 solver 或 granularity，要同时读 `llm-data-workflow` 和 `validation.md` 的公共接口检查，同步 CLI 接受值/帮助/默认值、workflow 分支和测试。
 
 ## 执行步骤
 
@@ -55,7 +62,7 @@
 
 ## 主链状态
 
-`global_solver.py` 文件存在且有注册装饰器，但当前 `register_solvers()` 只导入 `BlockwiseSolver`，主流程接通的是 `block`。`llm_ptq.run()` 当前在 granularity 分支前先查 registry，因此未注册的默认 `model` 会先失败，`_run_modelwise()` 不可达。文件、分支或装饰器存在都不等于 workflow 可选；分析时仍以本轮源码复核为准。
+`global_solver.py` 文件存在且有注册装饰器，但当前 `register_solvers()` 只导入 `BlockwiseSolver`，主流程接通的是 `block`。`llm_ptq.run()` 当前在 granularity 分支前先查 registry；`model` 分支虽存在，但 `_run_modelwise()` 仍是占位并抛出“不支持”异常。CLI 默认值应与已注册且可执行的 `block` 一致。文件、分支或装饰器存在都不等于 workflow 可选；分析时仍以本轮源码复核为准。
 
 ### 当前训练保存活跃链
 
@@ -155,9 +162,9 @@ LlmPtqWorkflow._run_blockwise()
 
 ## 自验
 
-- `pytest tests/unit_test/common/optimization/test_base_solver.py tests/unit_test/common/optimization/test_blockwise_solver.py tests/unit_test/common/optimization/test_factory.py`
-- 涉及注册：加跑 `tests/unit_test/common/optimization/test_global_solver.py` 或新增对应测试。
-- 涉及 PTQ workflow：`pytest tests/unit_test/workflows/test_llm_ptq.py`。
+- 测试定位与命令见 [validation.md](validation.md#场景测试索引)；按改动验证参数收集、优化循环及 optimizer/scheduler 构建。
+- 涉及注册：核对正常注册入口导入后的 registry 与 workflow 分派，不能由测试直接导入 solver 后的 registry 推断 CLI 可用。
+- 涉及 PTQ workflow：验证 unit 调度、solver 调用与结果保存顺序。
 - 涉及参数 store：补针对 `PtqParamHandler/Store` 的 unit 测试或模型 adapter mocked 测试。
 - 涉及新 granularity：覆盖 registry/CLI/workflow 分派、module 与 batch/GT 所有权、optimizer 参数集合、逐 unit 保存回载和部分产物续跑语义。
 - 涉及复合 unit：覆盖 block 原始输入与 kwargs、全部目标参数收集、finalize 内容、公平分开基线和 eval/deploy 回载。

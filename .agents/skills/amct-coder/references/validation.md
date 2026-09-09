@@ -37,6 +37,20 @@
 
 本节只定义修改后的检查动作。代码风格、版权和贡献要求必须已在修改前按 [project-rules.md](project-rules.md) 建立约束，不能等运行本节时才首次得知。
 
+## 按变更类型选验证
+
+先按本次实际改动选择最小验证，再叠加场景测试索引。不要为了看起来完整而运行无关大集合，也不要用低一级证据替代高一级结论。
+
+| 变更类型 | 最小验证 | 说明 |
+| --- | --- | --- |
+| 只改 `SKILL.md` 或 reference | `quick_validate.py .agents/skills/amct-coder`、Markdown 链接检查、`git diff --check` | forward-test 只有在路由语义或场景规则明显变化时才需要 |
+| docs/examples 纯措辞 | `git diff --check`，必要时检查链接和示例命令是否仍存在 | 不声称运行代码或覆盖实现行为 |
+| docs/examples 新增 API/CLI 承诺 | 对应实现 owner 的单测 + 公共接口与打包检查 | 文档承诺必须能被源码和测试支撑 |
+| Python 局部实现 | `python -m py_compile <changed .py>` + 命中场景单测 | 若改 public API、workflow 或 solver，再叠加对应集成测试 |
+| CLI/parser/default 行为 | parser 测试、命令 help 或最小 workflow dry-run | 默认值变化按兼容性风险说明 |
+| 保存/加载/文件格式 | producer 和 consumer 双侧单测或 smoke | 只测保存不等于回载闭环 |
+| 构建、packaging、ops 边界 | 对应 build/import 测试；ops 内部实现按 `amct-ops-dev` | 缺 CANN/NPU/protobuf 时明确阻塞 |
+
 ## Skill / Reference 自验
 
 修改 `.agents/skills/amct-coder/` 时，除 Markdown 静态检查外执行：
@@ -51,26 +65,52 @@
 
 ## 越界自查
 
-改完对照 [layer-rules.md](layer-rules.md) §按层检查规则，逐个改动文件确认所在层的检查项都过。四个高频问题：
+改完按实际调用关系逐个确认改动文件所在层、是否越层以及上下游契约是否闭环。四个高频问题：
 
 1. 改动是否停在声明的落点层，没有顺手改上下游？
 2. 是否先复用了现有抽象（`QuantLinear` / `QuantGatedMLP` / family helper）再新增？
 3. 关闭量化时原浮点行为是否保住？
 4. 是否有没必要的框架级重构或 solver 改动？
 
+## 公共接口与打包检查
+
+用户可见改动需要同时核对源码实现、入口转发、安装包和文档示例：
+
+- 公共 API：分别检查普通 import、顶层属性访问、通配符 import、源模块 `__all__` 和顶层 `__all__`；懒加载 API 不能只证明属性可达。
+- CLI：核对 parser 参数、默认值、choices、帮助文本和 `python -m` 入口是否与实际 registry/workflow 一致。
+- 打包：检查 `setup.py`、`pyproject.toml`、`build.sh`、`package_data` 和 `AMCT_EXPERIMENTAL` 开关；不提交构建产物或 generated staging。
+- 配置口径：文档中的 BF16、weight-only、W4A4、dtype 和 bit policy 必须与 parser 和实际每个 role 的配置一致。
+- 文档示例：新增 API、CLI 参数、dtype 或 workflow 行为时同步更新，并确认示例命令在当前 parser 中存在。
+
 ## 场景测试索引
 
-| 场景操作手册 | 推荐最小测试 |
+这里集中维护测试定位提示与命令；场景手册只描述需要验证的行为。先按实现符号、导入关系或目标行为在 `tests/` 中搜索直接断言，确认文件仍存在并覆盖本次改动，再运行对应测试。下表的目录是搜索范围，不要求整目录执行；文件改名后以搜索结果为准。
+
+通用执行方式：`pytest <已确认的测试文件>`；需要缩小范围时使用 `pytest <已确认的测试文件> -k <相关测试名>`。新增行为没有直接断言时，在所属测试模块补覆盖，不把邻近测试通过当成该行为已验证。
+
+| 场景操作手册 | 当前测试定位提示 |
 | --- | --- |
-| `dtype-quant-module` | `pytest tests/unit_test/quantization/test_dtypes.py tests/unit_test/quantization/modules/test_quant_base.py` |
-| `llm-algorithm` | `pytest tests/unit_test/algorithms tests/unit_test/quantization/modules/test_quant_base.py` |
-| `llm-model-unit`（契约对齐 / review / 局部修复） | `pytest tests/unit_test/common/models/llm`，必要时 mocked workflow 测试 |
-| `llm-data-workflow` | `pytest tests/unit_test/workflows tests/unit_test/common/datasets tests/unit_test/common/evaluate` |
-| `ptq-solver-params` | `pytest tests/unit_test/common/optimization tests/unit_test/workflows/test_llm_ptq.py` |
-| `deploy-export-code` | `pytest tests/unit_test/workflows/test_llm_deploy.py` |
-| `classic-graph` | `pytest tests/unit_test/classic tests/amct_pytorch/testcase_python/<area>` |
-| `ops-boundary` | `cd amct_ops && bash ops_build.sh <op>`；NPU 上跑 `tests/amct_ops` |
-| `public-api-tests` | `pytest tests/unit_test/test_public_api.py tests/unit_test/test_packaging.py` |
+| `quant-dtype-modules` | `tests/unit_test/quantization/test_dtypes.py`、`tests/unit_test/quantization/modules/`；按 dtype/quantizer/BitPolicy 符号定位 |
+| `llm-algorithm` | `tests/unit_test/algorithms/`；注册参考 `test_algorithms_registry_factory.py`，分流参考 `tests/unit_test/quantization/modules/test_quant_base.py` |
+| `model-adapter` | `tests/unit_test/common/models/llm/`；按目标 adapter、wrapper 或 `PtqUnit` 符号定位，跨层行为再查 mocked workflow 测试 |
+| `llm-data-workflow` | `tests/unit_test/workflows/`、`tests/unit_test/common/datasets/`、`tests/unit_test/common/evaluate/`；按 workflow、provider/I/O、PPL 行为定位 |
+| `ptq-solver-params` | `tests/unit_test/common/optimization/`、`tests/unit_test/common/models/llm/common/test_ptq_params.py`、`tests/unit_test/workflows/test_llm_ptq.py` |
+| `deploy-export-impl` | workflow：`tests/unit_test/workflows/test_llm_deploy.py`；helper：`tests/unit_test/common/models/llm/common/test_deploy_export.py` |
+| `amct-ops-dev` 上层接入 | 上层 fallback/import 参考 `tests/amct_pytorch/test_hifloat8_fallback.py`；算子硬件测试在 `tests/amct_ops/`，按 `amct-ops-dev` 执行 |
+| 公共接口与打包 | `tests/unit_test/test_public_api.py`、`tests/unit_test/test_packaging.py`、`tests/unit_test/cli/test_llm_module_entrypoints.py` |
+
+常用定向命令，按实际改动选取：
+
+- dtype 与 quantizer 分流：`pytest tests/unit_test/quantization/test_dtypes.py tests/unit_test/quantization/modules/test_quant_base.py`。
+- workflow：`pytest tests/unit_test/workflows/test_llm_eval.py tests/unit_test/workflows/test_llm_extract_ptq_data.py tests/unit_test/workflows/test_llm_ptq.py`，只涉及其中一个命令时只选该文件。
+- 数据保存与加载：`pytest tests/unit_test/common/datasets/test_ptq_io.py tests/unit_test/common/datasets/test_ptq_provider.py`。
+- PPL：`pytest tests/unit_test/common/evaluate/test_eval_ppl.py`。
+- solver 与 factory：`pytest tests/unit_test/common/optimization/test_base_solver.py tests/unit_test/common/optimization/test_blockwise_solver.py tests/unit_test/common/optimization/test_factory.py`。
+- 导出：`pytest tests/unit_test/workflows/test_llm_deploy.py tests/unit_test/common/models/llm/common/test_deploy_export.py`。
+- public API / packaging：`pytest tests/unit_test/test_public_api.py tests/unit_test/test_packaging.py`。
+- CLI 入口：`pytest tests/unit_test/cli/test_llm_module_entrypoints.py`；parser/default 行为还需确认有相应断言。
+
+算法自身、classic custom algorithm/config、graph pass、quantize/save、prune/distill/retrain/cali 等按符号与领域定位；不维护逐算法或逐 pass 的文件清单。跨契约任务按生产者和消费者补充上述验证，测试直接 import 未接通模块不证明正常注册入口已接通。
 
 ## LLM adapter / wrapper 完成标准
 
