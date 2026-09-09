@@ -26,13 +26,6 @@ __all__ = ['seed_everything']
 
 def seed_everything(seed: int = 0):
     '''Set random seeds for reproducibility.
-
-    Mirrors examples/algorithms/flatquant/src/utils.py: seeds python, numpy,
-    torch and the NPU RNGs (manual_seed + manual_seed_all), and forwards to
-    ``transformers.set_seed`` for the HuggingFace side. The cudnn flags of
-    the example are intentionally dropped: this repo pins CPU-only torch
-    (no cudnn backend), and ``deterministic=True`` carries a global
-    performance cost.
     '''
     random.seed(seed)
     np.random.seed(seed)
