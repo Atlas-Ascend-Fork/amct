@@ -31,5 +31,6 @@ def register_dtype():
 
     from .int import QuantDequantInt
     from .mxfp import QuantDequantMx
+    from .fp import QuantDequantFp
 
     _REGISTERED = True

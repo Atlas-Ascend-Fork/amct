@@ -88,7 +88,7 @@ class AutoRound(nn.Module):
 
     @staticmethod
     def _get_group_size(args):
-        if args.quant_dtype == "int":
+        if args.quant_dtype in ("int", "fp"):
             group_size = -1
         elif args.quant_dtype == "mxfp":
             group_size = 32

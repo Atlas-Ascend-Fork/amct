@@ -164,7 +164,8 @@ class LlmDeployWorkflow:
             bits_scheme_fn = getattr(self.pipeline, "bits_scheme", None)
             bits_scheme = bits_scheme_fn() if callable(bits_scheme_fn) else None
             quantization_config = generate_quant_config(
-                cache_scheme, quant_ignore_layers, is_mx=self.is_mx, bits_scheme=bits_scheme)
+                cache_scheme, quant_ignore_layers, is_mx=self.is_mx, bits_scheme=bits_scheme,
+                **({"is_fp": True} if self.quant_dtype == "fp" else {}))
             config['quantization_config'] = quantization_config
         else:
             config.pop('quantization_config', None)
@@ -279,7 +280,7 @@ class LlmDeployWorkflow:
                     output_name_fn(weight_name) if callable(output_name_fn) else weight_name
                 )
                 should_quantize = False
-                if self.quant_dtype in ["int", "mxfp"]:
+                if self.quant_dtype in ["int", "mxfp", "fp"]:
                     new_weight_name = output_weight_name.rsplit(".", 1)[0]
                     should_quantize = new_weight_name in quant_layers
                 compute_device = self._tensorwise_compute_device(

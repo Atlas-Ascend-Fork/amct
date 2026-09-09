@@ -49,20 +49,24 @@ def _default_bits_scheme():
     ]
 
 
-def generate_quant_config(cache_scheme, ignores, is_mx=False, bits_scheme=None):
+def generate_quant_config(cache_scheme, ignores, is_mx=False, bits_scheme=None, is_fp=False):
     """
     Generate a quantization configuration dictionary based on the specified parameters.
     """
     if bits_scheme is None:
         bits_scheme = _default_bits_scheme()
-    qtype = "float" if is_mx else "int"
+    qtype = "float" if is_mx or is_fp else "int"
     config_groups = {}
     for idx, group in enumerate(bits_scheme):
         entry = {"targets": group["targets"]}
         entry.update(generate_quant_group(a_bits=group["a_bits"], w_bits=group["w_bits"], qtype=qtype))
+        if is_fp:
+            for target in ("input_activations", "weights"):
+                entry[target]["strategy"] = "tensor"
+                entry[target]["group_size"] = None
         config_groups[f"group_{idx}"] = entry
     quant_config = {"config_groups": config_groups,
-                    "format": "float-quantized" if is_mx else "int-quantized",
+                    "format": "float-quantized" if is_mx or is_fp else "int-quantized",
                     "global_compression_ratio": 1,
                     "ignore": ignores,
                     "quant_method": "compressed-tensors",
