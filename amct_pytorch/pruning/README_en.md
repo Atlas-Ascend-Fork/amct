@@ -71,6 +71,12 @@ amct.prune(model, cfg, data=calib, tolerance=0.05, evaluator=test_acc,
 
 - Default fidelity metric needs no labels: quality = top-1 prediction agreement with the original model on
   the calibration data. An `evaluator` (`callable(model)->float`, or any object exposing `.evaluate(model) -> float`) can be passed instead.
+- `evaluator` also accepts `"fidelity"` (default), `"js"` (normalized distribution similarity), or `"ppl"` (original/candidate causal-LM PPL).
+  JS caches fp16 reference distributions; limit the evaluation set for large vocabularies. PPL uses token IDs or unshifted `labels`, excluding `-100` and positions masked by `attention_mask`.
+  PPL accepts `PPL_candidate / PPL_original <= 1 / (1 - tolerance)` for `0 <= tolerance < 1`.
+  Task presets: `"preservation"` → fidelity, `"causal_lm"` → PPL, `"classification"` → labeled top-1 accuracy.
+  Classification `eval_data` accepts `(inputs, labels)` or a dictionary containing `labels` (one int64 class per sample); `batch_adapter` can adapt model inputs. Its tolerance is the absolute drop from measured original accuracy: `0.02` means 2 percentage points.
+  `evaluator="auto"` selects accuracy for class labels and 2D logits, PPL for non-encoder-decoder `config.architectures` ending in `ForCausalLM` with int64 IDs and matching 3D token logits, otherwise fidelity. It uses `eval_data` or falls back to `data`, and logs its choice and reason.
 
 ### Parameters
 

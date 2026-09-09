@@ -26,6 +26,7 @@ import copy
 import os
 import sys
 import unittest
+from types import SimpleNamespace
 
 import torch
 
@@ -47,6 +48,8 @@ from amct_pytorch.pruning import (
 )
 from amct_pytorch.pruning.presets import _MOE_CRITERION_MENU
 from amct_pytorch.pruning.accuracy_based_auto_prune import (
+    _auto_metric,
+    _resolve_quality,
     _accuracy_based_auto_prune as accuracy_based_auto_prune,
     _size_budget_prune as size_budget_prune,
 )
@@ -1007,6 +1010,135 @@ class TestRecoveryKwarg(unittest.TestCase):
             data=data,
         )
         return model
+
+
+class _MetricModel(torch.nn.Module):
+    def __init__(self, logits=None):
+        super().__init__()
+        self.register_buffer("logits", logits)
+        self.config = SimpleNamespace(architectures=[], is_encoder_decoder=False)
+
+    def forward(self, input_ids, attention_mask=None):
+        return input_ids if self.logits is None else self.logits
+
+
+class _ClassifierMLP(MiniMLPModel):
+    def forward(self, input_ids):
+        return super().forward(input_ids).mean(1)
+
+
+class TestBuiltinEvaluators(unittest.TestCase):
+    def setUp(self):
+        rng = torch.random.fork_rng(devices=[])
+        rng.__enter__()
+        self.addCleanup(rng.__exit__, None, None, None)
+        torch.manual_seed(0)
+
+    def test_presets_identity_and_distribution_shift(self):
+        model = _MetricModel(torch.tensor([[[3.0, 2.0, 1.0], [1.0, 2.0, 3.0]]]))
+        data = [torch.tensor([[0, 1]])]
+        for name in (None, "fidelity", "preservation", "js", "ppl", "causal_lm"):
+            q, baseline = _resolve_quality(model, name, 1, data, None)
+            self.assertAlmostEqual(q(model), baseline, places=5)
+        changed = _MetricModel(model.logits * 0.1)
+        fidelity, _ = _resolve_quality(model, None, 1, data, None)
+        js, _ = _resolve_quality(model, "js", 1, data, None)
+        self.assertEqual(fidelity(changed), 1)
+        self.assertLess(js(changed), 0.999)
+
+    def test_ppl_masks_labels_and_padding(self):
+        model = _MetricModel(torch.zeros(1, 4, 3))
+        changed = _MetricModel(
+            torch.tensor(
+                [[[0.0, 2.0, 0.0], [0.0, 0.0, 2.0], [8.0, 0.0, 0.0], [0.0, 0.0, 0.0]]]
+            )
+        )
+        data = dict(input_ids=torch.tensor([[0, 1, 2, 0]]))
+        for metadata in (
+            dict(
+                labels=torch.tensor([[-100, 1, -100, 0]]),
+                attention_mask=torch.tensor([[1, 1, 1, 0]]),
+            ),
+            dict(attention_mask=torch.tensor([[0, 1, 1, 0]])),
+        ):
+            batch = dict(data, **metadata)
+            q, _ = _resolve_quality(
+                model, "ppl", 1, [batch], lambda b: ((b["input_ids"],), {})
+            )
+            self.assertAlmostEqual(
+                q(changed),
+                3 * torch.softmax(torch.tensor([0.0, 2.0, 0.0]), -1)[1].item(),
+                places=6,
+            )
+        for labels in (torch.full((1, 4), -100), torch.zeros(1, 4)):
+            with self.assertRaises(ValueError):
+                _resolve_quality(model, "ppl", 1, [dict(data, labels=labels)], None)
+
+    def test_classification_accuracy_and_auto_adapters(self):
+        pairs = [
+            (torch.tensor([[3.0, 0.0], [0.0, 3.0]]), torch.tensor([0, 0])),
+            (torch.tensor([[0.0, 3.0]]), torch.tensor([1])),
+        ]
+        variants = [
+            (pairs, None),
+            ([dict(input_ids=x, labels=y) for x, y in pairs], None),
+            (pairs, lambda b: ((), dict(input_ids=b[0], labels=b[1]))),
+        ]
+        for data, adapter in variants:
+            for name in ("classification", "auto"):
+                q, baseline = _resolve_quality(_MetricModel(), name, 1, data, adapter)
+                self.assertAlmostEqual(baseline, 2 / 3)
+                self.assertAlmostEqual(q(_MetricModel()), 2 / 3)
+        for labels in (
+            None,
+            torch.tensor([[0]]),
+            torch.tensor([0.0]),
+            torch.tensor([-1]),
+            torch.tensor([2]),
+        ):
+            with self.assertRaises(ValueError):
+                _resolve_quality(
+                    _MetricModel(),
+                    "classification",
+                    1,
+                    [dict(input_ids=torch.ones(1, 2), labels=labels)],
+                    None,
+                )
+
+    def test_auto_requires_causal_metadata_and_preserves_fallback(self):
+        model = _MetricModel(torch.tensor([[[3.0, 2.0, 1.0], [1.0, 2.0, 3.0]]]))
+        data = [torch.tensor([[0, 1]])]
+        self.assertEqual(_auto_metric(model, data, None)[0], "fidelity")
+        model.config.architectures = ["ExampleForCausalLM"]
+        self.assertEqual(_auto_metric(model, data, None)[0], "ppl")
+        auto, _ = _resolve_quality(model, "auto", 1, data, None)
+        ppl, _ = _resolve_quality(model, "ppl", 1, data, None)
+        self.assertEqual(auto(model), ppl(model))
+        model.config.is_encoder_decoder = True
+        self.assertEqual(_auto_metric(model, data, None)[0], "fidelity")
+        for name in ("auto", "ppl", "classification", "js", "unknown"):
+            with self.assertRaises(ValueError):
+                _resolve_quality(model, name, 1, [], None)
+
+    def test_named_metrics_through_prune_and_budget(self):
+        for name in ("auto", "classification", "preservation", "js"):
+            model = _ClassifierMLP(MiniMLPConfig()).eval()
+            data = [torch.randint(0, 1000, (2, 8))]
+            evaluation = (
+                [(data[0], model(data[0]).argmax(-1))]
+                if name in ("auto", "classification")
+                else data
+            )
+            before = sum(p.numel() for p in model.parameters())
+            prune(
+                model,
+                DENSE_CFG,
+                data=evaluation if name == "auto" else data,
+                eval_data=None if name == "auto" else evaluation,
+                evaluator=name,
+                **({"tolerance": 1.0} if name == "auto" else {"size_budget": 0.9}),
+            )
+            self.assertLess(sum(p.numel() for p in model.parameters()), before)
 
 
 if __name__ == "__main__":
