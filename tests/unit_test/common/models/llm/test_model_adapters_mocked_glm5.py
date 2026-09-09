@@ -1271,5 +1271,449 @@ class TestGLM5_2NewFunctions:
         assert "model.layers.1.eh_proj" not in ignore
 
 
+@pytest.fixture
+def ascend_glm_adapter():
+    # Selection uses only checkpoint names and config; no HF model or forward.
+    adapter = GLM5_2.__new__(GLM5_2)
+    adapter.config = SimpleNamespace(
+        num_hidden_layers=2,
+        num_nextn_predict_layers=1,
+        first_k_dense_replace=1,
+        n_routed_experts=2,
+        n_shared_experts=1,
+        indexer_types=["full", "shared"],
+    )
+    adapter.args = SimpleNamespace(
+        bit_policy=BitPolicy({"w_bits": 8, "a_bits": 8}),
+        deploy_format="ascend",
+        granularity="tensor",
+        quant_target=["mlp"],
+    )
+    adapter.quant_target = adapter.args.quant_target
+    return adapter
+
+
+def test_ascend_candidates_allow_int_low_rank_and_respect_structure(ascend_glm_adapter):
+    valid = {
+        "model.layers.0.self_attn.q_a_proj",
+        "model.layers.0.self_attn.kv_a_proj_with_mqa",
+        "model.layers.0.self_attn.indexer.wq_b",
+        "model.layers.1.self_attn.o_proj",
+        "model.layers.0.mlp.gate_proj",
+        "model.layers.1.mlp.experts.0.up_proj",
+        "model.layers.1.mlp.shared_experts.down_proj",
+    }
+    invalid = {
+        "model.layers.0.self_attn.kv_b_proj",
+        "model.layers.1.self_attn.indexer.wq_b",
+        "model.layers.2.self_attn.q_b_proj",
+        "model.layers.1.mlp.gate",
+        "model.layers.0.input_layernorm",
+        "model.layers.0.mlp.experts.0.up_proj",
+        "model.layers.1.mlp.experts.2.up_proj",
+        "model.layers.1.mlp.up_proj",
+        "lm_head",
+        "model.embed_tokens",
+    }
+    assert ascend_glm_adapter.get_ascend_deploy_candidates(valid | invalid) == valid
+
+
+@pytest.mark.parametrize(
+    "selected",
+    [
+        {
+            "model.layers.0.self_attn.q_a_proj",
+            "model.layers.0.self_attn.kv_a_proj_with_mqa",
+        },
+        {"model.layers.1.self_attn.q_b_proj"},
+        {"model.layers.0.mlp.gate_proj", "model.layers.0.mlp.up_proj"},
+        {"model.layers.1.mlp.shared_experts.down_proj"},
+        {
+            f"model.layers.1.mlp.experts.{i}.{p}"
+            for i in range(2)
+            for p in ("gate_proj", "up_proj", "down_proj")
+        },
+    ],
+)
+def test_ascend_valid_fusion_selections(ascend_glm_adapter, selected):
+    ascend_glm_adapter.validate_ascend_deploy_selection(selected)
+
+
+@pytest.mark.parametrize(
+    "selected, message",
+    [
+        ({"model.layers.0.self_attn.q_a_proj"}, "q_a_proj"),
+        ({"model.layers.0.self_attn.kv_a_proj_with_mqa"}, "kv_a_proj_with_mqa"),
+        ({"model.layers.0.mlp.gate_proj"}, "gate_proj"),
+        ({"model.layers.1.mlp.shared_experts.up_proj"}, "up_proj"),
+        ({"model.layers.1.mlp.experts.0.gate_proj"}, "experts"),
+        (
+            {
+                "model.layers.1.mlp.experts.0.gate_proj",
+                "model.layers.1.mlp.experts.0.up_proj",
+                "model.layers.1.mlp.experts.0.down_proj",
+            },
+            "experts",
+        ),
+        ({"lm_head"}, "Unsupported"),
+    ],
+)
+def test_ascend_rejects_unsupported_fusion(ascend_glm_adapter, selected, message):
+    with pytest.raises(ValueError, match=message):
+        ascend_glm_adapter.validate_ascend_deploy_selection(selected)
+
+
+@pytest.mark.parametrize(
+    "cfg, selected",
+    [
+        (
+            {"attn-linear": {"q_b_proj": {"w_bits": 4, "a_bits": 8}}},
+            {"model.layers.0.self_attn.q_b_proj"},
+        ),
+        ({"mlp": {"w_bits": 16, "a_bits": 16}}, {"model.layers.0.mlp.down_proj"}),
+        (
+            {"moe": {"shared": {"down_proj": {"w_bits": 8, "a_bits": 4}}}},
+            {"model.layers.1.mlp.shared_experts.down_proj"},
+        ),
+        (
+            {"moe": {"routed": {"w_bits": 4, "a_bits": 8}}},
+            {
+                f"model.layers.1.mlp.experts.{i}.{p}"
+                for i in range(2)
+                for p in ("gate_proj", "up_proj", "down_proj")
+            },
+        ),
+    ],
+)
+def test_ascend_checks_effective_bits(ascend_glm_adapter, cfg, selected):
+    ascend_glm_adapter.args.bit_policy = BitPolicy({"w_bits": 8, "a_bits": 8, **cfg})
+    with pytest.raises(ValueError, match="W8A8"):
+        ascend_glm_adapter.validate_ascend_deploy_selection(selected)
+
+
+def test_ascend_ignores_bits_for_unselected_modules(ascend_glm_adapter):
+    ascend_glm_adapter.args.bit_policy = BitPolicy(
+        {
+            "w_bits": 8,
+            "a_bits": 8,
+            "moe": {"w_bits": 4, "a_bits": 8},
+        }
+    )
+    ascend_glm_adapter.validate_ascend_deploy_selection(
+        {"model.layers.0.self_attn.o_proj"}
+    )
+
+
+def test_ascend_json_bypasses_legacy_quant_target_rejection(ascend_glm_adapter):
+    ascend_glm_adapter.parse_quant_mode()
+    ascend_glm_adapter.args.deploy_format = "legacy"
+    with pytest.raises(ValueError, match="mlp"):
+        ascend_glm_adapter.parse_quant_mode()
+
+
+def test_ascend_plan_forces_mtp_exclusion_before_candidate_checks(ascend_glm_adapter):
+    from amct_pytorch.common.models.llm.common.deploy_selection import (
+        DeploySelection,
+        build_ascend_deploy_plan,
+    )
+
+    keys = {
+        "model.layers.0.self_attn.q_b_proj.weight": "one.safetensors",
+        "model.layers.2.eh_proj.weight": "two.safetensors",
+    }
+    plan = build_ascend_deploy_plan(
+        keys, DeploySelection(("model.layers.*",)), ascend_glm_adapter
+    )
+    assert plan.selected_modules == frozenset({"model.layers.0.self_attn.q_b_proj"})
+    assert plan.selected_weight_keys == frozenset(
+        {"model.layers.0.self_attn.q_b_proj.weight"}
+    )
+    assert plan.excluded_mtp == frozenset({"model.layers.2.eh_proj"})
+    assert plan.match_counts == {"model.layers.*": 2}
+
+
+def test_ascend_mtp_only_selection_is_rejected(ascend_glm_adapter):
+    from amct_pytorch.common.models.llm.common.deploy_selection import (
+        DeploySelection,
+        build_ascend_deploy_plan,
+    )
+
+    with pytest.raises(ValueError, match="MTP"):
+        build_ascend_deploy_plan(
+            {"model.layers.2.eh_proj.weight": "x"},
+            DeploySelection(("*",)),
+            ascend_glm_adapter,
+        )
+
+
+def test_ascend_plan_does_not_silently_drop_unsupported_modules(ascend_glm_adapter):
+    from amct_pytorch.common.models.llm.common.deploy_selection import (
+        DeploySelection,
+        build_ascend_deploy_plan,
+    )
+
+    weights = {"model.layers.0.self_attn.q_b_proj.weight": "x", "lm_head.weight": "x"}
+    with pytest.raises(ValueError, match="lm_head"):
+        build_ascend_deploy_plan(weights, DeploySelection(("*",)), ascend_glm_adapter)
+    plan = build_ascend_deploy_plan(
+        weights, DeploySelection(("*",), ("lm_head",)), ascend_glm_adapter
+    )
+    assert len(plan.selected_modules) == 1
+
+
+def test_ascend_workflow_plan_reads_index_without_writing(ascend_glm_adapter, tmp_path):
+    import json
+    from safetensors.torch import save_file
+    from amct_pytorch.common.models.llm.common.deploy_selection import DeploySelection
+    from amct_pytorch.workflows.llm_deploy import LlmDeployWorkflow
+
+    source = tmp_path / "source"
+    source.mkdir()
+    keys = {
+        "model.layers.0.self_attn.q_a_proj.weight",
+        "model.layers.0.self_attn.kv_a_proj_with_mqa.weight",
+        "model.layers.2.eh_proj.weight",
+    }
+    save_file(
+        {k: torch.ones(2, 2, dtype=torch.bfloat16) for k in keys},
+        str(source / "one.safetensors"),
+    )
+    (source / "model.safetensors.index.json").write_text(
+        json.dumps(
+            {
+                "weight_map": {k: "one.safetensors" for k in keys},
+            }
+        )
+    )
+    args = SimpleNamespace(
+        model_name="glm5_2",
+        model=str(source),
+        output_dir=str(tmp_path / "output"),
+        granularity="tensor",
+        quant_dtype="int",
+        deploy_format="ascend",
+        deploy_selection=DeploySelection(("model.layers.*",)),
+        quant_target=["mlp"],
+    )
+    workflow = LlmDeployWorkflow(args)
+    workflow.pipeline = ascend_glm_adapter
+    workflow._prepare_ascend_deploy_plan()
+    assert workflow.ascend_deploy_plan.selected_weight_keys == keys - {
+        "model.layers.2.eh_proj.weight"
+    }
+    assert not (tmp_path / "output").exists()
+
+
+def test_ascend_official_reference_selection():
+    import hashlib
+    import json
+    import os
+    from pathlib import Path
+    from amct_pytorch.common.models.llm.common.deploy_selection import (
+        build_ascend_deploy_plan,
+        load_deploy_selection,
+    )
+
+    reference_dir = os.environ.get("AMCT_GLM52_REFERENCE_DIR")
+    if not reference_dir:
+        pytest.skip("Set AMCT_GLM52_REFERENCE_DIR to run the full reference comparison")
+    root = Path(reference_dir)
+    index_path = root / "GLM-5.2/model.safetensors.index.json"
+    desc_path = root / "GLM-5.2-w8a8/quant_model_description.json"
+    assert (
+        hashlib.sha256(index_path.read_bytes()).hexdigest()
+        == "5fd47a926aefce0f2c917f42523e5e0f3c87e23e389e767c3681536a62f5cf5e"
+    )
+    assert (
+        hashlib.sha256(desc_path.read_bytes()).hexdigest()
+        == "3386f968cd7049fe95f896c1a1aeacaa5c1c0659ac2ed9a42cd783cc48ef29ba"
+    )
+    adapter = GLM5_2.__new__(GLM5_2)
+    adapter.config = SimpleNamespace(
+        **json.loads((root / "GLM-5.2/config.json").read_text())
+    )
+    adapter.args = SimpleNamespace(bit_policy=BitPolicy({"w_bits": 8, "a_bits": 8}))
+    config_path = (
+        Path(__file__).resolve().parents[5]
+        / "amct_pytorch/configs/deploy/glm5_2_ascend_w8a8.json"
+    )
+    plan = build_ascend_deploy_plan(
+        json.loads(index_path.read_text())["weight_map"],
+        load_deploy_selection(config_path),
+        adapter,
+    )
+    reference = json.loads(desc_path.read_text())
+    expected = {
+        k.removesuffix(".weight")
+        for k, v in reference.items()
+        if k.endswith(".weight") and v in ("W8A8", "W8A8_DYNAMIC")
+    }
+    assert plan.selected_modules == expected
+    assert len(plan.selected_modules) == 58167
+    assert not any(k.startswith("model.layers.78.") for k in plan.selected_weight_keys)
+    from amct_pytorch.common.models.llm.common.ascend_deploy_export import (
+        make_ascend_description,
+    )
+
+    source_names = set(json.loads(index_path.read_text())["weight_map"])
+    names = source_names | {
+        m + suffix
+        for m in plan.selected_modules
+        for suffix in (".weight_scale", ".weight_offset")
+    }
+    desc = make_ascend_description(names, plan.selected_modules)
+    expected_dynamic = {
+        m + suffix
+        for m in expected
+        for suffix in (".weight", ".weight_scale", ".weight_offset")
+    }
+    assert {
+        k for k, v in desc.items() if v == "W8A8_DYNAMIC" and k != "model_quant_type"
+    } == expected_dynamic
+    assert {k for k, v in desc.items() if v == "FLOAT"} == source_names - {
+        m + ".weight" for m in expected
+    }
+    assert len(names) == 175919
+    assert len(expected_dynamic) == 174501
+    assert sum(v == "FLOAT" for v in desc.values()) == 1418
+    assert all(
+        desc[k] == "FLOAT" for k in source_names if k.startswith("model.layers.78.")
+    )
+    assert "optional" not in desc and "rot.weight" not in desc
+
+
+@pytest.mark.parametrize("sharded", [False, True])
+@pytest.mark.parametrize("corrupt", [False, True])
+def test_ascend_export_config_and_description(
+    ascend_glm_adapter, tmp_path, monkeypatch, sharded, corrupt
+):
+    import json
+    from safetensors.torch import save_file, load_file
+    from amct_pytorch.common.models.llm.common.deploy_selection import DeploySelection
+    from amct_pytorch.workflows.llm_deploy import LlmDeployWorkflow
+
+    source, output = tmp_path / "source", tmp_path / "output"
+    source.mkdir()
+    config_bytes = b'{ "moe_router_dtype": "float32", "torch_dtype": "bfloat16" }\n'
+    (source / "config.json").write_bytes(config_bytes)
+    (source / "tokenizer.json").write_bytes(b'{ "vocab": {} }\n')
+    (source / "generation_config.json").write_bytes(b'{"do_sample": false}\n')
+    selected = {
+        "model.layers.0.self_attn.q_a_proj",
+        "model.layers.0.self_attn.kv_a_proj_with_mqa",
+    }
+    tensors = {
+        name + ".weight": torch.ones(2, 3, dtype=torch.bfloat16) for name in selected
+    }
+    tensors.update(
+        {
+            "model.layers.2.eh_proj.weight": torch.ones(2, 3, dtype=torch.bfloat16),
+            "model.norm.weight": torch.ones(3),
+            "model.layers.0.self_attn.q_a_proj.bias": torch.ones(
+                2, dtype=torch.bfloat16
+            ),
+        }
+    )
+    weight_map = {}
+    for i, (name, tensor) in enumerate(sorted(tensors.items())):
+        weight_map[name] = (
+            f"shard-{i % 2}.safetensors" if sharded else "model.safetensors"
+        )
+    for filename in set(weight_map.values()):
+        save_file(
+            {k: v for k, v in tensors.items() if weight_map[k] == filename},
+            str(source / filename),
+        )
+    if sharded:
+        (source / "model.safetensors.index.json").write_text(
+            json.dumps({"weight_map": weight_map})
+        )
+    args = SimpleNamespace(
+        model_name="glm5_2",
+        model=str(source),
+        output_dir=str(output),
+        granularity="tensor",
+        quant_dtype="int",
+        deploy_format="ascend",
+        deploy_selection=DeploySelection(tuple(sorted(selected))),
+        quant_target=[],
+    )
+    workflow = LlmDeployWorkflow(args)
+    monkeypatch.setattr(workflow, "_build_pipeline", lambda: ascend_glm_adapter)
+
+    def forbidden(*args):
+        pytest.fail(
+            "Ascend must not refresh config or use legacy selection/cache scheme"
+        )
+
+    monkeypatch.setattr(workflow, "_refresh_config", forbidden)
+    monkeypatch.setattr(ascend_glm_adapter, "cache_scheme", forbidden)
+    monkeypatch.setattr(
+        ascend_glm_adapter, "generate_tensorwise_quant_layers", forbidden
+    )
+    output.mkdir()  # An existing empty directory is allowed.
+    if corrupt:
+        original_write = workflow._write_safetensor_file
+
+        def corrupt_write(filename, data):
+            for key, tensor in data.items():
+                if key.endswith(".weight_offset"):
+                    tensor.fill_(1)
+            original_write(filename, data)
+
+        monkeypatch.setattr(workflow, "_write_safetensor_file", corrupt_write)
+        with pytest.raises(ValueError, match="validation failed"):
+            workflow.run()
+        report = json.loads((output / "deployment_validation.json").read_text())
+        assert report["status"] == "failed" and report["error_counts"]["values"] > 0
+        with pytest.raises(ValueError, match="output"):
+            workflow.run()
+        return
+    result = workflow.run()
+    report = json.loads((output / "deployment_validation.json").read_text())
+    assert report["status"] == "passed"
+    assert result["validation_path"] == str(output / "deployment_validation.json")
+    index = json.loads((output / "model.safetensors.index.json").read_text())
+    desc = json.loads((output / "quant_model_description.json").read_text())
+    exported = {}
+    for filename in set(index["weight_map"].values()):
+        shard = load_file(str(output / filename))
+        assert all(index["weight_map"][name] == filename for name in shard)
+        exported.update(shard)
+    dynamic = {
+        m + suffix
+        for m in selected
+        for suffix in (".weight", ".weight_scale", ".weight_offset")
+    }
+    assert set(exported) == set(tensors) | dynamic
+    assert set(index["weight_map"]) == set(exported)
+    assert {
+        k for k, v in desc.items() if v == "W8A8_DYNAMIC" and k != "model_quant_type"
+    } == dynamic
+    assert {k for k, v in desc.items() if v == "FLOAT"} == set(tensors) - {
+        m + ".weight" for m in selected
+    }
+    assert {k for k in desc if k not in exported} == {
+        "version",
+        "model_quant_type",
+        "metadata",
+        "group_size",
+        "is_rot_used",
+    }
+    assert desc["is_rot_used"] is False and "optional" not in desc
+    assert index["metadata"]["total_size"] == sum(
+        t.numel() * t.element_size() for t in exported.values()
+    )
+    for filename in ("config.json", "tokenizer.json", "generation_config.json"):
+        assert (output / filename).read_bytes() == (source / filename).read_bytes()
+    for name in set(tensors) - {m + ".weight" for m in selected}:
+        assert (
+            torch.equal(exported[name], tensors[name])
+            and exported[name].dtype == tensors[name].dtype
+        )
+    assert result["description_path"] == str(output / "quant_model_description.json")
+    assert not list(output.glob(".*.tmp"))
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

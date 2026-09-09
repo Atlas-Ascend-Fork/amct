@@ -46,3 +46,55 @@ def test_trust_remote_code_rejects_explicit_value(value):
         parser_gen()
 
     assert exc_info.value.code == 2
+
+
+def test_deploy_format_defaults_to_legacy(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["amct"])
+    args = parser_gen(command="deploy")
+    assert args.deploy_format == "legacy"
+    assert args.quant_layers_config is None
+    assert args.deploy_selection is None
+
+
+@pytest.mark.parametrize("command", [None, "eval", "ptq", "extract_ptq_data"])
+@pytest.mark.parametrize("option", ["--deploy_format", "--quant_layers_config"])
+def test_deploy_options_unavailable_elsewhere(monkeypatch, command, option):
+    monkeypatch.setattr(sys, "argv", ["amct", option, "ascend"])
+    with pytest.raises(SystemExit) as exc:
+        parser_gen(command=command)
+    assert exc.value.code == 2
+
+
+def test_ascend_cli_loads_selection(monkeypatch, tmp_path):
+    config = tmp_path / "layers.json"
+    config.write_text('{"quant_layers": ["model.layers.*.self_attn.q_a_proj"]}')
+    bits = tmp_path / "bits.yaml"
+    bits.write_text("w_bits: 8\na_bits: 8\n")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "amct",
+            "--deploy_format",
+            "ascend",
+            "--model_name",
+            "glm5_2",
+            "--granularity",
+            "tensor",
+            "--quant_dtype",
+            "int",
+            "--quant_layers_config",
+            str(config),
+            "--bit_config",
+            str(bits),
+        ],
+    )
+    args = parser_gen(command="deploy")
+    assert args.deploy_selection.quant_layers == ("model.layers.*.self_attn.q_a_proj",)
+    assert args.deploy_selection.ignore_layers == ()
+
+
+def test_legacy_rejects_selection_instead_of_ignoring_it(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["amct", "--quant_layers_config", "layers.json"])
+    with pytest.raises(ValueError, match="quant_layers_config"):
+        parser_gen(command="deploy")

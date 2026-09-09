@@ -498,7 +498,8 @@ def test_deploy_setup_creates_output_dir_and_registers(tmp_path, monkeypatch):
     assert wf.pipeline is not None
 
 
-def test_deploy_run_unsupported_granularity():
+def test_deploy_run_unsupported_granularity(monkeypatch):
+    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.logger", MagicMock())
     wf = _make_deploy_workflow(granularity="model")
 
     def setup():
@@ -864,3 +865,234 @@ def test_load_weight_index_missing_raises(tmp_path):
     wf = _make_workflow(model_path=str(tmp_path))
     with pytest.raises(FileNotFoundError):
         wf._load_weight_index()  # pylint: disable=protected-access
+
+
+@pytest.mark.parametrize(
+    "marker",
+    [
+        "config",
+        "quant_model_description.json",
+        "quant_model_weights.safetensors.index.json",
+        "rot.safetensors",
+    ],
+)
+def test_ascend_rejects_quantized_source_before_output(tmp_path, marker):
+    source, output = tmp_path / "source", tmp_path / "output"
+    source.mkdir()
+    config = (
+        {"quantization_config": {"quant_method": "compressed-tensors"}}
+        if marker == "config"
+        else {}
+    )
+    (source / "config.json").write_text(json.dumps(config))
+    if marker != "config":
+        (source / marker).write_text("{}")
+    workflow = _make_workflow(str(source), str(output), "int")
+    workflow.args.deploy_format = "ascend"
+    with pytest.raises(ValueError, match="source"):
+        workflow.run()
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("deploy_format", ["legacy", "ascend"])
+def test_shared_shard_export_serializes_payload_once(
+    monkeypatch, tmp_path, deploy_format
+):
+    from safetensors import safe_open
+    from safetensors.torch import load_file
+    from amct_pytorch.quantization.dtypes import register_dtype
+
+    register_dtype()
+    module = importlib.import_module("amct_pytorch.workflows.llm_deploy")
+    original_quant = module.quant_payload
+    calls = []
+
+    def counted_quant(quant_cls, name, weight, bit):
+        calls.append(name)
+        return original_quant(quant_cls, name, weight, bit)
+
+    monkeypatch.setattr(module, "quant_payload", counted_quant)
+    src, dst = tmp_path / "src", tmp_path / "dst"
+    src.mkdir()
+    dst.mkdir()
+    # Non-square matrix catches an accidental transpose; zero/constant rows
+    # exercise the minimum scale and per-channel quantization.
+    weight = torch.tensor([[0, 0, 0], [2, 2, 2], [-1, 0.25, 0.5]], dtype=torch.bfloat16)
+    tensors = {"layer.weight": weight, "ignored.weight": torch.ones(2, 3)}
+    if deploy_format == "ascend":
+        tensors["layer.bias"] = torch.ones(3, dtype=torch.bfloat16)
+    save_file(tensors, str(src / MODEL_SAFETENSORS))
+    wf = _make_workflow(str(src), str(dst), "int")
+    wf.args.deploy_format = deploy_format
+    wf.pipeline = SimpleNamespace(
+        get_scale_name=lambda name: ("_scale_inv", "missing_scale_inv"),
+        block_size=lambda weight: 32,
+    )
+    weight_map = dict.fromkeys(tensors, MODEL_SAFETENSORS)
+    exported = wf._convert_tensorwise_shard(
+        MODEL_SAFETENSORS, src, weight_map, {"layer": 8}, {}
+    )
+    result = load_file(str(dst / MODEL_SAFETENSORS))
+    assert calls == ["layer.weight"]
+    assert set(exported) == set(result)
+    assert set(result) == set(tensors) | {"layer.weight_scale"} | (
+        {"layer.weight_offset"} if deploy_format == "ascend" else set()
+    )
+    assert result["layer.weight"].shape == weight.shape
+    assert result["layer.weight"].dtype == torch.int8
+    assert torch.equal(
+        result["layer.weight"],
+        torch.tensor([[0, 0, 0], [127, 127, 127], [-127, 32, 64]], dtype=torch.int8),
+    )
+    assert torch.equal(result["ignored.weight"], tensors["ignored.weight"])
+    assert result["ignored.weight"].dtype == torch.float32
+    scale = result["layer.weight_scale"]
+    assert scale.shape == (3, 1)
+    assert torch.isfinite(scale).all() and (scale > 0).all()
+    # Includes INT rounding plus BF16 division/scale rounding.
+    error = (result["layer.weight"].float() * scale.float() - weight.float()).abs()
+    bound = (
+        weight.float().abs().amax(dim=1, keepdim=True) / 127 / 2
+        + weight.float().abs() / 128
+        + 1e-8
+    )
+    assert (error <= bound).all()
+    with safe_open(str(dst / MODEL_SAFETENSORS), framework="pt") as f:
+        assert f.get_slice("layer.weight").get_dtype() == "I8"
+        assert f.get_slice("layer.weight_scale").get_dtype() == (
+            "BF16" if deploy_format == "ascend" else "F32"
+        )
+        if deploy_format == "ascend":
+            assert f.get_slice("layer.weight_offset").get_dtype() == "BF16"
+            assert torch.equal(result["layer.weight_offset"], torch.zeros_like(scale))
+            assert torch.equal(result["layer.bias"], tensors["layer.bias"])
+
+
+@pytest.mark.parametrize(
+    "weight",
+    [
+        torch.ones(2, 3),
+        torch.ones(3, dtype=torch.bfloat16),
+        torch.ones(2, 3, dtype=torch.int8),
+        torch.empty(0, 3, dtype=torch.bfloat16),
+        torch.full((2, 3), float("nan"), dtype=torch.bfloat16),
+        torch.full((2, 3), float("inf"), dtype=torch.bfloat16),
+    ],
+)
+def test_ascend_rejects_invalid_weight_before_quantization(
+    monkeypatch, tmp_path, weight
+):
+    src, dst = tmp_path / "src", tmp_path / "dst"
+    src.mkdir()
+    dst.mkdir()
+    save_file({"layer.weight": weight}, str(src / MODEL_SAFETENSORS))
+    wf = _make_workflow(str(src), str(dst), "int")
+    wf.args.deploy_format = "ascend"
+
+    def unexpected_quant(*args):
+        pytest.fail("Invalid source must be rejected before quantization")
+
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.quant_payload", unexpected_quant
+    )
+    with pytest.raises(ValueError, match="layer.weight"):
+        wf._convert_tensorwise_shard(
+            MODEL_SAFETENSORS,
+            src,
+            {"layer.weight": MODEL_SAFETENSORS},
+            {"layer": 8},
+            {},
+        )
+    assert list(dst.iterdir()) == []
+
+
+def test_legacy_payload_does_not_use_ascend_adapter(monkeypatch):
+    from amct_pytorch.quantization.dtypes import register_dtype
+
+    register_dtype()
+    wf = _make_workflow(quant_dtype="int")
+
+    def unexpected_adapt(*args):
+        pytest.fail("Legacy must not use Ascend adapter")
+
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.adapt_ascend_payload", unexpected_adapt
+    )
+    result = wf._export_tensor_payload("layer.weight", torch.ones(2, 3), 8)
+    assert result["layer.weight_scale"].dtype == torch.float32
+    assert "layer.weight_offset" not in result
+
+
+@pytest.mark.parametrize("relation", ["same", "child", "parent", "nonempty", "symlink"])
+def test_ascend_rejects_unsafe_output_before_setup(tmp_path, relation, monkeypatch):
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "config.json").write_text("{}")
+    output = tmp_path / "output"
+    if relation == "same":
+        output = source
+    elif relation == "child":
+        output = source / "output"
+    elif relation == "parent":
+        output = tmp_path
+    elif relation == "nonempty":
+        output.mkdir()
+        (output / "keep.txt").write_text("keep")
+    else:
+        output.symlink_to(source, target_is_directory=True)
+    wf = _make_workflow(str(source), str(output), "int")
+    wf.args.deploy_format = "ascend"
+    monkeypatch.setattr(
+        wf, "setup", lambda: pytest.fail("Unsafe output must fail before setup")
+    )
+    with pytest.raises(ValueError, match="output"):
+        wf.run()
+    assert (source / "config.json").read_text() == "{}"
+
+
+def test_ascend_shards_release_source_tensors(monkeypatch, tmp_path):
+    import weakref
+    from amct_pytorch.quantization.dtypes import register_dtype
+
+    register_dtype()
+    module = importlib.import_module("amct_pytorch.workflows.llm_deploy")
+    original = module.load_file
+    references = []
+
+    def tracked_load(*args, **kwargs):
+        assert all(ref() is None for ref in references)
+        state = original(*args, **kwargs)
+        references.extend(weakref.ref(tensor) for tensor in state.values())
+        return state
+
+    monkeypatch.setattr(module, "load_file", tracked_load)
+    src, dst = tmp_path / "src", tmp_path / "dst"
+    src.mkdir()
+    dst.mkdir()
+    for i in range(2):
+        save_file(
+            {
+                f"layer{i}.weight": torch.ones(2, 3, dtype=torch.bfloat16),
+                f"mtp{i}.weight": torch.ones(2, 3, dtype=torch.bfloat16),
+            },
+            str(src / f"{i}.safetensors"),
+        )
+    wf = _make_workflow(str(src), str(dst), "int")
+    wf.args.deploy_format = "ascend"
+    cache = {}
+    for i in range(2):
+        wf._convert_tensorwise_shard(
+            f"{i}.safetensors", src, {}, {f"layer{i}": 8}, cache
+        )
+        assert cache == {}
+        assert all(ref() is None for ref in references)
+
+
+@pytest.mark.parametrize(
+    "filename",
+    ["/tmp/escape.safetensors", "../escape.safetensors", "nested/weights.safetensors"],
+)
+def test_ascend_plan_rejects_nonlocal_shard_names(filename):
+    wf = _make_workflow(quant_dtype="int")
+    with pytest.raises(ValueError, match="shard"):
+        wf._prepare_ascend_deploy_plan({"weight_map": {"x.weight": filename}})

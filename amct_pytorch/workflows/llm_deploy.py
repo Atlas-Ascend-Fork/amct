@@ -33,11 +33,21 @@ from transformers.utils import SAFE_WEIGHTS_INDEX_NAME, SAFE_WEIGHTS_NAME
 from amct_pytorch.algorithms.quant import register_algorithms
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm import register_llm_models
+from amct_pytorch.common.models.llm.common.ascend_deploy_export import (
+    adapt_ascend_payload,
+    make_ascend_description,
+)
 from amct_pytorch.common.models.llm.common.deploy_export import (
     convert_state_dict,
     export_block_deploy,
     generate_quant_config,
     quant_payload,
+)
+from amct_pytorch.common.models.llm.common.deploy_selection import (
+    build_ascend_deploy_plan,
+)
+from amct_pytorch.common.models.llm.common.deploy_validation import (
+    validate_ascend_artifacts,
 )
 from amct_pytorch.common.models.llm.common.weight_path_validation import (
     collect_safetensors_files,
@@ -90,17 +100,20 @@ class LlmDeployWorkflow:
         return replaced
 
     def run(self):
+        if getattr(self.args, "deploy_format", "legacy") == "ascend":
+            self._validate_ascend_output()
+            self._validate_ascend_source()
         sink_id = self.setup()
-        if self.granularity == "block":
-            results = self._run_blockwise()
-        elif self.granularity == "tensor":
-            results = self._run_tensorwise()
-        else:
+        try:
+            if self.granularity == "block":
+                return self._run_blockwise()
+            if self.granularity == "tensor":
+                return self._run_tensorwise()
             raise ValueError(
                 f"Unsupported granularity '{self.granularity}' for deploy."
             )
-        logger.remove(sink_id)
-        return results
+        finally:
+            logger.remove(sink_id)
 
     def setup(self):
         os.makedirs(self.output_dir, exist_ok=True)
@@ -126,6 +139,40 @@ class LlmDeployWorkflow:
             f"tensor granularity does not support quant_dtype '{self.quant_dtype}' yet"
         )
 
+    def _validate_ascend_output(self):
+        source = Path(self.model_path).resolve()
+        output = Path(self.output_dir).resolve()
+        if source == output or source in output.parents or output in source.parents:
+            raise ValueError("Ascend output and source directories must not overlap")
+        if output.exists() and (not output.is_dir() or any(output.iterdir())):
+            raise ValueError("Ascend output directory must be new or empty")
+
+    def _validate_ascend_source(self):
+        source = Path(self.model_path)
+        with open(source / "config.json", encoding="utf-8") as f:
+            config = json.load(f)
+        markers = (
+            "quant_model_description.json",
+            "quant_model_weights.safetensors.index.json",
+            "rot.safetensors",
+        )
+        if (
+            not isinstance(config, dict)
+            or config.get("quantization_config")
+            or config.get("is_rot_used")
+            or any((source / name).exists() for name in markers)
+        ):
+            raise ValueError(
+                "Ascend source must be an unquantized, unrotated BF16 checkpoint"
+            )
+
+    @staticmethod
+    def _write_json_file(path: Path, data: dict):
+        temporary = path.with_name(f".{path.name}.tmp")
+        with open(temporary, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2, sort_keys=True)
+        os.replace(temporary, path)
+
     def _copy_support_files(self):
         src_dir = Path(self.model_path)
         dst_dir = Path(self.output_dir)
@@ -133,6 +180,11 @@ class LlmDeployWorkflow:
             if src_path.name.startswith("."):
                 continue
             if self._is_weight_file(src_path):
+                continue
+            if getattr(self.args, "deploy_format", "legacy") == "ascend" and (
+                src_path.name.endswith(".safetensors.index.json")
+                or src_path.name == "quant_model_description.json"
+            ):
                 continue
             dst_path = dst_dir / src_path.name
             if dst_path.exists():
@@ -206,11 +258,15 @@ class LlmDeployWorkflow:
         with open(config_file, "w") as f:
             json.dump(config, f, indent=2)
 
-    def _refresh_weight_index(self, original_index, updated_weight_map):
+    def _refresh_weight_index(
+        self, original_index, updated_weight_map, total_size=None
+    ):
         metadata = dict(original_index.get("metadata", {}))
-        total_size = 0
-        for file_name in sorted(set(updated_weight_map.values())):
-            total_size += os.path.getsize(os.path.join(self.output_dir, file_name))
+        if total_size is None:
+            total_size = sum(
+                os.path.getsize(os.path.join(self.output_dir, file_name))
+                for file_name in set(updated_weight_map.values())
+            )
         metadata["total_size"] = total_size
 
         output_index = {
@@ -218,8 +274,7 @@ class LlmDeployWorkflow:
             "weight_map": updated_weight_map,
         }
         index_path = os.path.join(self.output_dir, "model.safetensors.index.json")
-        with open(index_path, "w", encoding="utf-8") as f:
-            json.dump(output_index, f, ensure_ascii=False, indent=2, sort_keys=True)
+        self._write_json_file(Path(index_path), output_index)
         return index_path
 
     def _run_blockwise(self):
@@ -264,11 +319,19 @@ class LlmDeployWorkflow:
         }
 
     def _run_tensorwise(self):
+        is_ascend = getattr(self.args, "deploy_format", "legacy") == "ascend"
+        if is_ascend:
+            self._validate_ascend_source()
+            original_index = self._load_weight_index()
+            plan = self._prepare_ascend_deploy_plan(original_index)
+            quant_layers = {name: 8 for name in plan.selected_modules}
+            self._output_tensor_bytes = 0
+        else:
+            original_index = self._load_weight_index()
+            quant_layers = self.pipeline.generate_tensorwise_quant_layers()
+            quant_ignore_layers = self.pipeline.generate_tensorwise_ignore_layers()
         self._copy_support_files()
-        original_index = self._load_weight_index()
         original_weight_map = dict(original_index.get("weight_map", {}))
-        quant_layers = self.pipeline.generate_tensorwise_quant_layers()
-        quant_ignore_layers = self.pipeline.generate_tensorwise_ignore_layers()
         weights_by_file = defaultdict(list)
         for weight_name, file_name in original_weight_map.items():
             weights_by_file[file_name].append(weight_name)
@@ -286,14 +349,61 @@ class LlmDeployWorkflow:
                     loaded_files,
                 )
             )
-        index_path = self._refresh_weight_index(original_index, updated_weight_map)
-        self._refresh_config(quant_ignore_layers)
+        extra_results = {}
+        if is_ascend:
+            description = make_ascend_description(
+                set(updated_weight_map), plan.selected_modules
+            )
+            description_path = Path(self.output_dir) / "quant_model_description.json"
+            self._write_json_file(description_path, description)
+            index_path = self._refresh_weight_index(
+                original_index, updated_weight_map, total_size=self._output_tensor_bytes
+            )
+            report = validate_ascend_artifacts(Path(self.output_dir), plan)
+            validation_path = Path(self.output_dir) / "deployment_validation.json"
+            self._write_json_file(validation_path, report)
+            if report["status"] != "passed":
+                raise ValueError(
+                    f"Ascend artifact validation failed; see {validation_path}"
+                )
+            extra_results["description_path"] = str(description_path)
+            extra_results["validation_path"] = str(validation_path)
+        else:
+            index_path = self._refresh_weight_index(original_index, updated_weight_map)
+            self._refresh_config(quant_ignore_layers)
         logger.info("Exported tensor-converted model to {}", self.output_dir)
         logger.info("Refreshed weight index at {}", index_path)
         return {
             "index_path": index_path,
             "num_output_files": len(set(updated_weight_map.values())),
+            **extra_results,
         }
+
+    def _prepare_ascend_deploy_plan(self, original_index=None):
+        if original_index is None:
+            original_index = self._load_weight_index()
+        if any(
+            not isinstance(name, str) or Path(name).name != name
+            for name in original_index["weight_map"].values()
+        ):
+            raise ValueError("Ascend shard names must be local filenames")
+        if any(
+            name == "rot.weight" or name.endswith(".rot.weight")
+            for name in original_index["weight_map"]
+        ):
+            raise ValueError("Ascend source contains rotation weights")
+        self.ascend_deploy_plan = build_ascend_deploy_plan(
+            original_index["weight_map"], self.args.deploy_selection, self.pipeline
+        )
+        if getattr(self.args, "quant_target", None):
+            logger.warning("Ascend JSON selection overrides quant_target")
+        logger.info(
+            "Ascend selection: {} modules, {} MTP matches excluded, pattern counts: {}",
+            len(self.ascend_deploy_plan.selected_modules),
+            len(self.ascend_deploy_plan.excluded_mtp),
+            self.ascend_deploy_plan.match_counts,
+        )
+        return self.ascend_deploy_plan
 
     def _convert_tensorwise_shard(
         self, source_file, model_dir, original_weight_map, quant_layers, loaded_files
@@ -302,38 +412,70 @@ class LlmDeployWorkflow:
             model_dir, source_file, self.get_safetensors_files()
         )
         current_state_dict = load_file(str(source_path), device="cpu")
-        loaded_files[source_file] = current_state_dict
+        is_ascend = getattr(self.args, "deploy_format", "legacy") == "ascend"
+        if not is_ascend:
+            loaded_files[source_file] = current_state_dict
 
         new_state_dict = {}
         for weight_name, weight in current_state_dict.items():
-            scale_prefix, scale_inv_name = self.pipeline.get_scale_name(weight_name)
-            if weight_name.endswith(scale_prefix):
-                continue
-            # NVFP4: scale_inv_name 为 (scale_name, scale_2_name) 元组，
-            # `<name>_scale_2` 不满足 endswith("_scale")，需单独跳过。
-            if isinstance(scale_inv_name, tuple) and weight_name in scale_inv_name:
-                continue
-            block_size = self.pipeline.block_size(weight)
-            weight = convert_state_dict(
-                weight,
-                weight_name,
-                scale_inv_name,
-                original_weight_map,
-                model_dir,
-                loaded_files,
-                block_size,
-                self.get_safetensors_files(),
-            )
+            # Ascend accepts original BF16 weights and preserves auxiliary tensors.
+            # Source quantized-format decoding remains specific to legacy export.
+            if not is_ascend:
+                scale_prefix, scale_inv_name = self.pipeline.get_scale_name(weight_name)
+                if weight_name.endswith(scale_prefix):
+                    continue
+                # NVFP4: scale_inv_name 为 (scale_name, scale_2_name) 元组，
+                # `<name>_scale_2` 不满足 endswith("_scale")，需单独跳过。
+                if isinstance(scale_inv_name, tuple) and weight_name in scale_inv_name:
+                    continue
+                block_size = self.pipeline.block_size(weight)
+                weight = convert_state_dict(
+                    weight,
+                    weight_name,
+                    scale_inv_name,
+                    original_weight_map,
+                    model_dir,
+                    loaded_files,
+                    block_size,
+                    self.get_safetensors_files(),
+                )
             new_state_dict[weight_name] = weight
             if self.quant_dtype in ["int", "mxfp"]:
-                quant_cls = DTYPE_REGISTRY.get(self.quant_dtype)
                 new_weight_name = weight_name.rsplit(".", 1)[0]
-                if new_weight_name in quant_layers:
+                is_weight = not is_ascend or weight_name.endswith(".weight")
+                if is_weight and new_weight_name in quant_layers:
                     bit = quant_layers[new_weight_name]
-                    state_dict = quant_payload(quant_cls, weight_name, weight, bit)
+                    state_dict = self._export_tensor_payload(weight_name, weight, bit)
                     new_state_dict.update(state_dict)
         self._write_safetensor_file(source_file, new_state_dict)
+        if is_ascend:
+            self._output_tensor_bytes = getattr(self, "_output_tensor_bytes", 0) + sum(
+                tensor.numel() * tensor.element_size()
+                for tensor in new_state_dict.values()
+            )
         return {weight_name: source_file for weight_name in new_state_dict}
+
+    def _export_tensor_payload(
+        self, weight_name: str, weight: torch.Tensor, bit: int
+    ) -> dict[str, torch.Tensor]:
+        is_ascend = getattr(self.args, "deploy_format", "legacy") == "ascend"
+        if is_ascend:
+            if (
+                not weight_name.endswith(".weight")
+                or weight.dtype != torch.bfloat16
+                or weight.ndim != 2
+                or weight.numel() == 0
+            ):
+                raise ValueError(
+                    f"Ascend selected weight {weight_name} must be nonempty 2-D BF16"
+                )
+            if not torch.isfinite(weight).all():
+                raise ValueError(f"Ascend selected weight {weight_name} must be finite")
+        quant_cls = DTYPE_REGISTRY.get(self.quant_dtype)
+        payload = quant_payload(quant_cls, weight_name, weight, bit)
+        if is_ascend:
+            payload = adapt_ascend_payload(weight_name, payload)
+        return payload
 
     def _write_block_file(self, layer_idx: int, layer_tensors: dict[str, object]):
         width = max(3, len(str(max(self.pipeline.num_layers - 1, 0))))

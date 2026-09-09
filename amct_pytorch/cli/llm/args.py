@@ -19,6 +19,10 @@
 import argparse
 import os
 
+from amct_pytorch.common.models.llm.common.deploy_selection import (
+    load_deploy_selection,
+    validate_ascend_deploy_args,
+)
 from amct_pytorch.quantization.bit_policy import BitPolicy
 
 
@@ -35,6 +39,21 @@ def _validate_eval_mode(args):
 
 def parser_gen(command=None):
     parser = argparse.ArgumentParser()
+
+    if command == "deploy":
+        parser.add_argument(
+            "--deploy_format",
+            choices=["legacy", "ascend"],
+            default="legacy",
+            help="Deployment format. Ascend exports GLM-5.2 W8A8_DYNAMIC for vllm-ascend.",
+        )
+        parser.add_argument(
+            "--quant_layers_config",
+            type=str,
+            default=None,
+            help="Ascend-only JSON with quant_layers/ignore_layers module globs; "
+            "replaces quant_target selection in the Ascend export path.",
+        )
 
     parser.add_argument(
         '--model',
@@ -160,6 +179,13 @@ def parser_gen(command=None):
 
     if command == "eval":
         _validate_eval_mode(args)
+    elif command == "deploy":
+        validate_ascend_deploy_args(args)
+        args.deploy_selection = (
+            load_deploy_selection(args.quant_layers_config)
+            if args.deploy_format == "ascend"
+            else None
+        )
 
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
