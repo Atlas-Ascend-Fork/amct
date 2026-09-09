@@ -41,6 +41,7 @@ def _make_args(quant_target):
         device="cpu",
         model_name="qwen3",
         granularity="block",
+        seed=0,
     )
 
 
@@ -97,7 +98,7 @@ def test_run_blockwise_picks_hook_name_by_quant_target(
     wf.pipeline = _FakePipeline()
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_extract_ptq_data.get_pileval",
-        lambda tokenizer, n, seq_len: ["s"] * 2,
+        lambda tokenizer, n, seq_len, seed: ["s"] * 2,
     )
     wf._run_blockwise()
     assert seen["embed_hook"] == expected_hook
@@ -113,6 +114,7 @@ def _make_extract_workflow(**overrides):
         nsamples=32,
         output_dir="/tmp/fake",
         granularity="block",
+        seed=0,
     )
     defaults.update(overrides)
     args = SimpleNamespace(**defaults)
@@ -194,7 +196,7 @@ def test_run_completes(monkeypatch):
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_extract_ptq_data.get_pileval",
-        lambda tokenizer, n, seq_len: [],
+        lambda tokenizer, n, seq_len, seed: [],
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_extract_ptq_data.logger",
@@ -203,3 +205,19 @@ def test_run_completes(monkeypatch):
     wf = _make_extract_workflow(quant_target=["mlp"])
     wf.args.output_dir = "/tmp"
     wf.run()
+
+
+# ---- seed wiring -----------------------------------------------------------
+
+
+def test_init_applies_seed_from_args(monkeypatch):
+    captured = []
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_extract_ptq_data.seed_everything",
+        captured.append,
+    )
+    args = _make_args(["mlp"])
+    args.seed = 13
+    wf = LlmExtractPtqDataWorkflow(args)
+    assert captured == [13]
+    assert wf.seed == 13

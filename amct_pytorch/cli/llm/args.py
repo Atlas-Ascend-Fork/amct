@@ -62,7 +62,7 @@ def parser_gen(command=None):
         help='eval for block-wise or global.',
     )
     parser.add_argument(
-        '--seed', type=int, default=0, help='Random seed for HuggingFace and PyTorch.'
+        '--seed', type=int, default=42, help='Random seed for HuggingFace and PyTorch.'
     )
     parser.add_argument(
         '--quant_target',

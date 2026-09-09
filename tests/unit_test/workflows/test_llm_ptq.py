@@ -261,6 +261,7 @@ def test_init_sets_solver_key_default_and_custom():
         model_name="qwen3",
         device="cpu",
         solver="modelwise",
+        seed=0,
     )
     wf = LlmPtqWorkflow(args)
     assert wf.solver_key == "modelwise"
@@ -277,6 +278,7 @@ def test_init_solver_key_defaults_to_blockwise():
         output_dir="/tmp",
         model_name="qwen3",
         device="cpu",
+        seed=0,
     )
     wf = LlmPtqWorkflow(args)
     assert wf.solver_key == "blockwise"
@@ -653,3 +655,23 @@ def test_build_pipeline_uses_registry(monkeypatch):
     workflow = _make_workflow()
     pipeline = workflow._build_pipeline()
     assert pipeline is not None
+
+
+# ---- seed wiring -----------------------------------------------------------
+
+
+def test_init_applies_seed_from_args(monkeypatch):
+    captured = []
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_ptq.seed_everything", captured.append
+    )
+    args = SimpleNamespace(
+        quant_target=[QUANT_TARGET_MLP],
+        granularity="block",
+        device=torch.device("cpu"),
+        model_name="qwen3",
+        seed=13,
+    )
+    workflow = LlmPtqWorkflow(args)
+    assert captured == [13]
+    assert workflow.seed == 13

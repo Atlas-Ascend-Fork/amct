@@ -97,6 +97,7 @@ def test_workflow_initializes_plural_safetensors_files_cache():
         model=FAKE_MODEL,
         quant_dtype="int8",
         output_dir=TMP_DEPLOY_OUT,
+        seed=0,
     )
 
     workflow = LlmDeployWorkflow(args)
@@ -573,6 +574,7 @@ def test_deploy_init_sets_all_attrs():
         model=FAKE_MODEL,
         quant_dtype="int8",
         output_dir=TMP_DEPLOY_OUT,
+        seed=0,
     )
     wf = LlmDeployWorkflow(args)
     assert wf.args is args
@@ -595,6 +597,7 @@ def test_deploy_init_mx_flag():
             model="/m",
             quant_dtype="mxfp8",
             output_dir="/out",
+            seed=0,
         )
     )
     assert wf.is_mx is True
@@ -610,6 +613,7 @@ def test_deploy_init_hif_flag():
             model="/m",
             quant_dtype="hifp8",
             output_dir="/out",
+            seed=0,
         )
     )
     assert wf.is_hif is True
@@ -864,3 +868,24 @@ def test_load_weight_index_missing_raises(tmp_path):
     wf = _make_workflow(model_path=str(tmp_path))
     with pytest.raises(FileNotFoundError):
         wf._load_weight_index()  # pylint: disable=protected-access
+
+
+# ---- seed wiring -----------------------------------------------------------
+
+
+def test_init_applies_seed_from_args(monkeypatch):
+    captured = []
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.seed_everything", captured.append
+    )
+    args = SimpleNamespace(
+        granularity=GRANULARITY_BLOCK,
+        model_name=MODEL_NAME_QWEN3,
+        model=FAKE_MODEL,
+        quant_dtype="int",
+        output_dir=TMP_DEPLOY_OUT,
+        seed=13,
+    )
+    workflow = LlmDeployWorkflow(args)
+    assert captured == [13]
+    assert workflow.seed == 13

@@ -556,6 +556,7 @@ def test_eval_init_sets_all_attributes_from_args():
         output_dir="/tmp/out",
         quant_dtype="int4",
         bit_policy=bp,
+        seed=0,
     )
     wf = LlmEvalWorkflow(args)
     assert wf.args is args
@@ -696,3 +697,27 @@ def test_get_relevant_quant_bits_with_mlp_and_cache():
     bits = workflow._get_relevant_quant_bits()
     assert 8 in bits
     assert 4 in bits
+
+
+# ---- seed wiring -----------------------------------------------------------
+
+
+def test_init_applies_seed_from_args(monkeypatch):
+    captured = []
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_eval.seed_everything", captured.append
+    )
+    args = SimpleNamespace(
+        seq_len=512,
+        device="cpu",
+        granularity="block",
+        eval_mode="bf16",
+        model_name="qwen3",
+        quant_target=(),
+        quant_dtype="int",
+        bit_policy=_make_bit_policy(),
+        seed=13,
+    )
+    workflow = LlmEvalWorkflow(args)
+    assert captured == [13]
+    assert workflow.seed == 13
