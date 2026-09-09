@@ -92,7 +92,7 @@ class ModelArgs:
     n_expert_groups: int = 1
     n_limited_groups: int = 1
     score_func: Literal["softmax", "sigmoid"] = "softmax"
-    route_scale: float = 1.
+    route_scale: float = 1.0
     # mla
     q_lora_rank: int = 0
     kv_lora_rank: int = 512
@@ -102,10 +102,10 @@ class ModelArgs:
     # yarn
     original_seq_len: int = 4096
     rope_theta: float = 10000.0
-    rope_factor: float = 40.
+    rope_factor: float = 40.0
     beta_fast: int = 32
     beta_slow: int = 1
-    mscale: float = 1.
+    mscale: float = 1.0
     # index
     index_n_heads: int = 64
     index_head_dim: int = 128
@@ -113,9 +113,10 @@ class ModelArgs:
 
 
 def fp32_index(q: torch.Tensor, k: torch.Tensor, weights):
-
     logits = (
-        torch.matmul(q.transpose(1, 2).to(torch.float32), k.permute(0, 2, 3, 1).to(torch.float32))
+        torch.matmul(
+            q.transpose(1, 2).to(torch.float32), k.permute(0, 2, 3, 1).to(torch.float32)
+        )
     ).to(torch.float32)
     logits = torch.relu(logits)
     logits = logits * weights.permute(0, 2, 1, 3).to(torch.float32)
@@ -143,8 +144,10 @@ def hadamard_transform_fix(x):
     dtype = x.dtype
     device = x.device
     hidden_size = x.size(-1)
-    H_m = torch.tensor(hadamard(hidden_size, dtype=np.float32) / (hidden_size ** 0.5)).to(device)
-    x = (x.to(torch.float32) @ H_m).to(dtype)
+    hadamard_matrix = torch.tensor(
+        hadamard(hidden_size, dtype=np.float32) / (hidden_size**0.5)
+    ).to(device)
+    x = (x.to(torch.float32) @ hadamard_matrix).to(dtype)
     return x
 
 
@@ -162,19 +165,39 @@ class Indexer(torch.nn.Module):
         self.rope_head_dim: int = args.qk_rope_head_dim
         self.index_topk: int = args.index_topk
         self.q_lora_rank: int = args.q_lora_rank
-        self.wq_b = nn.Linear(self.q_lora_rank, self.n_heads * self.head_dim, bias=False)
+        self.wq_b = nn.Linear(
+            self.q_lora_rank, self.n_heads * self.head_dim, bias=False
+        )
         self.wk = nn.Linear(self.dim, self.head_dim, bias=False)
         self.k_norm = LayerNorm(self.head_dim)
         self.weights_proj = nn.Linear(self.dim, self.n_heads, bias=False)
-        self.softmax_scale = self.head_dim ** -0.5
+        self.softmax_scale = self.head_dim**-0.5
         self.scale_fmt = args.scale_fmt
 
-        self.register_buffer("k_cache", torch.zeros(args.max_batch_size, args.max_seq_len, self.head_dim,
-                                                    dtype=torch.float8_e4m3fn), persistent=False)
-        self.register_buffer("k_scale_cache",
-                             torch.zeros(args.max_batch_size, args.max_seq_len, self.head_dim // block_size),
-                             persistent=False)
+        self.register_buffer(
+            "k_cache",
+            torch.zeros(
+                args.max_batch_size,
+                args.max_seq_len,
+                self.head_dim,
+                dtype=torch.float8_e4m3fn,
+            ),
+            persistent=False,
+        )
+        self.register_buffer(
+            "k_scale_cache",
+            torch.zeros(
+                args.max_batch_size, args.max_seq_len, self.head_dim // block_size
+            ),
+            persistent=False,
+        )
 
-    def forward(self, x: torch.Tensor, qr: torch.Tensor, start_pos: int, freqs_cis: torch.Tensor,
-                mask: Optional[torch.Tensor]):
+    def forward(
+        self,
+        x: torch.Tensor,
+        qr: torch.Tensor,
+        start_pos: int,
+        freqs_cis: torch.Tensor,
+        mask: Optional[torch.Tensor],
+    ):
         pass

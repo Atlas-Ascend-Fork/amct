@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -30,20 +30,26 @@ PARAMS = 'params'
 
 class StopFowardException(Exception):
     '''set exception to stop the forward process'''
+
     def __init__(self, name):
         super().__init__()
         self.name = name
 
 
-class DistillHelper():
-    """ Helper to do Distill"""
+class DistillHelper:
+    """Helper to do Distill"""
+
     def __init__(self, model_t, model_s, config_file, loss, sample_instance):
         '''distill helper initialize'''
         self.config_file = DistillHelper.get_config_file(config_file)
-        self.model_teacher, self.model_student = DistillHelper.get_models(model_t, model_s)
+        self.model_teacher, self.model_student = DistillHelper.get_models(
+            model_t, model_s
+        )
         self.config = parse_distill_config(self.config_file, self.model_teacher)
         self.loss = torch.nn.MSELoss() if loss is None else loss
-        self.sample_helper = ModelSingleTensorInput() if sample_instance is None else sample_instance
+        self.sample_helper = (
+            ModelSingleTensorInput() if sample_instance is None else sample_instance
+        )
 
     @property
     def batch_num(self):
@@ -62,17 +68,17 @@ class DistillHelper():
 
     @property
     def model_t(self):
-        ''' teacher model '''
+        '''teacher model'''
         return self.model_teacher
 
     @property
     def model_s(self):
-        ''' student model '''
+        '''student model'''
         return self.model_student
 
     @property
     def sample_ins(self):
-        ''' sample '''
+        '''sample'''
         return self.sample_helper
 
     @staticmethod
@@ -203,11 +209,14 @@ class DistillHelper():
                     x = module.forward(x)
                 except Exception as exception:
                     raise RuntimeError(
-                        'module forward failed, please check the distill group config') from exception
+                        'module forward failed, please check the distill group config'
+                    ) from exception
             if x.numel() != target.numel():
                 raise RuntimeError(
-                    'shape error, please check train_loader, x {}, target {}'
-                    .format(x.numel(), target.numel()))
+                    'shape error, please check train_loader, x {}, target {}'.format(
+                        x.numel(), target.numel()
+                    )
+                )
 
             # broadcast the target shape
             target = target.reshape(x.shape)
@@ -215,7 +224,7 @@ class DistillHelper():
         return loss_val
 
     def do_calibration(self, train_loader):
-        ''' do calibration for ifmr '''
+        '''do calibration for ifmr'''
         if len(train_loader) == 0:
             raise ValueError('train_loader length is 0, please check the train_loader')
 
@@ -227,7 +236,10 @@ class DistillHelper():
                 run_batch = run_batch + 1
                 if run_batch >= self.batch_num:
                     LOGGER.logi(
-                        'distill do calibration success. batch num: {}'.format(self.batch_num))
+                        'distill do calibration success. batch num: {}'.format(
+                            self.batch_num
+                        )
+                    )
                     return
 
     def get_model_input(self, samples):
@@ -235,9 +247,15 @@ class DistillHelper():
         sp = self.sample_helper.get_model_input_data(samples)
         if isinstance(sp, (list, tuple)):
             if not all(isinstance(x, torch.Tensor) for x in sp):
-                raise RuntimeError('expect tensor in list/tuple, please check the sample_instance')
+                raise RuntimeError(
+                    'expect tensor in list/tuple, please check the sample_instance'
+                )
             return sp
         elif isinstance(sp, torch.Tensor):
             return sp
 
-        raise RuntimeError('expect tensor/list/tuple, but got {}, please check the sample_instance'.format(type(sp)))
+        raise RuntimeError(
+            'expect tensor/list/tuple, but got {}, please check the sample_instance'.format(
+                type(sp)
+            )
+        )

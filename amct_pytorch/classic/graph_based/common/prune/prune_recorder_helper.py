@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -17,7 +17,6 @@
 # ----------------------------------------------------------------------------
 import numpy as np
 from ..utils.prune_record_attr_util import AttrProtoHelper
-from ...utils.log import LOGGER
 
 ATTR_BEGIN = 'begin'
 ATTR_END = 'end'
@@ -28,7 +27,8 @@ ACTIVE_PRUNE_RECORDS = 'active_prune_records'
 
 
 class PruneRecordHelper:
-    """ the help class of prune record"""
+    """the help class of prune record"""
+
     def __init__(self, records, graph):
         """
         Function: init object
@@ -52,14 +52,20 @@ class PruneRecordHelper:
                 continue
             attr_helper = AttrProtoHelper(producer)
             if attr_helper.has_attr(ATTR_BEGIN):
-                cout_range = [attr_helper.get_attr_value(ATTR_BEGIN), attr_helper.get_attr_value(ATTR_END)]
+                cout_range = [
+                    attr_helper.get_attr_value(ATTR_BEGIN),
+                    attr_helper.get_attr_value(ATTR_END),
+                ]
                 return cout_range
         for consumer in record.consumer:
             if consumer.name != name:
                 continue
             attr_helper = AttrProtoHelper(consumer)
             if attr_helper.has_attr(ATTR_BEGIN):
-                cout_range = [attr_helper.get_attr_value(ATTR_BEGIN), attr_helper.get_attr_value(ATTR_END)]
+                cout_range = [
+                    attr_helper.get_attr_value(ATTR_BEGIN),
+                    attr_helper.get_attr_value(ATTR_END),
+                ]
                 return cout_range
         raise RuntimeError("cannot find range in record for {}".format(name))
 
@@ -154,7 +160,9 @@ class PruneRecordHelper:
                     split_info.get(name)[ACTIVE_PRUNE_SPLIT] = {}
                 attr_helper = AttrProtoHelper(producer)
                 ori_begin = attr_helper.get_attr_value(ATTR_BEGIN)
-                split_info.get(name).get(ACTIVE_PRUNE_SPLIT)['ori_begin_%s' % (ori_begin)] = ori_begin
+                split_info.get(name).get(ACTIVE_PRUNE_SPLIT)[
+                    'ori_begin_%s' % (ori_begin)
+                ] = ori_begin
             for consumer in prune_record.consumer:
                 name = consumer.name
                 if name not in split_info:
@@ -163,7 +171,9 @@ class PruneRecordHelper:
                     split_info.get(name)[PASSIVE_PRUNE_SPLIT] = {}
                 attr_helper = AttrProtoHelper(consumer)
                 ori_begin = attr_helper.get_attr_value(ATTR_BEGIN)
-                split_info.get(name).get(PASSIVE_PRUNE_SPLIT)['ori_begin_%s' % (ori_begin)] = ori_begin
+                split_info.get(name).get(PASSIVE_PRUNE_SPLIT)[
+                    'ori_begin_%s' % (ori_begin)
+                ] = ori_begin
         return split_info
 
     @staticmethod
@@ -185,20 +195,30 @@ class PruneRecordHelper:
                 if not active_remain_channels_raw.get(producer_record.name):
                     active_remain_channels_raw[producer_record.name] = {}
                 remain_channels, begin, end = PruneRecordHelper.read_attr_from_proto(
-                    producer_record)
-                active_remain_channels_raw.get(producer_record.name)[(begin, end)] = remain_channels
+                    producer_record
+                )
+                active_remain_channels_raw.get(producer_record.name)[(begin, end)] = (
+                    remain_channels
+                )
             # read consumer records
             for consumer_record in prune_record.consumer:
                 if not passive_remain_channels_raw.get(consumer_record.name):
                     passive_remain_channels_raw[consumer_record.name] = {}
                 remain_channels, begin, end = PruneRecordHelper.read_attr_from_proto(
-                    consumer_record)
-                passive_remain_channels_raw.get(consumer_record.name)[(begin, end)] = remain_channels
+                    consumer_record
+                )
+                passive_remain_channels_raw.get(consumer_record.name)[(begin, end)] = (
+                    remain_channels
+                )
 
         # remain channels may be splitted by begin and end index
         # here the splitted records need to be merged
-        active_remain_channels = _merge_channels_by_begin_end(active_remain_channels_raw)
-        passive_remain_channels = _merge_channels_by_begin_end(passive_remain_channels_raw)
+        active_remain_channels = _merge_channels_by_begin_end(
+            active_remain_channels_raw
+        )
+        passive_remain_channels = _merge_channels_by_begin_end(
+            passive_remain_channels_raw
+        )
         return active_remain_channels, passive_remain_channels
 
     @staticmethod
@@ -273,7 +293,10 @@ class PruneRecordHelper:
             records = producer_node.get_attr(ACTIVE_PRUNE_RECORDS)
             if del_record not in records:
                 raise RuntimeError(
-                    'the del_record is not in active_prune_records of producer {}'.format(producer_name))
+                    'the del_record is not in active_prune_records of producer {}'.format(
+                        producer_name
+                    )
+                )
             records.remove(del_record)
             if not records:
                 producer_node.delete_attr(ACTIVE_PRUNE_RECORDS)
@@ -285,7 +308,10 @@ class PruneRecordHelper:
                 records = consumer_node.get_attr(branch_record_key)
                 if del_record not in records:
                     raise RuntimeError(
-                        'the del_record is not in passive_prune_records of consumer {}'.format(consumer_name))
+                        'the del_record is not in passive_prune_records of consumer {}'.format(
+                            consumer_name
+                        )
+                    )
                 records.remove(del_record)
                 if not records:
                     consumer_node.delete_attr(branch_record_key)
@@ -438,7 +464,9 @@ def _merge_channels_by_begin_end(remain_channels_raw):
         # concatenate all remain channels
         for sorted_remain_channel in sorted_remain_channels:
             # remain_channels shifted by begin
-            shifted_remain_channels = sorted_remain_channel[0][0] + np.asarray(sorted_remain_channel[1])
+            shifted_remain_channels = sorted_remain_channel[0][0] + np.asarray(
+                sorted_remain_channel[1]
+            )
             remain_channel.extend(shifted_remain_channels.tolist())
         remain_channels[layer] = remain_channel
 

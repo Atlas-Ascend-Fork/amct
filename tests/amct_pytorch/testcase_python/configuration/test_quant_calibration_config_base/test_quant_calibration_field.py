@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -105,7 +105,9 @@ class TestQuantCalibrationField(unittest.TestCase):
         obj = field.SearchRange(ModuleHelper, CAPACITY)
         self.assertRaises(TypeError, obj.build, 'abc', [MATMUL_1_LAYER_NAME, LINEAR])
         self.assertRaises(ValueError, obj.build, [1.2], [MATMUL_1_LAYER_NAME, LINEAR])
-        self.assertRaises(ValueError, obj.build, [1.2, 0.8], [MATMUL_1_LAYER_NAME, LINEAR])
+        self.assertRaises(
+            ValueError, obj.build, [1.2, 0.8], [MATMUL_1_LAYER_NAME, LINEAR]
+        )
 
     def test_search_step_build(self):
         obj = field.SearchStep(ModuleHelper, CAPACITY)
@@ -120,7 +122,7 @@ class TestQuantCalibrationField(unittest.TestCase):
     def test_search_step_build_error(self):
         obj = field.SearchStep(ModuleHelper, CAPACITY)
         self.assertRaises(TypeError, obj.build, 'abc', [MATMUL_1_LAYER_NAME, LINEAR])
-        self.assertRaises(ValueError, obj.build, 0., [MATMUL_1_LAYER_NAME, LINEAR])
+        self.assertRaises(ValueError, obj.build, 0.0, [MATMUL_1_LAYER_NAME, LINEAR])
 
     def test_asymmetric_build(self):
         obj = field.Asymmetric(ModuleHelper, CAPACITY)
@@ -195,7 +197,9 @@ class TestQuantCalibrationField(unittest.TestCase):
         ret = obj.dump()
         self.assertEqual(ret.get(KV_DATA_QUANT_CONFIG).get(ACT_ALGO), 'ifmr')
 
-        obj.build({KV_DATA_QUANT_CONFIG: {ACT_ALGO: 'hfmg'}}, [MATMUL_1_LAYER_NAME, LINEAR])
+        obj.build(
+            {KV_DATA_QUANT_CONFIG: {ACT_ALGO: 'hfmg'}}, [MATMUL_1_LAYER_NAME, LINEAR]
+        )
         ret = obj.dump()
         self.assertEqual(ret.get(KV_DATA_QUANT_CONFIG).get(ACT_ALGO), 'hfmg')
 
@@ -207,19 +211,24 @@ class TestQuantCalibrationField(unittest.TestCase):
 
     def test_kv_cache_root_config_build(self):
         obj = field.KVCacheRootConfig(ModuleHelper, CAPACITY)
-        obj.build({MATMUL_1_LAYER_NAME: {KV_DATA_QUANT_CONFIG: {ACT_ALGO: 'hfmg'}}},
-                  {'kv_cache_quant_layers': {MATMUL_1_LAYER_NAME: LINEAR}})
+        obj.build(
+            {MATMUL_1_LAYER_NAME: {KV_DATA_QUANT_CONFIG: {ACT_ALGO: 'hfmg'}}},
+            {'kv_cache_quant_layers': {MATMUL_1_LAYER_NAME: LINEAR}},
+        )
         ret = obj.dump()
 
         self.assertIn(KV_DATA_QUANT_CONFIG, ret.get(MATMUL_1_LAYER_NAME))
-        self.assertEqual(ret.get(MATMUL_1_LAYER_NAME).get(KV_DATA_QUANT_CONFIG).get(ACT_ALGO), 'hfmg')
+        self.assertEqual(
+            ret.get(MATMUL_1_LAYER_NAME).get(KV_DATA_QUANT_CONFIG).get(ACT_ALGO), 'hfmg'
+        )
 
     def test_kv_cache_root_config_build_unsupported_layer_raises(self):
         obj = field.KVCacheRootConfig(ModuleHelper, CAPACITY)
         with self.assertRaises(ValueError):
             obj.build(
                 {'not_a_kv_layer': {KV_DATA_QUANT_CONFIG: {ACT_ALGO: 'hfmg'}}},
-                {'kv_cache_quant_layers': {MATMUL_1_LAYER_NAME: LINEAR}})
+                {'kv_cache_quant_layers': {MATMUL_1_LAYER_NAME: LINEAR}},
+            )
 
     def test_calibration_general_config_item_build_default(self):
         obj = field.CalibrationGeneralConfigItem(ModuleHelper, CAPACITY)
@@ -230,12 +239,13 @@ class TestQuantCalibrationField(unittest.TestCase):
 
     def test_calibration_general_config_item_build(self):
         obj = field.CalibrationGeneralConfigItem(ModuleHelper, CAPACITY)
-        obj.build({'batch_num': 8, 'activation_offset': False},
-                  {'kv_cache_quant_layers': {MATMUL_1_LAYER_NAME: LINEAR}})
+        obj.build(
+            {'batch_num': 8, 'activation_offset': False},
+            {'kv_cache_quant_layers': {MATMUL_1_LAYER_NAME: LINEAR}},
+        )
         ret = obj.dump()
         self.assertEqual(ret.get('batch_num'), 8)
         self.assertFalse(ret.get('activation_offset'))
-
 
     def test_quant_calibration_config_root_build_default(self):
         obj = field.QuantCalibrationConfigRoot(ModuleHelper, CAPACITY)
@@ -248,11 +258,14 @@ class TestQuantCalibrationField(unittest.TestCase):
     def test_quant_calibration_config_root_build(self):
         obj = field.QuantCalibrationConfigRoot(ModuleHelper, CAPACITY)
         obj.build(
-            {'batch_num': 8, 'activation_offset': False,
-             MATMUL_1_LAYER_NAME: {KV_DATA_QUANT_CONFIG: {ACT_ALGO: 'hfmg'}}},
-            {'kv_cache_quant_layers': {MATMUL_1_LAYER_NAME: LINEAR}})
+            {
+                'batch_num': 8,
+                'activation_offset': False,
+                MATMUL_1_LAYER_NAME: {KV_DATA_QUANT_CONFIG: {ACT_ALGO: 'hfmg'}},
+            },
+            {'kv_cache_quant_layers': {MATMUL_1_LAYER_NAME: LINEAR}},
+        )
         ret = obj.dump()
         self.assertEqual(ret.get('batch_num'), 8)
         self.assertFalse(ret.get('activation_offset'))
         self.assertIn(MATMUL_1_LAYER_NAME, ret)
-

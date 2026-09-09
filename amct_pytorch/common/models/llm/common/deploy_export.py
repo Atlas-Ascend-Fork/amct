@@ -14,14 +14,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from loguru import logger
 import torch
 import torch.nn as nn
+from loguru import logger
 from safetensors.torch import load_file
 
-from amct_pytorch.quantization.modules.quant_linear import QuantLinear
-from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
 from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
+from amct_pytorch.common.models.llm.common.weight_path_validation import (
+    collect_safetensors_files,
+    resolve_safetensors_path,
+)
+from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
+from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
 def generate_quant_group(a_bits=8, w_bits=8, qtype="float", activation_use_clip=False):
@@ -29,16 +33,34 @@ def generate_quant_group(a_bits=8, w_bits=8, qtype="float", activation_use_clip=
     act_strategy = "group" if qtype == "float" else "token"
     w_strategy = "group" if qtype == "float" else "channel"
     group_size = 32 if qtype == "float" else None
-    quant_group = {"input_activations": {"actorder": None, "block_structure": None, "dynamic": True,
-                                         "group_size": group_size, "num_bits": a_bits,
-                                         "observer": observer, "observer_kwargs": {},
-                                         "strategy": act_strategy, "symmetric": True, "type": qtype},
-                   "activation_use_clip": activation_use_clip,
-                   "output_activations": None,
-                   "weights": {"actorder": None, "block_structure": None, "dynamic": False,
-                               "group_size": group_size, "num_bits": w_bits,
-                               "observer": observer, "observer_kwargs": {},
-                               "strategy": w_strategy, "symmetric": True, "type": qtype}}
+    quant_group = {
+        "input_activations": {
+            "actorder": None,
+            "block_structure": None,
+            "dynamic": True,
+            "group_size": group_size,
+            "num_bits": a_bits,
+            "observer": observer,
+            "observer_kwargs": {},
+            "strategy": act_strategy,
+            "symmetric": True,
+            "type": qtype,
+        },
+        "activation_use_clip": activation_use_clip,
+        "output_activations": None,
+        "weights": {
+            "actorder": None,
+            "block_structure": None,
+            "dynamic": False,
+            "group_size": group_size,
+            "num_bits": w_bits,
+            "observer": observer,
+            "observer_kwargs": {},
+            "strategy": w_strategy,
+            "symmetric": True,
+            "type": qtype,
+        },
+    }
     return quant_group
 
 
@@ -59,14 +81,20 @@ def generate_quant_config(cache_scheme, ignores, is_mx=False, bits_scheme=None):
     config_groups = {}
     for idx, group in enumerate(bits_scheme):
         entry = {"targets": group["targets"]}
-        entry.update(generate_quant_group(a_bits=group["a_bits"], w_bits=group["w_bits"], qtype=qtype))
+        entry.update(
+            generate_quant_group(
+                a_bits=group["a_bits"], w_bits=group["w_bits"], qtype=qtype
+            )
+        )
         config_groups[f"group_{idx}"] = entry
-    quant_config = {"config_groups": config_groups,
-                    "format": "float-quantized" if is_mx else "int-quantized",
-                    "global_compression_ratio": 1,
-                    "ignore": ignores,
-                    "quant_method": "compressed-tensors",
-                    "quantization_status": "compressed"}
+    quant_config = {
+        "config_groups": config_groups,
+        "format": "float-quantized" if is_mx else "int-quantized",
+        "global_compression_ratio": 1,
+        "ignore": ignores,
+        "quant_method": "compressed-tensors",
+        "quantization_status": "compressed",
+    }
     if cache_scheme is not None:
         quant_config.update(cache_scheme)
     if is_mx:
@@ -129,23 +157,99 @@ def export_block_deploy(pipeline, layer_idx: int, quant_ignore_layers: list):
     return deploy_tensors, tensor_routes
 
 
-def convert_state_dict(weight, weight_name, scale_inv_name, original_weight_map, model_dir, loaded_files, block_size):
-    if weight.element_size() == 1:
-        # FP8 weight
-        try:
-            # Get scale_inv from the correct file
-            file_name = original_weight_map[scale_inv_name]
-            if file_name not in loaded_files:
-                file_path = model_dir / file_name
-                loaded_files[file_name] = load_file(file_path, device="cpu")
-            scale_inv = loaded_files[file_name][scale_inv_name]
-            if weight.dtype == torch.int8:
-                weight = weight_dequant(weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True)
-            else:
-                weight = weight_dequant(weight, scale_inv, block_size=block_size)
-        except KeyError:
-            logger.warning(
-                f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion")
+def _load_scales(
+    names, original_weight_map, model_dir, loaded_files, safetensors_files=None
+):
+    """Load scale tensors by name, loading their shards on demand."""
+    scales = []
+    for name in names:
+        file_name = original_weight_map[name]
+        if file_name not in loaded_files:
+            if safetensors_files is None:
+                safetensors_files = collect_safetensors_files(model_dir)
+            file_path = resolve_safetensors_path(
+                model_dir, file_name, safetensors_files
+            )
+            loaded_files[file_name] = load_file(str(file_path), device="cpu")
+        scales.append(loaded_files[file_name][name])
+    return scales
+
+
+def convert_state_dict(
+    weight,
+    weight_name,
+    scale_inv_name,
+    original_weight_map,
+    model_dir,
+    loaded_files,
+    block_size,
+    safetensors_files=None,
+):
+    if weight.element_size() != 1:
+        return weight
+    try:
+        # NVFP4
+        if isinstance(scale_inv_name, tuple):
+            from amct_pytorch.common.utils.nvfp4_format import nvfp4_weight_dequant
+
+            scale, scale_2 = _load_scales(
+                scale_inv_name,
+                original_weight_map,
+                model_dir,
+                loaded_files,
+                safetensors_files,
+            )
+            return nvfp4_weight_dequant(weight, scale, scale_2)
+        scale_inv = _load_scales(
+            (scale_inv_name,),
+            original_weight_map,
+            model_dir,
+            loaded_files,
+            safetensors_files,
+        )[0]
+
+        # HiF4
+        if (
+            weight.dtype == torch.uint8
+            and scale_inv.dtype == torch.uint8
+            and scale_inv.ndim == 3
+            and scale_inv.shape[-1] == 4
+        ):
+            from amct_pytorch.quantization.dtypes.hifp_impl import hif4_unpack
+
+            weight = hif4_unpack(scale_inv, weight)
+
+        # MXFP4 (E2M1 packed into int8, E8M0 block scale)
+        elif weight.dtype == torch.int8:
+            weight = weight_dequant(
+                weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True
+            )
+
+        # MXFP8 (FP8 weight, E8M0 block scale). An integer scale marks MX; the last-dim
+        # group size is derived from the scale and must tile the weight's last dim exactly.
+        elif not torch.is_floating_point(scale_inv):
+            n = weight.shape[-1]
+            scale_cols = scale_inv.shape[-1] if scale_inv.dim() == weight.dim() else 0
+            if scale_cols <= 0 or n % scale_cols != 0:
+                raise ValueError(
+                    f"MXFP8 weight '{weight_name}': E8M0 scale shape "
+                    f"{tuple(scale_inv.shape)} does not tile weight last dim {n} "
+                    f"(need a 2-D scale whose last dim divides {n}, e.g. OCP MX group "
+                    f"size 32)."
+                )
+            weight = weight_dequant(
+                weight, scale_inv, block_size=n // scale_cols, is_mx=True
+            )
+
+        # FP8 (float block scale)
+        else:
+            weight = weight_dequant(weight, scale_inv, block_size=block_size)
+
+    except KeyError:
+        logger.warning(
+            f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion"
+        )
+
     return weight
 
 

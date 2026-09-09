@@ -1,4 +1,20 @@
 #!/usr/bin/env python3
+# -*- coding: UTF-8 -*-
+# ----------------------------------------------------------------------------
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
 """归档 progress.md 的工作区内容到 progress_history.md（阶段推进时调用）。
 
 常驻区与工作区用以下标记分隔：
@@ -28,7 +44,9 @@ def archive_progress(progress_path: str) -> None:
         content = f.read()
 
     if SEPARATOR_END not in content:
-        logger.error("未找到常驻区结束标记，跳过归档。请确保 progress.md 含：%s", SEPARATOR_END)
+        logger.error(
+            "未找到常驻区结束标记，跳过归档。请确保 progress.md 含：%s", SEPARATOR_END
+        )
         sys.exit(1)
 
     parts = content.split(SEPARATOR_END, 1)

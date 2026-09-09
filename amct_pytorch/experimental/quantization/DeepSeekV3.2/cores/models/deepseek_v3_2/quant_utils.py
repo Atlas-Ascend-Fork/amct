@@ -93,7 +93,7 @@ def apply_quant_to_moe(args, model, shared_expert_bits=None, routed_expert_bits=
                 mod[i] = QuantDeepseekV3MLP(new_args, mod[i])
 
         if name in ["shared_experts"]:
-            logger.info(f"{name} - replace to QuantDeepseekV3MLP")
+            logger.info(f"{name} - replace with QuantDeepseekV3MLP")
             if shared_expert_bits is not None:
                 _new_args = deepcopy(args)
                 _new_args.w_bits = shared_expert_bits
@@ -144,7 +144,7 @@ def load_layer_weight(model_dir, rank, weight_map, layer_idx):
     # remove prefix of layer:
     state_dict_new = {}
     for k, v in state_dict.items():
-        state_dict_new[k[len(prefix):]] = v
+        state_dict_new[k[len(prefix) :]] = v
     state_dict = state_dict_new
     return state_dict
 
@@ -157,8 +157,8 @@ def load_layer(
     state_dict = load_layer_weight(model_dir, rank, weight_map, layer_idx)
     try:
         state_dict.pop('self_attn.rotary_emb.inv_freq')
-    except:
-        logger.info("not find self_attn.rotary_emb.inv_freq in state_dict")
+    except KeyError:
+        logger.info("self_attn.rotary_emb.inv_freq not found in state_dict")
 
     decoder_layer.load_state_dict(state_dict)
     state_dict = None  # or it will be still in GPU mem

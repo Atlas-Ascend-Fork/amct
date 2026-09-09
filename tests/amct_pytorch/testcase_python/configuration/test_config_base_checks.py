@@ -35,8 +35,9 @@ GRAPH = object()
 def _cfg(enable_quant=True, enable_approximate=False):
     querier = MagicMock()
     go = GraphObjects(graph_querier=querier, graph_checker=MagicMock())
-    obj = ConfigBase(go, CAPACITY, enable_quant=enable_quant,
-                     enable_approximate=enable_approximate)
+    obj = ConfigBase(
+        go, CAPACITY, enable_quant=enable_quant, enable_approximate=enable_approximate
+    )
     return obj, querier
 
 
@@ -120,8 +121,9 @@ class TestConfigBaseChecks(unittest.TestCase):
         obj, q = _cfg()
         q.get_act_symmetric_limit_layers.return_value = ['l1']
         config = {ACT: {'asymmetric': True}}
-        self.assertRaises(ValueError, obj.check_activation_symmetric_valid,
-                          GRAPH, config, 'l1')
+        self.assertRaises(
+            ValueError, obj.check_activation_symmetric_valid, GRAPH, config, 'l1'
+        )
 
     def test_check_int16_quantize_valid_raises(self):
         obj, q = _cfg()
@@ -148,8 +150,13 @@ class TestConfigBaseChecks(unittest.TestCase):
         obj, q = _cfg()
         q.get_name_type_dict.return_value = {'l1': 'Conv2d'}
         q.get_support_quant_layers.return_value = ['l1']
-        self.assertRaises(ValueError, obj.create_quant_config,
-                          '/tmp/x.json', GRAPH, skip_layers=['l1'])
+        self.assertRaises(
+            ValueError,
+            obj.create_quant_config,
+            '/tmp/x.json',
+            GRAPH,
+            skip_layers=['l1'],
+        )
 
 
 if __name__ == '__main__':

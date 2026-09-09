@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -114,7 +114,9 @@ def test_check_complete_recurse_into_nested_dicts():
 
 def test_check_complete_ignores_non_bit_non_dict_values():
     # int values that are not bit keys should be skipped.
-    _check_complete({W_BITS: 8, A_BITS: 8, "extra": 42, "nested": {W_BITS: 8, A_BITS: 8}}, "root")
+    _check_complete(
+        {W_BITS: 8, A_BITS: 8, "extra": 42, "nested": {W_BITS: 8, A_BITS: 8}}, "root"
+    )
 
 
 # ---- _has_lt_16 ------------------------------------------------------------
@@ -145,12 +147,16 @@ def test_has_quant_linear_true_when_top_level_below_16():
 
 
 def test_has_quant_linear_true_from_nested_group():
-    bp = BitPolicy({"mlp": {"gate_proj": {W_BITS: 8, A_BITS: 8}}, W_BITS: 16, A_BITS: 16})
+    bp = BitPolicy(
+        {"mlp": {"gate_proj": {W_BITS: 8, A_BITS: 8}}, W_BITS: 16, A_BITS: 16}
+    )
     assert bp.has_quant_linear() is True
 
 
 def test_has_quant_linear_false_when_all_bits_16():
-    bp = BitPolicy({W_BITS: 16, A_BITS: 16, "mlp": {"gate_proj": {W_BITS: 16, A_BITS: 16}}})
+    bp = BitPolicy(
+        {W_BITS: 16, A_BITS: 16, "mlp": {"gate_proj": {W_BITS: 16, A_BITS: 16}}}
+    )
     assert bp.has_quant_linear() is False
 
 
@@ -178,31 +184,41 @@ def test_linear_bits_falls_back_to_top_level():
 
 
 def test_linear_bits_resolves_group_level_override():
-    bp = BitPolicy({
-        W_BITS: 16, A_BITS: 16,
-        "attn-linear": {W_BITS: 8, A_BITS: 8},
-    })
+    bp = BitPolicy(
+        {
+            W_BITS: 16,
+            A_BITS: 16,
+            "attn-linear": {W_BITS: 8, A_BITS: 8},
+        }
+    )
     assert bp.linear_bits(name="q_proj", group="attn-linear") == (8, 8)
 
 
 def test_linear_bits_resolves_projection_level_override():
-    bp = BitPolicy({
-        W_BITS: 16, A_BITS: 16,
-        "attn-linear": {
-            W_BITS: 8, A_BITS: 8,
-            "q_proj": {W_BITS: 4, A_BITS: 4},
-        },
-    })
+    bp = BitPolicy(
+        {
+            W_BITS: 16,
+            A_BITS: 16,
+            "attn-linear": {
+                W_BITS: 8,
+                A_BITS: 8,
+                "q_proj": {W_BITS: 4, A_BITS: 4},
+            },
+        }
+    )
     assert bp.linear_bits(name="q_proj", group="attn-linear") == (4, 4)
 
 
 def test_linear_bits_dotted_group():
-    bp = BitPolicy({
-        W_BITS: 16, A_BITS: 16,
-        "moe": {
-            "routed": {W_BITS: 8, A_BITS: 8},
-        },
-    })
+    bp = BitPolicy(
+        {
+            W_BITS: 16,
+            A_BITS: 16,
+            "moe": {
+                "routed": {W_BITS: 8, A_BITS: 8},
+            },
+        }
+    )
     assert bp.linear_bits(name="gate_proj", group="moe.routed") == (8, 8)
 
 
@@ -243,12 +259,14 @@ def test_summary_includes_bitpolicy_prefix():
 
 
 def test_group_bits_getitem_returns_layer_bits():
-    bp = BitPolicy({
-        "attn-linear": {
-            "q_proj": {W_BITS: 8, A_BITS: 4},
-            "k_proj": {W_BITS: 8, A_BITS: 4},
-        },
-    })
+    bp = BitPolicy(
+        {
+            "attn-linear": {
+                "q_proj": {W_BITS: 8, A_BITS: 4},
+                "k_proj": {W_BITS: 8, A_BITS: 4},
+            },
+        }
+    )
     gb = _GroupBits(bp, "attn-linear")
     q = gb["q_proj"]
     assert isinstance(q, LayerBits)
@@ -256,9 +274,11 @@ def test_group_bits_getitem_returns_layer_bits():
 
 
 def test_group_bits_default_returns_group_level_bits():
-    bp = BitPolicy({
-        "attn-linear": {W_BITS: 4, A_BITS: 8},
-    })
+    bp = BitPolicy(
+        {
+            "attn-linear": {W_BITS: 4, A_BITS: 8},
+        }
+    )
     gb = _GroupBits(bp, "attn-linear")
     d = gb.default
     assert d.w == 4 and d.a == 8
@@ -273,7 +293,12 @@ def test_group_bits_default_falls_back_to_top_level():
 
 def test_ensure_bit_policy_creates_from_args():
     args = SimpleNamespace(
-        w_bits=8, a_bits=8, q_bits=4, k_bits=4, p_bits=4, v_bits=4,
+        w_bits=8,
+        a_bits=8,
+        q_bits=4,
+        k_bits=4,
+        p_bits=4,
+        v_bits=4,
         bit_policy=None,
     )
     policy = ensure_bit_policy(args)
@@ -287,5 +312,3 @@ def test_ensure_bit_policy_reuses_existing():
     args = SimpleNamespace(bit_policy=existing)
     policy = ensure_bit_policy(args)
     assert policy is existing
-
-

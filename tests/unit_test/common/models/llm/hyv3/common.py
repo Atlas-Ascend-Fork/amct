@@ -15,6 +15,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """Shared fixtures and helpers for hyv3 unit tests."""
+
 from types import SimpleNamespace
 
 import torch
@@ -44,15 +45,29 @@ def quant_args(quant_target=(ATTN_LINEAR,)):
         p_bits=8,
         v_bits=8,
         quant_target=list(quant_target),
-        bit_policy=BitPolicy({
-            ATTN_LINEAR: {n: {W_BITS: 8, A_BITS: 8} for n in ("q_proj", "k_proj", "v_proj", "o_proj")},
-            ATTN_CACHE: {"q": 8, "k": 8, "p": 8, "v": 8},
-            MLP: {n: {W_BITS: 8, A_BITS: 8} for n in ("gate_proj", "up_proj", "down_proj")},
-            "moe": {
-                "routed": {n: {W_BITS: 8, A_BITS: 8} for n in ("gate_proj", "up_proj", "down_proj")},
-                "shared": {n: {W_BITS: 8, A_BITS: 8} for n in ("gate_proj", "up_proj", "down_proj")},
-            },
-        }),
+        bit_policy=BitPolicy(
+            {
+                ATTN_LINEAR: {
+                    n: {W_BITS: 8, A_BITS: 8}
+                    for n in ("q_proj", "k_proj", "v_proj", "o_proj")
+                },
+                ATTN_CACHE: {"q": 8, "k": 8, "p": 8, "v": 8},
+                MLP: {
+                    n: {W_BITS: 8, A_BITS: 8}
+                    for n in ("gate_proj", "up_proj", "down_proj")
+                },
+                "moe": {
+                    "routed": {
+                        n: {W_BITS: 8, A_BITS: 8}
+                        for n in ("gate_proj", "up_proj", "down_proj")
+                    },
+                    "shared": {
+                        n: {W_BITS: 8, A_BITS: 8}
+                        for n in ("gate_proj", "up_proj", "down_proj")
+                    },
+                },
+            }
+        ),
     )
 
 

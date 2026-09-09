@@ -193,12 +193,38 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
     if mod_type != 'Linear':
         return True
 
+    # NPU op aclnnWeightQuantBatchMatmulV2 has a dimension limit of 65535
+    # for both k (input features) and n (output features). Layers like lm_head
+    # in large-vocabulary models (e.g. Qwen2 with vocab_size ~152K) will exceed
+    # this limit and cause runtime failures during PPL evaluation.
+    # This constraint only applies to weight-only quantization scenarios
+    # (where activation is NOT_QUANTIZE), not to full quantization combos.
+    npu_weight_quant_dim_limit = 65535
+    weight_only_combs = [
+        c for c in ALGORITHM_SUPPORTED_QUANT_TYPE_COMB if c.startswith('NOT_QUANTIZE')
+    ]
+    if quant_data_comb in weight_only_combs:
+        if (
+            mod.weight.shape[0] > npu_weight_quant_dim_limit
+            or mod.weight.shape[1] > npu_weight_quant_dim_limit
+        ):
+            LOGGER.logw(
+                "layer:{} cannot be quantized, weight shape [{}, {}] exceeds NPU "
+                "weight-quant operator dimension limit (max {})".format(
+                    layer_name,
+                    mod.weight.shape[0],
+                    mod.weight.shape[1],
+                    npu_weight_quant_dim_limit,
+                )
+            )
+            return False
+
     # npu op check cin length be integer multiple of 64
     support_quant_dtype_comb = ['float8_e4m3fn float4_e2m1']
     if quant_data_comb in support_quant_dtype_comb and mod.weight.shape[1] % 64 != 0:
         LOGGER.logd(
-            "layer:{} cannot be quantized, act_dtype and wts dtype {} has shape requirement "
-            "cin length should be integer multiple of 64".format(
+            "layer:{} cannot be quantized, act_dtype and wts dtype {} has a shape requirement: "
+            "the cin length should be an integer multiple of 64".format(
                 layer_name, quant_data_comb
             )
         )
@@ -206,7 +232,7 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
     # npu op check no bias
     if quant_data_comb in support_quant_dtype_comb and mod.bias is not None:
         LOGGER.logd(
-            "layer:{} cannot be quantized, act_dtype and wts dtype {} has shape requirement "
+            "layer:{} cannot be quantized, act_dtype and wts dtype {} has a shape requirement: "
             "bias is not supported".format(layer_name, quant_data_comb)
         )
         return False
@@ -217,8 +243,8 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
         and ((mod.weight.shape[1] + 31) // 32) % 2 != 0
     ):
         LOGGER.logd(
-            "layer:{} cannot be quantized, act_dtype and wts dtype {} has shape requirement "
-            "cin length ceildiv(cin, 32) must be even number".format(
+            "layer:{} cannot be quantized, act_dtype and wts dtype {} has a shape requirement: "
+            "ceildiv(cin, 32) must be an even number".format(
                 layer_name, quant_data_comb
             )
         )
@@ -228,7 +254,7 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
     if quant_data_comb in ['NOT_QUANTIZE mxfp4_e2m1', 'NOT_QUANTIZE float4_e2m1']:
         if mod.weight.shape[1] % 64 != 0 or mod.weight.shape[0] % 64 != 0:
             LOGGER.logd(
-                "layer:{} cannot be quantized, act_dtype and wts dtype {} has shape requirement"
+                "layer:{} cannot be quantized, act_dtype and wts dtype {} has shape requirement "
                 "cin and cout length should be integer multiple of 64".format(
                     layer_name, quant_data_comb
                 )
@@ -238,8 +264,8 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
     if quant_data_comb in ['NOT_QUANTIZE int4', 'int8 int4']:
         if mod.weight.shape[0] % 8 != 0 or mod.weight.shape[1] % 8 != 0:
             LOGGER.logd(
-                "layer:{} cannot be quantized, act_dtype and wts dtype {} has shape requirement"
-                " cin and cout length should be integer multiple of 8".format(
+                "layer:{} cannot be quantized, act_dtype and wts dtype {} has a shape requirement:"
+                " cin and cout lengths should be integer multiples of 8".format(
                     layer_name, quant_data_comb
                 )
             )
@@ -251,8 +277,8 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
 
     if group_size >= mod.weight.shape[1]:
         LOGGER.logd(
-            f"group size should less than cout, current group_size is {group_size}, "
-            f"cout is {mod.weight.shape[1]}, skip quantization of current layer {layer_name}"
+            f"Group size should be less than cout. Current group_size is {group_size}, "
+            f"cout is {mod.weight.shape[1]}. Skip quantization of current layer {layer_name}."
         )
         return False
     return True
@@ -278,7 +304,7 @@ def _build_layer_types_and_quant_type(quant_config, registed_alg):
         for src_op in src_ops:
             layer_types[src_op] = algo
         if algo not in BUILT_IN_ALGORITHM:
-            LOGGER.logd("Customized Algorithm {} is used fot quant".format(algo))
+            LOGGER.logd("Customized Algorithm {} is used for quant".format(algo))
         else:
             act_type = (
                 quant_config.quant_cfg.inputs_cfg.quant_type
@@ -300,7 +326,9 @@ def _is_layer_supported(mod, name, layer_types, quant_type_comb, quant_config):
     '''Check if layer is supported for quantization'''
     if type(mod).__name__ == 'FP8Linear':
         LOGGER.logw(
-            "layer:{} is already quantized, do not need quantized again.".format(name)
+            "layer:{} is already quantized and does not need to be quantized again.".format(
+                name
+            )
         )
         return False
     if (
@@ -337,8 +365,8 @@ def _check_layer_constraints(mod, name, algo, quant_type_comb, quant_config):
         and mod.weight.dtype not in ALLOWED_WEIGHT_DTYPES.get(quant_type_comb)
     ):
         LOGGER.logd(
-            "layer:{} cannot be quantized, act_dtype and wts dtype {} only support ori dtype {} "
-            "but got {}".format(
+            "Layer {} cannot be quantized. The act_dtype and wts dtype combination {} only supports "
+            "original dtypes {}, but the weight dtype is {}.".format(
                 name,
                 quant_type_comb,
                 ALLOWED_WEIGHT_DTYPES.get(quant_type_comb),
@@ -354,7 +382,7 @@ def _check_layer_constraints(mod, name, algo, quant_type_comb, quant_config):
 
 
 def get_supported_layers(model, quant_config, registed_alg):
-    '''get supported layers based on quant config and registed algorithm'''
+    '''get supported layers based on quant config and registered algorithm'''
     layer_types, quant_type_comb = _build_layer_types_and_quant_type(
         quant_config, registed_alg
     )

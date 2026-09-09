@@ -33,7 +33,7 @@ from mock_torch_npu import (
     mock_npu_weight_quant_batchmatmul,
 )
 
-from amct_pytorch import quantize
+from amct_pytorch import convert, quantize
 
 torch.manual_seed(0)
 
@@ -149,6 +149,45 @@ class TestMinMaxFakeQuant(FakeQuantTestBase):
         fake_out = model(self.inputs)
         self.assertFalse(torch.allclose(fp_ref, fake_out, atol=0))
 
+    @patch("torch_npu.npu_quantize", wraps=mock_npu_quantize)
+    @patch("torch_npu.npu_quant_matmul", wraps=mock_npu_quant_matmul)
+    @patch(
+        "torch_npu.npu_weight_quant_batchmatmul",
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
+    @patch(
+        "torch_npu.npu_convert_weight_to_int4pack",
+        wraps=mock_npu_convert_weight_to_int4pack,
+    )
+    @patch(
+        "amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema",
+        MagicMock(return_value=True),
+    )
+    def test_weight_only_int8_makes_sliced_inputs_contiguous(
+        self, _mock_int4_pack, mock_weight_batchmatmul, *_
+    ):
+        cfg = {
+            "batch_num": 1,
+            "quant_cfg": {
+                "weights": {"type": "int8", "symmetric": True, "strategy": "channel"},
+            },
+            "algorithm": {"minmax"},
+        }
+        model = copy.deepcopy(self.test_model).to(torch.bfloat16)
+        quantize(model, cfg)
+        model(self.inputs)
+        convert(model)
+
+        sliced_inputs = torch.randn(2, 16, 128).to(torch.bfloat16)[:, :, ::2]
+        self.assertEqual(sliced_inputs.shape[-1], self.inputs.shape[-1])
+        self.assertFalse(sliced_inputs.is_contiguous())
+
+        model(sliced_inputs.npu())
+
+        self.assertGreater(mock_weight_batchmatmul.call_count, 0)
+        for call in mock_weight_batchmatmul.call_args_list:
+            self.assertTrue(call.args[0].is_contiguous())
+
 
 class TestSmoothQuantFakeQuant(FakeQuantTestBase):
     @patch("torch_npu.npu_quantize", wraps=mock_npu_quantize)
@@ -245,6 +284,7 @@ class TestSmoothQuantFakeQuant(FakeQuantTestBase):
     )
     def test_fp8_fp4_progressive_passes_group_size(self, *_):
         from amct_pytorch.classic.quantize_op import smooth_quant_module
+
         cfg = {
             "batch_num": 1,
             "quant_cfg": {
@@ -265,13 +305,19 @@ class TestSmoothQuantFakeQuant(FakeQuantTestBase):
         model = copy.deepcopy(_ModelBias()).to(torch.bfloat16)
         quantize(model, cfg)
         model(self.inputs)
-        with patch.object(smooth_quant_module, 'apply_progressive_quant_dequant',
-                          wraps=smooth_quant_module.apply_progressive_quant_dequant) as m:
+        with patch.object(
+            smooth_quant_module,
+            'apply_progressive_quant_dequant',
+            wraps=smooth_quant_module.apply_progressive_quant_dequant,
+        ) as m:
             model(self.inputs)
         self.assertGreater(m.call_count, 0)
         for call in m.call_args_list:
-            self.assertEqual(call.args[3], 32,
-                             'group_size from quant_config must be forwarded to apply_progressive_quant_dequant')
+            self.assertEqual(
+                call.args[3],
+                32,
+                'group_size from quant_config must be forwarded to apply_progressive_quant_dequant',
+            )
 
 
 class TestOfmrFakeQuant(FakeQuantTestBase):

@@ -24,7 +24,6 @@ from amct_pytorch.common.models.llm.common.ptq_params import PtqParamHandler
 from amct_pytorch.algorithms.quant import AlgoBuildContext
 from amct_pytorch.quantization.modules.quant_base import (
     ActivationQuantizer,
-    WeightQuantizer,
     build_algorithms_by_target,
 )
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
@@ -45,21 +44,8 @@ class PlainLinear(nn.Module):
         return self.linear(x)
 
 
-def set_model_act_quant_state(model, flag):
-    for name, mod in model.named_modules():
-        if isinstance(mod, ActivationQuantizer):
-            mod.enable = flag
-            mod.is_observe = not flag
-
-
-def set_model_weight_quant_state(model, flag):
-    for name, mod in model.named_modules():
-        if isinstance(mod, WeightQuantizer):
-            mod.enable = flag
-
-
 def set_model_to_observe(model, flag):
-    for name, mod in model.named_modules():
+    for mod in model.modules():
         if hasattr(mod, "is_observe"):
             mod.is_observe = flag
 
@@ -86,9 +72,8 @@ def build_direct_quant_args(args, bits):
 
 def _build_quant_wrapper(cls, args, module, group):
     init_params = signature(cls.__init__).parameters
-    accepts_group = (
-        "group" in init_params
-        or any(param.kind == Parameter.VAR_KEYWORD for param in init_params.values())
+    accepts_group = "group" in init_params or any(
+        param.kind == Parameter.VAR_KEYWORD for param in init_params.values()
     )
     if accepts_group:
         return cls(args, module, group=group)
@@ -117,7 +102,11 @@ def apply_quant_to_moe_mlp(args, model, cls=None):
 
         if name in ["shared_experts"]:
             shared_args = build_no_algo_args(args)
-            setattr(model, name, _build_quant_wrapper(cls, shared_args, mod, group="moe.shared"))
+            setattr(
+                model,
+                name,
+                _build_quant_wrapper(cls, shared_args, mod, group="moe.shared"),
+            )
 
         if len(list(mod.children())) > 0:
             apply_quant_to_moe_mlp(args, mod, cls=cls)
@@ -161,9 +150,15 @@ class QuantGatedMLP(nn.Module):
 
         bits = quant_args.bit_policy[group]
         gate, up, down = bits["gate_proj"], bits["up_proj"], bits["down_proj"]
-        self.gate_proj = QuantLinear(quant_args, mlp_module.gate_proj, w_bits=gate.w, name="gate_proj")
-        self.up_proj = QuantLinear(quant_args, mlp_module.up_proj, w_bits=up.w, name="up_proj")
-        self.down_proj = QuantLinear(quant_args, mlp_module.down_proj, w_bits=down.w, name="down_proj")
+        self.gate_proj = QuantLinear(
+            quant_args, mlp_module.gate_proj, w_bits=gate.w, name="gate_proj"
+        )
+        self.up_proj = QuantLinear(
+            quant_args, mlp_module.up_proj, w_bits=up.w, name="up_proj"
+        )
+        self.down_proj = QuantLinear(
+            quant_args, mlp_module.down_proj, w_bits=down.w, name="down_proj"
+        )
         self.input_quant = ActivationQuantizer(quant_args, gate.a)
         self.hidden_quant = ActivationQuantizer(quant_args, down.a)
 
@@ -179,7 +174,9 @@ class QuantGatedMLP(nn.Module):
             hidden = self.hidden_transform(hidden)
 
         hidden_q = self.hidden_quant(hidden)
-        down_states = self.down_proj(hidden_q, structure_transform=self.hidden_transform)
+        down_states = self.down_proj(
+            hidden_q, structure_transform=self.hidden_transform
+        )
         return down_states
 
     def export_ptq_params(self):
@@ -189,13 +186,21 @@ class QuantGatedMLP(nn.Module):
         return PtqParamHandler.export_trainable_module(self)
 
     def load_ptq_params(self, params):
-        if isinstance(params, dict) and params and all(isinstance(v, dict) for v in params.values()):
+        if (
+            isinstance(params, dict)
+            and params
+            and all(isinstance(v, dict) for v in params.values())
+        ):
             PtqParamHandler.load_module(self, params)
             return
         PtqParamHandler.load_trainable_module(self, params)
 
     def _init_structure_transforms(self):
         ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)
-        self.input_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
+        self.input_transform = build_algorithms_by_target(
+            self.quant_args, "structure", ctx
+        )
         ctx = AlgoBuildContext(matrix_size=128, dim_size=self.intermediate_size)
-        self.hidden_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
+        self.hidden_transform = build_algorithms_by_target(
+            self.quant_args, "structure", ctx
+        )

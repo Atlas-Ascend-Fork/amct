@@ -18,7 +18,6 @@
 
 from types import SimpleNamespace
 
-import pytest
 import torch
 
 from amct_pytorch.algorithms.quant.auto_clip import LAC, LWC
@@ -44,8 +43,12 @@ def test_lwc_clip_dim_for_mxfp_uses_w_size_product_over_32():
 
 def test_lwc_init_value_equals_4():
     lwc = LWC(_lwc_args(), w_bits=8)
-    assert torch.allclose(lwc.clip_factor_min.data, torch.full_like(lwc.clip_factor_min.data, 4.0))
-    assert torch.allclose(lwc.clip_factor_max.data, torch.full_like(lwc.clip_factor_max.data, 4.0))
+    assert torch.allclose(
+        lwc.clip_factor_min.data, torch.full_like(lwc.clip_factor_min.data, 4.0)
+    )
+    assert torch.allclose(
+        lwc.clip_factor_max.data, torch.full_like(lwc.clip_factor_max.data, 4.0)
+    )
 
 
 def test_lwc_trainable_params_returns_both_clip_factors():
@@ -97,15 +100,20 @@ def _lac_args(is_per_tensor=False):
     return SimpleNamespace(is_per_tensor=is_per_tensor)
 
 
-def test_lac_observe_mode_updates_min_max_buffers():
+def test_lac_calib_forward_updates_min_max_buffers_and_returns_input():
     lac = LAC(_lac_args())
-    lac.is_observe = True
     x1 = torch.tensor([[-3.0, 5.0]])
     x2 = torch.tensor([[-1.0, 7.0]])
-    out1 = lac(x1)
-    out2 = lac(x2)
+    snapshot1 = x1.clone()
+    snapshot2 = x2.clone()
+    out1 = lac.calib_forward(x1)
+    out2 = lac.calib_forward(x2)
+    assert out1 is x1
+    assert out2 is x2
     assert torch.equal(out1, x1)
     assert torch.equal(out2, x2)
+    assert torch.equal(x1, snapshot1)
+    assert torch.equal(x2, snapshot2)
     assert lac.maxval.item() == 7.0
     assert lac.minval.item() == -3.0
 

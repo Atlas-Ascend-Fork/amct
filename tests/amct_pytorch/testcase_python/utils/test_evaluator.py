@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -16,7 +16,6 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import logging
-import os
 import unittest
 from unittest import mock
 
@@ -24,7 +23,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-import amct_pytorch.classic.graph_based.amct_pytorch.common.cmd_line_utils.data_handler as data_handler
 from amct_pytorch.classic.graph_based.amct_pytorch.utils.evaluator import (
     ModelEvaluator,
 )
@@ -36,6 +34,7 @@ class TestEvaluatorHelper(unittest.TestCase):
     """
     The UT for evaluator helper
     """
+
     @classmethod
     def setUpClass(cls):
         logger.info("Test Evaluator Helper start!")
@@ -43,9 +42,7 @@ class TestEvaluatorHelper(unittest.TestCase):
         data_dir = "data/input1"
         data_types = "float32"
         cls.evaluator_helper = ModelEvaluator(
-            input_shape=input_shape,
-            data_dir=data_dir,
-            data_types=data_types
+            input_shape=input_shape, data_dir=data_dir, data_types=data_types
         )
 
     @classmethod
@@ -62,38 +59,58 @@ class TestEvaluatorHelper(unittest.TestCase):
     def test_calibration(self):
         modified_model = torch.nn.Sequential(
             nn.Conv2d(in_channels=3, out_channels=4, kernel_size=5),
-            nn.BatchNorm2d(num_features=4)
+            nn.BatchNorm2d(num_features=4),
         )
-        data_map = [{
-            "input1": np.random.rand(1, 3, 10, 10).astype('f'),
-            "input2": np.random.rand(1, 3, 20, 20).astype('f')
-        }]
+        data_map = [
+            {
+                "input1": np.random.rand(1, 3, 10, 10).astype('f'),
+                "input2": np.random.rand(1, 3, 20, 20).astype('f'),
+            }
+        ]
         with mock.patch(
             'amct_pytorch.classic.graph_based.amct_pytorch.common.cmd_line_utils.'
-            'data_handler.load_data', return_value=data_map):
-            self.assertIsNone(self.evaluator_helper.calibration(modified_model=modified_model, batch_num=1))
+            'data_handler.load_data',
+            return_value=data_map,
+        ):
+            self.assertIsNone(
+                self.evaluator_helper.calibration(
+                    modified_model=modified_model, batch_num=1
+                )
+            )
 
     def test_evaluate(self):
         modified_model = torch.nn.Sequential(
             nn.Conv2d(in_channels=3, out_channels=4, kernel_size=5),
-            nn.BatchNorm2d(num_features=4)
+            nn.BatchNorm2d(num_features=4),
         )
-        data_map = [{
-            "input1": np.random.rand(1, 3, 10, 10).astype('f'),
-            "input2": np.random.rand(1, 3, 20, 20).astype('f')
-        }]
+        data_map = [
+            {
+                "input1": np.random.rand(1, 3, 10, 10).astype('f'),
+                "input2": np.random.rand(1, 3, 20, 20).astype('f'),
+            }
+        ]
         with mock.patch(
             'amct_pytorch.classic.graph_based.amct_pytorch.common.cmd_line_utils.'
-            'data_handler.load_data', return_value=data_map):
-            self.assertIsNone(self.evaluator_helper.evaluate(modified_model=modified_model, iterations=1))
+            'data_handler.load_data',
+            return_value=data_map,
+        ):
+            self.assertIsNone(
+                self.evaluator_helper.evaluate(
+                    modified_model=modified_model, iterations=1
+                )
+            )
 
     def test_preprocess_input_shape_none(self):
         input_shape = None
-        self.assertRaises(ValueError, self.evaluator_helper._preprocess_input_shape, input_shape)
+        self.assertRaises(
+            ValueError, self.evaluator_helper._preprocess_input_shape, input_shape
+        )
 
     def test_preprocess_input_shape_len(self):
         input_shape = "input_name1:1:"
-        self.assertRaises(ValueError, self.evaluator_helper._preprocess_input_shape, input_shape)
+        self.assertRaises(
+            ValueError, self.evaluator_helper._preprocess_input_shape, input_shape
+        )
 
     def test_preprocess_input_shape(self):
         input_shape = "input_name1:1,3,5,5;input_name2:1,2,3,3"
@@ -103,7 +120,9 @@ class TestEvaluatorHelper(unittest.TestCase):
 
     def test_preprocess_data_dir_none(self):
         data_dir = None
-        self.assertRaises(ValueError, self.evaluator_helper._preprocess_data_dir, data_dir)
+        self.assertRaises(
+            ValueError, self.evaluator_helper._preprocess_data_dir, data_dir
+        )
 
     def test_preprocess_data_dir(self):
         data_dir = "data/input1;data/input2"
@@ -112,7 +131,9 @@ class TestEvaluatorHelper(unittest.TestCase):
 
     def test_preprocess_data_types_none(self):
         data_types = None
-        self.assertRaises(ValueError, self.evaluator_helper._preprocess_data_types, data_types)
+        self.assertRaises(
+            ValueError, self.evaluator_helper._preprocess_data_types, data_types
+        )
 
     def test_preprocess_data_types(self):
         data_types = "float32;float64"
@@ -122,11 +143,14 @@ class TestEvaluatorHelper(unittest.TestCase):
 
     def test_preprocess_batch_num(self):
         batch_num = 0
-        self.assertRaises(ValueError, self.evaluator_helper._preprocess_batch_num, batch_num)
+        self.assertRaises(
+            ValueError, self.evaluator_helper._preprocess_batch_num, batch_num
+        )
 
     def test_preprocess_batch_num_001(self):
         batch_num = self.evaluator_helper._preprocess_batch_num(batch_num=1)
         self.assertEqual(batch_num, 1)
+
 
 if __name__ == '__main__':
     unittest.main()

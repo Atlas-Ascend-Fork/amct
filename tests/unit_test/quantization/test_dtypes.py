@@ -15,9 +15,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import sys
+from unittest.mock import patch
+
 import pytest
 import torch
 
+from amct_pytorch.cli.llm.args import parser_gen
 from amct_pytorch.quantization.dtypes.int import QuantDequantInt
 from amct_pytorch.quantization.dtypes.int_impl import (
     dynamic_per_token_quant,
@@ -30,7 +34,6 @@ from amct_pytorch.quantization.dtypes.mxfp import QuantDequantMx
 from amct_pytorch.quantization.dtypes.mxfp_impl import (
     down_size,
     f4_unpacked_to_f32,
-    f32_to_f4_unpacked,
     pack_uint4 as mx_pack_uint4,
     quantize_elewise,
     round_to_decimal,
@@ -40,6 +43,58 @@ from amct_pytorch.quantization.dtypes.mxfp_impl import (
     up_size,
     weight_dequant,
 )
+from amct_pytorch.quantization.dtypes import (
+    DTYPE_REGISTRY,
+    hifp as hifp_dtype,
+    hifp_impl,
+)
+from amct_pytorch.quantization.dtypes.hifp import QuantDequantHifp
+
+
+def _has_npu():
+    return (
+        hasattr(torch, "npu")
+        and hasattr(torch.Tensor, "npu")
+        and torch.npu.is_available()
+    )
+
+
+def _has_hifloat8_backend():
+    if not _has_npu():
+        return False
+    if hifp_impl.is_native_hifloat8_cast_available():
+        return True
+    try:
+        return hifp_impl._load_amct_ops_cast() is not None
+    except (ImportError, OSError, RuntimeError):
+        return False
+
+
+@pytest.mark.parametrize(
+    "dtype_cls, use_rounding_offset",
+    [
+        pytest.param(QuantDequantInt, True, id="int"),
+        pytest.param(QuantDequantMx, True, id="mxfp"),
+        pytest.param(QuantDequantHifp, False, id="hifp"),
+    ],
+)
+def test_dtype_observe_returns_input_object_unchanged(dtype_cls, use_rounding_offset):
+    quant_obj = dtype_cls(bits=8)
+    quant_obj.is_observe = True
+    x = torch.linspace(-1.0, 1.0, steps=64).reshape(2, 32)
+    snapshot = x.clone()
+
+    if dtype_cls is QuantDequantHifp:
+        with patch.object(
+            hifp_dtype, "hifloat8_fake_quant", return_value=torch.zeros_like(x)
+        ):
+            out = quant_obj(x)
+    else:
+        v = torch.full_like(x, 0.75) if use_rounding_offset else 0.0
+        out = quant_obj(x, v=v)
+
+    assert out is x
+    assert torch.equal(out, snapshot)
 
 
 @pytest.mark.parametrize("bits", [4, 8])
@@ -312,3 +367,186 @@ def test_weight_dequant_block_size_one_direct_multiply():
     expected = weight * scale
     assert result.shape == weight.shape
     assert torch.allclose(result, expected.to(torch.get_default_dtype()))
+
+
+def test_hifp_is_registered_under_hifp_name_only():
+    assert DTYPE_REGISTRY.get("hifp") is QuantDequantHifp
+    with pytest.raises(KeyError):
+        DTYPE_REGISTRY.get("hif")
+
+
+def test_hifp_quant_dtype_cli_option_replaces_hif():
+    with patch.object(
+        sys,
+        "argv",
+        ["amct", "--trust_remote_code", "--quant_dtype", "hifp"],
+    ):
+        assert parser_gen().quant_dtype == "hifp"
+
+    with patch.object(
+        sys,
+        "argv",
+        ["amct", "--trust_remote_code", "--quant_dtype", "hif"],
+    ):
+        with pytest.raises(SystemExit):
+            parser_gen()
+
+
+@pytest.mark.skipif(
+    not _has_hifloat8_backend(),
+    reason="NPU or HiFloat8 backend is not available",
+)
+def test_hifp_forward_shape_and_dtype_preserved():
+    qdq = QuantDequantHifp(bits=8)
+    x = torch.randn(2, 8, dtype=torch.bfloat16).npu()
+
+    y = qdq(x)
+
+    assert torch.mean(abs(x - y)) > 0.0, (
+        "HiFloat8 quant-dequant diff should be larger than 0."
+    )
+    assert y.shape == x.shape
+    assert y.dtype == x.dtype
+
+
+def test_hifp_quant_passes_gradient_through_ste():
+    x = torch.randn(2, 8, dtype=torch.float32, requires_grad=True)
+    quantized = torch.full_like(x, 0.25)
+
+    with patch.object(hifp_dtype, "hifloat8_fake_quant", return_value=quantized):
+        out = QuantDequantHifp(bits=8)(x)
+
+    assert torch.equal(out, quantized)
+    out.sum().backward()
+    assert torch.equal(x.grad, torch.ones_like(x))
+
+
+def test_hifp_identity_quant_result_preserves_gradient():
+    x = torch.randn(2, 8, dtype=torch.float32, requires_grad=True)
+
+    with patch.object(
+        hifp_dtype,
+        "hifloat8_fake_quant",
+        side_effect=lambda tensor: tensor.detach(),
+    ):
+        out = QuantDequantHifp(bits=8)(x)
+
+    assert torch.equal(out, x)
+    out.sum().backward()
+    assert torch.equal(x.grad, torch.ones_like(x))
+
+
+def test_hifp_forward_bits16_is_passthrough():
+    qdq = QuantDequantHifp(bits=16)
+    x = torch.randn(2, 8)
+    assert torch.equal(qdq(x), x)
+
+
+def test_hifp_deploy_and_export_deploy_are_unsupported():
+    qdq = QuantDequantHifp(bits=8)
+    x = torch.randn(2, 8, dtype=torch.bfloat16)
+
+    with pytest.raises(NotImplementedError, match="export_deploy is not supported"):
+        qdq.export_deploy(x)
+    with pytest.raises(NotImplementedError, match="deploy is not supported"):
+        qdq.deploy(x)
+
+
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16, torch.float32])
+def test_hifp_fake_quant_bits4_preserves_shape_and_dtype(dtype):
+    x = torch.randn(2, 64, dtype=dtype)
+    qdq = QuantDequantHifp(bits=4)
+
+    out = qdq.fake_quant(x)
+
+    assert out.shape == x.shape
+    assert out.dtype == x.dtype
+
+
+def test_hifp_forward_bits4_passes_gradient_through_ste():
+    x = torch.randn(2, 64, dtype=torch.float32, requires_grad=True)
+    qdq = QuantDequantHifp(bits=4)
+
+    out = qdq(x)
+    out.sum().backward()
+
+    assert x.grad is not None
+    assert torch.equal(x.grad, torch.ones_like(x))
+
+
+def test_hifp_fake_quant_unsupported_bits_raises():
+    qdq = QuantDequantHifp(bits=4)
+    qdq.bits = 32
+    x = torch.randn(2, 8)
+
+    with pytest.raises(ValueError, match="not supported"):
+        qdq.fake_quant(x)
+
+
+def test_hifp_forward_unsupported_bits_raises():
+    qdq = QuantDequantHifp(bits=32)
+    x = torch.randn(2, 8)
+
+    with pytest.raises(ValueError, match="only supports 16/8/4-bit"):
+        qdq(x)
+
+
+def test_hifp_deploy_bits4_returns_packed_value_and_scale():
+    torch.manual_seed(0)
+    qdq = QuantDequantHifp(bits=4)
+    x = torch.randn(2, 64)
+
+    value, scale = qdq.deploy(x)
+
+    assert value.dtype == torch.uint8
+    assert value.shape == (2, 32)
+    assert scale.dtype == torch.uint8
+    assert value.device.type == "cpu"
+    assert scale.device.type == "cpu"
+
+
+def test_hifp_export_deploy_bits4_returns_qweight_and_scale():
+    torch.manual_seed(0)
+    qdq = QuantDequantHifp(bits=4)
+    x = torch.randn(2, 64)
+
+    out = qdq.export_deploy(x)
+
+    assert set(out) == {"qweight", "scale"}
+    assert out["qweight"].shape == (2, 32)
+
+
+def test_weight_dequant_decodes_e8m0_integer_scale():
+    from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
+
+    w8 = torch.zeros(2, 32, dtype=torch.float8_e4m3fn)
+    w8[0, 0] = torch.finfo(torch.float8_e4m3fn).max  # 448 in fp32
+    # E8M0: e=127 -> 2^0 = 1.0; e=130 -> 2^3 = 8.0
+    scale = torch.tensor([[127, 130]], dtype=torch.uint8).expand(2, -1)
+    out = weight_dequant(w8, scale, block_size=32, is_mx=True)
+    assert out.dtype == torch.get_default_dtype()
+    assert out[0, 0] == 448.0  # 448 * 2^(127-127)
+    assert out[1, 0] == 0.0
+
+
+def test_weight_dequant_e8m0_0xff_scale_poisons_block_with_nan():
+    from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
+
+    w8 = torch.zeros(2, 64, dtype=torch.float8_e4m3fn)
+    w8[0, 0] = torch.finfo(torch.float8_e4m3fn).max  # 448 in fp32
+    # Block 0: e=127 -> scale 1.0; block 1: 0xff -> NaN scale -> whole block NaN
+    # per OCP MX, regardless of the element bits (even zeros).
+    scale = torch.tensor([[127, 255]], dtype=torch.uint8).expand(2, -1)
+    out = weight_dequant(w8, scale, block_size=32, is_mx=True)
+    assert out[0, 0] == 448.0  # 448 * 2^(127-127)
+    assert out[0, 1] == 0.0
+    assert torch.isnan(out[:, 32:]).all()
+
+
+def test_weight_dequant_float_scale_passes_through():
+    from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
+
+    w8 = torch.zeros(1, 32, dtype=torch.float8_e4m3fn)
+    w8[0, 0] = 448.0
+    out = weight_dequant(w8, torch.tensor([[2.0]]), block_size=32, is_mx=True)
+    assert out[0, 0] == 896.0

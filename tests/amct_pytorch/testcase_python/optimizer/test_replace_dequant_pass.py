@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -17,47 +17,23 @@
 # ----------------------------------------------------------------------------
 import logging
 import os
-import sys
 import unittest
 from copy import deepcopy
-from unittest.mock import patch
 
 import numpy as np
-import torch
-from google.protobuf import text_format
 from onnx import onnx_pb
 
-import amct_pytorch.classic.graph_based.amct_pytorch as amct
-from amct_pytorch.classic.graph_based.amct_pytorch.common.utils import (
-    files as files_util,
-)
-from amct_pytorch.classic.graph_based.amct_pytorch.configuration.configuration import (
-    Configuration,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
-from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.graph_optimizer import (
-    GraphOptimizer,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_dequant_pass import (
-    InsertDequantPass,
     construct_dequant_node,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_quant_pass import (
-    InsertQuantPass,
     construct_quant_node,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.replace_dequant_pass import (
     ReplaceDequantPass,
 )
-from amct_pytorch.classic.graph_based.amct_pytorch.parser.parse_record_file import (
-    RecordFileParser,
-)
-from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
-    scale_offset_record_pb2,
-)
 
-from .util import models, record_file
 
 logger = logging.getLogger(__name__)
 
@@ -109,20 +85,28 @@ class TestReplaceDequantPass(unittest.TestCase):
         def conv_sub(graph, conv_name, inputs, outputs, quant_attrs):
             # Add Ascend Quant
             quant_node = graph.node.add()
-            quant_node.CopyFrom(construct_quant_node(inputs, ['%s_quant' % (conv_name)],
-                quant_attrs, conv_name))
+            quant_node.CopyFrom(
+                construct_quant_node(
+                    inputs, ['%s_quant' % (conv_name)], quant_attrs, conv_name
+                )
+            )
             # Add conv
             conv = graph.node.add()
             conv.name = conv_name
             conv.op_type = 'Conv'
-            conv.input[:] = ['%s_quant' % (conv_name), '%s.weights' % (conv_name), '%s.bias' % (conv_name)]
+            conv.input[:] = [
+                '%s_quant' % (conv_name),
+                '%s.weights' % (conv_name),
+                '%s.bias' % (conv_name),
+            ]
             conv.output[:] = [conv_name]
             # Add Ascend DeQuant
             dequant_node = graph.node.add()
             dequant_inputs = [conv_name] + ['%s.dequant.param' % (conv_name)]
             dequant_outputs = ['%s_dequant' % (conv_name)]
             dequant_node.CopyFrom(
-                construct_dequant_node(dequant_inputs, dequant_outputs, conv_name, 0))
+                construct_dequant_node(dequant_inputs, dequant_outputs, conv_name, 0)
+            )
             # add attribute "kernel_shape"
             kernel_shape = conv.attribute.add()
             kernel_shape.name = 'kernel_shape'
@@ -149,7 +133,24 @@ class TestReplaceDequantPass(unittest.TestCase):
             dequant_param = graph.initializer.add()
             dequant_param.name = '%s.dequant.param' % (conv_name)
             dequant_param.data_type = 13
-            dequant_param.uint64_data[:] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+            dequant_param.uint64_data[:] = [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15,
+                16,
+            ]
             dequant_param.dims[:] = [16]
             # Add relu
             relu1 = graph.node.add()
@@ -157,9 +158,28 @@ class TestReplaceDequantPass(unittest.TestCase):
             relu1.op_type = 'Relu'
             relu1.input[:] = ['%s_dequant' % (conv_name)]
             relu1.output[:] = outputs
-        conv_sub(cls.graph, 'conv1', [CONCAT0], ['conv1_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
-        conv_sub(cls.graph, 'conv2', [CONCAT0], ['conv2_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
-        conv_sub(cls.graph, 'conv3', [CONCAT0], ['conv3_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
+
+        conv_sub(
+            cls.graph,
+            'conv1',
+            [CONCAT0],
+            ['conv1_output'],
+            {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8},
+        )
+        conv_sub(
+            cls.graph,
+            'conv2',
+            [CONCAT0],
+            ['conv2_output'],
+            {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8},
+        )
+        conv_sub(
+            cls.graph,
+            'conv3',
+            [CONCAT0],
+            ['conv3_output'],
+            {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8},
+        )
         # Add max_pooling
         pool0 = cls.graph.node.add()
         pool0.name = POOL0
@@ -194,13 +214,33 @@ class TestReplaceDequantPass(unittest.TestCase):
         avg_pool1.output[:] = [AVG_POOL1]
         # Add Ascend DeQuant
         dequant_node = cls.graph.node.add()
-        dequant_node.CopyFrom(construct_dequant_node([AVG_POOL1] + ['avg_pool1.dequant.param'], ['output'],
-                                                      AVG_POOL1, 0))
+        dequant_node.CopyFrom(
+            construct_dequant_node(
+                [AVG_POOL1] + ['avg_pool1.dequant.param'], ['output'], AVG_POOL1, 0
+            )
+        )
         # Add conv1.dequant.param
         dequant_param = cls.graph.initializer.add()
         dequant_param.name = 'avg_pool1.dequant.param'
         dequant_param.data_type = 13
-        dequant_param.uint64_data[:] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+        dequant_param.uint64_data[:] = [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+        ]
         dequant_param.dims[:] = [16]
         # add output
         graph_output = cls.graph.output.add()
@@ -219,10 +259,14 @@ class TestReplaceDequantPass(unittest.TestCase):
         pass
 
     def test_do_pass_success(self):
-        records = {'conv1': {DATA_SCALE: 1,
-                             DATA_OFFSET: 0,
-                             'weight_scale': np.array([1]),
-                             'weight_offset': np.array([0])}}
+        records = {
+            'conv1': {
+                DATA_SCALE: 1,
+                DATA_OFFSET: 0,
+                'weight_scale': np.array([1]),
+                'weight_offset': np.array([0]),
+            }
+        }
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
         conv_node = graph.get_node_by_name('conv1.dequant')
@@ -232,10 +276,14 @@ class TestReplaceDequantPass(unittest.TestCase):
         self.assertEqual(after_nodes - before_nodes, 0)
 
     def test_do_pass_average_pool_success(self):
-        records = {AVG_POOL1: {DATA_SCALE: 1,
-                             DATA_OFFSET: 0,
-                             'weight_scale': np.array([1]),
-                             'weight_offset': np.array([0])}}
+        records = {
+            AVG_POOL1: {
+                DATA_SCALE: 1,
+                DATA_OFFSET: 0,
+                'weight_scale': np.array([1]),
+                'weight_offset': np.array([0]),
+            }
+        }
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
         before_nodes = len(graph.nodes)
@@ -245,20 +293,23 @@ class TestReplaceDequantPass(unittest.TestCase):
         self.assertEqual(after_nodes - before_nodes, 0)
 
     def test_match_pattern_success(self):
-        records = {'conv1': {DATA_SCALE: 1, DATA_OFFSET: 0},
-                   'conv2': {DATA_SCALE: 1, DATA_OFFSET: 0},
-                   'conv3': {DATA_SCALE: 1, DATA_OFFSET: 0}}
+        records = {
+            'conv1': {DATA_SCALE: 1, DATA_OFFSET: 0},
+            'conv2': {DATA_SCALE: 1, DATA_OFFSET: 0},
+            'conv3': {DATA_SCALE: 1, DATA_OFFSET: 0},
+        }
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
         antiquant_node = graph.get_node_by_name('conv1.dequant')
         self.assertTrue(ReplaceDequantPass(records).match_pattern(antiquant_node))
 
     def test_match_pattern_false(self):
-        records = {'conv1': {DATA_SCALE: 1, DATA_OFFSET: 0},
-                   'conv2': {DATA_SCALE: 1, DATA_OFFSET: 0},
-                   'conv3': {DATA_SCALE: 1, DATA_OFFSET: 0}}
+        records = {
+            'conv1': {DATA_SCALE: 1, DATA_OFFSET: 0},
+            'conv2': {DATA_SCALE: 1, DATA_OFFSET: 0},
+            'conv3': {DATA_SCALE: 1, DATA_OFFSET: 0},
+        }
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
         antiquant_node = graph.get_node_by_name(CONCAT0)
         self.assertFalse(ReplaceDequantPass(records).match_pattern(antiquant_node))
-

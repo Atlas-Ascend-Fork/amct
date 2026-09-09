@@ -1,17 +1,57 @@
-repos:	 
-  # C++ 代码格式化检查 
-  - repo: https://github.com/pre-commit/mirrors-clang-format	 
-    rev: v16.0.0	 
-    hooks:	 
-      - id: clang-format	 
-        types_or: [c++, c]	 
+# See https://pre-commit.com for hook docs.
+# NOTE: 本文件 license header 由 OAT.xml 的 defaultPolicyFilter/copyrightPolicyFilter 豁免，
+# 因 CI 的 precommit.py 会用 PyYAML 重序列化本文件、丢弃所有注释（含 license header）。
+default_language_version:
+  python: python3
 
-  # Python 代码检查 
-  - repo: https://gitcode.com/gh_mirrors/ru/ruff-pre-commit 
-    rev: v0.14.14 
-    hooks: 
-      - id: ruff-check 
-        args: ["--output-format", "github", "--fix"] 
-        types: [python] 
-      - id: ruff-format 
-        types: [python] 
+repos:
+  # 基础文本/安全检查
+  - repo: https://gitcode.com/gh_mirrors/pr/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        exclude_types: [markdown]
+      - id: end-of-file-fixer
+      - id: check-yaml
+        # safe-loaders may choke on multi-document YAML anchors in some CI files
+        args: [--allow-multiple-documents]
+      - id: check-json
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  # C/C++ 格式化（遵循仓库根目录 .clang-format，style=file）
+  - repo: https://gitcode.com/pre-commit-clang/mirrors-clang-format
+    rev: v18.1.8
+    hooks:
+      - id: clang-format
+        types_or: [c++, c]
+
+  # Python 检查与格式化
+  - repo: https://gitcode.com/gh_mirrors/ru/ruff-pre-commit
+    rev: v0.14.14
+    hooks:
+      - id: ruff-check
+        args: [--output-format=github, --fix]
+        types: [python]
+      - id: ruff-format
+        types: [python]
+
+  # 拼写检查（CANN 专用词典白名单见 .codespellrc）
+  - repo: https://gitcode.com/gh_mirrors/co/codespell
+    rev: v2.4.1
+    hooks:
+      - id: codespell
+        additional_dependencies:
+          - tomli
+
+  # 开源合规检查（华为 OAT）
+  - repo: local
+    hooks:
+      - id: oat-check
+        name: oat-check (open-source compliance)
+        entry: ./scripts/oat_check.sh
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]

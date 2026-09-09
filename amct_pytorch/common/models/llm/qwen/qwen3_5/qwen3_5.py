@@ -15,7 +15,12 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+import json
+from functools import cached_property
+from pathlib import Path
+
 import torch
+from safetensors import safe_open
 from transformers.models.qwen3_5.modeling_qwen3_5 import (
     Qwen3_5DecoderLayer,
     Qwen3_5TextConfig,
@@ -28,7 +33,9 @@ from amct_pytorch.common.models.llm.common.quant_apply import (
     apply_quant_to_moe_mlp,
 )
 from amct_pytorch.common.models.llm.qwen.qwen3_5.quant_module import (
-    QuantQwen35Attn, QuantQwen35LinearAttn, QuantQwen35MLP,
+    QuantQwen35Attn,
+    QuantQwen35LinearAttn,
+    QuantQwen35MLP,
 )
 
 
@@ -51,7 +58,39 @@ class Qwen3_5(BaseModel):
 
     def parse_quant_mode(self):
         if "moe" in self.quant_target:
-            raise ValueError("Qwen3.5 < 7B is a dense model and does not support quant_target='moe'.")
+            raise ValueError(
+                "Qwen3.5 < 7B is a dense model and does not support quant_target='moe'."
+            )
+
+    @cached_property
+    def _checkpoint_keys(self):
+        """All tensor names in the checkpoint (header/index read, cached)."""
+        model_dir = Path(self.model_path)
+        index_path = model_dir / "model.safetensors.index.json"
+        if index_path.exists():
+            with open(index_path, encoding="utf-8") as f:
+                return frozenset(json.load(f)["weight_map"])
+        with safe_open(str(model_dir / "model.safetensors"), framework="pt") as f:
+            return frozenset(f.keys())
+
+    def get_scale_name(self, weight_name):
+        """Return (scale_prefix, scale_inv_name) for locating scale tensors during dequantization."""
+        scale_prefix = "_scale"
+        base_name = weight_name
+        if base_name.endswith("_scale_2"):
+            base_name = base_name[: -len("_scale_2")]
+        elif base_name.endswith("_scale"):
+            base_name = base_name[: -len("_scale")]
+        if f"{base_name}_scale_2" in self._checkpoint_keys:
+            return scale_prefix, (f"{base_name}_scale", f"{base_name}_scale_2")
+        return scale_prefix, f"{base_name}_scale"
+
+    def generate_tensorwise_quant_layers(self):
+        """Pure dequant (NVFP4->bf16 / HiF4->fp32) re-quantizes nothing."""
+        return {}
+
+    def generate_tensorwise_ignore_layers(self):
+        return []
 
     def float_model(self):
         return super().float_model()
@@ -74,7 +113,14 @@ class Qwen3_5(BaseModel):
     def do_embedding_forward(self, samples, dtype=torch.bfloat16, hook_name=None):
         return super().do_embedding_forward(samples, dtype=dtype, hook_name=hook_name)
 
-    def do_block_forward(self, layer_idx, samples, hook_name=None, use_quant_block=False, enable_quant=False):
+    def do_block_forward(
+        self,
+        layer_idx,
+        samples,
+        hook_name=None,
+        use_quant_block=False,
+        enable_quant=False,
+    ):
         return super().do_block_forward(
             layer_idx,
             samples,

@@ -18,10 +18,12 @@
 from __future__ import annotations
 
 import torch
-from loguru import logger
 from torch import Tensor
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY
-from amct_pytorch.quantization.dtypes.int_impl import weight_quant, dynamic_per_token_quant
+from amct_pytorch.quantization.dtypes.int_impl import (
+    weight_quant,
+    dynamic_per_token_quant,
+)
 
 
 @DTYPE_REGISTRY.register(name="int", description="quant dequant for int")
@@ -30,6 +32,7 @@ class QuantDequantInt(torch.nn.Module):
         super(QuantDequantInt, self).__init__()
         self.bits = bits
         self.is_act = is_act
+        self.is_observe = False
         self._deploy_mod = False
 
     def fake_quant(self, x: Tensor, v: Tensor = 0.0) -> Tensor:
@@ -40,7 +43,7 @@ class QuantDequantInt(torch.nn.Module):
         return x
 
     def forward(self, x: Tensor, v: Tensor = 0.0) -> Tensor:
-        if self.bits == 16:
+        if self.is_observe or self.bits == 16:
             return x
         return self.fake_quant(x, v=v)
 

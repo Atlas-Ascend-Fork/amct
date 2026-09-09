@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -26,6 +26,7 @@ class CompModuleConv2d(CompModuleBase):
     Function: Quantization module class after conv2d encapsulation.
     APIs: __init__, forward
     """
+
     def __init__(self, *args, **kwargs):
         super(CompModuleConv2d, self).__init__(*args, **kwargs)
         if not self.wts_config.get('channel_wise'):
@@ -39,20 +40,27 @@ class CompModuleConv2d(CompModuleBase):
         Defines the computation performed at every call.
         Should be overridden by all subclasses.
         """
-        compressed_inputs, compressed_weights = \
-            super(CompModuleConv2d, self).forward(inputs)
+        compressed_inputs, compressed_weights = super(CompModuleConv2d, self).forward(
+            inputs
+        )
 
         # amct_pytorch only support Conv2d with padding_mode 'zeros'
         padding_mode = self.replaced_module.padding_mode
         if 'quant' in self.comp_algs and padding_mode != 'zeros':
-            raise RuntimeError('Do not support Conv2d with padding mode {}!'.format(padding_mode))
+            raise RuntimeError(
+                'Do not support Conv2d with padding mode {}!'.format(padding_mode)
+            )
 
         # Forward
         with torch.enable_grad():
             output = F.conv2d(
-                compressed_inputs, compressed_weights,
-                self.replaced_module.bias, self.replaced_module.stride,
-                self.replaced_module.padding, self.replaced_module.dilation,
-                self.replaced_module.groups)
+                compressed_inputs,
+                compressed_weights,
+                self.replaced_module.bias,
+                self.replaced_module.stride,
+                self.replaced_module.padding,
+                self.replaced_module.dilation,
+                self.replaced_module.groups,
+            )
 
             return output

@@ -21,6 +21,7 @@
 import torch
 import torch.nn as nn
 
+from amct_pytorch.algorithms.quant.base import QuantAlgorithmBase
 from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
 
 
@@ -35,7 +36,9 @@ def _random_orthogonal(size: int, *, device=None, dtype=None) -> torch.Tensor:
     return q
 
 
-def _kronecker_matmul(x: torch.Tensor, left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:
+def _kronecker_matmul(
+    x: torch.Tensor, left: torch.Tensor, right: torch.Tensor
+) -> torch.Tensor:
     init_shape = x.shape
     x = x.reshape(-1, left.shape[0], right.shape[0])
     x = torch.matmul(x, right.to(x))
@@ -65,13 +68,19 @@ class _InvFlatDecomposeTransform(nn.Module):
         self.add_diag = add_diag
 
         self.linear_left = nn.Linear(left_size, left_size, bias=False)
-        self.linear_left.weight.data.copy_(_random_orthogonal(left_size).to(self.linear_left.weight))
+        self.linear_left.weight.data.copy_(
+            _random_orthogonal(left_size).to(self.linear_left.weight)
+        )
 
         self.linear_right = nn.Linear(right_size, right_size, bias=False)
-        self.linear_right.weight.data.copy_(_random_orthogonal(right_size).to(self.linear_right.weight))
+        self.linear_right.weight.data.copy_(
+            _random_orthogonal(right_size).to(self.linear_right.weight)
+        )
 
         if add_diag:
-            self.diag_scale = nn.Parameter(torch.ones(left_size * right_size, dtype=torch.float32))
+            self.diag_scale = nn.Parameter(
+                torch.ones(left_size * right_size, dtype=torch.float32)
+            )
 
     def forward(self, x: torch.Tensor, inv_t: bool = False) -> torch.Tensor:
         if self.add_diag:
@@ -94,7 +103,7 @@ class _InvFlatDecomposeTransform(nn.Module):
     description="Learnable affine structure transform inspired by FlatQuant",
     targets=("structure",),
 )
-class FlatQuant(nn.Module):
+class FlatQuant(QuantAlgorithmBase):
     """
     Minimal FlatQuant core for the current framework:
     learn a structure-level affine transform on activations and apply its
@@ -123,26 +132,15 @@ class FlatQuant(nn.Module):
         if use_decompose:
             left_size = self.dim_size // self.matrix_size
             right_size = self.matrix_size
-            self.transform = _InvFlatDecomposeTransform(left_size, right_size, self.add_diag)
+            self.transform = _InvFlatDecomposeTransform(
+                left_size, right_size, self.add_diag
+            )
         else:
             self.transform = _InvFlatSingleTransform(self.dim_size)
 
-    def forward(self, x: torch.Tensor, inv_t: bool = False, name: str = None) -> torch.Tensor:
+    def forward(
+        self, x: torch.Tensor, inv_t: bool = False, name: str = None
+    ) -> torch.Tensor:
+        if self.is_observe:
+            return self.calib_forward(x, inv_t=inv_t, name=name)
         return self.transform(x, inv_t=inv_t)
-
-    def trainable_params(self):
-        return list(self.parameters())
-
-    def export_ptq_params(self):
-        return {
-            name: param.detach().cpu()
-            for name, param in self.named_parameters()
-        }
-
-    def load_ptq_params(self, params):
-        named_params = dict(self.named_parameters())
-        for name, value in params.items():
-            if name not in named_params:
-                continue
-            param = named_params[name]
-            param.data.copy_(value.to(device=param.device, dtype=param.dtype))

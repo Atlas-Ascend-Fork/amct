@@ -20,7 +20,6 @@ from inspect import Parameter, signature
 
 import torch
 import torch.nn as nn
-from loguru import logger
 
 from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY
@@ -71,7 +70,8 @@ def build_algorithms_by_target(args, target, *ctor_args):
 def _build_algorithm(algo_cls, args, *ctor_args):
     init_params = list(signature(algo_cls.__init__).parameters.values())
     positional_params = [
-        param for param in init_params[1:]
+        param
+        for param in init_params[1:]
         if param.kind in (Parameter.POSITIONAL_ONLY, Parameter.POSITIONAL_OR_KEYWORD)
     ]
     has_varargs = any(param.kind == Parameter.VAR_POSITIONAL for param in init_params)
@@ -80,49 +80,29 @@ def _build_algorithm(algo_cls, args, *ctor_args):
     return algo_cls(args)
 
 
-def set_quantizer_state(model, enable=True):
-    for m in model.modules():
-        if isinstance(m, (WeightQuantizer, ActivationQuantizer)):
-            m.enable = enable
-    return model
-
-
-def set_weight_quantizer_state(model, enable=True):
-    for m in model.modules():
-        if isinstance(m, WeightQuantizer):
-            m.enable = enable
-    return model
-
-
-def set_act_quantizer_state(model, enable=True):
-    for m in model.modules():
-        if isinstance(m, ActivationQuantizer):
-            m.enable = enable
-    return model
-
-
 class ActivationQuantizer(torch.nn.Module):
-
     def __init__(self, args, bits):
         super(ActivationQuantizer, self).__init__()
         self.args = args
         self.bits = bits
         self.algorithms = nn.ModuleDict()
         self._init_algo()
-        self.quant_obj = DTYPE_REGISTRY.get(args.quant_dtype)(bits=self.bits, is_act=True)
-        self.enable = False
+        self.quant_obj = DTYPE_REGISTRY.get(args.quant_dtype)(
+            bits=self.bits, is_act=True
+        )
+        self.is_observe = False
 
     def deploy(self):
         pass
 
     def fake_quant(self, x):
+        if self.is_observe:
+            return x
         return self.quant_obj(x)
 
     def forward(self, x):
-        if not self.enable:
-            return x
         for algo in self.algorithms.values():
-            x = algo(x)
+            x = algo.calib_forward(x) if self.is_observe else algo(x)
         return self.fake_quant(x)
 
     def load_deploy(self, scale, zero):
@@ -140,7 +120,6 @@ class ActivationQuantizer(torch.nn.Module):
 
 
 class WeightQuantizer(torch.nn.Module):
-
     def __init__(self, args, w_bits=None):
         super(WeightQuantizer, self).__init__()
         self.args = args
@@ -148,15 +127,20 @@ class WeightQuantizer(torch.nn.Module):
         self.algorithms = nn.ModuleDict()
         self._init_algo()
         self.quant_obj = DTYPE_REGISTRY.get(args.quant_dtype)(bits=self.bits)
-        self.enable = False
+        self.is_observe = False
 
     def algo_forward(self, x):
         quantize_algo = None
         for algo in self.algorithms.values():
+            if self.is_observe:
+                x = algo.calib_forward(x)
+                continue
             quantize_fn = getattr(algo, "quantize", None)
             if callable(quantize_fn):
                 if quantize_algo is not None:
-                    raise ValueError("Only one weight algorithm with a custom quantize() hook is supported.")
+                    raise ValueError(
+                        "Only one weight algorithm with a custom quantize() hook is supported."
+                    )
                 quantize_algo = algo
                 continue
             x = algo(x)
@@ -167,7 +151,9 @@ class WeightQuantizer(torch.nn.Module):
         if quantize_algo is not None:
             export_fn = getattr(quantize_algo, "export_deploy", None)
             if not callable(export_fn):
-                raise NotImplementedError("export_deploy() does not support custom weight quantize() hooks yet.")
+                raise NotImplementedError(
+                    "export_deploy() does not support custom weight quantize() hooks yet."
+                )
             return export_fn(x, self.quant_obj)
         export_fn = getattr(self.quant_obj, "export_deploy", None)
         if not callable(export_fn):
@@ -177,11 +163,11 @@ class WeightQuantizer(torch.nn.Module):
         return export_fn(x)
 
     def fake_quant(self, x):
+        if self.is_observe:
+            return x
         return self.quant_obj(x)
 
     def forward(self, x):
-        if not self.enable:
-            return x
         x, quantize_algo = self.algo_forward(x)
         if quantize_algo is not None:
             return quantize_algo.quantize(x, self.quant_obj)

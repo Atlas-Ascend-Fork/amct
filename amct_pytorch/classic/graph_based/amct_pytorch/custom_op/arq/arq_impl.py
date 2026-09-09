@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -17,13 +17,13 @@
 # ----------------------------------------------------------------------------
 import torch
 from ....amct_pytorch.custom_op.utils import calculate_scale_offset
-from ....amct_pytorch.custom_op.utils import apply_fake_quantize_and_anti_quantize, apply_true_quantize
+from ....amct_pytorch.custom_op.utils import (
+    apply_fake_quantize_and_anti_quantize,
+    apply_true_quantize,
+)
 
 
-def arq_cali_pytorch(data,
-                     num_bits,
-                     channel_wise,
-                     with_offset):
+def arq_cali_pytorch(data, num_bits, channel_wise, with_offset):
     """
     ARQ calibration to find scale and offset.
 
@@ -57,10 +57,7 @@ def arq_cali_pytorch(data,
     return scale.reshape(-1), offset.reshape(-1), data
 
 
-def arq_real_pytorch(data, 
-                     scale, 
-                     offset, 
-                     num_bits):
+def arq_real_pytorch(data, scale, offset, num_bits):
     """
     ARQ real to quant data.
 

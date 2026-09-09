@@ -13,29 +13,28 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import os
-import json
-from pathlib import Path
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from tqdm import tqdm
 
 from transformers.models.qwen3_5.modeling_qwen3_5 import (
-    Qwen3_5MLP,
     Qwen3_5GatedDeltaNet,
     Qwen3_5Attention,
-    apply_mask_to_padding_states,
     apply_rotary_pos_emb,
 )
 from amct_pytorch.algorithms.quant import AlgoBuildContext
-from amct_pytorch.quantization.modules.quant_base import ActivationQuantizer, build_algorithms_by_target
+from amct_pytorch.quantization.modules.quant_base import (
+    ActivationQuantizer,
+    build_algorithms_by_target,
+)
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from amct_pytorch.quantization.modules.quant_matmul import QuantizedMatmul
 from amct_pytorch.quantization.bit_policy import ensure_bit_policy
-from amct_pytorch.common.models.llm.common.attention_forward import scaled_dot_product_attention
+from amct_pytorch.common.models.llm.common.attention_forward import (
+    scaled_dot_product_attention,
+)
+from amct_pytorch.common.models.llm.common.ptq_params import PtqParamHandler
 from amct_pytorch.common.models.llm.common.quant_apply import QuantGatedMLP, PlainLinear
-
 
 
 class QuantQwen35MLP(QuantGatedMLP):
@@ -57,36 +56,33 @@ class QuantQwen35LinearAttn(Qwen3_5GatedDeltaNet):
         bits = quant_args.bit_policy["attn-linear"]
         out, qkv = bits["out_proj"], bits["in_proj_qkv"]
         z, b, a = bits["in_proj_z"], bits["in_proj_b"], bits["in_proj_a"]
-        self.out_proj = QuantLinear(
-            quant_args,
-            attn_module.out_proj,
-            w_bits=out.w,
-            name="out_proj") if self.enable_attn_linear else PlainLinear(
-            attn_module.out_proj)
-        self.in_proj_qkv = QuantLinear(
-            quant_args,
-            attn_module.in_proj_qkv,
-            w_bits=qkv.w,
-            name="in_proj_qkv") if self.enable_attn_linear else PlainLinear(
-            attn_module.in_proj_qkv)
-        self.in_proj_z = QuantLinear(
-            quant_args,
-            attn_module.in_proj_z,
-            w_bits=z.w,
-            name="in_proj_z") if self.enable_attn_linear else PlainLinear(
-            attn_module.in_proj_z)
-        self.in_proj_b = QuantLinear(
-            quant_args,
-            attn_module.in_proj_b,
-            w_bits=b.w,
-            name="in_proj_b") if self.enable_attn_linear else PlainLinear(
-            attn_module.in_proj_b)
-        self.in_proj_a = QuantLinear(
-            quant_args,
-            attn_module.in_proj_a,
-            w_bits=a.w,
-            name="in_proj_a") if self.enable_attn_linear else PlainLinear(
-            attn_module.in_proj_a)
+        self.out_proj = (
+            QuantLinear(quant_args, attn_module.out_proj, w_bits=out.w, name="out_proj")
+            if self.enable_attn_linear
+            else PlainLinear(attn_module.out_proj)
+        )
+        self.in_proj_qkv = (
+            QuantLinear(
+                quant_args, attn_module.in_proj_qkv, w_bits=qkv.w, name="in_proj_qkv"
+            )
+            if self.enable_attn_linear
+            else PlainLinear(attn_module.in_proj_qkv)
+        )
+        self.in_proj_z = (
+            QuantLinear(quant_args, attn_module.in_proj_z, w_bits=z.w, name="in_proj_z")
+            if self.enable_attn_linear
+            else PlainLinear(attn_module.in_proj_z)
+        )
+        self.in_proj_b = (
+            QuantLinear(quant_args, attn_module.in_proj_b, w_bits=b.w, name="in_proj_b")
+            if self.enable_attn_linear
+            else PlainLinear(attn_module.in_proj_b)
+        )
+        self.in_proj_a = (
+            QuantLinear(quant_args, attn_module.in_proj_a, w_bits=a.w, name="in_proj_a")
+            if self.enable_attn_linear
+            else PlainLinear(attn_module.in_proj_a)
+        )
         self.input_transform = None
         self.out_transform = None
         if self.enable_attn_linear:
@@ -110,10 +106,12 @@ class QuantQwen35LinearAttn(Qwen3_5GatedDeltaNet):
             hidden_states = self.input_transform(hidden_states)
         hidden_states = self.inp_afq(hidden_states)
 
-        mixed_qkv = self.in_proj_qkv(hidden_states, structure_transform=self.input_transform).transpose(1, 2)
+        mixed_qkv = self.in_proj_qkv(
+            hidden_states, structure_transform=self.input_transform
+        ).transpose(1, 2)
         z = self.in_proj_z(
-    hidden_states, structure_transform=self.input_transform).reshape(
-        batch_size, seq_len, -1, self.head_v_dim)
+            hidden_states, structure_transform=self.input_transform
+        ).reshape(batch_size, seq_len, -1, self.head_v_dim)
         b = self.in_proj_b(hidden_states, structure_transform=self.input_transform)
         a = self.in_proj_a(hidden_states, structure_transform=self.input_transform)
 
@@ -157,11 +155,34 @@ class QuantQwen35LinearAttn(Qwen3_5GatedDeltaNet):
         output = self.out_proj(core_attn_out, structure_transform=self.out_transform)
         return output
 
+    # Mirrors QuantGatedMLP.export_ptq_params/load_ptq_params (quant_apply.py) -- without
+    # this override, BaseSolver.finalize()'s hasattr(..., "export_ptq_params") check fails
+    # for this class.
+    def export_ptq_params(self):
+        params = PtqParamHandler.export_module(self)
+        if params:
+            return params
+        return PtqParamHandler.export_trainable_module(self)
+
+    def load_ptq_params(self, params):
+        if (
+            isinstance(params, dict)
+            and params
+            and all(isinstance(v, dict) for v in params.values())
+        ):
+            PtqParamHandler.load_module(self, params)
+            return
+        PtqParamHandler.load_trainable_module(self, params)
+
     def _init_structure_transforms(self):
         ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)
-        self.input_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
+        self.input_transform = build_algorithms_by_target(
+            self.quant_args, "structure", ctx
+        )
         ctx = AlgoBuildContext(matrix_size=128, dim_size=self.value_dim)
-        self.out_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
+        self.out_transform = build_algorithms_by_target(
+            self.quant_args, "structure", ctx
+        )
 
 
 class QuantQwen35Attn(Qwen3_5Attention):
@@ -174,30 +195,26 @@ class QuantQwen35Attn(Qwen3_5Attention):
         self.value_dim = attn_module.config.num_attention_heads * self.head_dim
         bits = quant_args.bit_policy["attn-linear"]
         q, k, v, o = bits["q_proj"], bits["k_proj"], bits["v_proj"], bits["o_proj"]
-        self.q_proj = QuantLinear(
-    quant_args,
-    attn_module.q_proj,
-    w_bits=q.w,
-    name="q_proj") if self.enable_attn_linear else PlainLinear(
-        attn_module.q_proj)
-        self.k_proj = QuantLinear(
-    quant_args,
-    attn_module.k_proj,
-    w_bits=k.w,
-    name="k_proj") if self.enable_attn_linear else PlainLinear(
-        attn_module.k_proj)
-        self.v_proj = QuantLinear(
-    quant_args,
-    attn_module.v_proj,
-    w_bits=v.w,
-    name="v_proj") if self.enable_attn_linear else PlainLinear(
-        attn_module.v_proj)
-        self.o_proj = QuantLinear(
-    quant_args,
-    attn_module.o_proj,
-    w_bits=o.w,
-    name="o_proj") if self.enable_attn_linear else PlainLinear(
-        attn_module.o_proj)
+        self.q_proj = (
+            QuantLinear(quant_args, attn_module.q_proj, w_bits=q.w, name="q_proj")
+            if self.enable_attn_linear
+            else PlainLinear(attn_module.q_proj)
+        )
+        self.k_proj = (
+            QuantLinear(quant_args, attn_module.k_proj, w_bits=k.w, name="k_proj")
+            if self.enable_attn_linear
+            else PlainLinear(attn_module.k_proj)
+        )
+        self.v_proj = (
+            QuantLinear(quant_args, attn_module.v_proj, w_bits=v.w, name="v_proj")
+            if self.enable_attn_linear
+            else PlainLinear(attn_module.v_proj)
+        )
+        self.o_proj = (
+            QuantLinear(quant_args, attn_module.o_proj, w_bits=o.w, name="o_proj")
+            if self.enable_attn_linear
+            else PlainLinear(attn_module.o_proj)
+        )
         self.qk_matmul = QuantizedMatmul(
             self.quant_args,
             l_bits=quant_args.bit_policy.cache_bits("q"),
@@ -225,11 +242,11 @@ class QuantQwen35Attn(Qwen3_5Attention):
             self.o_proj_afq = nn.Identity()
 
     def forward(
-            self,
-            hidden_states: torch.Tensor,
-            position_embeddings: tuple[torch.Tensor, torch.Tensor],
-            attention_mask: torch.Tensor | None = None,
-            **kwargs,
+        self,
+        hidden_states: torch.Tensor,
+        position_embeddings: tuple[torch.Tensor, torch.Tensor],
+        attention_mask: torch.Tensor | None = None,
+        **kwargs,
     ) -> tuple[torch.Tensor, torch.Tensor | None]:
         input_shape = hidden_states.shape[:-1]
         hidden_shape = (*input_shape, -1, self.head_dim)
@@ -238,27 +255,30 @@ class QuantQwen35Attn(Qwen3_5Attention):
         hidden_states = self.inp_afq(hidden_states)
 
         query_states, gate = torch.chunk(
-    self.q_proj(
-        hidden_states, structure_transform=self.input_transform).view(
-            *input_shape, -1, self.head_dim * 2), 2, dim=-1)
+            self.q_proj(hidden_states, structure_transform=self.input_transform).view(
+                *input_shape, -1, self.head_dim * 2
+            ),
+            2,
+            dim=-1,
+        )
         gate = gate.reshape(*input_shape, -1)
 
         query_states = self.q_norm(query_states.view(hidden_shape)).transpose(1, 2)
         key_states = self.k_norm(
-    self.k_proj(
-        hidden_states,
-        structure_transform=self.input_transform).view(hidden_shape)).transpose(
-            1,
-             2)
-        value_states = self.v_proj(
-    hidden_states,
-    structure_transform=self.input_transform).view(hidden_shape).transpose(
-        1,
-         2)
+            self.k_proj(hidden_states, structure_transform=self.input_transform).view(
+                hidden_shape
+            )
+        ).transpose(1, 2)
+        value_states = (
+            self.v_proj(hidden_states, structure_transform=self.input_transform)
+            .view(hidden_shape)
+            .transpose(1, 2)
+        )
 
         cos, sin = position_embeddings
-        query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
-
+        query_states, key_states = apply_rotary_pos_emb(
+            query_states, key_states, cos, sin
+        )
 
         attn_output = scaled_dot_product_attention(
             self,
@@ -280,8 +300,33 @@ class QuantQwen35Attn(Qwen3_5Attention):
         attn_output = self.o_proj(attn_output, structure_transform=self.out_transform)
         return attn_output, None
 
+    # Mirrors QuantGatedMLP.export_ptq_params/load_ptq_params (quant_apply.py) -- without
+    # this override, BaseSolver.finalize()'s hasattr(..., "export_ptq_params") check fails
+    # for this class, and it falls back to filtering named_parameters() by requires_grad,
+    # which BlockwiseSolver has already zeroed out everywhere (no trainable params to keep
+    # for a closed-form algorithm like GPTQ) -- so PTQ params silently export as {}.
+    def export_ptq_params(self):
+        params = PtqParamHandler.export_module(self)
+        if params:
+            return params
+        return PtqParamHandler.export_trainable_module(self)
+
+    def load_ptq_params(self, params):
+        if (
+            isinstance(params, dict)
+            and params
+            and all(isinstance(v, dict) for v in params.values())
+        ):
+            PtqParamHandler.load_module(self, params)
+            return
+        PtqParamHandler.load_trainable_module(self, params)
+
     def _init_structure_transforms(self):
         ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)
-        self.input_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
+        self.input_transform = build_algorithms_by_target(
+            self.quant_args, "structure", ctx
+        )
         ctx = AlgoBuildContext(matrix_size=128, dim_size=self.value_dim)
-        self.out_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
+        self.out_transform = build_algorithms_by_target(
+            self.quant_args, "structure", ctx
+        )

@@ -71,7 +71,9 @@ def test_init_unwraps_single_target_to_string():
         ("moe", POST_ATTENTION_LAYERNORM),
     ],
 )
-def test_run_blockwise_picks_hook_name_by_quant_target(monkeypatch, target, expected_hook):
+def test_run_blockwise_picks_hook_name_by_quant_target(
+    monkeypatch, target, expected_hook
+):
     """Hijack pipeline + samples; verify the hook_name selected matches the target class."""
     wf = LlmExtractPtqDataWorkflow(_make_args([target]))
 
@@ -103,8 +105,13 @@ def test_run_blockwise_picks_hook_name_by_quant_target(monkeypatch, target, expe
 
 def _make_extract_workflow(**overrides):
     defaults = dict(
-        model="/tmp/fake", model_name="qwen3", quant_target=["mlp"],
-        device="cpu", seq_len=2048, nsamples=32, output_dir="/tmp/fake",
+        model="/tmp/fake",
+        model_name="qwen3",
+        quant_target=["mlp"],
+        device="cpu",
+        seq_len=2048,
+        nsamples=32,
+        output_dir="/tmp/fake",
         granularity="block",
     )
     defaults.update(overrides)
@@ -128,7 +135,8 @@ def test_extract_init_accepts_single_quant_target():
 
 def test_extract_setup_returns_sink_id(monkeypatch, tmp_path):
     monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_extract_ptq_data.register_llm_models", lambda: None)
+        "amct_pytorch.workflows.llm_extract_ptq_data.register_llm_models", lambda: None
+    )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_extract_ptq_data.MODEL_REGISTRY",
         SimpleNamespace(get=lambda k: type("FM", (), {"__init__": lambda s, a: None})),
@@ -141,7 +149,8 @@ def test_extract_setup_returns_sink_id(monkeypatch, tmp_path):
 
 def test_extract_setup_enables_sharded_block(monkeypatch, tmp_path):
     monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_extract_ptq_data.register_llm_models", lambda: None)
+        "amct_pytorch.workflows.llm_extract_ptq_data.register_llm_models", lambda: None
+    )
 
     class FakePipeline:
         sharded_block = False
@@ -161,7 +170,8 @@ def test_extract_setup_enables_sharded_block(monkeypatch, tmp_path):
 
 def test_run_completes(monkeypatch):
     monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_extract_ptq_data.register_llm_models", lambda: None)
+        "amct_pytorch.workflows.llm_extract_ptq_data.register_llm_models", lambda: None
+    )
 
     class FakePipeline:
         num_layers = 1
@@ -193,4 +203,3 @@ def test_run_completes(monkeypatch):
     wf = _make_extract_workflow(quant_target=["mlp"])
     wf.args.output_dir = "/tmp"
     wf.run()
-

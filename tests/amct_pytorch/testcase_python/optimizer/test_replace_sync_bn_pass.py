@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,29 +15,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
 import logging
 import os
-import sys
 import unittest
 
-import numpy as np
 import torch
-import torch.nn as nn
 
-from amct_pytorch.classic.graph_based.amct_pytorch.configuration.retrain_config import (
-    RetrainConfig,
-)
-from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.recorder.recorder import (
-    Recorder,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.model_optimizer import (
     ModelOptimizer,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.replace_sync_bn_pass import (
     RepalceSyncBNPass,
 )
-from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
 from tests.amct_pytorch.testcase_python.optimizer.utils import models
 
 logger = logging.getLogger(__name__)
@@ -72,7 +61,9 @@ class TestReplaceSyncBNPass(unittest.TestCase):
         named_module_dict = {name: mod for name, mod in self.model_003.named_modules()}
         logger.info('named_module_dict %s', named_module_dict)
 
-        self.assertIsInstance(named_module_dict['bn'], torch.nn.modules.batchnorm.BatchNorm2d)
+        self.assertIsInstance(
+            named_module_dict['bn'], torch.nn.modules.batchnorm.BatchNorm2d
+        )
 
 
 if __name__ == '__main__':

@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Unit tests for OfmrQuant and LinearAWQuant modules (CPU, no NPU required)."""
+
 import unittest
 from unittest.mock import patch
 
@@ -22,6 +23,7 @@ import torch.nn as nn
 
 from amct_pytorch.classic.quantize_op.ofmr_quant_module import OfmrQuant
 from amct_pytorch.classic.quantize_op.linear_awq_module import LinearAWQuant
+from amct_pytorch.classic.quantize_op.smooth_quant_module import SmoothQuant
 from amct_pytorch.common.utils.vars import INT8
 
 
@@ -73,6 +75,23 @@ class TestOfmrQuantInit(unittest.TestCase):
         cfg = _make_ofmr_config(weight_compress_only=True)
         q = OfmrQuant(mod, "fc", cfg)
         self.assertTrue(q.weight_compress_only)
+
+
+class TestSmoothQuantCalculateSmooth(unittest.TestCase):
+    """Test SmoothQuant smooth factor sanitization."""
+
+    def test_calculate_smooth_replaces_non_finite_factor_with_one(self):
+        quant_module = object.__new__(SmoothQuant)
+        quant_module.weight = torch.zeros((2, 2), dtype=torch.float32)
+        quant_module.quant_config = {
+            "algorithm": {"smoothquant": {"smooth_strength": 0.5}}
+        }
+
+        smooth_factor = quant_module.calculate_smooth(
+            torch.ones((1, 2), dtype=torch.float32)
+        )
+
+        self.assertTrue(torch.equal(smooth_factor, torch.ones_like(smooth_factor)))
 
 
 class TestOfmrQuantForward(unittest.TestCase):
@@ -160,7 +179,9 @@ class TestOfmrQuantFakeQuantForward(unittest.TestCase):
     def test_conv2d_calibration_with_act_quant(self):
         """Exercise Conv2d branches in _calc_weight/act_quant_loss (lines 202,211,214,240)."""
         mod = nn.Conv2d(2, 4, kernel_size=3, padding=1, bias=False)
-        cfg = _make_ofmr_config(batch_num=2, strategy="tensor", weight_compress_only=False)
+        cfg = _make_ofmr_config(
+            batch_num=2, strategy="tensor", weight_compress_only=False
+        )
         q = OfmrQuant(mod, "conv", cfg)
         x = torch.randn(1, 2, 8, 8)
         q(x)
@@ -171,7 +192,9 @@ class TestOfmrQuantFakeQuantForward(unittest.TestCase):
     def test_conv2d_per_channel_calibration_cout_axis(self):
         """Per-channel Conv2d hits the cout>1 axis-reduction path (lines 214-218)."""
         mod = nn.Conv2d(2, 4, kernel_size=3, padding=1, bias=False)
-        cfg = _make_ofmr_config(batch_num=1, strategy="channel", weight_compress_only=True)
+        cfg = _make_ofmr_config(
+            batch_num=1, strategy="channel", weight_compress_only=True
+        )
         q = OfmrQuant(mod, "conv", cfg)
         self.assertEqual(q.cout, 4)
         x = torch.randn(1, 2, 8, 8)
@@ -230,7 +253,9 @@ class TestLinearAWQuantForward(unittest.TestCase):
     @patch(
         "amct_pytorch.classic.quantize_op.linear_awq_module.calculate_scale_offset_by_granularity"
     )
-    def test_forward_second_pass_uses_fake_quant(self, mock_calc, mock_apply, mock_search):
+    def test_forward_second_pass_uses_fake_quant(
+        self, mock_calc, mock_apply, mock_search
+    ):
         mock_search.return_value = torch.ones(8)
         mock_calc.return_value = (torch.ones(4, 1), torch.zeros(4, 1))
         q = LinearAWQuant(self.mod, "fc", self.cfg)

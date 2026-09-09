@@ -307,6 +307,7 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
                 object_name,
                 type(object_module).__name__,
             ),
+            num_bits=wts_param.get('num_bits'),
             scale_r=self._reorganize_rnn_quant_factor(
                 tensor(scale_r), object_name, type(object_module).__name__
             ),

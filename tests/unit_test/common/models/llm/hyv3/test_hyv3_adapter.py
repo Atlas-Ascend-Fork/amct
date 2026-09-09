@@ -16,6 +16,8 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """Unit tests for the HyV3 adapter (key remap, deploy bindings, PTQ units)."""
+
+import re
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -25,13 +27,14 @@ import torch.nn as nn
 from transformers.models.hy_v3.modeling_hy_v3 import HYV3Config, HYV3DecoderLayer
 
 from amct_pytorch.common.models.llm.hyv3.hyv3 import HyV3, remap_hyv3_keys
+from amct_pytorch.quantization.bit_policy import BitPolicy
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
 def _stub(quant_target=("moe",), **attrs):
     """Bypass HyV3.__init__ and set only the attributes needed for testing."""
     obj = HyV3.__new__(HyV3)
-    obj.args = SimpleNamespace(quant_target=list(quant_target))
+    obj.args = SimpleNamespace(quant_target=list(quant_target), granularity="block")
     obj.quant_target = list(quant_target)
     for k, v in attrs.items():
         setattr(obj, k, v)
@@ -97,10 +100,22 @@ class TestRemapHyV3Keys:
 
 class TestHyV3Adapter:
     @staticmethod
-    def test_parse_quant_mode_rejects_mlp():
+    def test_parse_quant_mode_rejects_mlp_outside_tensorwise():
         obj = _stub(quant_target=["mlp"])
-        with pytest.raises(ValueError, match="does not support quant_target='mlp'"):
+        with pytest.raises(ValueError, match="only for tensorwise deploy"):
             obj.parse_quant_mode()
+
+    @staticmethod
+    def test_parse_quant_mode_accepts_mlp_for_tensorwise():
+        obj = _stub(quant_target=["mlp"])
+        obj.args.granularity = "tensor"
+        obj.parse_quant_mode()  # must not raise
+
+    @staticmethod
+    def test_parse_quant_mode_accepts_mlp_and_moe_for_tensorwise():
+        obj = _stub(quant_target=["mlp", "moe"])
+        obj.args.granularity = "tensor"
+        obj.parse_quant_mode()  # must not raise
 
     @staticmethod
     def test_parse_quant_mode_accepts_moe():
@@ -120,7 +135,9 @@ class TestHyV3Adapter:
     @staticmethod
     def test_get_scale_name_returns_scale_inv_suffix():
         obj = _stub()
-        scale_prefix, scale_inv_name = obj.get_scale_name("mlp.experts.0.gate_proj.weight")
+        scale_prefix, scale_inv_name = obj.get_scale_name(
+            "mlp.experts.0.gate_proj.weight"
+        )
         assert scale_prefix == "_scale"
         assert scale_inv_name == "mlp.experts.0.gate_proj.weight_scale"
 
@@ -142,6 +159,7 @@ class TestHyV3Adapter:
         def _mock_pack(sd, expert_prefix):
             captured_prefix["ep"] = expert_prefix
             return sd
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.hyv3.hyv3.pack_gated_expert_weights",
             _mock_pack,
@@ -226,6 +244,7 @@ class TestHyV3Adapter:
             lambda args, block, cls: captured.update({"cls": cls}),
         )
         from amct_pytorch.common.models.llm.hyv3.quant_module import QuantHYV3Attn
+
         obj.build_quant_block(0)
         assert captured.get("cls") is QuantHYV3Attn
 
@@ -284,7 +303,9 @@ _FROM_PRETRAINED = "from_pretrained"
 def _make_mock_args(model_path="/tmp/fake_model", quant_target=("moe",), **extra):
     base = {
         "model": model_path,
+        "trust_remote_code": True,
         "quant_target": list(quant_target),
+        "granularity": "block",
         "device": "cpu",
         "data_dir": "/tmp/fake_data",
         "output_dir": "/tmp/fake_output",
@@ -311,7 +332,11 @@ def _mock_hf_loading_chain(monkeypatch, cfg):
     )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.AutoTokenizer",
-        type("FakeAT", (), {_FROM_PRETRAINED: staticmethod(lambda *a, **kw: fake_tokenizer)})(),
+        type(
+            "FakeAT",
+            (),
+            {_FROM_PRETRAINED: staticmethod(lambda *a, **kw: fake_tokenizer)},
+        )(),
     )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.init_empty_weights",
@@ -323,10 +348,14 @@ def _mock_hf_loading_chain(monkeypatch, cfg):
         )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.AutoModelForCausalLM",
-        type("FakeAMFCLM", (), {
-            _FROM_PRETRAINED: staticmethod(lambda *a, **kw: empty_model),
-            "from_config": staticmethod(lambda *a, **kw: empty_model),
-        })(),
+        type(
+            "FakeAMFCLM",
+            (),
+            {
+                _FROM_PRETRAINED: staticmethod(lambda *a, **kw: empty_model),
+                "from_config": staticmethod(lambda *a, **kw: empty_model),
+            },
+        )(),
     )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.get_weight_mappings",
@@ -379,7 +408,7 @@ class TestHyV3Mocked:
     @staticmethod
     def test_init_rejects_mlp_quant_target(monkeypatch):
         _mock_hf_loading_chain(monkeypatch, _tiny_hyv3_config())
-        with pytest.raises(ValueError, match="does not support quant_target='mlp'"):
+        with pytest.raises(ValueError, match="only for tensorwise deploy"):
             HyV3(_make_mock_args(quant_target=["mlp"]))
 
     @staticmethod
@@ -409,6 +438,7 @@ def _stub_hyv3(**attrs):
     obj = HyV3.__new__(HyV3)
     obj.args = SimpleNamespace(
         quant_target=["moe"],
+        granularity="tensor",
         w_bits=8,
         a_bits=8,
     )
@@ -435,6 +465,8 @@ def test_hyv3_generate_tensorwise_ignore_layers():
     assert "model.layers.0.mlp.gate_proj" in ignore
     assert "model.layers.0.mlp.down_proj" in ignore
     assert "model.layers.0.mlp.up_proj" in ignore
+    assert "model.layers.0.self_attn.q_proj" in ignore
+    assert "model.layers.2.self_attn.o_proj" in ignore
     assert "model.layers.2.eh_proj" in ignore
     assert "model.embed_tokens" in ignore
     assert "lm_head" in ignore
@@ -455,6 +487,17 @@ def test_hyv3_cache_scheme_float():
     assert scheme["kv_cache_scheme"]["type"] == "float"
 
 
+def test_hyv3_cache_scheme_mxfp():
+    stub = _stub_hyv3()
+    stub.quant_dtype = "mxfp"
+
+    scheme = stub.cache_scheme()
+
+    assert scheme["kv_cache_scheme"]["type"] == "float"
+    assert scheme["quant_method"] == "mxfp8"
+    assert scheme["activation_scheme"] == "dynamic"
+
+
 def test_hyv3_bits_scheme():
     stub = _stub_hyv3()
     result = stub.bits_scheme()
@@ -467,25 +510,102 @@ def test_hyv3_bits_scheme():
 
 def test_hyv3_generate_tensorwise_quant_layers():
     stub = _stub_hyv3()
+    stub.args.bit_policy = BitPolicy(
+        {
+            "w_bits": 8,
+            "a_bits": 8,
+            "moe": {"routed": {"w_bits": 4, "a_bits": 8}},
+        }
+    )
     layers = stub.generate_tensorwise_quant_layers()
-    # Layer 0: only attn (no experts, no shared_mlp)
-    assert "model.layers.0.self_attn.q_proj" in layers
-    assert "model.layers.0.self_attn.k_proj" in layers
-    assert "model.layers.0.self_attn.v_proj" in layers
-    assert "model.layers.0.self_attn.o_proj" in layers
-    # Layer 0 should NOT have experts or shared_mlp
+    # moe does not implicitly select attention or the layer-0 dense MLP.
+    assert not any("self_attn" in k for k in layers)
+    assert not any("model.layers.0.mlp" in k for k in layers)
     assert not any("model.layers.0.mlp.experts" in k for k in layers)
     assert not any("model.layers.0.mlp.shared_mlp" in k for k in layers)
-    # Layer 1: attn + experts + shared_mlp
-    assert "model.layers.1.self_attn.q_proj" in layers
+    # Layer 1: experts + shared_mlp
     assert "model.layers.1.mlp.experts.0.gate_proj" in layers
     assert "model.layers.1.mlp.experts.1.down_proj" in layers
     assert "model.layers.1.mlp.shared_mlp.gate_proj" in layers
-    # Layer 2 (nextn predict): attn + experts (with bit=8) + shared_mlp
-    assert "model.layers.2.self_attn.q_proj" in layers
+    # Layer 2 (nextn predict): experts follow the routed-expert bit policy.
     assert "model.layers.2.mlp.experts.0.gate_proj" in layers
-    # nextn predict layers use bit=8 for routed experts
-    assert layers["model.layers.2.mlp.experts.0.gate_proj"] == 8
+    assert layers["model.layers.1.mlp.experts.0.gate_proj"] == 4
+    # Next-token prediction layers follow the routed-expert bit policy.
+    assert layers["model.layers.2.mlp.experts.0.gate_proj"] == 4
+
+
+def test_hyv3_generate_tensorwise_mlp_layers_only():
+    stub = _stub_hyv3(quant_target=["mlp"])
+    stub.args.quant_target = ["mlp"]
+
+    layers = stub.generate_tensorwise_quant_layers()
+
+    assert layers == {
+        "model.layers.0.mlp.gate_proj": 8,
+        "model.layers.0.mlp.down_proj": 8,
+        "model.layers.0.mlp.up_proj": 8,
+    }
+
+
+def test_hyv3_generate_tensorwise_mlp_and_moe_layers():
+    stub = _stub_hyv3(quant_target=["mlp", "moe"])
+    stub.args.quant_target = ["mlp", "moe"]
+
+    layers = stub.generate_tensorwise_quant_layers()
+
+    assert "model.layers.0.mlp.gate_proj" in layers
+    assert "model.layers.1.mlp.experts.0.gate_proj" in layers
+    assert "model.layers.1.mlp.shared_mlp.gate_proj" in layers
+    assert "model.layers.2.mlp.experts.1.down_proj" in layers
+    assert not any("self_attn" in key for key in layers)
+
+
+def test_hyv3_generate_tensorwise_attention_layers_only():
+    stub = _stub_hyv3(quant_target=["attn-linear"])
+    stub.args.quant_target = ["attn-linear"]
+
+    layers = stub.generate_tensorwise_quant_layers()
+
+    assert len(layers) == 12
+    assert "model.layers.0.self_attn.q_proj" in layers
+    assert "model.layers.2.self_attn.o_proj" in layers
+    assert not any(".mlp." in key for key in layers)
+
+
+def test_hyv3_tensorwise_mlp_layers_are_not_ignored():
+    stub = _stub_hyv3(quant_target=["mlp"])
+    stub.args.quant_target = ["mlp"]
+
+    ignore = stub.generate_tensorwise_ignore_layers()
+
+    assert "model.layers.0.mlp.gate_proj" not in ignore
+    assert "model.layers.0.mlp.down_proj" not in ignore
+    assert "model.layers.0.mlp.up_proj" not in ignore
+    assert "model.layers.0.self_attn.q_proj" in ignore
+    assert "model.layers.2.self_attn.o_proj" in ignore
+    expert_ignore = next(item for item in ignore if item.startswith("re:"))
+    expert_pattern = expert_ignore.removeprefix("re:")
+    assert re.match(expert_pattern, "model.layers.1.mlp.experts")
+    assert re.match(expert_pattern, "model.layers.1.mlp.experts.0.gate_proj")
+    assert not re.match(expert_pattern, "model.layers.1.mlp.shared_mlp.gate_proj")
+    assert "model.layers.1.mlp.shared_mlp.gate_proj" in ignore
+    assert re.match(expert_pattern, "model.layers.2.mlp.experts.1.down_proj")
+    assert "model.layers.2.mlp.shared_mlp.down_proj" in ignore
+    assert "model.layers.2.eh_proj" in ignore
+    assert "model.embed_tokens" in ignore
+    assert "lm_head" in ignore
+
+
+def test_hyv3_tensorwise_mlp_and_moe_layers_are_not_ignored():
+    stub = _stub_hyv3(quant_target=["mlp", "moe"])
+    stub.args.quant_target = ["mlp", "moe"]
+
+    ignore = stub.generate_tensorwise_ignore_layers()
+
+    assert "model.layers.0.mlp.gate_proj" not in ignore
+    assert "model.layers.0.self_attn.q_proj" in ignore
+    assert not any(item.startswith("re:") for item in ignore)
+    assert "model.layers.1.mlp.shared_mlp.gate_proj" not in ignore
 
 
 def test_hyv3_get_scale_name_uses_scale_suffix():

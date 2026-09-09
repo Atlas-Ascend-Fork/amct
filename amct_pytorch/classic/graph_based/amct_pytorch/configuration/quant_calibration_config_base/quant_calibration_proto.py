@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -16,26 +16,37 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 from collections import OrderedDict, defaultdict, namedtuple
-from enum import IntEnum, unique
 from google.protobuf import text_format
 
 from ....amct_pytorch.common.utils.util import check_no_repeated
 from ....amct_pytorch.common.utils.util import find_repeated_items
 from ....amct_pytorch.common.utils.util import proto_float_to_python_float
 from ....amct_pytorch.proto import quant_calibration_config_pb2
-from ....amct_pytorch.utils.log import LOGGER
-from ....amct_pytorch.common.config.proto_config import ProtoDataType
-from ....amct_pytorch.common.config.proto_config import ProtoConfig
-from ....amct_pytorch.utils.vars import ASYMMETRIC, BATCH_NUM, ACTIVATION_OFFSET,\
-    QUANT_GRANULARITY, MAX_PERCENTILE, MIN_PERCENTILE, SEARCH_RANGE, NUM_OF_BINS, IFMR, HFMG, SEARCH_STEP
+from ....amct_pytorch.utils.vars import (
+    ASYMMETRIC,
+    BATCH_NUM,
+    ACTIVATION_OFFSET,
+    QUANT_GRANULARITY,
+    MAX_PERCENTILE,
+    MIN_PERCENTILE,
+    SEARCH_RANGE,
+    NUM_OF_BINS,
+    IFMR,
+    HFMG,
+    SEARCH_STEP,
+)
 
-QuantKeywordInfo = namedtuple('QuantKeywordInfo', ['layer_key', 'common_config_key', 'config_key'])
+QuantKeywordInfo = namedtuple(
+    'QuantKeywordInfo', ['layer_key', 'common_config_key', 'config_key']
+)
 QUANT_METHOD_INFO_MAP = {
-    'kv_quant': QuantKeywordInfo('kv_cache_quant_layers', 'kv_cache_quant_config', 'kv_data_quant_config')
+    'kv_quant': QuantKeywordInfo(
+        'kv_cache_quant_layers', 'kv_cache_quant_config', 'kv_data_quant_config'
+    )
 }
 
 
-class QuantCalibrationProtoConfig():
+class QuantCalibrationProtoConfig:
     """
     Function: Cope with simple config file from proto.
     APIs:
@@ -43,13 +54,14 @@ class QuantCalibrationProtoConfig():
         get_override_layers
         read_override_layer_config
     """
+
     def __init__(self, config_proto_file, model):
         self.proto_config = self.read(config_proto_file)
         self.override_layer_proto = {}
 
     @staticmethod
     def read(config_proto_file):
-        """ Read config from config_proto_file. """
+        """Read config from config_proto_file."""
         proto_config = quant_calibration_config_pb2.AMCTQuantCaliConfig()
         with open(config_proto_file, 'rb') as cfg_file:
             pbtxt_string = cfg_file.read()
@@ -58,7 +70,7 @@ class QuantCalibrationProtoConfig():
 
     @staticmethod
     def _get_calibration_config(config):
-        """ generate layer config base on common config """
+        """generate layer config base on common config"""
         layer_config = OrderedDict()
         if config.HasField('ifmr_quantize'):
             QuantCalibrationProtoConfig._get_ifmr_config(config, layer_config)
@@ -86,16 +98,17 @@ class QuantCalibrationProtoConfig():
         """extract ifmr configs"""
         ifmr_quantize = config.ifmr_quantize
         act_params['act_algo'] = IFMR
-        act_params[MAX_PERCENTILE] = \
-            proto_float_to_python_float(ifmr_quantize.max_percentile)
-        act_params[MIN_PERCENTILE] = \
-            proto_float_to_python_float(ifmr_quantize.min_percentile)
+        act_params[MAX_PERCENTILE] = proto_float_to_python_float(
+            ifmr_quantize.max_percentile
+        )
+        act_params[MIN_PERCENTILE] = proto_float_to_python_float(
+            ifmr_quantize.min_percentile
+        )
         act_params[SEARCH_RANGE] = [
             proto_float_to_python_float(ifmr_quantize.search_range_start),
-            proto_float_to_python_float(ifmr_quantize.search_range_end)
+            proto_float_to_python_float(ifmr_quantize.search_range_end),
         ]
-        act_params[SEARCH_STEP] = proto_float_to_python_float(
-            ifmr_quantize.search_step)
+        act_params[SEARCH_STEP] = proto_float_to_python_float(ifmr_quantize.search_step)
         if ifmr_quantize.HasField(ASYMMETRIC):
             act_params[ASYMMETRIC] = ifmr_quantize.asymmetric
         else:
@@ -109,17 +122,26 @@ class QuantCalibrationProtoConfig():
         if hasattr(self.proto_config, BATCH_NUM):
             global_config[BATCH_NUM] = self._get_batch_num()
             if global_config[BATCH_NUM] < 1:
-                raise ValueError("batch_num({}) should be greater than zero".format(global_config[BATCH_NUM]))
+                raise ValueError(
+                    "batch_num({}) should be greater than zero".format(
+                        global_config[BATCH_NUM]
+                    )
+                )
         if hasattr(self.proto_config, ACTIVATION_OFFSET):
             global_config[ACTIVATION_OFFSET] = self._get_activation_offset()
         return global_config
 
     def get_quant_config(self, common_config_key):
         """get data config"""
-        if self.proto_config.HasField(common_config_key) and \
-            getattr(self.proto_config, common_config_key).HasField('calibration_config'):
-            data_quant_config = getattr(self.proto_config, common_config_key).calibration_config
-            return QuantCalibrationProtoConfig._get_calibration_config(data_quant_config)
+        if self.proto_config.HasField(common_config_key) and getattr(
+            self.proto_config, common_config_key
+        ).HasField('calibration_config'):
+            data_quant_config = getattr(
+                self.proto_config, common_config_key
+            ).calibration_config
+            return QuantCalibrationProtoConfig._get_calibration_config(
+                data_quant_config
+            )
         else:
             return OrderedDict()
 
@@ -134,7 +156,9 @@ class QuantCalibrationProtoConfig():
             return list()
         quant_layers = list(getattr(self.proto_config, common_config_key).quant_layers)
         repeated_layers = find_repeated_items(quant_layers)
-        check_no_repeated(repeated_layers, QUANT_METHOD_INFO_MAP.get(quant_method).layer_key)
+        check_no_repeated(
+            repeated_layers, QUANT_METHOD_INFO_MAP.get(quant_method).layer_key
+        )
         return quant_layers
 
     def get_override_layers(self):
@@ -154,18 +178,20 @@ class QuantCalibrationProtoConfig():
         return override_layers
 
     def read_override_layer_config(self, override_layer, config_key):
-        """ Read the config of one override_layer. """
+        """Read the config of one override_layer."""
         config = self.override_layer_proto.get(override_layer)
-        return QuantCalibrationProtoConfig._get_calibration_config(getattr(config, config_key))
+        return QuantCalibrationProtoConfig._get_calibration_config(
+            getattr(config, config_key)
+        )
 
     def _get_batch_num(self):
-        """ get batch_num from proto """
+        """get batch_num from proto"""
         if self.proto_config.HasField(BATCH_NUM):
             return self.proto_config.batch_num
         return 1
 
     def _get_activation_offset(self):
-        """ get batch activation_offset from proto """
+        """get batch activation_offset from proto"""
         if self.proto_config.HasField(ACTIVATION_OFFSET):
             return self.proto_config.activation_offset
         return None

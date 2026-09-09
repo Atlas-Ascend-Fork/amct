@@ -15,9 +15,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import os
 import sys
 from unittest.mock import MagicMock
-import torch
+
+# Disable torch_npu backend autoload before torch is imported during collection.
+os.environ["TORCH_DEVICE_BACKEND_AUTOLOAD"] = "0"
+
+import torch  # noqa: E402
 
 _mock_npu = MagicMock()
 _mock_npu.__spec__ = MagicMock()
