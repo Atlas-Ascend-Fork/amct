@@ -220,7 +220,7 @@ python -m amct_pytorch.ptq \
 
 **约束**：
 
-- 模块粒度：当前仅支持以block 为粒度的处理（`granularity=block`） 。
+- 模块粒度：blockwise 量化导出仅支持 `granularity=block`；`granularity=tensor` 为按张粒度转换权重（如 FP8/FP4 → BF16 权重转换，见 DeepSeek-V4-Flash 样例），两种路径互斥。
 - 自定义 hook 限制：若使用了自定义的 `quantize()` hook（用于权重量化算法），则当前版本不支持通过 `export_deploy()` 功能进行部署。
 
 `ptq`单卡相关启动指令也可参考[ptq_single_npu.sh](../../examples/ptq_single_npu.sh)
@@ -251,15 +251,15 @@ python -m amct_pytorch.deploy \
 
 | 参数 | 默认值 | 含义 |
 |------|------|------|
-| `--model` | `deepseek-ai/DeepSeek-V4-Pro` | 模型权重路径或模型标识，部署导出时应为本地模型目录。 |
-| `--model_name` | `deepseek-ai/DeepSeek-V4-Pro` | AMCT 内部模型适配器名称，需匹配已注册模型，如 `qwen3`、`deepseek_v4`。 |
+| `--model` | `deepseek-ai/DeepSeek-V4-Flash` | 模型权重路径或模型标识，部署导出时应为本地模型目录。 |
+| `--model_name` | **必填** | AMCT 内部模型适配器名称，需匹配已注册模型，如 `qwen3`、`deepseek_v4`。 |
 | `--trust_remote_code` | 默认关闭 | 是否允许 HuggingFace 模型仓执行自定义代码。传入该开关时启用；DeepSeek V3.2、DeepSeek V4 等依赖本地模型实现的模型必须启用，其他模型未启用时会给出 Warning。 |
 | `--device` | `npu:0` | 指定运行设备。建议选择NPU/GPU，以加速计算。 |
-| `--granularity` | `model` | 工作粒度，即量化或处理的单位，常用选项：<br> `block`：按模块块处理（更细粒度，可能效果更好但耗时）。<br> `model`：整个模型统一处理（粗粒度，速度快），部分流程不支持。 |
+| `--granularity` | `block` | 工作粒度，即量化或处理的单位，按子命令校验合法值：<br> `block`：按模块块处理（更细粒度，可能效果更好但耗时），所有子命令的默认值。<br> `model`：整个模型统一处理（整模型加载后前向，粗粒度，速度快），仅 `eval` 支持，`ptq` 中为预留接口。<br> `tensor`：按张（tensor）粒度转换权重（用于反量化或直转量化），仅 `deploy` 支持。 |
 | `--seed` | `0` | 随机种子，用于控制实验中随机行为的一致性（如数据采样、初始化等），设置为固定值可保证结果可复现。 |
-| `--quant_target` | `[]` | 量化目标，支持以下组合：<br>mlp：Multi-Layer Perceptron，多层感知机。<br>moe：Mixture of Experts，混合专家模型。<br>attn-linear：Attention Linear Layer，注意力机制中的线性层。<br>attn-cache：Attention Cache，注意力缓存。 |
+| `--quant_target` | `[]`（`ptq` / `extract_ptq_data` **必填**；`deploy` 的 blockwise 导出**必填**） | 量化目标，取值：mlp（多层感知机）/ moe（混合专家）/ attn-linear（注意力线性层）/ attn-cache（注意力缓存）。各命令用法不同：`eval` 与 `deploy` 可同时指定多个（如 `--quant_target mlp attn-linear`）；`ptq` / `extract_ptq_data` 一次仅允许一个，多目标请分目标依次执行。`deploy` blockwise 中该参数决定构建并导出哪些量化模块，缺失时会静默导出未量化权重；`granularity=tensor` 时纯反量化（如 FP8/FP4 → BF16 权重转换）不使用该参数，tensorwise 直转量化（部分模型族，如 hy_v3 / glm5_2）仍需指定。 |
 | `--seq_len` | `4096` | 校准和评估时使用的输入序列长度。用于确定模型在处理多长文本时的表现（尤其在量化校准阶段很重要）。 可选值：`1024`、`2048`、`4096`|
-| `--data_dir` | 空字符串 | PTQ 中间数据保存/读取目录。 |
+| `--data_dir` | 空字符串（`ptq` / `extract_ptq_data` **必填**） | PTQ 中间数据保存/读取目录：`extract_ptq_data` 的输出目录，`ptq` 从中读取。 |
 | `--output_dir` | `./outputs` | 输出目录，存放日志文件、PTQ 参数配置、最终部署模型等所有生成内容。 |
 
 ### 3.2 PPL 评估参数
@@ -284,7 +284,7 @@ python -m amct_pytorch.deploy \
 
 | 参数 | 默认值 | 含义 |
 |------|------|------|
-| `--quant_dtype` | 空  |量化后数据的类型，当前适配包括mxfp、int。`eval_mode=quant`时，为必要参数|
+| `--quant_dtype` | 空字符串（`deploy` 的 blockwise 导出**必填**；`eval_mode=quant` 时需显式指定） | 量化后数据的类型，取值 `int` / `mxfp` / `hifp`。`deploy` blockwise 导出时必须显式指定，以保证 `config.json` 中的量化声明与 PTQ 产物一致；`eval_mode=quant` 时构建量化模块需按该参数选择量化数据类型实现，缺失会在运行期报错；`granularity=tensor` 时纯反量化不使用该参数，tensorwise 直转量化（部分模型族）仍需指定（当前支持 `int` / `mxfp`）。 |
 | `--bit_config` | `None` | YAML 格式的配置文件路径，该文件定义了具体的位宽策略。如果不提供此参数，则使用默认的 `W16A16` 配置。 |
 | `--algos` | `[]` | 启用的量化算法列表，算法会根据其注册的 `target` 自动应用到模型的权重（weight）、激活值（activation）或结构（structure）上。 |
 | `--is_per_tensor` | `False` | 对于LAC（Learned Activation Clipping，学习式激活裁剪）算法，是否使用 per-tensor统计信息来确定裁剪范围。 |
@@ -341,7 +341,7 @@ layer_{layer_idx}_{unit_name}.pt
 - `extract_ptq_data` 和 `ptq` 的 `quant_target` 必须保持一致。
 - `ptq`、`extract_ptq_data` 当前一次只处理一个 `quant_target`，需要多目标量化时建议分目标依次执行。
 - `deploy` 读取 PTQ 参数目录时，应确保对应 `quant_target` 的参数已训练完成。
-- `--granularity block` 是当前 LLM Agent 的主要可用路径；`ptq` 的 model 粒度仍为预留实现。
+- `--granularity` 默认值为 `block`；`ptq` / `extract_ptq_data` 仅支持 `block`（`model` 粒度为预留实现），`deploy` 额外支持 `tensor`，`eval` 额外支持 `model`。
 - `--model_name` 是内部适配器名称，不一定等同于 HuggingFace 模型路径。
 - `bit_config`、`model`请配置本地路径，`bit_config`对应的yaml文件可以参考仓上amct_pytorch/configs内的文件
 
