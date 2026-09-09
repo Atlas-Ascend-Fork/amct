@@ -14,11 +14,16 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import time
+from pathlib import Path
 import torch
 import tqdm
 import torch.nn as nn
 from datasets import load_dataset
 from transformers import AutoTokenizer, LlamaForCausalLM, AutoModelForCausalLM
+
+
+DEFAULT_WIKITEXT2_RAW = "/mnt/workspace/gitCode/yaoguangxiu/models/wikitext/wikitext-2-raw/wiki.test.raw"
+DEFAULT_PILEVAL_JSONL = "/mnt/workspace/gitCode/yaoguangxiu/models/pile-val-backup/val.jsonl"
 
 
 def build_enc(model_path):
@@ -46,9 +51,10 @@ def get_qwen(model_path, seqlen=2048):
     print(f'Getting official pretrained {model_path}')
 
     model = AutoModelForCausalLM.from_pretrained(
-        model_path, device_map="auto", torch_dtype=torch.bfloat16
+        model_path,
+        device_map="auto",
+        torch_dtype=torch.bfloat16,
     )
-
     model.seqlen = seqlen
     enc = AutoTokenizer.from_pretrained(
         model_path, use_fast=False, trust_remote_code=True
@@ -58,16 +64,23 @@ def get_qwen(model_path, seqlen=2048):
 
 def get_test_dataset(enc, seqlen):
     print('Loading dataset: Wikitext2')
-    testenc = load_dataset('Salesforce/wikitext', 'wikitext-2-raw-v1', split='test')
-    testenc = enc("\n\n".join(testenc["text"]), return_tensors="pt")
-
+    raw_path = Path(DEFAULT_WIKITEXT2_RAW)
+    if raw_path.exists():
+        testenc = enc(raw_path.read_text(encoding="utf-8"), return_tensors="pt")
+    else:
+        testenc = load_dataset('wikitext', 'wikitext-2-raw-v1', split='test')
+        testenc = enc("\n\n".join(testenc["text"]), return_tensors="pt")
     return testenc
 
 
 def get_calib_dataset(tokenizer=None, n_samples=512, block_size=512):
     print('Loading dataset: pileval')
-    dataset = load_dataset("mit-han-lab/pile-val-backup")
-    dataset = dataset["validation"]
+    local_path = Path(DEFAULT_PILEVAL_JSONL)
+    if local_path.exists():
+        dataset = load_dataset("json", data_files=str(local_path), split="train")
+    else:
+        dataset = load_dataset("mit-han-lab/pile-val-backup")
+        dataset = dataset["validation"]
     dataset = dataset.shuffle(seed=42)
     samples = []
     n_run = 0

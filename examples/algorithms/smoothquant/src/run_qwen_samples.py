@@ -29,6 +29,12 @@ if __name__ == '__main__':
     # Phase0: choose model && data
     model, enc = get_qwen(args.model_path)
     quant_model = model.eval().npu()
+    testenc = get_test_dataset(enc=enc, seqlen=model.seqlen)
+    testenc = testenc.input_ids.npu()
+
+    # Baseline
+    print("== BF16 baseline ==")
+    test_ppl(quant_model, testenc)
 
     samples = get_calib_dataset(tokenizer=enc, n_samples=512, block_size=256)
     samples = torch.cat(samples, dim=0)[:64, :]
@@ -62,6 +68,5 @@ if __name__ == '__main__':
     torch_npu.npu.empty_cache()
 
     # Phase4: Test ppl result
-    testenc = get_test_dataset(enc=enc, seqlen=model.seqlen)
-    testenc = testenc.input_ids.npu()
+    print("== SmoothQuant quantized ==")
     test_ppl(quant_model, testenc)
