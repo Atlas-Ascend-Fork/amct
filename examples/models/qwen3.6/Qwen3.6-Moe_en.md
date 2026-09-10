@@ -139,7 +139,7 @@ python -m amct_pytorch.ptq \
   ```
 Required parameter explanation:
 - base_lr: Learning rate, can be adjusted according to model/algorithm, etc.
-- algos: Quantization algorithm used, currently supports lwc/lac/omniquant/autoround
+- algos: Quantization algorithm used, currently supports lwc/lac/let/autoround
 - output_dir: PTQ training result save path
 - epoches: Iteration rounds, adjust according to algorithm and optimization effect
 
