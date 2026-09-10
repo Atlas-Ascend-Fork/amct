@@ -105,7 +105,7 @@ def _model_with_observe_modules():
     model = nn.Module()
     model.act_quantizer = ActivationQuantizer(_MOCK_QUANT_ARGS, bits=8)
     model.weight_quantizer = WeightQuantizer(_MOCK_QUANT_ARGS)
-    model.structure_algorithm = ALGO_REGISTRY.get("omniquant")(
+    model.structure_algorithm = ALGO_REGISTRY.get("let")(
         _MOCK_QUANT_ARGS, AlgoBuildContext(dim_size=8)
     )
     model.linear = nn.Linear(4, 4)
