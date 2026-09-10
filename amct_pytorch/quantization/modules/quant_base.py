@@ -128,7 +128,9 @@ class WeightQuantizer(torch.nn.Module):
         self.algorithms = nn.ModuleDict()
         self._init_algo()
 
-        self.quant_obj = _build_quant_obj(args, self.bits, False)
+        self.quant_obj = DTYPE_REGISTRY.get(args.quant_dtype)(
+            self.bits, True, args.block_size_col, args.scale_dtype
+        )
         self.is_observe = False
 
     def algo_forward(self, x):
