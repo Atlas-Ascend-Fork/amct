@@ -132,7 +132,7 @@ class QuantDequantFP(torch.nn.Module):
     def fake_quant(self, x: Tensor, qdim: int = -1, v: Tensor = 0.0):
         x_dtype = x.dtype
         scale, ex_mx = self.quant(x, qdim, v=v)
-        dx = self.dequantize_fp_block(ex_mx, scale, self.min_exp, self.max_norm)
+        dx = self.dequantize_fp_block(ex_mx, scale)
         dx = dx.to(x_dtype)
         return dx
 
@@ -144,7 +144,7 @@ class QuantDequantFP(torch.nn.Module):
     def quant(self, x: Tensor, qdim: int = -1, v: Tensor = 0.0):
         if isinstance(v, torch.Tensor):
             v = v.to(device=x.device, dtype=x.dtype)
-        x_scaled, scale = self.quantize_fp_block(x, self.min_exp, self.max_norm)
+        x_scaled, scale = self.quantize_fp_block(x)
         ex_mx = quantize_elewise(
             x_scaled, self.min_exp, self.max_norm, self.shift_val, v=v
         )
