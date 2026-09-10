@@ -172,3 +172,104 @@ Candidate ratios evaluated during the searches (binary-search order, reproducibl
 The smallest default candidate 0.1 already costs ΔPPL 0.58, beyond all three tolerances, so the
 model stays unchanged in every tier; pass a finer `--ratio-grid` (e.g. `0.02,0.05,0.1`) to make
 pruning take effect.
+
+## 4 Community Sample: Qwen3.6-35B-A3B MoE `mass_variance` + `tolerance` (Task 2)
+
+Corresponds to Issue [#183](https://gitcode.com/cann/amct/issues/183) task 2: structured expert
+pruning on a real MoE checkpoint.
+Script: [`src/run_qwen3_6_35b_a3b_pruning_mass_variance_tolerance.py`](src/run_qwen3_6_35b_a3b_pruning_mass_variance_tolerance.py).
+
+### 4.1 How to Run
+
+Environment: CANNLab / cloud **NPU A3** (preferably **2 visible NPUs**, host RAM ≥150GB).
+Default `--device-map auto` shards the model onto NPUs; **both tolerance search and
+acceptance run WikiText2 PPL on NPU** (same as task 1). Use `--device-map cpu` only if
+NPU memory is insufficient.
+
+`tolerance` means allowed **absolute PPL increase**: `pruned_ppl - baseline_ppl <= tolerance`.
+
+```bash
+# repo root
+source /home/developer/Ascend/cann/set_env.sh
+export MODEL_DIR=/data/models/Qwen3.6-35B-A3B   # placeholder; point to local weights
+export HF_ENDPOINT=https://hf-mirror.com
+export HF_HUB_DISABLE_XET=1
+
+# baseline once
+python3 -m amct_pytorch.eval \
+  --trust_remote_code \
+  --model "$MODEL_DIR" \
+  --model_name qwen3_6_moe \
+  --seq_len 4096 \
+  --granularity block \
+  --device npu:0 \
+  --eval_mode bf16 \
+  --bit_config amct_pytorch/configs/bf16.yaml
+
+# run each tolerance independently (default WikiText2 PPL search + default ratio_grid)
+# Qwen3.6 local weights need an explicit --trust-remote-code (trusted local dir only)
+# Replace BASELINE_PPL with your measured baseline
+BASELINE_PPL=6.308547
+for T in 0.1 0.2 0.5; do
+  python3 examples/algorithms/pruning/src/run_qwen3_6_35b_a3b_pruning_mass_variance_tolerance.py \
+    --model "$MODEL_DIR" \
+    --trust-remote-code \
+    --tolerance "$T" \
+    --baseline-ppl "$BASELINE_PPL" \
+    --skip-baseline-eval \
+    --search-evaluator wikitext2_ppl \
+    --device-map auto \
+    --output-dir ./output/qwen3_6_35b_a3b_mass_variance_tolerance
+done
+```
+
+Note: the smallest default `ratio_grid` candidate is 0.1. If that ΔPPL already exceeds
+0.1/0.2/0.5, all three tiers may leave the model unchanged (same class of outcome as task 1;
+valid). Pass a finer grid such as `--ratio-grid 0.02,0.05,0.1` if pruning must take effect.
+
+Key arguments:
+
+| Arg | Meaning |
+|:--|:--|
+| `--tolerance` | Allowed absolute WikiText2 PPL increase; task requires `0.1` / `0.2` / `0.5` separately |
+| `--trust-remote-code` | Allow custom Python from the model dir (off by default). `--model` must be a local directory; enable only for trusted local weights |
+| `--device-map auto` | Default; shard across visible NPUs (same as task 1). `single` / `cpu` are fallbacks |
+| `--search-evaluator wikitext2_ppl` | Default; search metric aligned with acceptance. `fidelity` / `proxy_ppl` are for comparison only — do not mix into the result table |
+| `--eval-batches` | Optional cap on WikiText2 batches for search; omit for the full test split |
+| `--ratio-grid` | Optional comma-separated prune ratios; default is library `DEFAULT_RATIO_GRID` |
+| `--calib-nsamples` / `--calib-seq-len` | Pileval calibration count/length (default 8 / 512) |
+| `--eval-seq-len` | Evaluation sequence length, fixed at 4096 |
+| `--output-dir` | Artifact directory (relative / placeholder path) |
+
+Calibration: `mit-han-lab/pile-val-backup`. Evaluation: WikiText2 `wikitext-2-raw-v1` test.
+After `save_pretrained`, the script restores VL-nested `config.json` and updates
+`text_config.num_experts` so the `qwen3_6_moe` eval path can load the checkpoint.
+
+### 4.2 Diagnosis and Report
+
+Measured with `--device-map auto`, `--search-evaluator wikitext2_ppl`, `search_device=npu:0`.
+
+For `tolerance=0.1` / `0.2`, no default-grid candidate meets the tolerance; the model is left
+unchanged and `PruneReport` contains a warning such as:
+
+```text
+no prune ratio met tolerance 0.100 across 3 candidates; model left unchanged.
+```
+
+For `tolerance=0.5`, search selects a feasible ratio and pruning takes effect; see the matching
+`result.json` for `params_after` and per-layer `mass_variance` events.
+
+### 4.3 Results
+
+Measured on cloud A3 with `--device-map auto`, WikiText2 PPL, `seq_len=4096`,
+`--search-evaluator wikitext2_ppl`.
+
+| Model | Method | Setting | Baseline PPL | Pruned PPL | Post PPL | Params (before → after) | Cut rate | Prune time (min) |
+|:--|:--|:--|--:|--:|:--|:--|--:|--:|
+| Qwen3.6-35B-A3B | `mass_variance` | `tolerance=0.1` | 6.308547 | 6.308547 | N/A | 34660610688 → 34660610688 | 0.0000 | 17.95 |
+| Qwen3.6-35B-A3B | `mass_variance` | `tolerance=0.2` | 6.308547 | 6.308547 | N/A | 34660610688 → 34660610688 | 0.0000 | 17.12 |
+| Qwen3.6-35B-A3B | `mass_variance` | `tolerance=0.5` | 6.308547 | 6.586955 | N/A | 34660610688 → 31386923648 | 0.0945 | 17.99 |
+
+Notes: `0.1` / `0.2` find no acceptable candidate on the default grid (same class of valid
+outcome as task 1). At `0.5`, ΔPPL≈0.278 ≤ 0.5 so pruning applies (~9.45% cut). Values come
+from each tier's `result.json`.
