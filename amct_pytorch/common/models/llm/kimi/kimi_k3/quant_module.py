@@ -16,12 +16,15 @@
 # ----------------------------------------------------------------------------
 """Quantization wrappers for Kimi-K3 MLP, MoE and MLA modules."""
 
+import copy
+
 import torch
 import torch.nn as nn
 
 from amct_pytorch.algorithms.quant import AlgoBuildContext
 from amct_pytorch.common.models.llm.common.ptq_params import PtqParamHandler
 from amct_pytorch.quantization.bit_policy import ensure_bit_policy
+from amct_pytorch.quantization.dtypes.mxfp_impl import quantize_elewise
 from amct_pytorch.quantization.modules.quant_base import (
     ActivationQuantizer,
     build_algorithms_by_target,
@@ -29,11 +32,44 @@ from amct_pytorch.quantization.modules.quant_base import (
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
-def _cache_bits(policy, name, fallback):
-    cache_cfg = policy.cfg.get("attn-cache") or {}
-    if name in cache_cfg:
-        return policy.cache_bits(name)
-    return policy.cache_bits(fallback)
+class KimiFpActivationQuantizer(ActivationQuantizer):
+    """FP activation fake quantization with Kimi MLA cache granularities."""
+
+    _GRANULARITIES = ("tensor", "token_head")
+
+    def __init__(self, quant_args, bits, granularity):
+        if granularity not in self._GRANULARITIES:
+            raise ValueError(
+                f"Unsupported Kimi FP granularity {granularity!r}; "
+                f"expected one of {self._GRANULARITIES}."
+            )
+        fp_args = copy.copy(quant_args)
+        fp_args.quant_dtype = "fp"
+        super().__init__(fp_args, bits)
+        self.granularity = granularity
+
+    def fake_quant(self, x):
+        if self.bits == 16 or self.granularity == "tensor":
+            return self.quant_obj(x)
+        if not x.is_floating_point():
+            raise ValueError("FP quantization requires a floating-point tensor.")
+        if x.numel() == 0:
+            return x
+
+        values = x.float()
+        amax = values.detach().abs().amax(dim=-1, keepdim=True)
+        fp32 = torch.finfo(torch.float32)
+        scale = (amax / self.quant_obj.max_norm).clamp_min(
+            fp32.tiny * fp32.eps
+        )
+        scale = torch.where(amax == 0, torch.ones_like(scale), scale)
+        quantized = quantize_elewise(
+            values / scale,
+            self.quant_obj.min_exp,
+            self.quant_obj.max_norm,
+            self.quant_obj.shift_val,
+        )
+        return (quantized * scale).to(x.dtype)
 
 
 class QuantKimiLinear(QuantLinear):
@@ -66,10 +102,10 @@ class QuantKimiMLAAttention(nn.Module):
 
     Only q_a_proj, q_b_proj and kv_a_proj_with_mqa participate in
     ``attn-linear``.  kv_b_proj, output projection and output gate remain
-    floating point.  ``attn-cache`` quantizes normalized latent KV and the
-    shared K branch immediately before they are consumed or written to a
-    cache. Kimi-K3 MLA uses NoPE, so neither branch receives rotary position
-    embeddings.
+    floating point. ``attn-cache`` applies per-token-per-head FP quantization
+    to joined Q, and per-tensor FP quantization to joined latent KV and the
+    attention probabilities. Kimi-K3 MLA uses NoPE, so neither branch receives
+    rotary position embeddings.
     """
 
     def __init__(self, quant_args, attention):
@@ -109,17 +145,22 @@ class QuantKimiMLAAttention(nn.Module):
         if self.use_output_gate:
             self.g_proj = attention.g_proj
 
-        cache_quantizer = ActivationQuantizer if self.enable_attn_cache else None
-        self.kv_nope_cache_quantizer = (
-            cache_quantizer(
-                quant_args, _cache_bits(policy, "kv_nope", "v"),
-            ) if cache_quantizer else nn.Identity()
+        self.q_cache_quantizer = (
+            KimiFpActivationQuantizer(
+                quant_args, policy.cache_bits("q"), "token_head",
+            ) if self.enable_attn_cache else nn.Identity()
         )
-        self.kv_rope_cache_quantizer = (
-            cache_quantizer(
-                quant_args, _cache_bits(policy, "kv_rope", "k"),
-            ) if cache_quantizer else nn.Identity()
+        self.kv_cache_quantizer = (
+            KimiFpActivationQuantizer(
+                quant_args, policy.cache_bits("kv"), "tensor",
+            ) if self.enable_attn_cache else nn.Identity()
         )
+        self.p_cache_quantizer = (
+            KimiFpActivationQuantizer(
+                quant_args, policy.cache_bits("p"), "tensor",
+            ) if self.enable_attn_cache else nn.Identity()
+        )
+
     def _linear(self, quant_args, linear, name):
         if not self.enable_attn_linear:
             return linear
@@ -187,6 +228,7 @@ class QuantKimiMLAAttention(nn.Module):
         q_states = q_states.view(
             batch_size, seq_length, self.num_heads, self.q_head_dim,
         )
+        q_states = self.q_cache_quantizer(q_states)
         q_nope, q_rope = torch.split(
             q_states,
             [self.qk_nope_head_dim, self.qk_rope_head_dim],
@@ -200,10 +242,16 @@ class QuantKimiMLAAttention(nn.Module):
             dim=-1,
         )
         kv_nope = self.kv_a_layernorm(kv_nope)
+        kv_states = self.kv_cache_quantizer(
+            torch.cat((kv_nope, kv_rope), dim=-1)
+        )
+        kv_nope, kv_rope = torch.split(
+            kv_states,
+            [self.kv_lora_rank, self.qk_rope_head_dim],
+            dim=-1,
+        )
         kv_rope = kv_rope.unsqueeze(2)
 
-        kv_nope = self.kv_nope_cache_quantizer(kv_nope)
-        kv_rope = self.kv_rope_cache_quantizer(kv_rope)
         if past_key_values is not None:
             cache_kwargs = {"cache_position": cache_position}
             kv_nope, kv_rope = past_key_values.update(
@@ -231,6 +279,7 @@ class QuantKimiMLAAttention(nn.Module):
         ) * self.scaling
         scores = scores + self._attention_mask(attention_mask, scores)
         probs = scores.softmax(dim=-1, dtype=torch.float32).to(hidden_states.dtype)
+        probs = self.p_cache_quantizer(probs)
         attn_output = torch.einsum("bsht,btc->bshc", probs, kv_nope)
         attn_output = torch.einsum(
             "bshc,hdc->bshd", attn_output, v_b_weight,

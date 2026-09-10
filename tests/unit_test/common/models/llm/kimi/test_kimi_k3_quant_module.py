@@ -156,10 +156,10 @@ class _MoeBlock(nn.Module):
         )
 
 
-def _args(target):
+def _args(target, quant_dtype="int"):
     groups = {
         "attn-linear": {"w_bits": 8, "a_bits": 8},
-        "attn-cache": {"kv_nope": 8, "kv_rope": 8},
+        "attn-cache": {"q": 8, "kv": 8, "p": 8},
         "mlp": {"w_bits": 8, "a_bits": 8},
         "moe": {
             "routed": {"w_bits": 8, "a_bits": 8},
@@ -167,7 +167,7 @@ def _args(target):
         },
     }
     return SimpleNamespace(
-        algos=[], quant_dtype="int", quant_target=list(target),
+        algos=[], quant_dtype=quant_dtype, quant_target=list(target),
         w_bits=8, a_bits=8, bit_policy=BitPolicy(groups), device="cpu",
     )
 
@@ -258,15 +258,16 @@ def test_quant_kimi_mla_only_quantizes_three_selected_projections():
     assert result.o_proj is source.o_proj
 
 
-def test_quant_kimi_mla_quantizes_shared_kv_branch_without_rotary():
+def test_quant_kimi_mla_quantizes_joined_q_and_kv_before_score():
     from amct_pytorch.common.models.llm.kimi.kimi_k3 import quant_module
 
     source = _MLAAttention()
     wrapper = quant_module.QuantKimiMLAAttention(
         _args(["attn-cache"]), source,
     )
-    assert wrapper.kv_nope_cache_quantizer.bits == 8
-    assert wrapper.kv_rope_cache_quantizer.bits == 8
+    assert wrapper.q_cache_quantizer.bits == 8
+    assert wrapper.kv_cache_quantizer.bits == 8
+    assert wrapper.p_cache_quantizer.bits == 8
     seen = {}
 
     class _Record(nn.Module):
@@ -278,17 +279,116 @@ def test_quant_kimi_mla_quantizes_shared_kv_branch_without_rotary():
             seen[self.name] = value.detach().clone()
             return value
 
-    wrapper.kv_nope_cache_quantizer = _Record("kv_nope")
-    wrapper.kv_rope_cache_quantizer = _Record("kv_rope")
+    wrapper.q_cache_quantizer = _Record("q")
+    wrapper.kv_cache_quantizer = _Record("kv")
+    wrapper.p_cache_quantizer = _Record("p")
 
     hidden_states = torch.randn(1, 3, 8)
+    raw_q = source.q_b_proj(source.q_a_layernorm(source.q_a_proj(hidden_states)))
+    raw_q = raw_q.view(1, 3, source.num_heads, source.q_head_dim)
     raw_kv = source.kv_a_proj_with_mqa(hidden_states)
     raw_kv_nope, raw_kv_rope = torch.split(raw_kv, [3, 2], dim=-1)
     output = wrapper(hidden_states, position_ids=torch.arange(3).unsqueeze(0))
 
-    torch.testing.assert_close(seen["kv_nope"], raw_kv_nope)
-    torch.testing.assert_close(seen["kv_rope"], raw_kv_rope.unsqueeze(2))
+    torch.testing.assert_close(seen["q"], raw_q)
+    torch.testing.assert_close(
+        seen["kv"], torch.cat([raw_kv_nope, raw_kv_rope], dim=-1),
+    )
+    assert seen["p"].dtype == hidden_states.dtype
+    torch.testing.assert_close(
+        seen["p"].sum(dim=-1), torch.ones_like(seen["p"][..., 0]),
+    )
     assert output.shape == hidden_states.shape
+
+
+def test_kimi_cache_quantizers_use_fp_when_linear_dtype_is_mxfp():
+    from amct_pytorch.common.models.llm.kimi.kimi_k3.quant_module import (
+        KimiFpActivationQuantizer,
+        QuantKimiMLAAttention,
+    )
+
+    wrapper = QuantKimiMLAAttention(
+        _args(["attn-linear", "attn-cache"], quant_dtype="mxfp"),
+        _MLAAttention(),
+    )
+
+    assert isinstance(wrapper.q_cache_quantizer, KimiFpActivationQuantizer)
+    assert isinstance(wrapper.kv_cache_quantizer, KimiFpActivationQuantizer)
+    assert isinstance(wrapper.p_cache_quantizer, KimiFpActivationQuantizer)
+    assert wrapper.q_cache_quantizer.granularity == "token_head"
+    assert wrapper.kv_cache_quantizer.granularity == "tensor"
+    assert wrapper.p_cache_quantizer.granularity == "tensor"
+    assert type(wrapper.q_cache_quantizer.quant_obj).__name__ == "QuantDequantFp"
+    assert type(wrapper.kv_cache_quantizer.quant_obj).__name__ == "QuantDequantFp"
+    assert type(wrapper.p_cache_quantizer.quant_obj).__name__ == "QuantDequantFp"
+    assert type(wrapper.q_a_proj.weight_quantizer.quant_obj).__name__ == "QuantDequantMx"
+
+
+def test_kimi_cache_quantizers_are_passthrough_with_bf16_bit_policy():
+    from amct_pytorch.common.models.llm.common.quant_apply import (
+        set_model_act_quant_state,
+    )
+    from amct_pytorch.common.models.llm.kimi.kimi_k3.quant_module import (
+        QuantKimiMLAAttention,
+    )
+
+    torch.manual_seed(3)
+    source = _MLAAttention()
+    hidden_states = torch.randn(1, 3, 8)
+    args = _args(["attn-cache"], quant_dtype="mxfp")
+    args.bit_policy = BitPolicy({})
+    wrapper = QuantKimiMLAAttention(args, source)
+    set_model_act_quant_state(wrapper, True)
+
+    assert wrapper.q_cache_quantizer.bits == 16
+    assert wrapper.kv_cache_quantizer.bits == 16
+    assert wrapper.p_cache_quantizer.bits == 16
+    torch.testing.assert_close(
+        wrapper(hidden_states), source(hidden_states), rtol=1e-5, atol=1e-6,
+    )
+
+
+def test_kimi_fp_token_head_quantization_scales_heads_independently():
+    from amct_pytorch.common.models.llm.kimi.kimi_k3.quant_module import (
+        KimiFpActivationQuantizer,
+    )
+
+    quantizer = KimiFpActivationQuantizer(
+        _args(["attn-cache"], quant_dtype="mxfp"),
+        bits=8,
+        granularity="token_head",
+    )
+    quantizer.enable = True
+    x = torch.tensor([[[[1.0, 0.73], [0.01, 0.0073]]]])
+    x_with_larger_first_head = x.clone()
+    x_with_larger_first_head[..., 0, :] *= 1000
+
+    actual = quantizer(x)
+    changed = quantizer(x_with_larger_first_head)
+
+    torch.testing.assert_close(actual[..., 1, :], changed[..., 1, :])
+
+
+def test_kimi_fp_tensor_quantization_shares_scale_across_all_values():
+    from amct_pytorch.common.models.llm.kimi.kimi_k3.quant_module import (
+        KimiFpActivationQuantizer,
+    )
+
+    quantizer = KimiFpActivationQuantizer(
+        _args(["attn-cache"], quant_dtype="mxfp"),
+        bits=8,
+        granularity="tensor",
+    )
+    quantizer.enable = True
+    x = torch.tensor([[[1.0, 0.73], [0.01, 0.0073]]])
+    x_with_larger_values = x.clone()
+    x_with_larger_values[..., 0, :] *= 1000
+
+    actual = quantizer(x)
+    changed = quantizer(x_with_larger_values)
+
+    assert torch.count_nonzero(actual[..., 1, :]) > 0
+    assert torch.count_nonzero(changed[..., 1, :]) == 0
 
 
 def test_quant_kimi_mla_matches_expanded_float_path_when_quant_is_disabled():
@@ -301,7 +401,9 @@ def test_quant_kimi_mla_matches_expanded_float_path_when_quant_is_disabled():
     hidden_states = torch.randn(2, 4, 8)
     position_ids = torch.arange(4).unsqueeze(0)
     expected = source(hidden_states, position_ids=position_ids)
-    wrapper = QuantKimiMLAAttention(_args(["attn-linear"]), source)
+    wrapper = QuantKimiMLAAttention(
+        _args(["attn-linear", "attn-cache"], quant_dtype="mxfp"), source,
+    )
     _disable_quant(wrapper)
 
     actual = wrapper(hidden_states, position_ids=position_ids)
