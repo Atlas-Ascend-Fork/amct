@@ -239,4 +239,3 @@
                                 padding_mode='zeros', device=None, dtype=None)
     Conv2dQAT.from_float(mod=conv2d_op, config=None)
     ```
-

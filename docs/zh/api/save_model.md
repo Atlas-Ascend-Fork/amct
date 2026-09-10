@@ -94,4 +94,3 @@ amct.save_model(modfied_onnx_file="./tmp/modfied_model.onnx",
     后续通过ATC工具加载压缩后的\*.onnx部署模型文件进行模型转换时，会自动读取同级目录下\*.external文件中的Tensor数据。
 
 重新执行量化时，该接口输出的上述文件将会被覆盖。
-
