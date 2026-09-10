@@ -115,31 +115,16 @@ class _MLAAttention(nn.Module):
         self.g_proj = nn.Linear(8, 4, bias=False)
         self.o_proj = nn.Linear(4, 8, bias=False)
 
-    @staticmethod
-    def _rope(value, position_ids):
-        inv_freq = 1.0 / (
-            10000.0 ** (torch.arange(0, value.shape[-1], 2) / value.shape[-1])
-        )
-        angles = position_ids.float().unsqueeze(-1) * inv_freq
-        cos, sin = angles.cos().unsqueeze(2), angles.sin().unsqueeze(2)
-        pairs = value.float().reshape(*value.shape[:-1], -1, 2)
-        even, odd = pairs.unbind(-1)
-        return torch.stack(
-            (even * cos - odd * sin, even * sin + odd * cos), dim=-1,
-        ).flatten(-2).to(value.dtype)
-
     def forward(self, hidden_states, position_ids=None, attention_mask=None):
         batch_size, seq_length, _ = hidden_states.shape
-        if position_ids is None:
-            position_ids = torch.arange(seq_length).unsqueeze(0)
+        del position_ids
         q = self.q_b_proj(self.q_a_layernorm(self.q_a_proj(hidden_states)))
         q = q.view(batch_size, seq_length, self.num_heads, self.q_head_dim)
         q_nope, q_rope = torch.split(q, [2, 2], dim=-1)
-        q_rope = self._rope(q_rope, position_ids)
         compressed_kv = self.kv_a_proj_with_mqa(hidden_states)
         kv_nope, kv_rope = torch.split(compressed_kv, [3, 2], dim=-1)
         kv_nope = self.kv_a_layernorm(kv_nope)
-        kv_rope = self._rope(kv_rope.unsqueeze(2), position_ids)
+        kv_rope = kv_rope.unsqueeze(2)
         expanded = self.kv_b_proj(kv_nope).view(
             batch_size, seq_length, self.num_heads, 4,
         )
@@ -273,7 +258,7 @@ def test_quant_kimi_mla_only_quantizes_three_selected_projections():
     assert result.o_proj is source.o_proj
 
 
-def test_quant_kimi_mla_quantizes_kv_rope_after_rotary(monkeypatch):
+def test_quant_kimi_mla_quantizes_shared_kv_branch_without_rotary():
     from amct_pytorch.common.models.llm.kimi.kimi_k3 import quant_module
 
     source = _MLAAttention()
@@ -293,11 +278,6 @@ def test_quant_kimi_mla_quantizes_kv_rope_after_rotary(monkeypatch):
             seen[self.name] = value.detach().clone()
             return value
 
-    def fake_rotary(value, freqs_cis):
-        del freqs_cis
-        return value + 10
-
-    monkeypatch.setattr(quant_module, "apply_rotary_emb", fake_rotary)
     wrapper.kv_nope_cache_quantizer = _Record("kv_nope")
     wrapper.kv_rope_cache_quantizer = _Record("kv_rope")
 
@@ -307,7 +287,7 @@ def test_quant_kimi_mla_quantizes_kv_rope_after_rotary(monkeypatch):
     output = wrapper(hidden_states, position_ids=torch.arange(3).unsqueeze(0))
 
     torch.testing.assert_close(seen["kv_nope"], raw_kv_nope)
-    torch.testing.assert_close(seen["kv_rope"], raw_kv_rope.unsqueeze(2) + 10)
+    torch.testing.assert_close(seen["kv_rope"], raw_kv_rope.unsqueeze(2))
     assert output.shape == hidden_states.shape
 
 

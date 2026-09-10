@@ -16,8 +16,6 @@
 # ----------------------------------------------------------------------------
 """Quantization wrappers for Kimi-K3 MLP, MoE and MLA modules."""
 
-import math
-
 import torch
 import torch.nn as nn
 
@@ -29,56 +27,6 @@ from amct_pytorch.quantization.modules.quant_base import (
     build_algorithms_by_target,
 )
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
-
-
-def precompute_freqs_cis(config, dim):
-    """Precompute the complex RoPE frequencies used by the reference MLA."""
-    max_seq_len = int(getattr(config, "max_position_embeddings", 4096))
-    if dim == 0:
-        return torch.empty(max_seq_len, 0, dtype=torch.complex64)
-    if dim % 2:
-        raise ValueError(f"Kimi MLA RoPE dimension must be even, got {dim}")
-
-    rope_scaling = getattr(config, "rope_scaling", None) or {}
-    base = float(getattr(config, "rope_theta", 10000.0))
-    factor = float(rope_scaling.get("factor", 1.0))
-    original_seq_len = int(
-        rope_scaling.get("original_max_position_embeddings", max_seq_len)
-    )
-    beta_fast = float(rope_scaling.get("beta_fast", 32.0))
-    beta_slow = float(rope_scaling.get("beta_slow", 1.0))
-
-    def find_correction_dim(num_rotations):
-        return dim * math.log(
-            original_seq_len / (num_rotations * 2 * math.pi)
-        ) / (2 * math.log(base))
-
-    freqs = 1.0 / (
-        base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim)
-    )
-    if max_seq_len > original_seq_len:
-        low = max(math.floor(find_correction_dim(beta_fast)), 0)
-        high = min(math.ceil(find_correction_dim(beta_slow)), dim - 1)
-        if low == high:
-            high += 0.001
-        ramp = (
-            torch.arange(dim // 2, dtype=torch.float32) - low
-        ) / (high - low)
-        smooth = 1 - ramp.clamp(0, 1)
-        freqs = freqs / factor * (1 - smooth) + freqs * smooth
-
-    angles = torch.outer(torch.arange(max_seq_len), freqs)
-    return torch.polar(torch.ones_like(angles), angles)
-
-
-def apply_rotary_emb(x, freqs_cis):
-    """Apply the complex-valued RoPE implementation from the reference MLA."""
-    if x.shape[-1] == 0:
-        return x
-    dtype = x.dtype
-    x = torch.view_as_complex(x.float().reshape(*x.shape[:-1], -1, 2))
-    freqs_cis = freqs_cis.view(1, x.size(1), 1, x.size(-1))
-    return torch.view_as_real(x * freqs_cis).flatten(3).to(dtype)
 
 
 def _cache_bits(policy, name, fallback):
@@ -119,8 +67,9 @@ class QuantKimiMLAAttention(nn.Module):
     Only q_a_proj, q_b_proj and kv_a_proj_with_mqa participate in
     ``attn-linear``.  kv_b_proj, output projection and output gate remain
     floating point.  ``attn-cache`` quantizes normalized latent KV and the
-    rotary K branch after RoPE, immediately before they are consumed or
-    written to a cache.
+    shared K branch immediately before they are consumed or written to a
+    cache. Kimi-K3 MLA uses NoPE, so neither branch receives rotary position
+    embeddings.
     """
 
     def __init__(self, quant_args, attention):
@@ -171,36 +120,10 @@ class QuantKimiMLAAttention(nn.Module):
                 quant_args, _cache_bits(policy, "kv_rope", "k"),
             ) if cache_quantizer else nn.Identity()
         )
-        freqs_cis = precompute_freqs_cis(
-            self.config, self.qk_rope_head_dim,
-        )
-        self.freqs_cis = freqs_cis
-
     def _linear(self, quant_args, linear, name):
         if not self.enable_attn_linear:
             return linear
         return QuantKimiLinear(quant_args, linear, name)
-
-    def _rope_freqs(self, position_ids, batch_size, seq_length, device):
-        if self.freqs_cis.device != device:
-            self.freqs_cis = self.freqs_cis.to(device)
-        if position_ids is None:
-            position_ids = torch.arange(
-                seq_length, device=device,
-            ).unsqueeze(0)
-        else:
-            position_ids = position_ids.to(device=device, dtype=torch.long)
-        if position_ids.shape[0] == 1 and batch_size != 1:
-            position_ids = position_ids.expand(batch_size, -1)
-        if int(position_ids.max().item()) >= self.freqs_cis.shape[0]:
-            raise ValueError(
-                "Kimi MLA position exceeds config.max_position_embeddings"
-            )
-        if position_ids.shape[0] > 1 and not torch.equal(
-            position_ids, position_ids[:1].expand_as(position_ids)
-        ):
-            raise ValueError("Kimi MLA requires identical positions across the batch")
-        return self.freqs_cis[position_ids[0]]
 
     @staticmethod
     def _as_additive_mask(mask, scores):
@@ -277,14 +200,7 @@ class QuantKimiMLAAttention(nn.Module):
             dim=-1,
         )
         kv_nope = self.kv_a_layernorm(kv_nope)
-        rope_position_ids = position_ids
-        if rope_position_ids is None and cache_position is not None:
-            rope_position_ids = cache_position.unsqueeze(0)
-        freqs_cis = self._rope_freqs(
-            rope_position_ids, batch_size, seq_length, hidden_states.device,
-        )
-        q_rope = apply_rotary_emb(q_rope, freqs_cis)
-        kv_rope = apply_rotary_emb(kv_rope.unsqueeze(2), freqs_cis)
+        kv_rope = kv_rope.unsqueeze(2)
 
         kv_nope = self.kv_nope_cache_quantizer(kv_nope)
         kv_rope = self.kv_rope_cache_quantizer(kv_rope)
