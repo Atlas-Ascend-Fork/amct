@@ -80,6 +80,10 @@ def load_llm(model_path):
     # eager attention avoids sdpa, which torch_npu redispatches to
     # npu_fusion_attention_v3 (no AscendIR converter in torchair yet)
     model.config._attn_implementation = "eager"
+    # disable KV cache: some transformers versions initialize DynamicCache
+    # with an empty tensor whose torch.cat([empty, key_states], dim=-2) is
+    # traced as a 0-dim ConcatV2 that the GE InferShape cannot handle
+    model.config.use_cache = False
     enc = AutoTokenizer.from_pretrained(model_path, use_fast=False,
                                         trust_remote_code=True)
     return model, enc
@@ -310,7 +314,10 @@ def export_torchair_air(model, export_inputs, output_dir, export_name):
         config=config,
     )
     artifacts = [f"{export_name}.air"]
-    artifacts += (["input_<i>.bin"] if len(export_inputs) > 1 else ["input.bin"])
+    if len(export_inputs) > 1:
+        artifacts.append("input_<i>.bin")
+    elif len(export_inputs) == 1:
+        artifacts.append("input.bin")
     if os.path.isdir(os.path.join(output_dir, "weights")):
         artifacts.append("weights/dynamo.pbtxt + weight files")
     else:
@@ -323,8 +330,9 @@ def main():
         description="Export an AMCT-quantized model to an offline torchair AIR graph"
     )
     parser.add_argument("--model_path", type=str, required=True,
-                        help="Path of the AMCT-quantized deploy model "
-                             "(already converted by amct.convert)")
+                        help="Path of the quantized deploy model or its "
+                             "containing directory (already converted by "
+                             "amct.convert)")
     parser.add_argument("--model_type", type=str, choices=["llm", "vlm"],
                         default="llm",
                         help="llm: causal LM; vlm: image-only VLM (e.g. CLIP)")
@@ -340,18 +348,34 @@ def main():
                              "(default: built-in sample text)")
     parser.add_argument("--image_path", type=str, default=None,
                         help="Image file or a directory of images used to "
-                             "trace the VLM forward (vlm only)")
+                             "trace the VLM forward (vlm only, optional; "
+                             "if not provided, please build and pass the "
+                             "export input yourself)")
     parser.add_argument("--batch_size", type=int, default=1,
                         help="Batch size of the VLM export input; must be <= "
                              "the number of images under --image_path")
     parser.add_argument("--dtype", type=str,
                         choices=["float16", "bfloat16"], default="float16",
-                        help="Dtype of the VLM image input")
+                        help="Dtype of the VLM image input; only applies to "
+                             "the vlm scenario, because the LLM export input "
+                             "is int64 token ids and has no float precision "
+                             "to tune")
     args = parser.parse_args()
 
-    if args.model_type == "vlm" and not args.image_path:
-        parser.error("--image_path is required when --model_type is vlm")
-    if args.model_type == "vlm" and not os.path.exists(args.image_path):
+    if args.model_type == "llm" and args.image_path is not None:
+        print(f"Warning: --image_path ({args.image_path}) 仅适用于vlm场景，"
+              "llm场景下该参数未生效。")
+    if args.model_type == "llm" and args.batch_size != 1:
+        print(f"Warning: --batch_size ({args.batch_size}) 仅适用于vlm场景，"
+              "llm场景下该参数未生效。")
+    if args.model_type == "vlm" and args.seqlen != 2048:
+        print(f"Warning: --seqlen ({args.seqlen}) 仅适用于llm场景，"
+              "vlm场景下该参数未生效。")
+    if args.model_type == "vlm" and args.input_file is not None:
+        print(f"Warning: --input_file ({args.input_file}) 仅适用于llm场景，"
+              "vlm场景下该参数未生效。")
+    if args.model_type == "vlm" and args.image_path is not None \
+            and not os.path.exists(args.image_path):
         parser.error(f"--image_path does not exist: {args.image_path}")
 
     export_name = args.export_name or os.path.basename(
@@ -362,13 +386,16 @@ def main():
         model = to_npu(model.eval())
         export_inputs = build_llm_input(enc, args.input_file, args.seqlen)
     else:
-        dtype = getattr(torch, args.dtype)
         model, processor = load_vlm(args.model_path)
         model = to_npu(model.eval())
-        device = next(model.parameters()).device
-        model, export_inputs = build_vlm_input(model, processor,
-                                                args.image_path,
-                                                args.batch_size, dtype, device)
+        if args.image_path is None:
+            export_inputs = ()
+        else:
+            dtype = getattr(torch, args.dtype)
+            device = next(model.parameters()).device
+            model, export_inputs = build_vlm_input(model, processor,
+                                                    args.image_path,
+                                                    args.batch_size, dtype, device)
 
     export_torchair_air(model, export_inputs, args.output_dir, export_name)
 
