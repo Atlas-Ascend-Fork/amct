@@ -25,9 +25,8 @@ from amct_pytorch.quantization.dtypes.fp_impl import (
     f32_to_f4_unpacked,
     pack_uint4,
     quantize_elewise,
-    shared_exponents,
     weight_dequant,
-    round_to_decimal
+    round_to_decimal,
 )
 
 BLOCK_SIZE_ROW = 128
@@ -83,7 +82,7 @@ class QuantDequantFP(torch.nn.Module):
         if self.scale_dtype == "e8m0":
             scale = round_to_decimal(amax) - self.emax
             scale = scale.clamp(min=-127, max=1e10)
-            scale = 2 ** scale
+            scale = 2**scale
         else:
             scale = amax / self.max_norm
             scale = torch.clamp(scale, min=1e-8)
