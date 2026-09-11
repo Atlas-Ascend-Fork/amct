@@ -1032,6 +1032,31 @@ class TestBuiltinEvaluators(unittest.TestCase):
         self.addCleanup(rng.__exit__, None, None, None)
         torch.manual_seed(0)
 
+    def test_js_masks_padding(self):
+        model = _MetricModel(torch.zeros(1, 4, 3))
+        # Differ from the reference only at the padded (mask=0) position.
+        changed = _MetricModel(
+            torch.tensor([[[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [9.0, 0.0, 0.0]]])
+        )
+        input_ids = torch.tensor([[0, 1, 2, 0]])
+        for mask, expect_identical in (
+            (torch.tensor([[1, 1, 1, 0]]), True),
+            (torch.tensor([[0, 1, 1, 1]]), False),
+            (None, False),
+        ):
+            batch = dict(input_ids=input_ids)
+            if mask is not None:
+                batch["attention_mask"] = mask
+            q, baseline = _resolve_quality(model, "js", 1, [batch], None)
+            if expect_identical:
+                self.assertAlmostEqual(q(changed), baseline, places=6)
+            else:
+                self.assertLess(q(changed), baseline - 1e-6)
+        with self.assertRaises(ValueError):
+            batch = dict(input_ids=input_ids, attention_mask=torch.tensor([[1, 1, 0]]))
+            q, _ = _resolve_quality(model, "js", 1, [batch], None)
+            q(changed)
+
     def test_presets_identity_and_distribution_shift(self):
         model = _MetricModel(torch.tensor([[[3.0, 2.0, 1.0], [1.0, 2.0, 3.0]]]))
         data = [torch.tensor([[0, 1]])]

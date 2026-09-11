@@ -210,7 +210,12 @@ def prune(
     (labeled top-1 accuracy; tolerance is an absolute drop from measured baseline).
     Only explicit classification treats (inputs, labels) as a labeled pair;
     auto/JS preserve positional tuples and use explicit labels metadata.
-    Search evaluator also accepts "js" (default), "fidelity", or "ppl". PPL uses
+    Search evaluator also accepts "js" (default), "fidelity", or "ppl". evaluator=None now
+    means JS instead of the prior "fidelity"; the same tolerance has a different acceptance
+    boundary under each metric, so calls relying on the old default should pass
+    evaluator="fidelity" explicitly to keep prior behavior. JS accumulates only over
+    attention_mask-valid positions (falls back to all positions without a mask), and caches
+    fp16 reference distributions (~1e-3-scale numerical noise). PPL uses
     unshifted labels or input_ids, ignoring -100 and attention_mask padding.
     For 0 <= tolerance < 1, the accepted PPL ratio is at most 1 / (1 - tolerance).
     """
