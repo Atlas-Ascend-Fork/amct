@@ -139,3 +139,7 @@ Score:  5.477707
 
 
 推理成功后，在当前目录会生成量化日志文件./amct_log/amct_pytorch.log
+
+## 3 torchair离线模型导出
+
+> 如需将量化后模型转为离线air模型，请参考[导出脚本及完整使用说明](../export/README.md)。

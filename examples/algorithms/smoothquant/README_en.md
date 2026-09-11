@@ -139,3 +139,7 @@ Under 2048-token evaluation, `smooth_strength=0.8` is more accurate than the def
 
 
 After inference succeeds, a quantization log file ./amct_log/amct_pytorch.log is generated in the current directory
+
+## 3 Exporting an offline torchair model
+
+> To convert a quantized model into an offline AIR graph, please refer to the [export script and full instructions](../export/README_en.md).
