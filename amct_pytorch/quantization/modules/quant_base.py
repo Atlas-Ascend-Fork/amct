@@ -133,7 +133,7 @@ class WeightQuantizer(torch.nn.Module):
 
         self.quant_obj = DTYPE_REGISTRY.get(args.quant_dtype)(
             self.bits,
-            True,
+            False,
             getattr(args, "block_size_col", 128),
             getattr(args, "scale_dtype", "fp32"),
         )
