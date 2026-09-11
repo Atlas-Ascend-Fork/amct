@@ -360,11 +360,11 @@ class AccuracyBasedAutoCalibrationBase:  # pylint: disable=R0902
         )
         if not is_satisfied:
             LOGGER.loge(
-                "The comparison between original_accuracy and original_accuracy does not satisfy the accuracy "
+                "The comparison between original_accuracy and quantized_accuracy does not satisfy the accuracy "
                 "requirement. Please check the metric_eval() function."
             )
             raise ValueError(
-                "Compare between original_accuracy and original_accuracy can not satisfy the acc requirement, please "
+                "Comparison between original_accuracy and quantized_accuracy cannot satisfy the accuracy requirement; please "
                 "check the metric_eval() function."
             )
 

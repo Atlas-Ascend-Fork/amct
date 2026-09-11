@@ -63,7 +63,7 @@ class InsertBiasQuantPass(BaseFusionPass):
         if cmp_ans.any():
             invalid_value = quant_bias[np.argmax(cmp_ans)]
             LOGGER.loge(
-                'Quantized bias {} of layer "{}" exceed int32 '
+                'Quantized bias {} of layer "{}" exceeds the int32 '
                 'range:[{}, {}], please add it to skip layer.'.format(
                     invalid_value, layer_name, left_bound, right_bound
                 )
