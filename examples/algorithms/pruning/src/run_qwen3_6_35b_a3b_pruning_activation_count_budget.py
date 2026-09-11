@@ -1,6 +1,7 @@
 import argparse
 import importlib.machinery
 import json
+import math
 import sys
 import time
 import types
@@ -96,7 +97,12 @@ def parse_args():
         default="huggingface",
         help="Official Pileval source or its ModelScope mirror.",
     )
-    parser.add_argument("--ratio_grid", default="0.1,0.2,0.3")
+    parser.add_argument(
+        "--ratio_grid",
+        type=parse_ratio_grid,
+        default=(0.1, 0.2, 0.3),
+        help="Comma-separated finite pruning ratios between 0 and 1.",
+    )
     parser.add_argument(
         "--report_dir",
         required=True,
@@ -109,6 +115,14 @@ def parse_args():
     )
 
     args = parser.parse_args()
+    if not math.isfinite(args.size_budget) or not 0.0 < args.size_budget <= 1.0:
+        parser.error("--size_budget must be finite and between 0 and 1")
+
+    if args.seq_len <= 0:
+        parser.error("--seq_len must be a positive integer")
+
+    if args.calibration_samples <= 0:
+        parser.error("--calibration_samples must be a positive integer")
     if not Path(args.model_path).is_dir():
         parser.error(
             f"--model_path does not exist or is not a directory: {args.model_path}"
@@ -117,15 +131,26 @@ def parse_args():
 
 
 def parse_ratio_grid(value):
-    ratios = tuple(float(item.strip()) for item in value.split(",") if item.strip())
-    if not ratios or any(ratio <= 0.0 or ratio >= 1.0 for ratio in ratios):
-        raise ValueError("ratio_grid must contain values between 0 and 1")
+    try:
+        ratios = tuple(float(item.strip()) for item in value.split(",") if item.strip())
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(
+            "ratio_grid must contain comma-separated numbers"
+        ) from error
+
+    if not ratios or any(
+        not math.isfinite(ratio) or ratio <= 0.0 or ratio >= 1.0 for ratio in ratios
+    ):
+        raise argparse.ArgumentTypeError(
+            "ratio_grid values must be finite and between 0 and 1"
+        )
+
     return ratios
 
 
 def main():
     args = parse_args()
-    ratios = parse_ratio_grid(args.ratio_grid)
+    ratios = args.ratio_grid
     workflow_start = time.time()
 
     tokenizer = AutoTokenizer.from_pretrained(
