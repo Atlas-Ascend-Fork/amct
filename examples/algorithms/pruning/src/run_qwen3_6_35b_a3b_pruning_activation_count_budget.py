@@ -111,8 +111,7 @@ def parse_args():
     args = parser.parse_args()
     if not Path(args.model_path).is_dir():
         parser.error(
-            f"--model_path does not exist or is not a directory: "
-            f"{args.model_path}"
+            f"--model_path does not exist or is not a directory: {args.model_path}"
         )
     return args
 
