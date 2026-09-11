@@ -22,10 +22,6 @@ from transformers import AutoModelForCausalLM, AutoTokenizer  # noqa: E402
 from amct_pytorch.pruning import PruneReport  # noqa: E402
 
 
-DEFAULT_MODEL = "/mnt/workspace/models/Qwen3.6-35B-A3B"
-DEFAULT_REPORT_DIR = "/mnt/workspace/qwen3_6_pruning_results"
-
-
 def load_pileval(tokenizer, seq_len, sample_count, source):
     if source == "huggingface":
         dataset = load_dataset("mit-han-lab/pile-val-backup", split="validation")
@@ -84,7 +80,11 @@ def save_pruned_model(model, tokenizer, model_path, output_dir):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_path", default=DEFAULT_MODEL)
+    parser.add_argument(
+        "--model_path",
+        required=True,
+        help="Path to the local Qwen3.6-35B-A3B model directory.",
+    )
     parser.add_argument(
         "--size_budget", type=float, required=True, choices=(0.9, 0.8, 0.5)
     )
@@ -97,13 +97,24 @@ def parse_args():
         help="Official Pileval source or its ModelScope mirror.",
     )
     parser.add_argument("--ratio_grid", default="0.1,0.2,0.3")
-    parser.add_argument("--report_dir", default=DEFAULT_REPORT_DIR)
+    parser.add_argument(
+        "--report_dir",
+        required=True,
+        help="Directory for JSON pruning reports.",
+    )
     parser.add_argument(
         "--save_model_dir",
         default="",
         help="Optional output directory for the pruned model.",
     )
-    return parser.parse_args()
+
+    args = parser.parse_args()
+    if not Path(args.model_path).is_dir():
+        parser.error(
+            f"--model_path does not exist or is not a directory: "
+            f"{args.model_path}"
+        )
+    return args
 
 
 def parse_ratio_grid(value):

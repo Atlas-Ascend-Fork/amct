@@ -3,3 +3,5 @@ torch_npu
 transformers
 datasets
 accelerate
+
+modelscope
