@@ -56,7 +56,7 @@ blockwise：
 tensorwise：
 
 1. 按原始 weight map 分 shard 读取，必要时用 scale inverse 把 FP8/MXFP 权重转换为浮点。
-2. adapter 给出 quant/ignore layer；当前只对 `quant_dtype in ("int", "int4x", "mxfp")` 调 `quant_payload()`。（核对：`rg -n "quant_dtype in" amct_pytorch/workflows/llm_deploy.py`）
+2. adapter 给出 quant/ignore layer；当前只对 `quant_dtype in ["int", "mxfp"]` 调 `quant_payload()`。（核对：`rg -n "quant_dtype in" amct_pytorch/workflows/llm_deploy.py`）
 3. 复用原 shard 文件名写新 tensor，刷新 index 和 config。
 
 ## 实施门禁
