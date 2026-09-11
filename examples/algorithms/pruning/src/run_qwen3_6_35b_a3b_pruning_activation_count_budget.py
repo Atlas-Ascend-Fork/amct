@@ -20,7 +20,7 @@ import amct_pytorch as amct  # noqa: E402
 from datasets import load_dataset  # noqa: E402
 from modelscope import MsDataset  # noqa: E402
 from transformers import AutoModelForCausalLM, AutoTokenizer  # noqa: E402
-from amct_pytorch.pruning import PruneReport  # noqa: E402
+from amct_pytorch.pruning import PruneReport, prune_diagnose  # noqa: E402
 
 
 def load_pileval(tokenizer, seq_len, sample_count, source):
@@ -151,6 +151,28 @@ def parse_ratio_grid(value):
 def main():
     args = parse_args()
     ratios = args.ratio_grid
+
+    run_parameters = {
+        "model_path": args.model_path,
+        "size_budget": args.size_budget,
+        "seq_len": args.seq_len,
+        "calibration_samples": args.calibration_samples,
+        "pileval_source": args.pileval_source,
+        "ratio_grid": list(ratios),
+        "report_dir": args.report_dir,
+        "save_model_dir": args.save_model_dir,
+    }
+
+    print("=== run parameters ===")
+    print(
+        json.dumps(
+            run_parameters,
+            ensure_ascii=False,
+            indent=2,
+        ),
+        flush=True,
+    )
+
     workflow_start = time.time()
 
     tokenizer = AutoTokenizer.from_pretrained(
@@ -174,6 +196,26 @@ def main():
     before = count_parameters(model)
     experts_before = count_experts(model)
     config = {"methods": {"moe": {"name": "activation_count", "kwargs": {}}}}
+
+    diagnosis = prune_diagnose(
+        model,
+        data=calibration,
+        config=config,
+        prune_ratio=ratios[0],
+        tolerance=0.1,
+    )
+
+    print("[prune-diagnose]")
+    print(
+        json.dumps(
+            asdict(diagnosis),
+            ensure_ascii=False,
+            indent=2,
+            default=str,
+        ),
+        flush=True,
+    )
+
     report = PruneReport()
 
     amct.prune(
@@ -217,6 +259,8 @@ def main():
                 "calibration_samples": args.calibration_samples,
                 "pileval_source": args.pileval_source,
                 "calibration_to_prune_seconds": prune_finish - workflow_start,
+                "run_parameters": run_parameters,
+                "diagnosis": asdict(diagnosis),
                 "report": asdict(report),
             },
             file,
