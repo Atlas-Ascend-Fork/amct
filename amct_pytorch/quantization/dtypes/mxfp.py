@@ -30,7 +30,7 @@ from amct_pytorch.quantization.dtypes.fp_impl import (
 
 @DTYPE_REGISTRY.register(name="mxfp", description="quant dequant for mxfp")
 class QuantDequantMx(torch.nn.Module):
-    def __init__(self, bits=8, is_act=False):
+    def __init__(self, bits=8, is_act=False, *args):
         super(QuantDequantMx, self).__init__()
         self.bits = bits
         self.is_act = is_act
