@@ -54,26 +54,13 @@ def test_trust_remote_code_rejects_explicit_value(value):
     assert exc_info.value.code == 2
 
 
-# Minimal argv per sub-command to satisfy required arguments.
+# Minimal argv per sub-command to satisfy parser-level requirements
+# (--model_name is the only always-required argument).
 REQUIRED_ARGV = {
-    "ptq": ["--model_name", "qwen3_5", "--quant_target", "mlp", "--data_dir", "/tmp/d"],
+    "ptq": ["--model_name", "qwen3_5"],
     "eval": ["--model_name", "qwen3_5"],
-    "extract_ptq_data": [
-        "--model_name",
-        "qwen3_5",
-        "--quant_target",
-        "mlp",
-        "--data_dir",
-        "/tmp/d",
-    ],
-    "deploy": [
-        "--model_name",
-        "qwen3_5",
-        "--quant_target",
-        "mlp",
-        "--quant_dtype",
-        "int",
-    ],
+    "extract_ptq_data": ["--model_name", "qwen3_5"],
+    "deploy": ["--model_name", "qwen3_5"],
     None: ["--model_name", "qwen3_5"],
 }
 
@@ -94,20 +81,6 @@ def _argv_without_model_name(command):
         idx = argv.index("--model_name")
         del argv[idx : idx + 2]
     return argv
-
-
-@pytest.mark.parametrize("command", ["ptq", "extract_ptq_data", "deploy"])
-def test_granularity_rejects_model_for_non_eval_commands(command):
-    # All required arguments except granularity are provided, so SystemExit(2)
-    # can only come from the invalid granularity choice itself.
-    argv = ["amct", "--granularity", "model"] + REQUIRED_ARGV[command]
-    with (
-        patch.object(sys, "argv", argv),
-        pytest.raises(SystemExit) as exc_info,
-    ):
-        parser_gen(command=command)
-
-    assert exc_info.value.code == 2
 
 
 def test_granularity_accepts_model_for_eval():
@@ -136,55 +109,6 @@ def test_model_name_required_for_all_commands(command):
         pytest.raises(SystemExit) as exc_info,
     ):
         parser_gen(command=command)
-
-    assert exc_info.value.code == 2
-
-
-@pytest.mark.parametrize("command", ["ptq", "extract_ptq_data"])
-def test_quant_target_required_for_ptq_commands(command):
-    argv = ["amct", "--model_name", "qwen3_5", "--data_dir", "/tmp/some_dir"]
-    with (
-        patch.object(sys, "argv", argv),
-        pytest.raises(SystemExit) as exc_info,
-    ):
-        parser_gen(command=command)
-
-    assert exc_info.value.code == 2
-
-
-@pytest.mark.parametrize("command", ["ptq", "extract_ptq_data"])
-def test_data_dir_required_for_ptq_commands(command):
-    argv = ["amct", "--model_name", "qwen3_5", "--quant_target", "mlp"]
-    with (
-        patch.object(sys, "argv", argv),
-        pytest.raises(SystemExit) as exc_info,
-    ):
-        parser_gen(command=command)
-
-    assert exc_info.value.code == 2
-
-
-def test_quant_dtype_required_for_deploy():
-    # quant_target is provided so the missing quant_dtype is the only failure.
-    argv = ["amct", "--model_name", "qwen3_5", "--quant_target", "mlp"]
-    with (
-        patch.object(sys, "argv", argv),
-        pytest.raises(SystemExit) as exc_info,
-    ):
-        parser_gen(command="deploy")
-
-    assert exc_info.value.code == 2
-
-
-def test_quant_target_required_for_deploy():
-    # quant_dtype is provided so the missing quant_target is the only failure;
-    # without it deploy would silently export unquantized weights.
-    argv = ["amct", "--model_name", "qwen3_5", "--quant_dtype", "int"]
-    with (
-        patch.object(sys, "argv", argv),
-        pytest.raises(SystemExit) as exc_info,
-    ):
-        parser_gen(command="deploy")
 
     assert exc_info.value.code == 2
 
@@ -237,8 +161,8 @@ def test_optional_args_stay_optional_for_eval():
 
 
 def test_command_specific_args_not_enforced_without_command():
-    # Without a known command, only the always-required --model_name applies;
-    # the command-specific required arguments stay optional.
+    # Command-specific values are validated by each workflow's __init__, not
+    # by the parser; without a command the parser only enforces --model_name.
     argv = ["amct", "--model_name", "qwen3_5"]
     with patch.object(sys, "argv", argv):
         args = parser_gen()

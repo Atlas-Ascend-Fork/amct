@@ -572,6 +572,25 @@ def test_eval_init_sets_all_attributes_from_args():
     assert wf.bit_policy is bp
 
 
+def test_eval_init_rejects_unsupported_granularity():
+    bp = _make_bit_policy()
+    args = SimpleNamespace(
+        model="/tmp/fake",
+        model_name="qwen3",
+        quant_target=["mlp"],
+        device="cuda:0",
+        granularity="tensor",
+        eval_mode="quant",
+        seq_len=1024,
+        output_dir="/tmp/out",
+        quant_dtype="int4",
+        bit_policy=bp,
+        seed=0,
+    )
+    with pytest.raises(ValueError, match="granularity 'block' or 'model'"):
+        LlmEvalWorkflow(args)
+
+
 # ---- run with model granularity -------------------------------------------
 
 

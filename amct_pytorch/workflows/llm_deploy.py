@@ -55,6 +55,20 @@ class LlmDeployWorkflow:
     def __init__(self, args):
         self.args = args
         self.granularity = args.granularity
+        if self.granularity not in ("block", "tensor"):
+            raise ValueError(
+                f"deploy only supports granularity 'block' or 'tensor', "
+                f"got '{self.granularity}'."
+            )
+        if self.granularity == "block":
+            if not args.quant_target:
+                raise ValueError(
+                    "deploy with --granularity block requires: --quant_target."
+                )
+            if not args.quant_dtype:
+                raise ValueError(
+                    "deploy with --granularity block requires: --quant_dtype."
+                )
         self.pipeline = None
         self.model_name = args.model_name
         self.model_path = args.model

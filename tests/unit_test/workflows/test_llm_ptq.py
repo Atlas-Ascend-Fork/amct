@@ -77,11 +77,51 @@ def test_init_rejects_multiple_quant_targets():
     args = SimpleNamespace(
         quant_target=[QUANT_TARGET_MLP, "attn-linear"],
         granularity="block",
+        data_dir="/tmp/d",
         output_dir="/tmp",
         model_name="qwen3",
         device="cpu",
     )
     with pytest.raises(ValueError, match="ptq only supports a single quant_target"):
+        LlmPtqWorkflow(args)
+
+
+def test_init_requires_quant_target():
+    args = SimpleNamespace(
+        quant_target=[],
+        granularity="block",
+        data_dir="/tmp/d",
+        output_dir="/tmp",
+        model_name="qwen3",
+        device="cpu",
+    )
+    with pytest.raises(ValueError, match="requires --quant_target"):
+        LlmPtqWorkflow(args)
+
+
+def test_init_requires_data_dir():
+    args = SimpleNamespace(
+        quant_target=[QUANT_TARGET_MLP],
+        granularity="block",
+        data_dir="",
+        output_dir="/tmp",
+        model_name="qwen3",
+        device="cpu",
+    )
+    with pytest.raises(ValueError, match="requires --data_dir"):
+        LlmPtqWorkflow(args)
+
+
+def test_init_rejects_non_block_granularity():
+    args = SimpleNamespace(
+        quant_target=[QUANT_TARGET_MLP],
+        granularity="model",
+        data_dir="/tmp/d",
+        output_dir="/tmp",
+        model_name="qwen3",
+        device="cpu",
+    )
+    with pytest.raises(ValueError, match="granularity 'block'"):
         LlmPtqWorkflow(args)
 
 
@@ -257,6 +297,7 @@ def test_init_sets_solver_key_default_and_custom():
     args = SimpleNamespace(
         quant_target=[QUANT_TARGET_MLP],
         granularity="block",
+        data_dir="/tmp/d",
         output_dir="/tmp/ptq",
         model_name="qwen3",
         device="cpu",
@@ -275,6 +316,7 @@ def test_init_solver_key_defaults_to_blockwise():
     args = SimpleNamespace(
         quant_target=["attn-linear"],
         granularity="block",
+        data_dir="/tmp/d",
         output_dir="/tmp",
         model_name="qwen3",
         device="cpu",
@@ -668,6 +710,7 @@ def test_init_applies_seed_from_args(monkeypatch):
     args = SimpleNamespace(
         quant_target=[QUANT_TARGET_MLP],
         granularity="block",
+        data_dir="/tmp/d",
         device=torch.device("cpu"),
         model_name="qwen3",
         seed=13,

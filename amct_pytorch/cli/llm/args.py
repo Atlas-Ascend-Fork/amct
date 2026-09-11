@@ -21,24 +21,6 @@ import os
 
 from amct_pytorch.quantization.bit_policy import BitPolicy
 
-# Granularity choices per sub-command: model (modelwise) is eval-only for now,
-# tensor is deploy-only. Unknown commands fall back to the full set.
-GRANULARITY_CHOICES = {
-    "eval": ("block", "model"),
-    "ptq": ("block",),
-    "extract_ptq_data": ("block",),
-    "deploy": ("block", "tensor"),
-}
-_DEFAULT_GRANULARITY_CHOICES = ("block", "model", "tensor")
-
-# Command-specific arguments without a safe default; eval needs none extra.
-COMMAND_SPECIFIC_REQUIRED_ARGS = {
-    "eval": (),
-    "ptq": ("quant_target", "data_dir"),
-    "extract_ptq_data": ("quant_target", "data_dir"),
-    "deploy": (),
-}
-
 
 def _validate_eval_mode(args):
     if args.eval_mode != "bf16":
@@ -51,23 +33,7 @@ def _validate_eval_mode(args):
         )
 
 
-def _validate_deploy_args(parser, args):
-    # Block-wise export needs explicit quant_target/quant_dtype.
-    if args.granularity != "block":
-        return
-    missing = [
-        name for name in ("quant_target", "quant_dtype") if not getattr(args, name)
-    ]
-    if missing:
-        parser.error(
-            "the following arguments are required for deploy with "
-            "--granularity block: " + ", ".join(f"--{name}" for name in missing)
-        )
-
-
 def parser_gen(command=None):
-    granularity_choices = GRANULARITY_CHOICES.get(command, _DEFAULT_GRANULARITY_CHOICES)
-    required_args = COMMAND_SPECIFIC_REQUIRED_ARGS.get(command, ())
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
@@ -93,12 +59,9 @@ def parser_gen(command=None):
         '--granularity',
         type=str,
         default='block',
-        choices=granularity_choices,
-        help='Granularity used by the sub-command. Choices: {}. Defaults to '
-        'block. "model" (eval only) loads the whole model for PPL; "tensor" '
-        '(deploy only) converts weights tensor-wise (dequant/direct quant).'.format(
-            ', '.join(granularity_choices)
-        ),
+        help='Granularity used by the sub-command. Defaults to block. '
+        '"model" (eval only) loads the whole model for PPL; "tensor" '
+        '(deploy only) converts weights tensor-wise (dequant/direct quant).',
     )
     parser.add_argument(
         '--seed', type=int, default=42, help='Random seed for HuggingFace and PyTorch.'
@@ -107,7 +70,6 @@ def parser_gen(command=None):
         '--quant_target',
         nargs="+",
         default=[],
-        required='quant_target' in required_args,
         choices=["mlp", "moe", "attn-linear", "attn-cache"],
         help='Only support [mlp, moe, attn-linear, attn-cache]',
     )
@@ -117,8 +79,8 @@ def parser_gen(command=None):
     parser.add_argument(
         '--data_dir',
         default="",
-        required='data_dir' in required_args,
-        help='Directory holding extract_ptq_data outputs; required by ptq.',
+        help='Directory holding extract_ptq_data outputs; '
+        'required by extract_ptq_data and ptq.',
     )
 
     parser.add_argument(
@@ -141,7 +103,6 @@ def parser_gen(command=None):
         "--quant_dtype",
         type=str,
         default="",
-        required='quant_dtype' in required_args,
         choices=['int', 'mxfp', 'hifp'],
         help='Quantization data type.',
     )
@@ -207,8 +168,6 @@ def parser_gen(command=None):
 
     if command == "eval":
         _validate_eval_mode(args)
-    if command == "deploy":
-        _validate_deploy_args(parser, args)
 
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
