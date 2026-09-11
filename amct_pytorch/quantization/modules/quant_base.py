@@ -89,7 +89,10 @@ class ActivationQuantizer(torch.nn.Module):
         self._init_algo()
 
         self.quant_obj = DTYPE_REGISTRY.get(args.quant_dtype)(
-            self.bits, True, args.block_size_col, args.scale_dtype
+            self.bits,
+            True,
+            getattr(args, "block_size_col", 128),
+            getattr(args, "scale_dtype", "fp32"),
         )
         self.is_observe = False
 
@@ -129,7 +132,10 @@ class WeightQuantizer(torch.nn.Module):
         self._init_algo()
 
         self.quant_obj = DTYPE_REGISTRY.get(args.quant_dtype)(
-            self.bits, True, args.block_size_col, args.scale_dtype
+            self.bits,
+            True,
+            getattr(args, "block_size_col", 128),
+            getattr(args, "scale_dtype", "fp32"),
         )
         self.is_observe = False
 
