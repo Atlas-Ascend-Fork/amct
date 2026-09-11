@@ -211,6 +211,32 @@ def load_qwen36_moe(
     return model, tokenizer
 
 
+def load_qwen3_dense(
+    model_path,
+    torch_dtype=torch.bfloat16,
+    trust_remote_code=True,
+    device_map=None,
+):
+    """Load a Qwen3 Dense causal LM such as Qwen3-0.6B."""
+    return load_qwen36_moe(
+        model_path,
+        torch_dtype=torch_dtype,
+        trust_remote_code=trust_remote_code,
+        device_map=device_map,
+    )
+
+
+def as_causal_lm_batches(batches):
+    """Wrap token-id tensors as dict batches for prune_finetune()."""
+    wrapped = []
+    for batch in batches:
+        if isinstance(batch, dict):
+            wrapped.append(batch)
+        else:
+            wrapped.append({"input_ids": batch})
+    return wrapped
+
+
 def build_pileval_batches(tokenizer, n_samples, seq_len):
     from amct_pytorch.common.datasets.preproc import get_pileval
 

@@ -273,3 +273,92 @@ Measured on cloud A3 with `--device-map auto`, WikiText2 PPL, `seq_len=4096`,
 Notes: `0.1` / `0.2` find no acceptable candidate on the default grid (same class of valid
 outcome as task 1). At `0.5`, ΔPPL≈0.278 ≤ 0.5 so pruning applies (~9.45% cut). Values come
 from each tier's `result.json`.
+
+## 5 Community Task 17: Qwen3-0.6B Dense `reconstruct` + `finetune` (ratio)
+
+Corresponds to Issue [#183](https://gitcode.com/cann/amct/issues/183) task 17: start from the
+unpruned Qwen3-0.6B checkpoint, apply Dense FFN intermediate-dim `reconstruct` pruning at a
+fixed `prune_ratio=0.5`, then recover with `prune_finetune()`.
+Script: [`src/run_qwen3_0_6b_pruning_reconstruct_ratio_finetune.py`](src/run_qwen3_0_6b_pruning_reconstruct_ratio_finetune.py).
+
+### 5.1 Run Instructions
+
+- Calibration: Pileval (`mit-han-lab/pile-val-backup`), default `8` samples, `seq_len=512`
+- Evaluation: WikiText2 `wikitext-2-raw-v1` test split, fixed `seq_len=4096`, full split by default
+- Mode: `ratio`. Only `methods.dense.name=reconstruct` and `kwargs.prune_ratio=0.5`; `recovery` uses the library default `ls`
+- Do **not** pass `tolerance` / `size_budget` / `evaluator` to `amct.prune()` (ratio mode errors if they are passed)
+- Recovery train: `prune_finetune(model, data=pileval_batches, steps=200, lr=1e-4)` on the same Pileval calib batches
+- Single card: `npu:0`. Outputs go to the relative placeholder `./outputs/...`; do not commit weights
+- The script prints the full runtime arguments and writes diagnose / `PruneReport` / metrics under `save_dir`
+
+```bash
+# from examples/algorithms/pruning/
+source /home/developer/Ascend/cann/set_env.sh
+export HF_ENDPOINT=https://hf-mirror.com
+export HF_HUB_DISABLE_XET=1
+
+python3 src/run_qwen3_0_6b_pruning_reconstruct_ratio_finetune.py \
+  --model-path /path/to/Qwen3-0.6B \
+  --save-dir ./outputs/qwen3_0_6b_reconstruct_ratio_finetune \
+  --device npu:0 \
+  --prune-ratio 0.5 \
+  --calib-samples 8 \
+  --calib-seq-len 512 \
+  --seq-len 4096 \
+  --finetune-steps 200 \
+  --finetune-lr 1e-4
+```
+
+Key arguments:
+
+| Arg | Meaning |
+|:--|:--|
+| `--model-path` | Local Qwen3-0.6B weight directory (placeholder) |
+| `--prune-ratio` | Dense-domain removal ratio; this task has only the `0.5` tier |
+| `--calib-samples` / `--calib-seq-len` | Pileval calibration count/length (default 8 / 512) |
+| `--seq-len` | WikiText2 evaluation length, fixed at 4096 |
+| `--finetune-steps` / `--finetune-lr` | `prune_finetune` steps and learning rate (default 200 / 1e-4) |
+| `--device` | Single-card device, default `npu:0` |
+| `--save-dir` | Relative output directory for reports and optional weights |
+| `--eval-batches` | Optional eval-batch cap; omit for the full test split |
+
+Prune time: from the start of calibration collection through `amct.prune()` (excludes finetune). Finetune time is recorded separately.
+
+### 5.2 Diagnostics and Report
+
+The script prints the full runtime arguments, the `prune_diagnose()` summary, `PruneReport.as_dict()` after pruning, and a short finetune-loss summary. The text below is from the local run; originals are in `./outputs/qwen3_0_6b_reconstruct_ratio_finetune/diagnose_summary.txt` and `prune_report.json`.
+
+`prune_diagnose()` dry-runs a model copy: fixed-ratio prune is available (about 22.2% cut), but the copy lands on CPU while calib batches stay on `npu:0`, so the forward check and acc search fail with a device mismatch. Formal `amct.prune()` is unaffected (the original model stays on `npu:0`).
+
+```text
+[prune-diagnose] prunable targets: cnn=0, dense=28, moe=0
+  fixed-ratio prune: available (cut 22.2%, forward failed)
+  acc binary search: unavailable
+  - acc search dry-run error: RuntimeError: Expected all tensors to be on the same device, but found at least two devices, npu:0 and cpu! (when checking argument for argument indices in method wrapper_NPU__embedding)
+```
+
+`PruneReport.as_dict()` summary: `backend=huggingface`, `params_before=596049920`, `params_after=463929344`, all 28 `model.layers.*.mlp.down_proj` layers use `reconstruct` + `ls` (`3072 -> 1536`), `per_layer_sparsity=0.5`, `warnings=[]`. Full dict: local `prune_report.json`.
+
+```json
+{
+  "backend": "huggingface",
+  "params_before": 596049920,
+  "params_after": 463929344,
+  "budget_unreachable": false,
+  "prunable_fraction": null,
+  "warnings": [],
+  "allocation_choice": null,
+  "events": "28x dense/reconstruct ls 3072->1536 on model.layers.{0..27}.mlp.down_proj; cnn/moe: no targets",
+  "per_layer_sparsity": "model.layers.{0..27}.mlp.down_proj = 0.5"
+}
+```
+
+### 5.3 Result Table
+
+Measured on a single Ascend 910 (`npu:0`), WikiText2 test, `seq_len=4096` (73 batches). Calibration: 8 Pileval samples, `seq_len=512`. Finetune: `steps=200`, `lr=1e-4` on those 8 Pileval batches.
+
+| Model | Method | Setting | Baseline PPL | Pruned PPL | Post-process PPL | Params (before -> after) | Reduction | Prune time (min) |
+| --- | --- | --- | ---: | ---: | ---: | --- | ---: | ---: |
+| Qwen3-0.6B | `reconstruct` + `finetune` | `prune_ratio=0.5` | 19.153452 | 78.375824 | 1863.838989 | 596049920 -> 463929344 | 22.17% | 0.51 |
+
+Finetune time: 0.46 min (not included in prune time). Train loss fell from 3.190 to 0.020 while eval PPL rose, i.e. 200 steps on 8 short sequences overfit the calib set. Numbers are measured; hyperparameters match the task-book defaults.
