@@ -40,3 +40,7 @@ coverage.xml
 oat_reports/
 
 log/
+
+# Local community-sample artifacts (weights / PTQ data / reports)
+examples/algorithms/pruning/outputs/
+examples/models/qwen3/outputs/

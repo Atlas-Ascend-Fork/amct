@@ -263,3 +263,90 @@ no prune ratio met tolerance 0.100 across 3 candidates; model left unchanged.
 
 说明：`0.1` / `0.2` 在默认网格下无候选满足绝对 PPL 容差（与任务 1 同类，属有效结果）；
 `0.5` 档 ΔPPL≈0.278 ≤ 0.5，剪枝生效，削减率约 9.45%。字段来自各档 `result.json`。
+
+## 5 社区任务 17：Qwen3-0.6B Dense `reconstruct` + `finetune`（ratio）
+
+对应 Issue [#183](https://gitcode.com/cann/amct/issues/183) 任务 17：从未经剪枝的 Qwen3-0.6B 出发，对 Dense FFN 中间维做 `reconstruct` 固定比例剪枝（`prune_ratio=0.5`），再用 `prune_finetune()` 做短恢复训练。
+脚本：[`src/run_qwen3_0_6b_pruning_reconstruct_ratio_finetune.py`](src/run_qwen3_0_6b_pruning_reconstruct_ratio_finetune.py)。
+
+### 5.1 运行说明
+
+- 校准集：Pileval（`mit-han-lab/pile-val-backup`），默认 `8` 个样本，`seq_len=512`
+- 评估集：WikiText2 `wikitext-2-raw-v1` test split，固定 `seq_len=4096`，默认全量
+- 执行模式：`ratio`。只写 `methods.dense.name=reconstruct` 与 `kwargs.prune_ratio=0.5`，`recovery` 走库默认 `ls`
+- **不要**向 `amct.prune()` 传入 `tolerance` / `size_budget` / `evaluator`（ratio 模式下传入会报错）
+- 恢复训练：`prune_finetune(model, data=pileval_batches, steps=200, lr=1e-4)`，数据为校准用的 Pileval 批次
+- 单卡：`npu:0`。输出目录为相对占位路径 `./outputs/...`，不提交权重
+- 脚本启动时打印完整运行参数，并把 `prune_diagnose()` / `PruneReport` / 指标写入 `save_dir`
+
+```bash
+# 仓库根目录或本目录均可；以下在 examples/algorithms/pruning/ 下执行
+source /home/developer/Ascend/cann/set_env.sh
+export HF_ENDPOINT=https://hf-mirror.com
+export HF_HUB_DISABLE_XET=1
+
+python3 src/run_qwen3_0_6b_pruning_reconstruct_ratio_finetune.py \
+  --model-path /path/to/Qwen3-0.6B \
+  --save-dir ./outputs/qwen3_0_6b_reconstruct_ratio_finetune \
+  --device npu:0 \
+  --prune-ratio 0.5 \
+  --calib-samples 8 \
+  --calib-seq-len 512 \
+  --seq-len 4096 \
+  --finetune-steps 200 \
+  --finetune-lr 1e-4
+```
+
+主要参数：
+
+| 参数 | 含义 |
+|:--|:--|
+| `--model-path` | 本地 Qwen3-0.6B 权重目录（占位路径） |
+| `--prune-ratio` | Dense 域移除比例；本任务只有 `0.5` 一档 |
+| `--calib-samples` / `--calib-seq-len` | Pileval 校准条数与长度（默认 8 / 512） |
+| `--seq-len` | WikiText2 评估长度，固定 4096 |
+| `--finetune-steps` / `--finetune-lr` | `prune_finetune` 步数与学习率（默认 200 / 1e-4） |
+| `--device` | 单卡设备，默认 `npu:0` |
+| `--save-dir` | 报告与可选权重的相对输出目录 |
+| `--eval-batches` | 可选，截断评测 batch；默认全量 test split |
+
+剪枝时长口径：从开始收集校准数据到 `amct.prune()` 完成（不含 finetune）。finetune 耗时单独记录。
+
+### 5.2 诊断与报告
+
+脚本依次打印完整运行参数、`prune_diagnose()` 摘要、正式剪枝后的 `PruneReport.as_dict()`，以及 finetune 损失摘要。下列内容来自本机实测，原文见 `./outputs/qwen3_0_6b_reconstruct_ratio_finetune/diagnose_summary.txt` 与 `prune_report.json`。
+
+`prune_diagnose()` 在模型副本上做 dry-run：固定比例试剪可用（削减约 22.2%），但副本落在 CPU、校准 batch 在 `npu:0`，前向检查与 acc search 因设备不一致失败。这不影响正式 `amct.prune()`（原模型保持在 `npu:0`）。
+
+```text
+[prune-diagnose] prunable targets: cnn=0, dense=28, moe=0
+  fixed-ratio prune: available (cut 22.2%, forward failed)
+  acc binary search: unavailable
+  - acc search dry-run error: RuntimeError: Expected all tensors to be on the same device, but found at least two devices, npu:0 and cpu! (when checking argument for argument indices in method wrapper_NPU__embedding)
+```
+
+`PruneReport.as_dict()` 摘要：`backend=huggingface`，`params_before=596049920`，`params_after=463929344`，28 层 `model.layers.*.mlp.down_proj` 均为 `reconstruct` + `ls`，`3072 -> 1536`，`per_layer_sparsity=0.5`，`warnings=[]`。完整字典见本地 `prune_report.json`。
+
+```json
+{
+  "backend": "huggingface",
+  "params_before": 596049920,
+  "params_after": 463929344,
+  "budget_unreachable": false,
+  "prunable_fraction": null,
+  "warnings": [],
+  "allocation_choice": null,
+  "events": "28x dense/reconstruct ls 3072->1536 on model.layers.{0..27}.mlp.down_proj; cnn/moe: no targets",
+  "per_layer_sparsity": "model.layers.{0..27}.mlp.down_proj = 0.5"
+}
+```
+
+### 5.3 结果表
+
+实测环境：单卡 Ascend 910，`npu:0`，WikiText2 test，`seq_len=4096`（73 个 batch）。校准 Pileval 8 条、`seq_len=512`。finetune：`steps=200`，`lr=1e-4`，数据为上述 8 条 Pileval。
+
+| 模型 | 方法 | 实验设置 | 基线 PPL | 剪枝后 PPL | 后处理 PPL | 参数量（前 → 后） | 参数削减率 | 剪枝时长（min） |
+| --- | --- | --- | ---: | ---: | ---: | --- | ---: | ---: |
+| Qwen3-0.6B | `reconstruct` + `finetune` | `prune_ratio=0.5` | 19.153452 | 78.375824 | 1863.838989 | 596049920 → 463929344 | 22.17% | 0.51 |
+
+finetune 耗时：0.46 min（不计入剪枝时长）。训练损失从 3.190 降到 0.020，但评测 PPL 上升，说明 8 条短序列、200 step 的短训在本设置下过拟合校准集；结果按实测填写，超参与任务书默认值一致。
