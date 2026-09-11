@@ -1,4 +1,4 @@
-# 子能力：deploy-export-impl
+# 子能力：llm-deploy
 
 ## 简介
 
@@ -6,7 +6,7 @@
 
 ## 职责边界
 
-本文件只负责导出实现与 review；实际运行导出并生成交付目录转 `deploy-export`。
+本文件只负责导出实现与 review；实际运行 deploy 命令并生成交付目录转 `deploy-export` skill。
 
 ## 真实导出链
 
@@ -33,11 +33,11 @@ deploy CLI -> LlmDeployWorkflow -> adapter/dtype/algorithm 状态
 | --- | --- | --- |
 | index metadata、单/多 shard、剩余权重 | `_load_weight_index()`、`_refresh_weight_index()` | `_write_remaining_original_weights()`、下游 loader 契约 |
 | `config.json` / `quantization_config` | `_refresh_config()`、`generate_quant_config()` | adapter `cache_scheme()` / `bits_scheme()`；公开字段成立时按 `validation.md` 的公共接口检查 |
-| blockwise payload/binding | `_run_blockwise()`、`export_block_deploy()`、`QuantLinear.export_deploy()` | 命中 adapter 的 `iter_deploy_bindings()`、PTQ 参数回载；payload 变化时读 `quant-dtype-modules` 或 `llm-algorithm` |
+| blockwise payload/binding | `_run_blockwise()`、`export_block_deploy()`、`QuantLinear.export_deploy()` | 命中 adapter 的 `iter_deploy_bindings()`、PTQ 参数回载；payload 变化时读 `quant-dtype-module` 或 `llm-algorithm` |
 | tensorwise 转换 | `_run_tensorwise()`、`convert_state_dict()`、`quant_payload()` | 命中 adapter 的 `generate_tensorwise_*()`、`get_scale_name()`、`block_size()` |
 | 用户文档或交付格式 | 实际产物写入点、`docs/zh/AMCT_Pytorch_LLM.md` 的 deploy 小节 | 命中的 examples 和 `validation.md` 的文档检查 |
 
-先用 `rg` 确认定义和调用方。当前源码中 `_refresh_config_tensor()`、`_convert_tensor()` 只有定义和直接单测，没有运行时调用方；不得把它们描述成当前 bf16/tensorwise 主路径。blockwise 与 tensorwise 当前都在结束时调用 `_refresh_config()`。
+先用 `rg` 确认定义和调用方。当前源码中 `_refresh_config_tensor()`、`_convert_tensor()` 只有定义和直接单测，没有运行时调用方；不得把它们描述成当前 bf16/tensorwise 主路径。（快照；核对：`grep -n "self\._convert_tensor\b\|self\._refresh_config_tensor" amct_pytorch/workflows/llm_deploy.py` 应无命中，出现命中即说明已接通、本论断过期）blockwise 与 tensorwise 当前都在结束时调用 `_refresh_config()`。（核对：`rg -n "self\._refresh_config\(" amct_pytorch/workflows/llm_deploy.py`）
 
 ### 验证入口
 
@@ -56,7 +56,7 @@ blockwise：
 tensorwise：
 
 1. 按原始 weight map 分 shard 读取，必要时用 scale inverse 把 FP8/MXFP 权重转换为浮点。
-2. adapter 给出 quant/ignore layer；当前只对 `quant_dtype in ["int", "mxfp"]` 调 `quant_payload()`。
+2. adapter 给出 quant/ignore layer；当前只对 `quant_dtype in ("int", "int4x", "mxfp")` 调 `quant_payload()`。（核对：`rg -n "quant_dtype in" amct_pytorch/workflows/llm_deploy.py`）
 3. 复用原 shard 文件名写新 tensor，刷新 index 和 config。
 
 ## 实施门禁
@@ -67,7 +67,7 @@ tensorwise：
 4. 修改已有 helper 前必须反查所有调用方；无调用 helper 不能作为当前行为依据。
 5. 新 dtype payload 先确认 `export_deploy()` 字段和 `quant_payload()`/`export_block_deploy()` 命名规则，再修改 workflow；数值与 packing 留在 dtype。
 6. algorithm 有自定义 `quantize()` 或 `export_deploy()` 时，确认 PTQ 参数已回载且 hook 契约可被 `WeightQuantizer.export_deploy()` 消费。
-7. adapter 只提供 binding、ignore、bits/cache scheme 等模型事实；workflow 不加入模型名分支。需要新增或结构性修改 adapter 时转 `model-adapter`。
+7. adapter 只提供 binding、ignore、bits/cache scheme 等模型事实；workflow 不加入模型名分支。需要新增或结构性修改 adapter 时转 `model-adapter` skill。
 8. tensorwise 逐 shard 行为要核对 `loaded_files` 生命周期和峰值内存，不把“按 shard 循环”等同于内存已受控。
 
 ## 产物与测试矩阵

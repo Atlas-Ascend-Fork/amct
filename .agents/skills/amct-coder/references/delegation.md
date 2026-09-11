@@ -1,8 +1,8 @@
-# 职责交界
+# 职责交界：delegation
 
 ## 使用原则
 
-`amct-coder` 只承接 AMCT 源码编码、实现规划、调试和 review。开始任务时以当前会话已发现 skill 的 `name + description` 为外部职责事实源；本文件不复制完整 skill 清单，只说明最容易与编码任务混淆的稳定交界。
+`amct-coder` 只承接 AMCT 源码编码、实现规划、调试和 review。开始任务时以当前会话已发现 skill 的 `name + description` 为外部职责事实源（完整优先级：用户指定 > 专门 skill description > 本 skill 流程，见 [SKILL.md](../SKILL.md) 职责归属节）；本文件不复制完整 skill 清单，只说明最容易与编码任务混淆的稳定交界。
 
 先区分用户要的是实现代码、评审拟议落点，还是实际执行操作：
 
@@ -17,7 +17,7 @@
 
 | 交界 | amct-coder 承接 | 更专门职责 |
 | --- | --- | --- |
-| 模型层 | 已有 adapter/wrapper 的局部非结构 bug、契约 review | 新模型注册、`PtqUnit`/quant block、attention/MLP/MoE wrapper 的新增或结构性修改由 `model-adapter` 承接 |
+| 模型层 | 已有 adapter/wrapper 的局部非结构 bug、契约 review | 新模型注册、`PtqUnit`/quant block、attention/MLP/MoE wrapper 的新增或结构性修改由 `model-adapter` skill 承接 |
 | NPU 算子 | `amct_pytorch` 调用、可选 import、fallback 和报错时机 | Ascend C kernel、C++ extension、schema、Meta、构建和 wheel 由 `amct-ops-dev` 承接 |
 | eval/extract/PTQ | workflow、data I/O、PPL 等实现代码 | 实际运行命令、生成实验结果和结果判读由当前发现的执行或 reviewer skill 承接 |
 | deploy | deploy workflow、safetensors/index/config 等实现代码 | 实际生成 deploy-ready 目录和交付文档由当前发现的导出 skill 承接 |
@@ -35,7 +35,7 @@
 | “这个 PTQ 算法相对直转有没有收益” | 转算法收益判读类 skill，例如 `algorithm-validation` | 只核对算法结果文件或参数回载代码是否可信 |
 | “给这个已适配模型推荐下一步算法” | 转推荐类 skill，例如 `algorithm-recommendation` | 只核对仓库算法注册和适用范围事实 |
 | “端到端量化这个模型 / 只适配 / 只导出” | 转编排类 skill，例如 `quant-workflow` | 只处理编排中发现的源码缺陷或契约 review |
-| “新增某模型 adapter / attention wrapper / MoE wrapper” | 转 `model-adapter` | review 分层、`PtqUnit`、关量化等价和下游契约 |
+| “新增某模型 adapter / attention wrapper / MoE wrapper” | 转 `model-adapter` skill | review 分层、`PtqUnit`、关量化等价和下游契约 |
 | “写 NPU kernel / schema / Meta / CMake / wheel” | 转 `amct-ops-dev` | 只处理 `amct_pytorch` Python 侧调用和 fallback |
 | “导出 deploy-ready 目录并写交付文档” | 转 `deploy-export` | 只处理 deploy 实现代码、配置生成和 public API 问题 |
 
@@ -43,7 +43,7 @@
 
 ## 模型层契约
 
-新增或结构性修改 `amct_pytorch/common/models/llm/...` 时进入 `model-adapter`。amct-coder 在模型层只保留：
+新增或结构性修改 `amct_pytorch/common/models/llm/...` 时进入 `model-adapter` skill。amct-coder 在模型层只保留：
 
 1. 核对 `PtqUnit.kind`、hook 名、deploy binding 与下游消费口径。
 2. review 越层、注册缺失、关量化不等价和验证缺失。
@@ -53,6 +53,6 @@
 
 ## 继续执行与询问
 
-BLOCKER 只停止错误落点或错误方案。正确替代路径明确、仍属于用户目标且不需要新授权时，直接进入对应流程继续完成任务。只有输入输出、数值语义、schema、兼容范围或用户控制方式等关键契约缺失，且不同答案会改变实现方案时，才询问用户；询问前先按 SKILL.md「契约缺失时的处理形态」确认该问题不能由源码、注册入口或测试消歧。
+BLOCKER 的处理形态与何时询问用户以 [process-rules「全局 BLOCKER」与「契约缺失的处理形态」](process-rules.md#契约缺失的处理形态) 为唯一出处。本文件的补充只有一条：询问用户前，先确认该问题不能由源码、注册入口或测试消歧（与 SKILL.md 核心流程「事实纪律」的固定消歧顺序一致），且只问编码与操作流程交界处的契约，不把 amct-coder 内部可自查的问题带出。
 
 进入更专门 skill 后要实际加载并遵循其流程，不能由 amct-coder 模仿实现后只口头说明“已经委派”。混合任务完成后，只对共享签名、数据格式、保存/加载和验证证据做收口，不重新接管其它 skill 的内部职责。

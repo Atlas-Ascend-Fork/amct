@@ -29,7 +29,7 @@ CLI --algos -> ALGO_REGISTRY/targets -> quant module 分流
 
 - 上游：算法由 CLI `--algos` 传入，经 `ALGO_REGISTRY`、`register_algorithms()` 和 `build_algorithms_by_target()` 构建。
 - 平级：算法只通过 quantizer hook、module buffer/parameter 或 structure transform 影响量化，不直接读取 dataset 或 workflow。
-- 下游：`ptq-solver-params` 消费 `trainable_params()`、buffer 和 PTQ 参数导出；`deploy-export-impl` 消费算法的 `export_deploy()` 或已回载状态。
+- 下游：`llm-solving-lifecycle` 消费 `trainable_params()`、buffer 和 PTQ 参数导出；`llm-deploy` 消费算法的 `export_deploy()` 或已回载状态。
 - 算法影响 dtype、solver、workflow、CLI 或 deploy 时，先用本手册列出的源码和测试确认真实跨契约影响，再按“跨契约扩张门”选择 owner；不要因题面同时出现多个层名就一次性读取多份 Reference。
 
 ## 执行步骤
@@ -53,13 +53,13 @@ helper、hook 或导出函数存在但找不到 caller 时，明确记为“源�
 
 | 未解决契约 | owner Reference |
 | --- | --- |
-| 数值格式、packing 或 real quant dtype 语义 | `quant-dtype-modules` |
-| 样本遍历、trainable 参数、finalize、保存或回载 | `ptq-solver-params` |
-| unit 输入、GT、阶段数据或 workflow 调度 | `llm-data-workflow` |
-| deploy payload、index、config 或下游消费 | `deploy-export-impl` |
+| 数值格式、packing 或 real quant dtype 语义 | `quant-dtype-module` |
+| 样本遍历、trainable 参数、finalize、保存或回载 | `llm-solving-lifecycle` |
+| unit 输入、GT、阶段数据或 workflow 调度 | `llm-cli-dataflow` |
+| deploy payload、index、config 或下游消费 | `llm-deploy` |
 | CLI 公开值、配置兼容性或用户可见接口 | `validation.md` 的公共接口检查 |
 
-默认一次只加载最阻塞的一份辅助 Reference。读取前记录：未解决契约、已经核对的源码/测试和该 owner 的职责。只有第一份辅助资料与新增源码证据仍无法回答另一个会改变方案的问题时，才能加载第二份，并先说明超出默认预算的原因。其它受影响面只标记 `affected` 或条件式验证，不为列全链路而全文预读。
+默认先只加载最阻塞的一份辅助 Reference。读取前记录：未解决契约、已经核对的源码/测试和该 owner 的职责。只有第一份辅助资料与新增源码证据仍无法回答另一个会改变方案的问题时，才考虑加载第二份，并说明触发扩张的冲突或缺失证据。其它受影响面只标记 `affected` 或条件式验证，不为列全链路而全文预读。
 
 达到以下条件后停止扩张：算法体系与 target 已确认；执行形态已确定或明确保持 `pending`；数据驱动者、完成动作和活跃保存/消费链已有证据或明确标为未接通；剩余未知项已能用条件分支表达。只读规划默认输出这些结论和最小验证，不重复枚举全部算法实现、测试目录或跨层文件清单。
 
@@ -84,7 +84,7 @@ helper、hook 或导出函数存在但找不到 caller 时，明确记为“源�
 | 保存 | 活跃 caller 最终取得哪些 buffer/权重/scale/offset；不能只引用未接通 helper |
 | eval/deploy | 用什么 `--algos` 和参数重建结构；回载后哪个 hook 消费状态 |
 
-当前源码需要特别复核三点：`QuantLinear.forward()` 的非 eval 分支会调用 `WeightQuantizer.observe_input()`；`LlmPtqWorkflow._prepare_unit_batch()` 生成 GT 时关闭量化但开启 observe；`BlockwiseSolver.solve()` 在没有 trainable 参数时于遍历 dataloader 前返回。因此，一次性统计算法若没有额外已接通的驱动和 finalize 调用，不能声称现有 PTQ 流程能够完成统计优化。
+当前源码需要特别复核三点（快照；作为落点依据前先执行核对命令，冲突时以命令结果为准）：`QuantLinear.forward()` 的非 eval 分支会调用 `WeightQuantizer.observe_input()`（核对：`rg -n -B4 -A2 "observe_input" amct_pytorch/quantization/modules/quant_linear.py`，确认命中行位于 `else:` 非 eval 分支内、且与缓存 eval 权重的 `if` 分支互斥）；`LlmPtqWorkflow._prepare_unit_batch()` 生成 GT 时关闭量化但开启 observe（核对：`rg -n -A12 "def _prepare_unit_batch" amct_pytorch/workflows/llm_ptq.py`，在函数体内看到 `set_model_to_observe(unit.module, True)` 后紧跟 `materialize_gt` 的 try/finally 结构即证据；上下文不足 12 行看不到 observe 开关时扩大 -A）；`BlockwiseSolver.solve()` 在没有 trainable 参数时于遍历 dataloader 前返回（核对：`rg -n -B3 -A2 "param_groups" amct_pytorch/common/optimization/blockwise_solver.py`，`solve()` 开头 `if not param_groups: return` 的早退分支即证据）。因此，一次性统计算法若没有额外已接通的驱动和 finalize 调用，不能声称现有 PTQ 流程能够完成统计优化。
 
 ## 统计与决策型能力
 
@@ -96,11 +96,11 @@ helper、hook 或导出函数存在但找不到 caller 时，明确记为“源�
 4. 决策的执行者；algorithm 产生统计或决策状态，solver 不按模型结构自行猜测 unit，workflow 只有在通用 skip 契约冻结后才执行。
 5. “跳过”的数值语义：保持浮点、回退 direct quant、跳过 PTQ 优化但仍量化，三者不能混写。
 
-只有方案真实改变 skip/partial result 的文件、续跑或 strict load 语义时，才按“跨契约扩张门”读取 `ptq-solver-params`；eval/deploy 只在对应产物或消费契约变化时追加 owner。契约冻结前只给条件式计划，不发明通用阈值参数或把“跳过 `solver.solve()`”表述为跳过量化。
+只有方案真实改变 skip/partial result 的文件、续跑或 strict load 语义时，才按“跨契约扩张门”读取 `llm-solving-lifecycle`；eval/deploy 只在对应产物或消费契约变化时追加 owner。契约冻结前只给条件式计划，不发明通用阈值参数或把“跳过 `solver.solve()`”表述为跳过量化。
 
 ## 契约未冻结时的早停
 
-新算法的名称和业务目标不等于实现契约。下列任一项尚未确定且会改变实现时，只做只读规划：
+新算法的名称和业务目标不等于实现契约。早停与询问总则以 SKILL.md 核心流程的「事实纪律」（完整询问形态见 [process-rules](process-rules.md#契约缺失的处理形态)） 为唯一出处，不再重述；下列算法领域契约任一未冻结且会改变实现时触发：
 
 - 参数或统计状态的 shape、初始化、约束和 dtype/device 语义。
 - 算法对输入的具体数值变换，以及关闭算法时的等价基线。
@@ -108,11 +108,9 @@ helper、hook 或导出函数存在但找不到 caller 时，明确记为“源�
 - PTQ 参数 key、导出/加载行为和旧参数兼容性。
 - fake quant、real quant 与 deploy payload 是否复用同一路径。
 
-此时输出必须冻结的契约、候选源码定位提示、条件分支、阶段依赖和测试范围，不创建或建议先接入一个可由 `--algos` 选中的占位实现。空 `trainable_params()`、空导出/加载 hook、直通 `quantize()` 或伪造 payload 会让注册成功掩盖算法不可用，不是安全的“阶段 0”。
+早停后的算法领域禁令：不创建或建议先接入一个可由 `--algos` 选中的占位实现——空 `trainable_params()`、空导出/加载 hook、直通 `quantize()` 或伪造 payload 会让注册成功掩盖算法不可用，不是安全的“阶段 0”。只有最小数值语义、状态生命周期和失败行为已经明确，才能把算法导入 `register_algorithms()`；注册、用户选择入口和最小行为测试应在同一可用阶段闭环。
 
-只有最小数值语义、状态生命周期和失败行为已经明确，才能把算法导入 `register_algorithms()`；注册、用户选择入口和最小行为测试应在同一可用阶段闭环。
-
-题目只说“一个新算法”或未给算法身份时，保持 `<new_algo>` 等占位表达。现有算法和前序任务只能作为注册、hook 或测试模式的证据，不能把其名称、状态 key、shape、payload 或已冻结决策带入当前算法；条件式计划也不得把前序算法文件写成当前最终落点。
+题目只说“一个新算法”或未给算法身份时，保持 `<new_algo>` 等占位表达。现有算法和前序任务只能作为注册、hook 或测试模式的证据，不能把其名称、状态 key、shape、payload 或已冻结决策带入当前算法。
 
 ## 两套算法系统
 
@@ -160,4 +158,4 @@ LLM CLI path 只认 `ALGO_REGISTRY`：
 - 涉及统计/一次性优化：覆盖 GT 阶段不污染、observe 次数、无 trainable 参数的数据遍历、finalize 幂等和保存回载。
 - 涉及敏感层/跳层：覆盖 score 聚合、决策持久化、续跑、strict load、eval/deploy 的一致语义。
 - 涉及 deploy hook：验证回载状态被导出消费且产物字段正确。
-- Skill 行为回归：记录实际读取资料；默认保持一个主 Reference、一份辅助 Reference 和首轮 2～4 个源码/测试切片，超出前给出扩张凭据，并验证达到停止条件后不再枚举无关实现。
+- Skill 行为回归仅在路由语义或场景规则明显变化时需要（政策见 [validation.md](validation.md#按变更类型选验证)）：记录实际读取资料；典型形态是一个主 Reference、一份辅助 Reference 和首轮 2～4 个源码/测试切片（规模信号而非额度，见 [process-rules「渐进披露与读取预算」](process-rules.md#渐进披露与读取预算)），并验证达到停止条件后不再枚举无关实现。

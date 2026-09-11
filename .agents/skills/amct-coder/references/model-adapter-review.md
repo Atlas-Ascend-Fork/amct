@@ -1,4 +1,4 @@
-# 模型层开发与审查入口
+# 子能力：model-adapter-review
 
 本文件用于 `amct-coder` 对已有 LLM adapter/wrapper 做局部非结构修复和契约 review。新增模型注册、`PtqUnit` 拆分、quant block 或 attention/MLP/MoE wrapper 的结构性实现，必须加载并遵循 [model-adapter skill](../../quant-tools/model-adapter/SKILL.md)。本文件不重复其适配流程、实验流程和完成标准。
 
@@ -23,7 +23,7 @@
 | 契约 | 必须一致的两端 |
 | --- | --- |
 | `PtqUnit.kind`、`save_name` | adapter、extract 文件名、PTQ 参数文件和回载逻辑 |
-| hook 与 kwargs | adapter 的 embedding/block forward、`llm-data-workflow` 的保存与加载 |
+| hook 与 kwargs | adapter 的 embedding/block forward、`llm-cli-dataflow` 的保存与加载 |
 | quant block 参数 | adapter、solver 的参数收集/finalize、`PtqParamStore` |
 | deploy binding | adapter、deploy 导出的权重映射、ignore layers 和 dtype/algo 配置 |
 
@@ -40,3 +40,26 @@
 ## 验证
 
 局部修复至少运行目标 adapter 的直接单测；涉及输入捕获、unit 或回载时补对应 workflow mocked 测试。验证应分别说明源码调用链、单测覆盖、集成闭环和真实模型/NPU 验证，不能用 import 成功代替模型适配完成。
+
+### 局部修复完成标准
+
+先用直接断言复现并验证目标 bug，再按实际受影响契约追加下表中的验证；未触及的路径不作为局部修复完成门槛。
+
+| 实际影响 | 追加验证 |
+| --- | --- |
+| block 构建或权重加载 | 受影响的 float/quant block 可构建，权重名称、shape 和加载结果符合预期 |
+| forward、mask/position 或量化开关 | 目标 forward 路径正确；关闭量化后与原始 float 行为等价或在明确容差内接近 |
+| 输入捕获、kwargs 或 unit 契约 | 对应捕获、保存、加载、unit 枚举及 GT 路径一致；补相关 workflow mocked 测试 |
+| PTQ 参数导出或回载 | 受影响状态经实际保存与加载入口恢复，eval/deploy 中受影响的消费者能使用该状态 |
+| deploy binding | binding 对应正确权重和模块，导出 payload、tensor route 与 index 一致；仅改 binding 不要求额外验证 GT 路径 |
+
+完成说明列出已验证的契约和仍缺失的证据。缺少真实模型或硬件时明确说明验证范围，不把 mocked 测试通过写成完整模型适配通过。
+
+需要新增模型或结构性修改注册链、wrapper、unit 拆分时，转 [model-adapter skill](../../quant-tools/model-adapter/SKILL.md)，按其完整适配标准验证（含 BF16 baseline 与最小 PTQ smoke）。
+
+## BLOCKER
+
+- 局部修复引入新的 wrapper 类、模型名分支或注册链改动（属结构性实现，转 model-adapter skill）。
+- workflow/solver/通用 quant module 中出现模型专属逻辑。
+- 关闭量化后与 float 行为不等价却声称修复完成。
+- unit 契约（`PtqUnit.kind`/`save_name`、hook、deploy binding）单侧改动，未同步另一端。

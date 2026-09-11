@@ -1,4 +1,4 @@
-# 子能力：ptq-solver-params
+# 子能力：llm-solving-lifecycle
 
 ## 真实求解链
 
@@ -30,7 +30,7 @@ workflow -> adapter PtqUnit + provider batch/GT
 - 上游：solver 消费 adapter 的 quant block / `PtqUnit`、data provider 的输入/GT、algorithm 的 `trainable_params()` 和 PTQ 参数 hook。
 - 平级：solver 只做优化调度和参数收集，不读取模型名、不解析离线输入文件、不决定 dtype payload。
 - 下游：eval/deploy 通过 `PtqParamHandler` / `PtqParamStore` 回载状态，必须用训练时一致的 target、unit 名和 `--algos`。
-- 若新增 solver 或 granularity，要同时读 `llm-data-workflow` 和 `validation.md` 的公共接口检查，同步 CLI 接受值/帮助/默认值、workflow 分支和测试。
+- 若新增 solver 或 granularity，要同时读 `llm-cli-dataflow` 和 `validation.md` 的公共接口检查，同步 CLI 接受值/帮助/默认值、workflow 分支和测试。
 
 ## 执行步骤
 
@@ -44,9 +44,7 @@ workflow -> adapter PtqUnit + provider batch/GT
 
 ## 新 granularity 语义门禁
 
-`block`、`layer`、`model` 等名字不能替代执行语义。形成具体类名、构造签名或源码落点前，逐项冻结：
-
-`--granularity=layer`、“按层保存”或“介于 block 与 model 之间”都不能单独证明要做整层联合 forward、跨 unit 共享 optimizer、使用 layer 输入/输出或建立 layer 完成标记。用户没有给出优化目标、资源约束或精度语义时，只能并列这些候选及其代价，不推荐其中一种。
+`block`、`layer`、`model` 等名字不能替代执行语义；语义未冻结时按 SKILL.md 核心流程的「事实纪律」 只输出条件分支。`--granularity=layer`、“按层保存”或“介于 block 与 model 之间”都不能单独证明要做整层联合 forward、跨 unit 共享 optimizer、使用 layer 输入/输出或建立 layer 完成标记。用户没有给出优化目标、资源约束或精度语义时，只能并列这些候选及其代价，不推荐其中一种。形成具体类名、构造签名或源码落点前，逐项冻结：
 
 | 契约 | 必须回答的问题 |
 | --- | --- |
@@ -54,15 +52,19 @@ workflow -> adapter PtqUnit + provider batch/GT
 | module 所有权 | solver 持有 unit module、quant block、多个 module 的集合，还是完整模型；forward 实际消费哪一个对象 |
 | batch / GT | provider 返回单 unit batch 还是联合 batch；不同 unit 的 kwargs、shape 和 GT 如何组织与对应 |
 | optimizer 生命周期 | 参数集合在何时一次性收集；optimizer/scheduler 是 per-unit、per-layer 还是全局；共享是否会引入孤立参数或错过计算图 |
-| finalize / 保存 | 谁把 solver 结果拆回各 unit；是否继续写 `layer_<idx>_<unit.save_name>.pt`；eval/deploy 现有 store 能否直接回载 |
+| finalize / 保存 | 谁把 solver 结果拆回各 unit；是否继续沿用现有 unit 参数文件名；eval/deploy 现有 store 能否直接回载 |
 | 断点续跑 | 完成标记属于 unit、layer 还是 model；部分产物存在时恢复、重训或报错的确定语义 |
 | 兼容关系 | 与现有 granularity 是否共享参数目录和产物格式；CLI、registry、workflow、eval/deploy 分别接受、映射还是拒绝新值 |
 
-以上任一项会改变接口而尚未冻结时，只输出条件分支和候选锚点。不得先发明 `LayerSolver` 等类名、固定构造参数、block 级文件名或把“跨 unit 共享 optimizer”描述为最小改动；共享 optimizer 只有在 solver 同时持有相关 module、batch/GT 和活跃计算图时才成立。具体类、文件和 runner 名只能出现在对应契约已冻结的条件分支内，不能写成当前确定落点。
+领域补充：共享 optimizer 只有在 solver 同时持有相关 module、batch/GT 和活跃计算图时才成立。
 
 ## 主链状态
 
-`global_solver.py` 文件存在且有注册装饰器，但当前 `register_solvers()` 只导入 `BlockwiseSolver`，主流程接通的是 `block`。`llm_ptq.run()` 当前在 granularity 分支前先查 registry；`model` 分支虽存在，但 `_run_modelwise()` 仍是占位并抛出“不支持”异常。CLI 默认值应与已注册且可执行的 `block` 一致。文件、分支或装饰器存在都不等于 workflow 可选；分析时仍以本轮源码复核为准。
+本节是快照。事实附「核对」命令；作为落点依据前先执行，结果与断言冲突时以命令结果为准并更新本节。命令失效（符号搜不到）本身即过期信号。
+
+- `global_solver.py` 文件存在且有注册装饰器，但当前 `register_solvers()` 只导入 `BlockwiseSolver`，主流程接通的是 `block`。（核对：`rg -n -A4 "def register_solvers" amct_pytorch/common/optimization/__init__.py`）
+- `llm_ptq.run()` 当前在 granularity 分支前先查 registry；`model` 分支虽存在，但 `_run_modelwise()` 仍是占位并抛出“不支持”异常。（核对：`rg -n "SOLVER_REGISTRY.get|_run_modelwise" amct_pytorch/workflows/llm_ptq.py`）
+- CLI 默认值应与已注册且可执行的 `block` 一致；当前 `--granularity` 默认值与已注册 solver 的差距是待核验事实，不是已冻结契约。（核对：`rg -n -A3 "granularity" amct_pytorch/cli/llm/args.py`）
 
 ### 当前训练保存活跃链
 
@@ -73,16 +75,16 @@ LlmPtqWorkflow._run_blockwise()
   -> solver.solve(unit_batch.data_loader)
   -> solver.finalize()
   -> LlmPtqWorkflow._save_unit_result()
-  -> torch.save(result, layer_<idx>_<unit.save_name>.pt)
+  -> torch.save(result, 按现有 unit 参数文件名)
 ```
 
-`BaseSolver.finalize()` 只在 unit module 自身提供 `export_ptq_params()` 时调用该方法，否则 fallback 到 unit module 的 `requires_grad` 参数。`PtqParamHandler.export_unit()` 提供 module 导出、递归子模块导出和 trainable fallback，但当前训练保存链没有调用它；它的存在不能证明任意子 wrapper 会被递归保存。
+`BaseSolver.finalize()` 只在 unit module 自身提供 `export_ptq_params()` 时调用该方法，否则 fallback 到 unit module 的 `requires_grad` 参数。（核对：`rg -n -A8 "def finalize" amct_pytorch/common/optimization/base_solver.py`，应看到 `hasattr` 分派与 requires_grad fallback 两支）`PtqParamHandler.export_unit()` 提供 module 导出、递归子模块导出和 trainable fallback，但当前训练保存链没有调用它；它的存在不能证明任意子 wrapper 会被递归保存。（核对：`grep -rn "\.export_unit(" amct_pytorch/ tests/ | grep -v "def export_unit"` 应只命中 `tests/` 下文件；`amct_pytorch/` 内非定义命中即说明该论断过期——只搜 `amct_pytorch/` 时无输出不能区分「无调用」与「调用都在测试里」，必须含测试目录才有区分力）
 
 任何保存/回载方案必须逐项给出：活跃 caller、传入的 module/unit、result 的真实 key/shape、文件名与 target 目录、加载 caller、strict 行为以及 eval/deploy 的最终消费者。找不到调用方的 helper 标记为“源码存在但未接通”，不能作为集成闭环证据。
 
 ### 无 trainable 参数的执行门禁
 
-当前 `BlockwiseSolver.solve()` 收集不到 trainable 参数时，在遍历 dataloader 前直接返回。统计型或一次性优化算法不能依赖该方法自然完成 observe。新增路径前必须在 `llm-algorithm` 的执行形态基础上确定：
+当前 `BlockwiseSolver.solve()` 收集不到 trainable 参数时，在遍历 dataloader 前直接返回。（核对：`rg -n -B3 -A2 "param_groups" amct_pytorch/common/optimization/blockwise_solver.py`）统计型或一次性优化算法不能依赖该方法自然完成 observe。新增路径前必须在 `llm-algorithm` 的执行形态基础上确定：
 
 - 样本遍历由既有 GT forward、独立 calibration、solver 的统计分支还是其它已定义 caller 驱动。
 - GT forward 的 observe 副作用是否可复用；若不可复用，如何隔离或清空统计。
@@ -112,14 +114,14 @@ LlmPtqWorkflow._run_blockwise()
 - unit 是否枚举或跳过由 adapter 的 `iter_ptq_units()` 或已定义的通用 unit 契约表达，solver 不查看其它 unit 决定过滤策略。
 - 仅服务单个模型族的 unit 过滤参数不能直接加入通用 CLI；只有证明为跨模型通用能力并定义稳定语义后，才同步 CLI/API/workflow 闭环。
 - trainable 参数只从 module 的 `trainable_params()` 收集。
-- 无 trainable 参数时 solver 应直接返回，不假装训练。
+- 当前训练型 solver 无 trainable 参数时应直接返回，不假装训练；统计型路径的样本驱动与 finalize 按上面的执行门禁单独核对。
 - reconstruction loss 默认比较 unit output 与 GT。
 - epoch loss 恒为 0 或 NaN 是强失败信号，必须检查输入、GT、梯度和 unit 策略。
 - 新 solver 若要进入主流程，必须更新 `register_solvers()`、CLI 接受值/帮助/默认值、workflow 分支和测试；当前 CLI 没有 `choices` 时，不要把“新增 choices”冒充既有契约，应明确这是兼容性决策。
 
 ## 参数规则
 
-- unit 参数文件名：`layer_<idx>_<unit.save_name>.pt`。
+- unit 参数文件名默认 `layer_<idx>_<unit.save_name>.pt`；unit 不属于任何层时省略 `layer_<idx>_` 前缀，保存与回载同规则。
 - `PtqParamHandler.export_unit()` 优先 module 自己的 `export_ptq_params()`，再递归子模块，最后 fallback 到 requires_grad 参数；先确认当前 caller 是否实际使用该 helper。
 - `load_unit()` 优先 module 自己的 `load_ptq_params()`，再递归子模块，最后按 trainable 参数加载。
 - eval/deploy 加载 PTQ 参数时，必须用训练时一致的 `--algos` 构建出相同子模块结构。
@@ -141,7 +143,7 @@ LlmPtqWorkflow._run_blockwise()
 训练日志显示“参数更新”只能证明日志所指的训练侧状态发生变化，不能直接证明保存文件包含该状态，也不能证明 eval/deploy 已加载。按以下顺序取证：
 
 1. 从当前实际启用的算法/module 查 `trainable_params()`、`export_ptq_params()`、`load_ptq_params()` 及真实 key；算法未指定时不套用 AutoRound 的 `value`、`min_scale`、`max_scale` 等字段。
-2. 核对 `unit.save_name`、target 参数目录和 `layer_<idx>_<unit.save_name>.pt` 是否一致，并检查文件内容是否相对该算法初始状态发生变化。
+2. 核对 `unit.save_name`、target 参数目录和实际文件名是否一致，并检查文件内容是否相对该算法初始状态发生变化。
 3. 核对 eval/deploy 是否用相同 target、`--algos` 和参数目录重建模块；区分目录为空、文件缺失、unit 名错位与 payload key 不匹配。
 4. `strict=False` 仅能表达已定义的可选缺失；本应存在的参数未加载必须产生可见日志或错误。
 
@@ -149,15 +151,15 @@ LlmPtqWorkflow._run_blockwise()
 
 ## BLOCKER
 
-- 算法有状态但没有导出/加载闭环。
-- 参数目录按 target 混用，导致 attn/MLP/MoE 互相加载。
-- strict=False 下吞掉本应存在的参数而无日志说明。
-- 新 granularity 只加 solver 文件，没接 CLI/workflow/register。
 - 新 granularity 的 module、batch/GT、optimizer、保存和续跑语义未冻结，却已确定类名、构造签名或共享 optimizer 方案。
 - 仅凭 `layer` 名称就断言或推荐整层联合训练，并发明 block 级数据文件或完成标记。
 - 复合 unit 没有闭环 adapter 构造、原始输入/kwargs、finalize 拆分和回载结构，却声称现有 solver/helper 可直接复用。
 - 无 trainable 参数时未定义样本驱动与 finalize，却声称统计算法已由 solver 执行。
 - 用结果文件缺失表达主动跳过，导致续跑、strict load、eval 或 deploy 无法区分未执行与已决策。
+- 算法有状态但没有导出/加载闭环。
+- 参数目录按 target 混用，导致 attn/MLP/MoE 互相加载。
+- strict=False 下吞掉本应存在的参数而无日志说明。
+- 新 granularity 只加 solver 文件，没接 CLI/workflow/register。
 - solver 自己读离线输入文件，绕过 data provider。
 
 ## 自验
@@ -169,3 +171,17 @@ LlmPtqWorkflow._run_blockwise()
 - 涉及新 granularity：覆盖 registry/CLI/workflow 分派、module 与 batch/GT 所有权、optimizer 参数集合、逐 unit 保存回载和部分产物续跑语义。
 - 涉及复合 unit：覆盖 block 原始输入与 kwargs、全部目标参数收集、finalize 内容、公平分开基线和 eval/deploy 回载。
 - 涉及 skip/partial result：覆盖主动跳过与未执行的区分、断点续跑、strict load 和最终量化开关。
+
+## PTQ smoke 健康信号
+
+按算法的实际执行形态选择最小 PTQ 集成 smoke 标准；组合算法分别核对每种形态。适用项不满足时停下排查，不把训练型条件套到纯统计路径。
+
+共同要求：unit 输入加载成功；流程需要 GT 时 materialize 成功且参考输出未被统计或权重更新污染；需要持久化的参数、统计状态或优化结果保存后可回载，并被后续量化或导出消费。
+
+| 执行形态 | 必须取得的健康信号 |
+| --- | --- |
+| trainable | solver 至少跑一个 batch，loss 不是恒 0 或 NaN，目标参数真实更新 |
+| observe-only | 已确认的 GT forward、独立 calibration 或其它 caller 实际遍历样本，统计 buffer 按预期写入，后续量化或导出消费该统计 |
+| observe-then-finalize | 样本遍历与统计写入成功；已接通的 caller 在统计完成后触发 finalize，生成预期的优化权重或状态，后续量化或导出消费该结果 |
+
+纯统计路径不要求 optimizer、训练 loss 或 solver 遍历 batch。统计由 GT forward 驱动时，solver 因无 trainable 参数提前返回可以是预期行为；仍需验证统计次数、GT 不受污染，以及 finalize（若需要）和保存回载链已实际执行。

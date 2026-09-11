@@ -1,10 +1,12 @@
-# 子能力：quant-dtype-modules
+# 子能力：quant-dtype-module
 
 ## 简介
 
 解决一种量化数据类型应该怎样定义、注册并接入通用量化模块的问题，保证数值格式、支持位宽、权重与激活用法、量化粒度以及导出数据格式形成一致契约。本子能力处理跨模型通用能力，不承载具体模型结构。
 
 ## 职责边界
+
+本子能力只处理 `amct_pytorch/quantization/dtypes/` 与 `amct_pytorch/quantization/modules/` 两层（含 `amct_pytorch/quantization/bit_policy.py`）：跨模型通用的数值语义、quantizer 契约和 bit policy。不承载具体模型结构（转 `model-adapter` skill），不实现 NPU kernel（转 `amct-ops-dev`），不编排 CLI/workflow 阶段。
 
 ## 真实量化链
 
@@ -30,7 +32,7 @@ dtype registry -> quant module -> role/bit policy
 
 核对数值边界、位宽/role/粒度、关量化行为和部署 payload。测试定位与命令见 [validation.md](validation.md#场景测试索引)，覆盖目标见本文件“测试矩阵”。
 
-PRODUCE：`DTYPE_REGISTRY` 条目、quantizer 实例化接口、`export_deploy()` payload 和 bit policy。CLI/public config、deploy、algorithm 兼容和可选 NPU 加速是下游闭环，不自动成为主修改面。
+PRODUCE（本子能力的产出物）：`DTYPE_REGISTRY` 条目、quantizer 实例化接口、`export_deploy()` payload 和 bit policy。CLI/public config、deploy、algorithm 兼容和可选 NPU 加速是下游闭环，不自动成为主修改面。
 
 ## 先冻结 dtype 契约
 
@@ -48,27 +50,18 @@ PRODUCE：`DTYPE_REGISTRY` 条目、quantizer 实例化接口、`export_deploy()
 
 ### 契约状态模型
 
-把当前仓库事实与新 dtype 的目标决策分开记录，不能用参考实现的现状替目标做决定：
+事实与目标的分账、`pending` 的转换条件和“待定项动作只能进条件分支”等通用规则以 SKILL.md 核心流程的「事实纪律」（完整询问形态见 [process-rules](process-rules.md#契约缺失的处理形态)）为唯一出处，本节只保留 dtype 领域的记账机器：
 
 | 维度 | 允许状态 | 证据要求 |
 | --- | --- | --- |
 | 当前仓库事实 | `confirmed` / `not found` | 给出当前 commit 的定义、调用方或直接测试；`not found` 表示本轮已查锚点未找到，不表示目标必须拒绝 |
 | 目标契约 | `pending` / `supported` / `rejected` / `not applicable` | 给出用户输入、已冻结需求或兼容性裁决；`pending` 时写明缺失输入和条件分支 |
 
-按以下规则转换目标状态：
-
-1. 只读规划允许 role、bit、粒度、CLI 和 deploy 等目标项保持 `pending`。
-2. 只有用户明确输入、已冻结需求、兼容性裁决或可直接决定目标语义的契约证据，才能把 `pending` 转为终态。
-3. 当前 INT、MXFP 或 experimental 实现的 role、bit、粒度和 deploy 范围只进入“当前仓库事实”，不能单独触发目标状态转换。
-4. 同一回答中没有新增证据时，后文必须保持前文的 `pending`，不得静默改写为 `supported`、`rejected` 或 `not applicable`。
-5. 目标契约仍为 `pending` 时，只列候选锚点和条件分支，不给出唯一类名、实现文件、CLI 值、payload 字段或最终改动清单。
-6. 实际编码遇到会产出不兼容实现的 `pending` 时，完成不依赖该项的事实核验后一次性询问用户，不落盘投机分支。
+领域补充：当前 INT、MXFP 或 experimental 实现的 role、bit、粒度和 deploy 范围只进入“当前仓库事实”，不能单独触发目标状态转换。
 
 ### 命名契约与动作一致性
 
-把产品称谓、CLI 值、registry key、Python 文件/类标识符和可选 ops schema 名分别记录为目标契约。它们可以相同，也可以映射，但不能只根据现有格式族命名惯例自动合并、删改用户给出的名称或生成新的公开名称。仓库惯例只能形成候选映射；公开值或兼容别名仍需用户输入、已冻结需求或兼容性证据。
-
-最终计划中每个会改变实现、公开契约或交付产物的立即动作，都必须引用一个非 `pending` 的目标状态。依赖 `pending` 的修改只能出现在条件分支或待确认清单中；为消歧而进行的源码核验和现状测试可以继续执行：
+产品称谓、CLI 值、registry key、Python 文件/类标识符和可选 ops schema 名分别记录为目标契约；它们可以相同，也可以映射，但仓库惯例只能形成候选映射，公开值或兼容别名仍需用户输入、已冻结需求或兼容性证据。待定项与当前动作的对应关系按下表执行：
 
 | 目标项仍为 `pending` | 不能写成当前立即动作 |
 | --- | --- |
@@ -77,9 +70,7 @@ PRODUCE：`DTYPE_REGISTRY` 条目、quantizer 实例化接口、`export_deploy()
 | deploy 参与范围 | 修改 payload、packing、index 或 `quantization_config` |
 | NPU 加速与接口 | 创建确定的 kernel、schema、Meta、构建项或算子目录 |
 
-交付前逐项比较目标状态与修改动作、落点、实施顺序和修改后测试。同一回答没有新增证据时，前文为 `pending` 的项目在后文仍保持条件式表达；不能通过“建议先建骨架”“顺手接入”或修改后测试暗中把它改成既定方案。
-
-只读规划默认只输出职责边界、关键当前事实、目标状态、条件动作和验证建议。搜索命中用于取证，不重复展开全部候选文件、跨层重构和实现骨架。
+交付前逐项比较目标状态与修改动作、落点、实施顺序和修改后测试。
 
 ### 既有语义复用门
 
@@ -91,23 +82,27 @@ PRODUCE：`DTYPE_REGISTRY` 条目、quantizer 实例化接口、`export_deploy()
 | --- | --- | --- |
 | 注册或新 dtype 类 | `DTYPE_REGISTRY`、`register_dtype()`、目标 dtype 类/impl | CLI choices；deploy/algorithm 仅按实际支持范围扩展 |
 | fake quant 数值 | dtype `forward()`/`fake_quant()`/impl | `ActivationQuantizer` 或 `WeightQuantizer` 中实际消费的一侧 |
-| 通用 quant module | 目标 quantizer、`QuantLinear` 或 `QuantizedMatmul` | algorithm hook；模型 wrapper 仅做契约 review，结构实现转 `model-adapter` |
+| 通用 quant module | 目标 quantizer、`QuantLinear` 或 `QuantizedMatmul` | algorithm hook；模型 wrapper 仅做契约 review，结构实现转 `model-adapter` skill |
 | bit policy/config | `BitPolicy`、命中 YAML 及其加载方 | eval/deploy 对 bit policy 的消费者 |
-| deploy payload | dtype `export_deploy()`、`WeightQuantizer.export_deploy()`、deploy payload 消费点 | `deploy-export-impl`、下游 config schema |
+| deploy payload | dtype `export_deploy()`、`WeightQuantizer.export_deploy()`、deploy payload 消费点 | `llm-deploy`、下游 config schema |
 | NPU 加速 | Python dtype/impl 的确定语义、上层调用点 | `amct-ops-dev` 的上层接入边界；kernel/schema/Meta/CMake 转 `amct-ops-dev` |
 
-`rg quant_dtype` 得到的模型或算法分支只是兼容性审计信号，不是默认必改列表。只有新 dtype 真实进入该路径且现有 fallback 语义不成立时才扩展；模型结构性变化转 `model-adapter`。
+`rg quant_dtype` 得到的模型或算法分支只是兼容性审计信号，不是默认必改列表。只有新 dtype 真实进入该路径且现有 fallback 语义不成立时才扩展；模型结构性变化转 `model-adapter` skill。
 
 ## 当前接通事实
 
-- `register_dtype()` 通过 import 注册 `int` 和 `mxfp`；只有新增文件而没有进入该 import 链时，registry 不可达。
-- `ActivationQuantizer` 用 `is_act=True` 实例化 dtype；`WeightQuantizer` 使用 weight 默认语义。两者 disabled 时直接返回输入。
-- 当前 bit policy 允许 4、8、16；INT/MXFP 的 `forward()` 在 16 bit 时直通。
-- INT activation 当前是 dynamic per-token；INT weight 当前是 per-row scale。INT4 real quant 还会 packing 并生成辅助 bias。
-- MXFP 当前 block size 为 32；8 bit 输出 float8 payload，4 bit 输出 packed E2M1 和共享指数 scale。
-- CLI `--quant_dtype` 当前 choices 为 `int`、`mxfp`。
-- deploy 同时存在 `startswith("mx"/"int"/"hif")` 分类和 tensorwise `quant_dtype in ["int", "mxfp"]` 精确分支；新名字必须逐处判断，不能只更新 CLI。
-- `generate_quant_config()` 当前以 `is_mx` 二分 float/int 格式；新类别不能默认套入任一侧。
+本节是快照。每条事实附一行「核对」命令；作为落点依据前先执行对应命令，结果与断言冲突时以命令结果为准。命令锚定稳定符号而非行号，命令搜不到目标符号本身就是过期信号。快照修正按任务形态区分（见 [process-rules「渐进披露与读取预算」](process-rules.md#渐进披露与读取预算)）：编码任务顺手更新断言并按 validation.md 跑本节核对命令；只读任务不改本节，把差异写进交付说明。
+
+- `register_dtype()` 通过 import 注册 `int`、`int4x`、`mxfp` 和 `hifp`；`int4x` 是 `int` 的纯 registry 别名（同一 `QuantDequantInt` 类，双 `@DTYPE_REGISTRY.register` 装饰），不钉死 4bit。只有新增文件而没有进入该 import 链时，registry 不可达。（核对：`rg -n "from \. import|import" amct_pytorch/quantization/dtypes/__init__.py` 中的 `register_dtype()` 函数体与 `rg -n 'name="int4x"' amct_pytorch/quantization/dtypes/int.py`）
+- `ActivationQuantizer` 用 `is_act=True` 实例化 dtype；`WeightQuantizer` 使用 weight 默认语义。两者 disabled 时直接返回输入。（核对：`rg -n "is_act=True|def fake_quant" amct_pytorch/quantization/modules/quant_base.py`）
+- 当前 bit policy 允许 4、8、16；INT/MXFP 的 `forward()` 在 16 bit 时直通。（核对：`rg -n "_ALLOWED_BITS" amct_pytorch/quantization/bit_policy.py` 与 `rg -n -A2 "bits == 16" amct_pytorch/quantization/dtypes/int.py amct_pytorch/quantization/dtypes/mxfp.py`）
+- INT activation 当前是 dynamic per-token；INT weight 当前是 per-row scale。INT4 real quant 还会 packing 并生成辅助 bias。（核对：`rg -n "dynamic_per_token_quant|weight_quant|real_quant=True" amct_pytorch/quantization/dtypes/int.py`）
+- MXFP 当前 block size 为 32；8 bit 输出 float8 payload，4 bit 输出 packed E2M1 和共享指数 scale。（核对：`rg -n "block_size|float8|f32_to_f4" amct_pytorch/quantization/dtypes/mxfp.py`）
+- HiFp 当前只支持 4/8/16 bit：16 直通，8/4 走 fake quant；`export_deploy()` 只实现 4 bit（value + scale payload），8 bit 抛 `NotImplementedError`。`__init__` 接受 `is_act` 但不消费，weight 与 activation 是同一套 fake quant 语义，不像 INT 有 `is_act` 分流。（核对：`rg -n "is_act|bits == 16|export_deploy|NotImplementedError" amct_pytorch/quantization/dtypes/hifp.py`）
+- CLI `--quant_dtype` 当前 choices 为 `int`、`int4x`、`mxfp`、`hifp`。（核对：`rg -n -A2 "quant_dtype" amct_pytorch/cli/llm/args.py`）
+- 算法侧存在 hifp 分支：AutoRound 以 `quant_dtype == "hifp"` 进入 HiF4 分支（仅 4 bit，group size 整除约束），GPTQ 以 `wts_type == 'hifloat4'` 判断；这些是精确名称匹配，不是 `startswith` 前缀类。int 类精确匹配点当前同时接受 `("int", "int4x")`（AutoRound `_get_group_size`、GPTQ `__init__`）。（核对：`rg -n '"hifp"|hifloat4|int4x' amct_pytorch/algorithms/quant/auto_round.py amct_pytorch/algorithms/quant/gptq.py`）
+- deploy 同时存在 `startswith("mx"/"int"/"hif")` 分类和 tensorwise `quant_dtype in ("int", "int4x", "mxfp")` 精确分支；新名字必须逐处判断，不能只更新 CLI。（核对：`rg -n 'startswith\(|quant_dtype in' amct_pytorch/workflows/llm_deploy.py`）
+- `generate_quant_config()` 当前以 `is_mx` 二分 float/int 格式；新类别不能默认套入任一侧。（核对：`rg -n -A3 "def generate_quant_config" amct_pytorch/common/models/llm/common/deploy_export.py`）
 
 ## 分层实施顺序
 
@@ -118,16 +113,14 @@ PRODUCE：`DTYPE_REGISTRY` 条目、quantizer 实例化接口、`export_deploy()
 3. 接入 `register_dtype()`，验证 registry 重复注册、未知名称和 import 顺序。
 4. 只在通用接口不兼容时修改 quant module；registry 构造已经满足时不重复增加 dtype 分支。
 5. 仅在目标 CLI/config 参与状态为 `supported` 时同步 bit policy、CLI choice 和配置样例；只允许真实支持的 bit/activation/weight 组合进入入口。
-6. 仅在目标 deploy 参与状态为 `supported` 时，按已冻结 payload 更新 blockwise/tensorwise 消费和 `quantization_config`；确认存在真实跨契约影响后再读取 `deploy-export-impl`。
+6. 仅在目标 deploy 参与状态为 `supported` 时，按已冻结 payload 更新 blockwise/tensorwise 消费和 `quantization_config`；确认存在真实跨契约影响后再读取 `llm-deploy`。
 7. 若现有 algorithm 显式区分 dtype，逐个确认支持、拒绝或 fallback；不要无依据扩展所有算法。
-8. 若模型侧显式依赖 dtype 选择 cache/layout，先做兼容性 review；需要模型专属结构实现时转 `model-adapter`。
+8. 若模型侧显式依赖 dtype 选择 cache/layout，先做兼容性 review；需要模型专属结构实现时转 `model-adapter` skill。
 9. 仅在目标 NPU 加速状态为 `supported` 时，以 Python 路径作为语义参考或 fallback；上层软依赖、延迟 import 和错误时机按 `amct-ops-dev` 的上层接入边界处理，schema 和目录仍由其根据已冻结接口确定。
 
 ## 消费面强制收口
 
-新 dtype 的计划、实现 review 和最终说明必须逐项填写下表。每项分别记录“当前事实状态 + 源码/测试证据”和“目标契约状态 + 决策依据或缺失输入”；不得用“已注册”代替下游消费证据。
-
-只读规划允许目标状态为 `pending`。实际编码前，所有会改变实现或公开契约的项目必须转为 `supported`、`rejected` 或 `not applicable`；仍为 `pending` 的项目按“契约状态模型”停止对应实现，不阻塞其它事实核验。
+新 dtype 的计划、实现 review 和最终说明必须逐项填写下表。每项分别记录“当前事实状态 + 源码/测试证据”和“目标契约状态 + 决策依据或缺失输入”；不得用“已注册”代替下游消费证据。`pending` 项的处理遵循契约状态模型的对应关系，不阻塞其它事实核验。
 
 | 消费面 | 当前事实核验 | 目标契约决策 |
 | --- | --- | --- |
@@ -159,10 +152,9 @@ PRODUCE：`DTYPE_REGISTRY` 条目、quantizer 实例化接口、`export_deploy()
 
 ## BLOCKER
 
+通用契约纪律以 SKILL.md 核心流程的「事实纪律」 为准，其中对 dtype 领域最常触发的两条：`pending` 不得自行转终态，待定项不得写成当前动作。本节只列 dtype 领域的 BLOCKER：
+
 - 数值格式或适用范围未冻结，却按名称臆造实现语义或最终落点。
-- 前文把 role、bit、粒度、CLI 或 deploy 范围标为 `pending`，后文没有新增证据却自行选择终态。
-- 产品称谓、CLI 值、registry key、Python 标识符或 ops schema 未分别冻结，却仅按仓库命名惯例替用户改名或确定唯一映射。
-- 目标状态仍为 `pending`，却在修改动作、落点、实施顺序或修改后测试中把对应 CLI、deploy、NPU 或 dtype 骨架写成当前必改项。
 - 把 INT、MXFP、experimental 或其它参考实现的当前行为写入目标决策，借此默认 weight-only、weight+activation、固定 bit/粒度或 deploy 范围。
 - 未比较现有 INT/MXFP/experimental 数值语义，仅因新名称重复创建等价 dtype。
 - 新 dtype 未进入 `register_dtype()`，或 CLI/bit policy 允许框架实际不支持的组合。
@@ -178,6 +170,5 @@ PRODUCE：`DTYPE_REGISTRY` 条目、quantizer 实例化接口、`export_deploy()
 - dtype/quant module：覆盖上面的数值与模块测试矩阵。
 - CLI：验证配置解析、支持值和 role 位宽生效。
 - deploy：分别验证 payload、binding 和 workflow 产物消费。
-- Skill 行为回归：用不含既有 dtype 名和 role 暗示的隔离规划题，验证未给出的目标项全程保持 `pending`，且不产生唯一实现落点。
-- 规划一致性回归：检查产品名、CLI、registry、Python 和 ops 命名分别记录；每个改变实现或公开契约的立即动作均能回指非 `pending` 的目标状态。
+- Skill 行为回归与规划一致性回归仅在路由语义或场景规则明显变化时需要（政策见 [validation.md](validation.md#按变更类型选验证)）：用不含既有 dtype 名和 role 暗示的隔离规划题验证未给出的目标项全程保持 `pending` 且不产生唯一实现落点；检查产品名、CLI、registry、Python 和 ops 命名分别记录，每个改变实现或公开契约的立即动作均能回指非 `pending` 的目标状态。
 - 真实 eval/deploy 或 NPU 数值未执行时，分别说明缺模型/数据/硬件环境。

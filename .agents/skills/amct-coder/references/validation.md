@@ -1,4 +1,4 @@
-# AMCT Coder 验证规则
+# 验证规则：validation
 
 实际编码在修改后读取本文件并执行匹配的最小验证；实现规划、行为诊断和各类 review 只在判断验证方案或既有验证证据时读取相关部分。
 
@@ -30,12 +30,26 @@
 - Python 语法：`python -m py_compile <files>`。
 - Python 风格检查：对本次改动文件运行 `ruff check <changed files>` 和 `ruff format --check <changed files>`，只验证、不改文件。
 - Python 风格修复：确认需要自动修复时运行 `ruff check --fix <changed files>` 和 `ruff format <changed files>`；对应 `.pre-commit-config.yaml` 的 `ruff-check --fix` / `ruff-format` hook，格式选项来自 `pyproject.toml` 的 `[tool.ruff.format]`。
-- pre-commit：准备提交且环境未就绪时，先运行 `python -m pip install pre-commit` 和 `pre-commit install`；再运行 `pre-commit run --files <changed files>`。**不要用 `--all-files`**，避免全仓存量问题掩盖本次改动信号。
+- pre-commit：环境已就绪时运行 `pre-commit run --files <changed files>`（**不要用 `--all-files`**，避免全仓存量问题掩盖本次改动信号）。未安装 pre-commit 时**不主动安装**——安装有网络、环境和权限副作用；在交付说明中报告「pre-commit 未执行：环境未就绪」即可。仅当用户明确要求完整提交前检查时，经确认后再安装（`python -m pip install pre-commit` + `pre-commit install`）。
 - C/C++：用仓库 `.clang-format` 检查或格式化本次改动文件。
 - 版权：检查新增代码包含仓库既有的 Apache 2.0 版权声明，现有版权头未被删除或破坏。
-- public API：跑静态 API 测试。
+- public API：`pytest tests/unit_test/test_public_api.py`（其中 ast 解析的静态检查无需构建环境，import 行为用例在未构建源码树时自动跳过）。
 
-本节只定义修改后的检查动作。代码风格、版权和贡献要求必须已在修改前按 [project-rules.md](project-rules.md) 建立约束，不能等运行本节时才首次得知。
+本节只定义修改后的检查动作。代码风格和版权要求必须已在修改前按 [coding-rules.md](coding-rules.md) 建立约束，不能等运行本节时才首次得知。
+
+## 验证失败的处理
+
+验证失败按类型分派，处理顺序固定：先判断失败属于哪类，再按对应动作执行，不跳类。
+
+| 失败类型 | 判定 | 处理 | 交付措辞 |
+| --- | --- | --- | --- |
+| 静态检查失败（py_compile/ruff/clang-format） | 失败点在本次改动文件内 | 修复后重跑直至通过；ruff 的存量告警（stash 对照确认非本次引入）不修，如实引用 | 「静态检查通过；X 为存量问题（对照 HEAD 确认）」 |
+| 本次改动引入的单测失败 | 失败用例断言的是本次改动目标或其直接下游 | 修复实现或测试（实现错误改实现，断言过时改断言并说明），重跑至绿 | 「单测通过；修正了 X（原因）」 |
+| 与本次改动无关的单测失败 | 失败用例与改动面无调用关系 | 不顺手修（范围控制，另开 issue）；验证证据标注该失败与本改动的关系判断依据 | 「本次改动相关用例全过；Y 失败与本改动无关（依据：调用链不相交），已单独记录」 |
+| 环境缺失（NPU/CANN/权重/数据集/pre-commit） | 验证目标需要外部资源 | 不假装已验证，不阻塞可执行部分；能 mock 的走单测级 | 「X 未执行：缺 Y」——不得写成已验证或跳过 |
+| 间歇性失败（flake） | 同一用例重跑结果不一致 | 重跑 2~3 次确认；仍复现按无关失败或本次引入分类 | 标注重跑次数与结果分布 |
+
+任何失败都不改变证据等级表述：修复后通过写「单测覆盖」，不写「曾失败现已修复」作为降级理由。
 
 ## 按变更类型选验证
 
@@ -43,25 +57,13 @@
 
 | 变更类型 | 最小验证 | 说明 |
 | --- | --- | --- |
-| 只改 `SKILL.md` 或 reference | `quick_validate.py .agents/skills/amct-coder`、Markdown 链接检查、`git diff --check` | forward-test 只有在路由语义或场景规则明显变化时才需要 |
+| 只改 `SKILL.md` 或 reference | 自检脚本 `python .agents/skills/amct-coder/scripts/check_skill.py`（链接+锚点+快照符号三项，替代手工检查）；`git diff --check`；修改「当前接通事实」「主链状态」等快照时，确认脚本中该条核对命令通过；skill 结构校验（frontmatter、命名）用 skill-creator 的 `quick_validate.py`，脚本随 skill-creator skill 分发，不在本仓 | 路由语义或场景规则明显变化时，按 `evals/routing.json` 的五道路由题跑 forward-test（agent 判路由并说明理由即可） |
 | docs/examples 纯措辞 | `git diff --check`，必要时检查链接和示例命令是否仍存在 | 不声称运行代码或覆盖实现行为 |
 | docs/examples 新增 API/CLI 承诺 | 对应实现 owner 的单测 + 公共接口与打包检查 | 文档承诺必须能被源码和测试支撑 |
 | Python 局部实现 | `python -m py_compile <changed .py>` + 命中场景单测 | 若改 public API、workflow 或 solver，再叠加对应集成测试 |
 | CLI/parser/default 行为 | parser 测试、命令 help 或最小 workflow dry-run | 默认值变化按兼容性风险说明 |
 | 保存/加载/文件格式 | producer 和 consumer 双侧单测或 smoke | 只测保存不等于回载闭环 |
 | 构建、packaging、ops 边界 | 对应 build/import 测试；ops 内部实现按 `amct-ops-dev` | 缺 CANN/NPU/protobuf 时明确阻塞 |
-
-## Skill / Reference 自验
-
-修改 `.agents/skills/amct-coder/` 时，除 Markdown 静态检查外执行：
-
-1. 使用当前客户端 `skill-creator` 的 `scripts/quick_validate.py .agents/skills/amct-coder` 校验 frontmatter、名称和基本结构。
-2. 解析 `SKILL.md` 与 reference 内部 Markdown 链接，确认目标存在；核对导航表中的直接 reference 与实际设计一致。
-3. 为命中的单 reference 保留正常题、边界路由题、未知契约题和伪活跃调用链题；跨 reference 至少覆盖 dtype+deploy、algorithm+solver、data+adapter、model+external skill 中受本次修改影响的组合。
-4. cold 与 warm forward-test 分开。cold 测试使用物理隔离的新会话，只投喂原始用户题目和可发现 skill，不泄露预期答案、诊断或 reviewer 材料。
-5. 原始 prompt、Agent 输出和 reviewer 评分分文件保存，记录源码 commit、实际读取资料、测试模式和 rubric；不要把审查结论追加进被测 Agent 可读取的答案文件。
-
-`quick_validate.py`、链接检查和 `git diff --check` 只证明结构静态有效，不能替代 forward-test。当前工作区含测试答案或预期结论时，明确标记 cold 测试未执行，不用同会话重跑冒充独立行为证据。
 
 ## 越界自查
 
@@ -78,7 +80,7 @@
 
 - 公共 API：分别检查普通 import、顶层属性访问、通配符 import、源模块 `__all__` 和顶层 `__all__`；懒加载 API 不能只证明属性可达。
 - CLI：核对 parser 参数、默认值、choices、帮助文本和 `python -m` 入口是否与实际 registry/workflow 一致。
-- 打包：检查 `setup.py`、`pyproject.toml`、`build.sh`、`package_data` 和 `AMCT_EXPERIMENTAL` 开关；不提交构建产物或 generated staging。
+- 打包：按改动面检查——运行依赖变更查 `requirements.txt`，打包变更查 `setup.py`、`pyproject.toml`、`build.sh`、`package_data` 和 `AMCT_EXPERIMENTAL` 开关；不提交构建产物或 generated staging。
 - 配置口径：文档中的 BF16、weight-only、W4A4、dtype 和 bit policy 必须与 parser 和实际每个 role 的配置一致。
 - 文档示例：新增 API、CLI 参数、dtype 或 workflow 行为时同步更新，并确认示例命令在当前 parser 中存在。
 
@@ -90,16 +92,18 @@
 
 | 场景操作手册 | 当前测试定位提示 |
 | --- | --- |
-| `quant-dtype-modules` | `tests/unit_test/quantization/test_dtypes.py`、`tests/unit_test/quantization/modules/`；按 dtype/quantizer/BitPolicy 符号定位 |
+| `quant-dtype-module` | `tests/unit_test/quantization/test_dtypes.py`、`tests/unit_test/quantization/modules/`；按 dtype/quantizer/BitPolicy 符号定位 |
 | `llm-algorithm` | `tests/unit_test/algorithms/`；注册参考 `test_algorithms_registry_factory.py`，分流参考 `tests/unit_test/quantization/modules/test_quant_base.py` |
-| `model-adapter` | `tests/unit_test/common/models/llm/`；按目标 adapter、wrapper 或 `PtqUnit` 符号定位，跨层行为再查 mocked workflow 测试 |
-| `llm-data-workflow` | `tests/unit_test/workflows/`、`tests/unit_test/common/datasets/`、`tests/unit_test/common/evaluate/`；按 workflow、provider/I/O、PPL 行为定位 |
-| `ptq-solver-params` | `tests/unit_test/common/optimization/`、`tests/unit_test/common/models/llm/common/test_ptq_params.py`、`tests/unit_test/workflows/test_llm_ptq.py` |
-| `deploy-export-impl` | workflow：`tests/unit_test/workflows/test_llm_deploy.py`；helper：`tests/unit_test/common/models/llm/common/test_deploy_export.py` |
+| `model-adapter-review` | `tests/unit_test/common/models/llm/`；按目标 adapter、wrapper 或 `PtqUnit` 符号定位，跨层行为再查 mocked workflow 测试 |
+| `llm-cli-dataflow` | `tests/unit_test/workflows/`、`tests/unit_test/common/datasets/`、`tests/unit_test/common/evaluate/`；按 workflow、provider/I/O、PPL 行为定位 |
+| `llm-solving-lifecycle` | `tests/unit_test/common/optimization/`、`tests/unit_test/common/models/llm/common/test_ptq_params.py`、`tests/unit_test/workflows/test_llm_ptq.py` |
+| `llm-deploy` | workflow：`tests/unit_test/workflows/test_llm_deploy.py`；helper：`tests/unit_test/common/models/llm/common/test_deploy_export.py` |
 | `amct-ops-dev` 上层接入 | 上层 fallback/import 参考 `tests/amct_pytorch/test_hifloat8_fallback.py`；算子硬件测试在 `tests/amct_ops/`，按 `amct-ops-dev` 执行 |
 | 公共接口与打包 | `tests/unit_test/test_public_api.py`、`tests/unit_test/test_packaging.py`、`tests/unit_test/cli/test_llm_module_entrypoints.py` |
 
-常用定向命令，按实际改动选取：
+表中目录是搜索范围，不要求整目录执行；同一文件被多个场景引用时（如 `test_llm_ptq.py` 同时覆盖 `llm-cli-dataflow` 的 ptq 命令和 `llm-solving-lifecycle` 的求解链路）按本次改动选择相关用例，命令详见下节。
+
+常用定向命令，按实际改动选取；与上表重复的文件不再列出第二份清单，以实际改动所属场景和搜索结果为准：
 
 - dtype 与 quantizer 分流：`pytest tests/unit_test/quantization/test_dtypes.py tests/unit_test/quantization/modules/test_quant_base.py`。
 - workflow：`pytest tests/unit_test/workflows/test_llm_eval.py tests/unit_test/workflows/test_llm_extract_ptq_data.py tests/unit_test/workflows/test_llm_ptq.py`，只涉及其中一个命令时只选该文件。
@@ -112,31 +116,29 @@
 
 算法自身、classic custom algorithm/config、graph pass、quantize/save、prune/distill/retrain/cali 等按符号与领域定位；不维护逐算法或逐 pass 的文件清单。跨契约任务按生产者和消费者补充上述验证，测试直接 import 未接通模块不证明正常注册入口已接通。
 
-## LLM adapter / wrapper 完成标准
+## 链接检查
 
-满足前不要认为完成：
+skill 文件内的仓库相对链接（reference、repo-map、casebook、README 等相对路径）必须实际存在，带锚点的链接（`file.md#section`）还要确认目标文件含对应标题。先拆分路径与锚点再分别验证：
 
-1. `MODEL_REGISTRY` 可取到模型。
-2. 至少一层 float block 可构建。
-3. 至少一层 quant block 可构建。
-4. 至少一个 `PtqUnit` 可枚举。
-5. 关闭量化后 quant block 与 float block 前向等价或足够接近。
-6. 至少一个 unit 输入/GT/参数导出路径闭环。
+```bash
+python -c 'import re,sys,pathlib
+def gh_anchor(h):
+    # github 风格锚点：小写、移除标点（保留中英文与连字符）、空格转连字符
+    return re.sub(r"[^\w一-鿿\- ]", "", h.strip().lower()).replace(" ", "-")
+for f in sys.argv[1:]:
+    for link in re.findall(r"\]\((?!https?://)([^)#]+)(?:#([^)]+))?\)", pathlib.Path(f).read_text()):
+        path, anchor = link
+        p = pathlib.Path(f).parent/path
+        if path and not p.exists():
+            print(f"{f}: broken link {path}"); continue
+        if anchor:
+            target = (p if path else pathlib.Path(f))
+            headings = [gh_anchor(m) for m in re.findall(r"^#+ (.+)$", target.read_text(), re.M)]
+            if anchor not in headings:
+                print(f"{f}: broken anchor {path or f.name}#{anchor}")' <changed skill files>
+```
 
-## PTQ smoke 健康信号
-
-- unit 输入加载成功。
-- GT materialize 成功。
-- solver 至少跑一个 batch。
-- loss 不是恒 0 或 NaN。
-- 参数真实更新或统计 buffer 真实写入。
-- 参数保存后可回载。
-
-## PPL 口径
-
-Wikitext PPL 默认 `seq_len=4096`。历史结果不是同口径时，只能参考，不能直接比较。
-
-BF16 PPL 异常时第一优先级检查 mask/position/position_embeddings 传递链。
+无输出即通过；也可用任一等价的本地链接检查工具（要求：路径存在性 + 锚点可达性都覆盖）。外链（https://）不在本仓维护范围内，纯锚点链接（`#section`，同文件内跳转）只查锚点。
 
 ## 构建
 

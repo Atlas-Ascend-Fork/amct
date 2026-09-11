@@ -1,0 +1,31 @@
+{
+  "skill_name": "amct-coder",
+  "description": "skill 修改后的路由回归测试题集。每题标注期望路由,用 skill-creator 的 forward-test 流程跑（agent 只需判路由并说明理由,不需要完成任务本身）,验证分级与委派行为不回退。",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "帮我新增一个 fp8e4m3 的 quant_dtype 并接进 CLI",
+      "expected": "重级：命中门禁对象（新 dtype）+ public 契约;走 quant-dtype-module 主手册,先过既有语义复用门"
+    },
+    {
+      "id": 2,
+      "prompt": "跑一下 qwen3 的直转 eval,看看 PPL",
+      "expected": "委派:运行命令拿结果属执行类 skill（如 quant-run）,不留在 amct-coder"
+    },
+    {
+      "id": 3,
+      "prompt": "给 llama 新增一个模型 adapter",
+      "expected": "委派:新增模型适配转 model-adapter skill,amct-coder 不做结构性模型实现"
+    },
+    {
+      "id": 4,
+      "prompt": "这个报错信息没说传了什么参数,帮我改一下报错文案",
+      "expected": "quick-path/轻级:普通局部修复,五步路径,不读 process-rules/repo-map"
+    },
+    {
+      "id": 5,
+      "prompt": "eval 的 PPL 和直转一样,帮我查为什么",
+      "expected": "标准级诊断:留在 amct-coder,走行为诊断流程（walkthrough 收束形态）,不转判读类 skill"
+    }
+  ]
+}
