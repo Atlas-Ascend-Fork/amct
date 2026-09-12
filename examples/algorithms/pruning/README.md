@@ -323,7 +323,8 @@ python3 src/run_qwen3_6_35b_a3b_pruning_activation_count_budget.py \
   --pileval_source modelscope \
   --ratio_grid 0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8 \
   --report_dir ./outputs/qwen3_6_pruning_results \
-  --save_model_dir ./outputs/Qwen3.6-35B-A3B-pruned-budget09
+  --save_model_dir ./outputs/Qwen3.6-35B-A3B-pruned-budget09 \
+  --trust_remote_code
 
 python3 src/run_qwen3_6_35b_a3b_pruning_activation_count_budget.py \
   --model_path ./path/to/Qwen3.6-35B-A3B \
@@ -333,7 +334,8 @@ python3 src/run_qwen3_6_35b_a3b_pruning_activation_count_budget.py \
   --pileval_source modelscope \
   --ratio_grid 0.2,0.3,0.4 \
   --report_dir ./outputs/qwen3_6_pruning_results \
-  --save_model_dir ./outputs/Qwen3.6-35B-A3B-pruned-budget08
+  --save_model_dir ./outputs/Qwen3.6-35B-A3B-pruned-budget08 \
+  --trust_remote_code
 
 python3 src/run_qwen3_6_35b_a3b_pruning_activation_count_budget.py \
   --model_path ./path/to/Qwen3.6-35B-A3B \
@@ -343,7 +345,8 @@ python3 src/run_qwen3_6_35b_a3b_pruning_activation_count_budget.py \
   --pileval_source modelscope \
   --ratio_grid 0.5,0.6,0.7 \
   --report_dir ./outputs/qwen3_6_pruning_results \
-  --save_model_dir ./outputs/Qwen3.6-35B-A3B-pruned-budget05
+  --save_model_dir ./outputs/Qwen3.6-35B-A3B-pruned-budget05 \
+  --trust_remote_code
 ```
 
 脚本在 CPU 上加载完整模型并执行结构化剪枝，完成后对剪枝模型执行一次前向检查。只有传入
