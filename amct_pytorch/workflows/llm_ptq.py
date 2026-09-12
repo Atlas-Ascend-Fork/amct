@@ -41,7 +41,7 @@ class LlmPtqWorkflow:
         self.args = args
         if len(args.quant_target) != 1:
             raise ValueError(
-                f"PTQ supports exactly one quant_target, but got {len(args.quant_target)}: {args.quant_target}."
+                f"ptq only supports a single quant_target, but got {len(args.quant_target)}: {args.quant_target}."
             )
         self.quant_target = args.quant_target[0]
         self.device = args.device
