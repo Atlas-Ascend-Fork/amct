@@ -321,13 +321,7 @@ The calibration and evaluation datasets are downloaded and cached automatically 
 
 ### 5.3 Run Pruning
 
-Pruning script:
-
-```text
-src/run_qwen3_6_35b_a3b_pruning_activation_count_budget.py
-```
-
-Run the following commands from `examples/algorithms/pruning`. Each budget must be evaluated independently from the same original model directory:
+Run the following commands from `amct/examples/algorithms/pruning`. Each budget must be evaluated independently from the same original model directory:
 
 ```bash
 python3 src/run_qwen3_6_35b_a3b_pruning_activation_count_budget.py \
