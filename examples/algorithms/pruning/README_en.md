@@ -332,7 +332,8 @@ python3 src/run_qwen3_6_35b_a3b_pruning_activation_count_budget.py \
   --pileval_source modelscope \
   --ratio_grid 0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8 \
   --report_dir ./outputs/qwen3_6_pruning_results \
-  --save_model_dir ./outputs/Qwen3.6-35B-A3B-pruned-budget09
+  --save_model_dir ./outputs/Qwen3.6-35B-A3B-pruned-budget09 \
+  --trust_remote_code
 
 python3 src/run_qwen3_6_35b_a3b_pruning_activation_count_budget.py \
   --model_path ./path/to/Qwen3.6-35B-A3B \
@@ -342,7 +343,8 @@ python3 src/run_qwen3_6_35b_a3b_pruning_activation_count_budget.py \
   --pileval_source modelscope \
   --ratio_grid 0.2,0.3,0.4 \
   --report_dir ./outputs/qwen3_6_pruning_results \
-  --save_model_dir ./outputs/Qwen3.6-35B-A3B-pruned-budget08
+  --save_model_dir ./outputs/Qwen3.6-35B-A3B-pruned-budget08 \
+  --trust_remote_code
 
 python3 src/run_qwen3_6_35b_a3b_pruning_activation_count_budget.py \
   --model_path ./path/to/Qwen3.6-35B-A3B \
@@ -352,7 +354,8 @@ python3 src/run_qwen3_6_35b_a3b_pruning_activation_count_budget.py \
   --pileval_source modelscope \
   --ratio_grid 0.5,0.6,0.7 \
   --report_dir ./outputs/qwen3_6_pruning_results \
-  --save_model_dir ./outputs/Qwen3.6-35B-A3B-pruned-budget05
+  --save_model_dir ./outputs/Qwen3.6-35B-A3B-pruned-budget05 \
+  --trust_remote_code
 ```
 
 The script loads the complete model on the CPU and performs structured pruning, then runs one forward-pass check on the pruned model. The pruned config, tokenizer, and safetensors weights are written to the output directory only when `--save_model_dir` is provided. If the argument is omitted, only the JSON report remains after the process exits.
@@ -367,6 +370,7 @@ Parameter Description:
 | `--ratio_grid` | `0.1,0.2,0.3` | No | Candidate expert pruning ratios tried by AMCT, comma-separated, each between 0 and 1 |
 | `--report_dir` | none | Yes | Directory for the JSON pruning report |
 | `--save_model_dir` | `""` | No | Directory to save the pruned model; if empty, weights are not saved |
+| `--trust_remote_code` | `False` | No | Enable execution of custom Python shipped with the model directory. Disabled by default; pass it explicitly only for a local checkpoint you trust. The Qwen3.6-35B-A3B weights require this flag. |
 
 
 ### 5.4 Diagnosis and Reports
