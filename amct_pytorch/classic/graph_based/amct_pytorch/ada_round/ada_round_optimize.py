@@ -55,7 +55,9 @@ def replace_adaround_module(
     # Step3: replace new model
     model_helper.replace_module_by_name(model, object_module_name, new_ada_module)
     LOGGER.logd(
-        "replace AdaRoundQuant module to '{}' success!".format(object_module_name)
+        "Replaced the AdaRoundQuant module with '{}' successfully.".format(
+            object_module_name
+        )
     )
 
     return new_ada_module
