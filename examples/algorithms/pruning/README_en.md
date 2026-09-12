@@ -370,7 +370,7 @@ Parameter Description:
 | `--ratio_grid` | `0.1,0.2,0.3` | No | Candidate expert pruning ratios tried by AMCT, comma-separated, each between 0 and 1 |
 | `--report_dir` | none | Yes | Directory for the JSON pruning report |
 | `--save_model_dir` | `""` | No | Directory to save the pruned model; if empty, weights are not saved |
-| `--trust_remote_code` | `False` | No | Enable execution of custom Python shipped with the model directory. Disabled by default; pass it explicitly only for a local checkpoint you trust. The Qwen3.6-35B-A3B weights require this flag. |
+| `--trust_remote_code` | `False` | No | Allows execution of custom code within the model directory; disabled by default. --model must be a local directory; enable only for trusted local weights. |
 
 
 ### 5.4 Diagnosis and Reports
