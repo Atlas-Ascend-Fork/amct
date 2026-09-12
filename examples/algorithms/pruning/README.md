@@ -362,6 +362,7 @@ python3 src/run_qwen3_6_35b_a3b_pruning_activation_count_budget.py \
 | `--ratio_grid` | `0.1,0.2,0.3` | 否 | AMCT 尝试的候选专家剪枝比例，逗号分隔且须在 0~1 之间 |
 | `--report_dir` | 无 | 是 | JSON 剪枝报告输出目录 |
 | `--save_model_dir` | `""` | 否 | 剪枝模型保存目录，为空则不保存权重 |
+| `--trust_remote_code` | `False` | 否 | 允许执行模型目录内自定义代码；默认关闭。--model 必须是本地目录；仅对信任的本地权重开启 |
 
 ### 5.4 诊断与报告
 
