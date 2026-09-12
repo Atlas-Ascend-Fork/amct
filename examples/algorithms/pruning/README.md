@@ -312,13 +312,7 @@ tokenizer_config.json
 
 ### 5.3 运行剪枝
 
-正式脚本路径：
-
-```text
-src/run_qwen3_6_35b_a3b_pruning_activation_count_budget.py
-```
-
-在 `examples/algorithms/pruning` 目录执行以下命令。每个预算都应从同一个原始模型目录独立运行：
+在 `amct/examples/algorithms/pruning` 目录执行以下命令。每个预算都应从同一个原始模型目录独立运行：
 
 ```bash
 python3 src/run_qwen3_6_35b_a3b_pruning_activation_count_budget.py \
@@ -509,7 +503,7 @@ model.save_pretrained(
 恢复训练后 PPL：    8.294227600097656
 ```
 
-相对未经恢复的剪枝模型，PPL 绝对下降 `1.486186981201172`，相对下降约 `15.20%`；若以剪枝造成的 PPL 增量为损失，本次恢复约 `42.81%`。恢复后 PPL 仍比原始模型高 `1.985680580139160`，因此当前结果是明显恢复但尚未恢复到基线。
+相对未经恢复的剪枝模型，PPL 绝对下降 `1.486186981201172`，相对下降约 `15.20%`；若以剪枝造成的 PPL 增量为损失，本次恢复约 `42.81%`。恢复后 PPL 仍比原始模型高 `1.985680580139160`，因此当前结果是有所恢复但尚未恢复到基线。
 
 ### 5.7 继续恢复时可调整的参数
 
