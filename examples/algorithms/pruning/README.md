@@ -354,6 +354,17 @@ python3 src/run_qwen3_6_35b_a3b_pruning_activation_count_budget.py \
 
 脚本在 CPU 上加载完整模型并执行结构化剪枝，完成后对剪枝模型执行一次前向检查。只有传入
 `--save_model_dir` 时，剪枝后的 config、tokenizer 和 safetensors 权重才会写入输出目录；未传该参数时，进程退出后只保留 JSON 报告。
+参数说明：
+| 参数 | 默认值 | 必填 | 含义 |
+| --- | --- | --- | --- |
+| `--model_path` | 无 | 是 | 本地模型目录 |
+| `--size_budget` | 无 | 是 | 目标参数预算，可选 0.9 / 0.8 / 0.5 |
+| `--seq_len` | 4096 | 否 | 校准序列长度 |
+| `--calibration_samples` | 4 | 否 | 校准样本数量 |
+| `--pileval_source` | `huggingface` | 否 | Pileval 数据来源：`huggingface` 或 `modelscope` |
+| `--ratio_grid` | `0.1,0.2,0.3` | 否 | AMCT 尝试的候选专家剪枝比例，逗号分隔且须在 0~1 之间 |
+| `--report_dir` | 无 | 是 | JSON 剪枝报告输出目录 |
+| `--save_model_dir` | `""` | 否 | 剪枝模型保存目录，为空则不保存权重 |
 
 ### 5.4 诊断与报告
 
@@ -365,13 +376,6 @@ dense targets: 40
 moe targets:   40
 fixed-ratio pruning: available
 accuracy search:     available
-```
-
-本样例只启用 `moe` 目标，因此实际只修改 MoE 专家结构。剪枝完成后，脚本检查：
-
-```text
-logits shape: (1, 4096, 248320)
-logits finite: True
 ```
 
 正式剪枝后的 `PruneReport` 核心内容：
@@ -396,11 +400,7 @@ experts=256 -> 102
 budget_unreachable=False
 ```
 
-完整 `events`、`per_layer_sparsity` 和 `warnings` 保存在脚本输出的 JSON 报告中，默认目录为：
-
-```text
-./outputs/qwen3_6_pruning_results/
-```
+完整 `events`、`per_layer_sparsity` 和 `warnings` 保存在脚本输出的 JSON 报告中。
 
 ### 5.5 WikiText2 评测与结果
 
