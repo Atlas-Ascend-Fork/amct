@@ -1,3 +1,18 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
 import argparse
 import importlib.machinery
 import json
@@ -79,6 +94,18 @@ def save_pruned_model(model, tokenizer, model_path, output_dir):
             file.write("\n")
 
 
+def model_load_kwargs(trust_remote_code):
+    if trust_remote_code:
+        print(
+            "WARNING: --trust_remote_code is enabled. Custom Python from the "
+            "model directory may execute under the current user. Use only with "
+            "checkpoints you trust.",
+            flush=True,
+        )
+        return {"trust_remote_code": True}
+    return {"trust_remote_code": False}
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -86,6 +113,16 @@ def parse_args():
         required=True,
         help="Path to the local Qwen3.6-35B-A3B model directory.",
     )
+    parser.add_argument(
+        "--trust_remote_code",
+        action="store_true",
+        help=(
+            "Allow transformers to execute custom Python shipped with the model. "
+            "Off by default. Only enable for a local checkpoint you trust; "
+            "the Qwen3.6 weights require this flag."
+        ),
+    )
+
     parser.add_argument(
         "--size_budget", type=float, required=True, choices=(0.9, 0.8, 0.5)
     )
@@ -151,9 +188,10 @@ def parse_ratio_grid(value):
 def main():
     args = parse_args()
     ratios = args.ratio_grid
-
+    load_kwargs = model_load_kwargs(args.trust_remote_code)
     run_parameters = {
         "model_path": args.model_path,
+        "trust_remote_code": args.trust_remote_code,
         "size_budget": args.size_budget,
         "seq_len": args.seq_len,
         "calibration_samples": args.calibration_samples,
@@ -176,7 +214,7 @@ def main():
     workflow_start = time.time()
 
     tokenizer = AutoTokenizer.from_pretrained(
-        args.model_path, trust_remote_code=True, local_files_only=True
+        args.model_path, local_files_only=True, **load_kwargs
     )
     calibration = load_pileval(
         tokenizer,
@@ -187,7 +225,7 @@ def main():
 
     model = AutoModelForCausalLM.from_pretrained(
         args.model_path,
-        trust_remote_code=True,
+        **load_kwargs,
         local_files_only=True,
         dtype=torch.bfloat16,
         low_cpu_mem_usage=True,
