@@ -221,8 +221,8 @@ class PassivePruneHelper(PassivePruneHelperBase):
             while prune_records:
                 record_helper.delete_record(prune_records[0])
             LOGGER.logd(
-                "Disable node {} for only support Linear-Linear and Conv-Conv, not support Linear-Conv "
-                "and Conv-Linear".format(node.name),
+                "Disabling node {}: only Linear-Linear and Conv-Conv connections are supported; "
+                "Linear-Conv and Conv-Linear are not supported.".format(node.name),
                 "PassivePruneHelper",
             )
 

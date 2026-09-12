@@ -812,7 +812,7 @@ def _check_matmul(node):
         weight_tensor = QuantOpInfo.get_weight_tensor(node)
     except RuntimeError:
         LOGGER.logd(
-            'Not support quantization for "MatMul" layer "{}" with no constant weight'.format(
+            'Quantization is not supported for "MatMul" layer "{}" because it has no constant weight.'.format(
                 node.name
             )
         )

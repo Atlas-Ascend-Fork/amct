@@ -41,7 +41,9 @@ class LlmPtqWorkflow:
     def __init__(self, args):
         self.args = args
         if len(args.quant_target) != 1:
-            raise ValueError("ptq only supports a single quant_target.")
+            raise ValueError(
+                f"ptq only supports a single quant_target, but got {len(args.quant_target)}: {args.quant_target}."
+            )
         self.quant_target = args.quant_target[0]
         self.device = args.device
         self.granularity = args.granularity
