@@ -211,17 +211,8 @@ def main():
         flush=True,
     )
 
-
-
     tokenizer = AutoTokenizer.from_pretrained(
         args.model_path, local_files_only=True, **load_kwargs
-    )
-    workflow_start = time.time()
-    calibration = load_pileval(
-        tokenizer,
-        args.seq_len,
-        args.calibration_samples,
-        args.pileval_source,
     )
 
     model = AutoModelForCausalLM.from_pretrained(
@@ -231,6 +222,14 @@ def main():
         dtype=torch.bfloat16,
         low_cpu_mem_usage=True,
     ).eval()
+
+    workflow_start = time.time()
+    calibration = load_pileval(
+        tokenizer,
+        args.seq_len,
+        args.calibration_samples,
+        args.pileval_source,
+    )
 
     before = count_parameters(model)
     experts_before = count_experts(model)
