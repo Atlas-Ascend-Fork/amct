@@ -48,7 +48,9 @@ class LlmPtqWorkflow:
         if not args.quant_target:
             raise ValueError("ptq requires --quant_target.")
         if len(args.quant_target) != 1:
-            raise ValueError("ptq only supports a single quant_target.")
+            raise ValueError(
+                f"ptq only supports a single quant_target, got {len(args.quant_target)}: {args.quant_target}."
+            )
         if not args.data_dir:
             raise ValueError("ptq requires --data_dir.")
         self.quant_target = args.quant_target[0]
