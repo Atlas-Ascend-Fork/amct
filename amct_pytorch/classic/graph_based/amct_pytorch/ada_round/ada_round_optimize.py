@@ -170,7 +170,7 @@ def _compute_recon_loss(ada_quantized_output, original_output):
     Return:
         recon_loss: reconstruction loss.
     '''
-    frobenius_norm = torch.norm(ada_quantized_output - original_output, p="fro", dim=1)  # codespell:ignore fro
+    frobenius_norm = torch.norm(ada_quantized_output - original_output, p="fro", dim=1)  # codespell:ignore
     recon_loss = frobenius_norm.pow(2).mean()
 
     return recon_loss
