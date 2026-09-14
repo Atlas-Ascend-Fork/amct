@@ -366,39 +366,34 @@ python3 src/run_qwen3_6_35b_a3b_pruning_activation_count_budget.py \
 
 ### 5.4 诊断与报告
 
-正式脚本调用 `amct_pytorch.pruning.prune_diagnose`，诊断结果确认：
+正式脚本调用 `amct_pytorch.pruning.prune_diagnose`，例如 size_budget=0.9 时诊断结果如下：
 
 ```text
-cnn targets:   0
-dense targets: 40
-moe targets:   40
-fixed-ratio pruning: available
-accuracy search:     available
+{
+  "targets": {
+    "cnn": 0,
+    "dense": 40,
+    "moe": 40
+  },
+  "prune_works": true,
+  "prune_reduction": 0.09444977959183498,
+  "prune_forward_ok": true,
+  "search_works": true,
+  "search_chosen_ratio": 0.5,
+  "notes": []
+}
 ```
 
 正式剪枝后的 `PruneReport` 核心内容：
 
 ```text
-size_budget=0.9
-params_before=34660610688
-params_after=28239147648
-experts=256 -> 205
-budget_unreachable=False
-
-size_budget=0.8
-params_before=34660610688
-params_after=24965460608
-experts=256 -> 179
-budget_unreachable=False
-
-size_budget=0.5
-params_before=34660610688
-params_after=15270310528
-experts=256 -> 102
-budget_unreachable=False
+params_before: 34660610688
+params_after: 28239147648
+budget_unreachable: False
+prunable_fraction: 0.9335997444269842
 ```
 
-完整 `events`、`per_layer_sparsity` 和 `warnings` 保存在脚本输出的 JSON 报告中。
+完整内容保存在脚本输出的 JSON 报告中。
 
 ### 5.5 WikiText2 评测与结果
 
@@ -432,9 +427,9 @@ python3 -m amct_pytorch.eval \
 
 | 模型            | 方法               | 实验设置          |          基线 PPL |         剪枝后 PPL |        后处理 PPL | 参数量（前 → 后）               | 参数削减率 | 剪枝时长（min） |
 | --------------- | ------------------ | ----------------- | ----------------: | -----------------: | ----------------: | ------------------------------- | ---------: | --------------: |
-| Qwen3.6-35B-A3B | `activation_count` | `size_budget=0.9` | 6.308547019958496 |  6.664599895477295 |               N/A | 34,660,610,688 → 28,239,147,648 |   18.5267% |           28.89 |
-| Qwen3.6-35B-A3B | `activation_count` | `size_budget=0.8` | 6.308547019958496 | 7.1991167068481445 |               N/A | 34,660,610,688 → 24,965,460,608 |   27.9717% |           16.84 |
-| Qwen3.6-35B-A3B | `activation_count` | `size_budget=0.5` | 6.308547019958496 |  9.780414581298828 | 8.294227600097656 | 34,660,610,688 → 15,270,310,528 |   55.9433% |           20.46 |
+| Qwen3.6-35B-A3B | `activation_count` | `size_budget=0.9` | 6.308547019958496 |  6.664599895477295 |               N/A | 34,660,610,688 → 28,239,147,648 |   18.5267% |           20.11 |
+| Qwen3.6-35B-A3B | `activation_count` | `size_budget=0.8` | 6.308547019958496 | 7.1991167068481445 |               N/A | 34,660,610,688 → 24,965,460,608 |   27.9717% |           15.44 |
+| Qwen3.6-35B-A3B | `activation_count` | `size_budget=0.5` | 6.308547019958496 |  9.780414581298828 | 8.294227600097656 | 34,660,610,688 → 15,270,310,528 |   55.9433% |           15.07 |
 
 ### 5.6 `size_budget=0.5` 恢复训练
 
