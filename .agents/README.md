@@ -49,7 +49,7 @@ clone 本仓即可直接使用，Agent Skills 自动加载（机制见 [docs/arc
 |---|---|
 | 量化目标 | `mlp` / `moe` / `attn-linear` / `attn-cache` |
 | 位宽·数据类型 | W8A8 / W4A8 / W4A4；`int` / `mxfp` |
-| 算法 | 直转（minmax 等）、可训练 PTQ（lwc / lac / autoround / omniquant；其余如 gptq/awq 视分支移植）|
+| 算法 | 直转（minmax 等）、可训练 PTQ（lwc / lac / autoround / let（`lwc` + `let` 为完整的omniquant算法）；其余如 gptq/awq 视分支移植）|
 | bit 配置 | yaml `--bit_config`（顶层 `w_bits/a_bits` + `moe.routed/shared` + `attn-cache` 的 q/k/p/v）|
 | 评测·阈值 | Wikitext PPL；默认接受 `delta ≤ 0.2` |
 | 产物 | compressed-tensors（`config.json` + 分片权重 + `deploy_quantization.md`）|

@@ -13,7 +13,7 @@
 | CLI 入口 | `amct_pytorch/cli/llm/` | 提供 `eval`、`extract_ptq_data`、`ptq`、`deploy` 四类命令行入口。 |
 | 工作流 | `amct_pytorch/workflows/` | 支持编排 PPL 评估、校准数据提取、PTQ 优化训练和部署导出等功能。 |
 | 模型适配器 | `amct_pytorch/common/models/llm/` | 适配 DeepSeek、Qwen、LongCat、Pangu、GLM 等模型结构。 |
-| 量化算法 | `amct_pytorch/algorithms/quant/` | 提供 LWC、LAC、OmniQuant、Learnable Hadamard、AutoRound 等算法组件。 |
+| 量化算法 | `amct_pytorch/algorithms/quant/` | 提供 LWC、LAC、LET、AutoRound 等算法组件。（LWC+LET为完整的omniquant算法） |
 | 量化数据类型 | `amct_pytorch/quantization/dtypes/` | 提供 `mxfp`、`int` 等量化/反量化实现。 |
 | 量化配置 | `amct_pytorch/configs/` | 提供 BF16、W8A8、W4A4、W4A8 示例配置。 |
 

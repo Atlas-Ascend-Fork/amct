@@ -139,7 +139,7 @@ python -m amct_pytorch.ptq \
   ```
 必要传参解释：
 - base_lr：学习率，可根据模型/算法等自行调节
-- algos：所用量化算法，目前支持lwc/lac/omniquant/autoround
+- algos：所用量化算法，目前支持lwc/lac/let/autoround
 - output_dir：ptq训练结果保存路径
 - epoches：迭代轮数，根据算法和优化效果进行调整
 
