@@ -55,7 +55,7 @@ def replace_adaround_module(
     # Step3: replace new model
     model_helper.replace_module_by_name(model, object_module_name, new_ada_module)
     LOGGER.logd(
-        "replace AdaRoundQuant module to '{}' success!".format(object_module_name)
+        "Replaced the AdaRoundQuant module with '{}' successfully.".format(object_module_name)
     )
 
     return new_ada_module
@@ -170,7 +170,7 @@ def _compute_recon_loss(ada_quantized_output, original_output):
     Return:
         recon_loss: reconstruction loss.
     '''
-    frobenius_norm = torch.norm(ada_quantized_output - original_output, p="fro", dim=1)
+    frobenius_norm = torch.norm(ada_quantized_output - original_output, p="fro", dim=1)  # codespell:ignore fro
     recon_loss = frobenius_norm.pow(2).mean()
 
     return recon_loss
