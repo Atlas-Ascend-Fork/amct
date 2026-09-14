@@ -123,7 +123,9 @@ def _e2m1_packed_to_fp32(packed: torch.Tensor) -> torch.Tensor:
 
 
 def mxfp4_quantize(
-    tensor: torch.Tensor, axis: int = -1
+    tensor: torch.Tensor,
+    axis: int = -1,
+    max_abs_scale: float = 1.0,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     ndim = tensor.ndim
     axis = axis if axis >= 0 else axis + ndim
@@ -159,6 +161,8 @@ def mxfp4_quantize(
     groups_shape = padded.shape[:-1] + (padded.shape[-1] // BLOCK_SIZE, BLOCK_SIZE)
     grouped = abs_vals.view(*groups_shape)
     max_abs = grouped.max(dim=-1)[0]
+    if max_abs_scale != 1.0:
+        max_abs = max_abs * max_abs_scale
     scale_float = _compute_scale_even(max_abs)
     scale_e8m0 = scale_float_to_e8m0(scale_float)
 
@@ -172,6 +176,34 @@ def mxfp4_quantize(
     packed = packed.permute(perm)
     scale_e8m0 = scale_e8m0.permute(perm)
     return packed.contiguous(), scale_e8m0.contiguous()
+
+
+DEFAULT_SCALE_CANDIDATES = [0.85, 0.9, 0.925, 0.95, 0.975, 1.0, 1.05]
+
+
+def mxfp4_quantize_mse(
+    tensor: torch.Tensor,
+    axis: int = -1,
+    scale_candidates: list[float] | None = None,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    if scale_candidates is None:
+        scale_candidates = DEFAULT_SCALE_CANDIDATES
+
+    best_packed = None
+    best_scale_e8m0 = None
+    best_mse = float("inf")
+    ref = tensor.to(torch.float32)
+
+    for a in scale_candidates:
+        packed, scale_e8m0 = mxfp4_quantize(tensor, axis=axis, max_abs_scale=a)
+        dq = mxfp4_dequantize(packed, scale_e8m0, target_dtype=torch.float32, axis=axis)
+        mse = ((dq - ref) ** 2).mean().item()
+        if mse < best_mse:
+            best_mse = mse
+            best_packed = packed
+            best_scale_e8m0 = scale_e8m0
+
+    return best_packed, best_scale_e8m0
 
 
 def mxfp4_dequantize(

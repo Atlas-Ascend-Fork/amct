@@ -29,6 +29,7 @@
 | 依赖 | 不涉及　　　 | cmake/third_party/protobuf.cmake | https://gitcode.com/cann-src-third-party/protobuf/releases/download/v3.13.0/protobuf-3.13.0.tar.gz　　　　　　| 从gitcode下载protobuf源码，作用编译依赖　 |
 | 依赖 | 不涉及　　　 | cmake/third_party/protobuf.cmake | https://gitcode.com/cann-src-third-party/abseil-cpp/releases/download/20230802.1/abseil-cpp-20230802.1.tar.gz | 从gitcode下载abseil源码，作用编译依赖　　 |
 | 依赖 | 不涉及　　　 | cmake/fetch_cann_cmake.cmake　　 | https://cann-3rd.obs.cn-north-4.myhuaweicloud.com/cmake/cmake-master-049.tar.gz　　　　　　　　　　　　　　　 | 从gitcode下载cann cmake源码，作用编译依赖 |
+| 依赖 | 不涉及　　　 | install_graph.sh　　　　　　　 | https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/CANN/20260902_newest/cann-amct-graph_9.2.0_linux-${ARCH}.tar.gz | 从OBS下载amct-graph包，作用构建依赖　　　 |
 ---
 
 ## 漏洞机制说明
