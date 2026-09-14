@@ -25,7 +25,7 @@ description: 为已适配模型推荐下一步值得尝试的量化算法（仅�
 2. 已有个案再读最相近 `<series>/<case>.md`
 3. 确认量化口径读 [../references/metrics-and-thresholds.md](../references/metrics-and-thresholds.md)
 4. 确认直转判读规则读 [../references/direct-quant.md](../references/direct-quant.md)
-5. 可用算法**以 new-path `register_algorithms()` 实际 import 的为准** = `autoround / lac / lwc / let`（gptq/awq/mxfp 视分支移植，先确认在 ALGO_REGISTRY）；**别用 `grep amct_pytorch/algorithms` 命中名册判定可用**——classic 图量化 path 列了 gptq/awq 等但 LLM PTQ 不走，据此选会运行期 `KeyError: '...' is not registered in 'algo'`。
+5. 可用算法**以 new-path `register_algorithms()` 实际 import 的为准** = `autoround / lac / lwc / let`（`lwc` + `let`为完整的omniquant算法）（gptq/awq/mxfp 视分支移植，先确认在 ALGO_REGISTRY）；**别用 `grep amct_pytorch/algorithms` 命中名册判定可用**——classic 图量化 path 列了 gptq/awq 等但 LLM PTQ 不走，据此选会运行期 `KeyError: '...' is not registered in 'algo'`。
 
 ## 当前算法分组
 
