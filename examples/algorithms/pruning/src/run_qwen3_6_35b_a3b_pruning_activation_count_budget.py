@@ -211,11 +211,12 @@ def main():
         flush=True,
     )
 
-    workflow_start = time.time()
+
 
     tokenizer = AutoTokenizer.from_pretrained(
         args.model_path, local_files_only=True, **load_kwargs
     )
+    workflow_start = time.time()
     calibration = load_pileval(
         tokenizer,
         args.seq_len,
