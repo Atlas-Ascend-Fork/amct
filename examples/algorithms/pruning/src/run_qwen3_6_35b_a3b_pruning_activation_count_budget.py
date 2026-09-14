@@ -223,7 +223,7 @@ def main():
         low_cpu_mem_usage=True,
     ).eval()
 
-    workflow_start = time.time()
+    
     calibration = load_pileval(
         tokenizer,
         args.seq_len,
@@ -255,7 +255,7 @@ def main():
     )
 
     report = PruneReport()
-
+    workflow_start = time.time()
     amct.prune(
         model,
         config,
