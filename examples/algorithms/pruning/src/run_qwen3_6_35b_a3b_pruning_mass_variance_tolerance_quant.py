@@ -210,10 +210,6 @@ def main() -> None:
         quant_ppl, quant_command, quant_returncode = _run_quant_eval(
             args, model_dir, output_dir
         )
-        if quant_returncode:
-            raise RuntimeError(
-                f"quantization evaluation failed with exit code {quant_returncode}"
-            )
     result = {
         "model": "Qwen3.6-35B-A3B",
         "method": "mass_variance",
@@ -244,6 +240,10 @@ def main() -> None:
         json.dumps(result, indent=2, ensure_ascii=True), encoding="utf-8"
     )
     print("Saved:", result_path, flush=True)
+    if quant_returncode:
+        raise RuntimeError(
+            f"quantization evaluation failed with exit code {quant_returncode}"
+        )
 
 
 if __name__ == "__main__":
