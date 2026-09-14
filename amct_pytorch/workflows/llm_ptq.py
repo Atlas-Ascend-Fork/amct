@@ -47,7 +47,12 @@ class LlmPtqWorkflow:
             )
         if not args.quant_target:
             raise ValueError("ptq requires --quant_target.")
-        if len(args.quant_target) != 1:`r`n            raise ValueError(`r`n                f"PTQ supports exactly one quant_target, but got {len(args.quant_target)}: {args.quant_target}."`r`n            )`r`n        if not args.data_dir:`r`n            raise ValueError("ptq requires --data_dir.")
+        if len(args.quant_target) != 1:
+            raise ValueError(
+                f"PTQ supports exactly one quant_target, but got {len(args.quant_target)}: {args.quant_target}."
+            )
+        if not args.data_dir:
+            raise ValueError("ptq requires --data_dir.")
         self.quant_target = args.quant_target[0]
         self.device = args.device
         self.pipeline = None
@@ -264,4 +269,5 @@ class LlmPtqWorkflow:
             unit.name,
             save_path,
         )
+
 
