@@ -273,3 +273,47 @@ Measured on cloud A3 with `--device-map auto`, WikiText2 PPL, `seq_len=4096`,
 Notes: `0.1` / `0.2` find no acceptable candidate on the default grid (same class of valid
 outcome as task 1). At `0.5`, ΔPPL≈0.278 ≤ 0.5 so pruning applies (~9.45% cut). Values come
 from each tier's `result.json`.
+
+## 5 Community Task Sample: `mass_variance` + Quantization (Task 18)
+
+Task 18 runs Qwen3.6's public `amct_pytorch.eval` blockwise workflow for W8A8
+`attn-linear + moe` quantization after MoE expert pruning with `tolerance=0.1`. The script is
+[`src/run_qwen3_6_35b_a3b_pruning_mass_variance_tolerance_quant.py`](src/run_qwen3_6_35b_a3b_pruning_mass_variance_tolerance_quant.py).
+Weights and datasets are not committed; paths below are relative placeholders.
+
+### 5.1 Run Instructions
+
+```bash
+python3 examples/algorithms/pruning/src/run_qwen3_6_35b_a3b_pruning_mass_variance_tolerance_quant.py \
+  --model ./path/to/Qwen3.6-35B-A3B \
+  --trust-remote-code \
+  --device-map auto \
+  --tolerance 0.1 \
+  --ratio-grid 0.05 \
+  --bit-config amct_pytorch/configs/w8a8.yaml \
+  --quant-target attn-linear moe --quant-dtype int \
+  --output-dir ./output/qwen3_6_35b_a3b_mass_variance_quant
+```
+
+The script collects Pileval calibration data and runs the `mass_variance` tolerance search from the
+original model, then evaluates quantization on the pruned model using the WikiText2 `test` split at
+`seq_len=4096`. If no default-grid candidate meets the tolerance, pruning legitimately leaves the model
+unchanged and quantization is still evaluated on the original checkpoint. Commands, the pruning log tail,
+quantized PPL, and the return code are written to `result.json`. `--skip-quant-eval` is for debugging only.
+
+### 5.2 Diagnosis and Report
+
+The full arguments, pruning command, and quantization command are printed at startup. The pruning
+`prune_diagnose()` output and `PruneReport` are retained in the nested task output `result.json`; the
+quantization stage emits `PPL evaluation completed: ...`, captured as `quant_ppl`. Qwen3.6's fused MoE
+requires this dedicated workflow, so the script intentionally uses `amct_pytorch.eval` instead of the
+classic `amct.quantize` API.
+
+### 5.3 Results
+
+| Model | Method | Setting | Baseline PPL | Pruned PPL | Post PPL | Params (before → after) | Cut rate | Prune time (min) |
+| --- | --- | --- | ---: | ---: | ---: | --- | ---: | ---: |
+| Qwen3.6-35B-A3B | `mass_variance` + `quant` | `tolerance=0.1`, `ratio_grid=0.05`, W8A8 `attn-linear + moe` | 6.308547 | 6.354577 | 6.449746 | 34660610688 → 33023767168 | 0.0472 | 10.39 |
+
+Results are from an A3 dual-NPU run. The pruning report and quantization log are retained in the
+output directory's `result.json`.

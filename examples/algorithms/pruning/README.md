@@ -263,3 +263,43 @@ no prune ratio met tolerance 0.100 across 3 candidates; model left unchanged.
 
 说明：`0.1` / `0.2` 在默认网格下无候选满足绝对 PPL 容差（与任务 1 同类，属有效结果）；
 `0.5` 档 ΔPPL≈0.278 ≤ 0.5，剪枝生效，削减率约 9.45%。字段来自各档 `result.json`。
+
+## 5 社区任务样例：`mass_variance` + 量化（任务 18）
+
+任务 18 在 `tolerance=0.1` 的 MoE 专家剪枝后，继续使用 Qwen3.6 的公开
+`amct_pytorch.eval` blockwise 流程做 W8A8 `attn-linear + moe` 量化评估。脚本位于
+[`src/run_qwen3_6_35b_a3b_pruning_mass_variance_tolerance_quant.py`](src/run_qwen3_6_35b_a3b_pruning_mass_variance_tolerance_quant.py)。
+模型权重和数据集均不提交，路径为占位的相对路径。
+
+### 5.1 运行说明
+
+```bash
+python3 examples/algorithms/pruning/src/run_qwen3_6_35b_a3b_pruning_mass_variance_tolerance_quant.py \
+  --model ./path/to/Qwen3.6-35B-A3B \
+  --trust-remote-code \
+  --device-map auto \
+  --tolerance 0.1 \
+  --ratio-grid 0.05 \
+  --bit-config amct_pytorch/configs/w8a8.yaml \
+  --quant-target attn-linear moe --quant-dtype int \
+  --output-dir ./output/qwen3_6_35b_a3b_mass_variance_quant
+```
+
+脚本会先从原始模型收集 Pileval 校准数据，并执行 `mass_variance` 容差搜索；随后对剪枝模型执行
+WikiText2 `test` split、`seq_len=4096` 的量化 PPL 评估。若默认网格下没有候选满足容差，剪枝模型
+保持原样，量化仍会对原始模型执行。完整命令、剪枝日志尾部、量化 PPL 和返回码写入 `result.json`。
+`--skip-quant-eval` 只用于检查剪枝流程，不属于正式结果。
+
+### 5.2 诊断与报告
+
+启动时打印完整参数、剪枝命令和量化命令。剪枝阶段的 `prune_diagnose()` 与 `PruneReport` 保存在
+子任务输出目录的 `result.json`；量化阶段输出 `PPL evaluation completed: ...`，并记录为 `quant_ppl`。
+量化使用 `amct_pytorch.eval` 而不是经典 `amct.quantize`，因为 Qwen3.6 的融合 MoE 需要专用模型工作流。
+
+### 5.3 结果表
+
+| 模型 | 方法 | 实验设置 | 基线 PPL | 剪枝后 PPL | 后处理 PPL | 参数量（前 → 后） | 参数削减率 | 剪枝时长（min） |
+| --- | --- | --- | ---: | ---: | ---: | --- | ---: | ---: |
+| Qwen3.6-35B-A3B | `mass_variance` + `quant` | `tolerance=0.1`, `ratio_grid=0.05`, W8A8 `attn-linear + moe` | 6.308547 | 6.354577 | 6.449746 | 34660610688 → 33023767168 | 0.0472 | 10.39 |
+
+结果来自 A3 双 NPU 实测；剪枝报告和量化日志保存在输出目录的 `result.json`。
