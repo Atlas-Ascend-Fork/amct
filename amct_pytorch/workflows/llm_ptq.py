@@ -40,11 +40,19 @@ from amct_pytorch.common.utils.seed_utils import seed_everything
 class LlmPtqWorkflow:
     def __init__(self, args):
         self.args = args
+        self.granularity = args.granularity
+        if self.granularity != "block":
+            raise ValueError(
+                f"ptq only supports granularity 'block', got '{self.granularity}'."
+            )
+        if not args.quant_target:
+            raise ValueError("ptq requires --quant_target.")
         if len(args.quant_target) != 1:
             raise ValueError("ptq only supports a single quant_target.")
+        if not args.data_dir:
+            raise ValueError("ptq requires --data_dir.")
         self.quant_target = args.quant_target[0]
         self.device = args.device
-        self.granularity = args.granularity
         self.pipeline = None
         self.data_provider = None
         self.model_name = self.args.model_name

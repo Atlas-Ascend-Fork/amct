@@ -41,18 +41,33 @@ def _make_args(quant_target):
         device="cpu",
         model_name="qwen3",
         granularity="block",
+        data_dir="/tmp/d",
         seed=0,
     )
 
 
 def test_init_rejects_no_quant_target():
-    with pytest.raises(ValueError, match="single quant_target"):
+    with pytest.raises(ValueError, match="requires --quant_target"):
         LlmExtractPtqDataWorkflow(_make_args([]))
 
 
 def test_init_rejects_multiple_quant_targets():
     with pytest.raises(ValueError, match="single quant_target"):
         LlmExtractPtqDataWorkflow(_make_args(["mlp", "attn-linear"]))
+
+
+def test_init_requires_data_dir():
+    args = _make_args(["mlp"])
+    args.data_dir = ""
+    with pytest.raises(ValueError, match="requires --data_dir"):
+        LlmExtractPtqDataWorkflow(args)
+
+
+def test_init_rejects_non_block_granularity():
+    args = _make_args(["mlp"])
+    args.granularity = "model"
+    with pytest.raises(ValueError, match="granularity 'block'"):
+        LlmExtractPtqDataWorkflow(args)
 
 
 def test_init_unwraps_single_target_to_string():

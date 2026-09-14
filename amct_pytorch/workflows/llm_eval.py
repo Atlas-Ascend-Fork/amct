@@ -41,6 +41,11 @@ class LlmEvalWorkflow:
         self.seq_len = args.seq_len
         self.device = args.device
         self.granularity = args.granularity
+        if self.granularity not in ("block", "model"):
+            raise ValueError(
+                f"eval only supports granularity 'block' or 'model', "
+                f"got '{self.granularity}'."
+            )
         self.eval_mode = args.eval_mode
         self.pipeline = None
         self.data_provider = None

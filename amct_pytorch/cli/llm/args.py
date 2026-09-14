@@ -45,8 +45,8 @@ def parser_gen(command=None):
     parser.add_argument(
         '--model_name',
         type=str,
-        default='deepseek-ai/DeepSeek-V4-Flash',
-        help='Model to load.',
+        required=True,
+        help='Model registry name, e.g. qwen3_5, deepseek_v4.',
     )
     parser.add_argument(
         '--trust_remote_code',
@@ -58,8 +58,10 @@ def parser_gen(command=None):
     parser.add_argument(
         '--granularity',
         type=str,
-        default='model',
-        help='eval for block-wise or global.',
+        default='block',
+        help='Granularity used by the sub-command. Defaults to block. '
+        '"model" (eval only) loads the whole model for PPL; "tensor" '
+        '(deploy only) converts weights tensor-wise (dequant/direct quant).',
     )
     parser.add_argument(
         '--seed', type=int, default=42, help='Random seed for HuggingFace and PyTorch.'
@@ -71,9 +73,15 @@ def parser_gen(command=None):
         choices=["mlp", "moe", "attn-linear", "attn-cache"],
         help='Only support [mlp, moe, attn-linear, attn-cache]',
     )
+
     parser.add_argument("--seq_len", type=int, default=4096)
 
-    parser.add_argument('--data_dir', default="")
+    parser.add_argument(
+        '--data_dir',
+        default="",
+        help='Directory holding extract_ptq_data outputs; '
+        'required by extract_ptq_data and ptq.',
+    )
 
     parser.add_argument(
         '--output_dir', type=str, default="./outputs", help='Output directory path.'

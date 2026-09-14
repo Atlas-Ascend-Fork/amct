@@ -33,8 +33,17 @@ class LlmExtractPtqDataWorkflow:
         self.seq_len = args.seq_len
         self.nsamples = args.nsamples
         self.granularity = args.granularity
+        if self.granularity != "block":
+            raise ValueError(
+                f"extract_ptq_data only supports granularity 'block', "
+                f"got '{self.granularity}'."
+            )
+        if not args.quant_target:
+            raise ValueError("extract_ptq_data requires --quant_target.")
         if len(args.quant_target) != 1:
             raise ValueError("extract_ptq_data only supports a single quant_target.")
+        if not args.data_dir:
+            raise ValueError("extract_ptq_data requires --data_dir.")
         self.quant_target = args.quant_target[0]
         self.device = args.device
         self.pipeline = None
