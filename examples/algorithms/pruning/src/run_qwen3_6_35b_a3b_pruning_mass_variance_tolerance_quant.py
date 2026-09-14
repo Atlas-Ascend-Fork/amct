@@ -44,14 +44,20 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--model", required=True, help="Local Qwen3.6 checkpoint")
     parser.add_argument(
-        "--tolerance", type=float, default=0.1, choices=[0.1],
+        "--tolerance",
+        type=float,
+        default=0.1,
+        choices=[0.1],
         help="Allowed absolute PPL increase; task 18 fixes this at 0.1",
     )
     parser.add_argument(
-        "--output-dir", default="./output/qwen3_6_35b_a3b_mass_variance_quant",
+        "--output-dir",
+        default="./output/qwen3_6_35b_a3b_mass_variance_quant",
         help="Relative output directory",
     )
-    parser.add_argument("--device-map", choices=["auto", "single", "cpu"], default="auto")
+    parser.add_argument(
+        "--device-map", choices=["auto", "single", "cpu"], default="auto"
+    )
     parser.add_argument("--device", default="npu:0")
     parser.add_argument("--trust-remote-code", action="store_true")
     parser.add_argument("--baseline-ppl", type=float, default=None)
@@ -61,7 +67,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--eval-batches", type=int, default=None)
     parser.add_argument("--bit-config", default="amct_pytorch/configs/w8a8.yaml")
     parser.add_argument(
-        "--quant-target", nargs="+", default=["attn-linear", "moe"],
+        "--quant-target",
+        nargs="+",
+        default=["attn-linear", "moe"],
         choices=["mlp", "moe", "attn-linear"],
     )
     parser.add_argument("--quant-dtype", default="int", choices=["int", "mxfp", "hifp"])
@@ -73,11 +81,22 @@ def parse_args() -> argparse.Namespace:
 
 def _run_pruning(args: argparse.Namespace, prune_output: Path) -> tuple[Path, str]:
     command = [
-        sys.executable, str(PRUNE_SCRIPT.relative_to(ROOT)), "--model", args.model,
-        "--tolerance", str(args.tolerance), "--output-dir", str(prune_output),
-        "--device-map", args.device_map, "--device", args.device,
-        "--calib-nsamples", str(args.calib_nsamples),
-        "--calib-seq-len", str(args.calib_seq_len),
+        sys.executable,
+        str(PRUNE_SCRIPT.relative_to(ROOT)),
+        "--model",
+        args.model,
+        "--tolerance",
+        str(args.tolerance),
+        "--output-dir",
+        str(prune_output),
+        "--device-map",
+        args.device_map,
+        "--device",
+        args.device,
+        "--calib-nsamples",
+        str(args.calib_nsamples),
+        "--calib-seq-len",
+        str(args.calib_seq_len),
     ]
     if args.trust_remote_code:
         command.append("--trust-remote-code")
@@ -89,8 +108,12 @@ def _run_pruning(args: argparse.Namespace, prune_output: Path) -> tuple[Path, st
         command += ["--eval-batches", str(args.eval_batches)]
     print("[prune-command]", " ".join(command), flush=True)
     process = subprocess.Popen(
-        command, cwd=ROOT, text=True, stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT, bufsize=1,
+        command,
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        bufsize=1,
     )
     lines = []
     assert process.stdout is not None
@@ -100,20 +123,44 @@ def _run_pruning(args: argparse.Namespace, prune_output: Path) -> tuple[Path, st
     process.wait()
     output = "".join(lines)
     if process.returncode:
-        raise RuntimeError(f"pruning command failed with exit code {process.returncode}")
+        raise RuntimeError(
+            f"pruning command failed with exit code {process.returncode}"
+        )
     candidate = prune_output / f"tolerance_{args.tolerance}" / "pruned_model"
     # Tight tolerances can legitimately leave the original model untouched.
-    model_for_quant = candidate.resolve() if candidate.is_dir() else Path(args.model).resolve()
+    model_for_quant = (
+        candidate.resolve() if candidate.is_dir() else Path(args.model).resolve()
+    )
     return model_for_quant, output
 
 
-def _run_quant_eval(args: argparse.Namespace, model_dir: Path, output_dir: Path) -> tuple[float | None, str, int]:
+def _run_quant_eval(
+    args: argparse.Namespace, model_dir: Path, output_dir: Path
+) -> tuple[float | None, str, int]:
     command = [
-        sys.executable, "-m", "amct_pytorch.eval", "--model", str(model_dir),
-        "--model_name", "qwen3_6_moe", "--seq_len", "4096", "--granularity", "block",
-        "--device", args.device, "--eval_mode", "quant", "--quant_target", *args.quant_target,
-        "--quant_dtype", args.quant_dtype, "--bit_config", args.bit_config,
-        "--output_dir", str(output_dir / "quant_eval"),
+        sys.executable,
+        "-m",
+        "amct_pytorch.eval",
+        "--model",
+        str(model_dir),
+        "--model_name",
+        "qwen3_6_moe",
+        "--seq_len",
+        "4096",
+        "--granularity",
+        "block",
+        "--device",
+        args.device,
+        "--eval_mode",
+        "quant",
+        "--quant_target",
+        *args.quant_target,
+        "--quant_dtype",
+        args.quant_dtype,
+        "--bit_config",
+        args.bit_config,
+        "--output_dir",
+        str(output_dir / "quant_eval"),
     ]
     if args.trust_remote_code:
         command.append("--trust_remote_code")
@@ -123,8 +170,12 @@ def _run_quant_eval(args: argparse.Namespace, model_dir: Path, output_dir: Path)
         command += ["--attn_linear_param_dir", args.attn_linear_param_dir]
     print("[quant-command]", " ".join(command), flush=True)
     process = subprocess.Popen(
-        command, cwd=ROOT, text=True, stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT, bufsize=1,
+        command,
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        bufsize=1,
     )
     lines = []
     assert process.stdout is not None
@@ -139,27 +190,46 @@ def _run_quant_eval(args: argparse.Namespace, model_dir: Path, output_dir: Path)
 
 def main() -> None:
     args = parse_args()
-    print("[run-config]", json.dumps(vars(args), ensure_ascii=True, sort_keys=True), flush=True)
+    print(
+        "[run-config]",
+        json.dumps(vars(args), ensure_ascii=True, sort_keys=True),
+        flush=True,
+    )
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     model_dir, prune_log = _run_pruning(args, output_dir / "pruning")
-    nested_result_path = output_dir / "pruning" / f"tolerance_{args.tolerance}" / "result.json"
+    nested_result_path = (
+        output_dir / "pruning" / f"tolerance_{args.tolerance}" / "result.json"
+    )
     nested_result = {}
     if nested_result_path.is_file():
         nested_result = json.loads(nested_result_path.read_text(encoding="utf-8"))
     quant_ppl = quant_command = None
     quant_returncode = None
     if not args.skip_quant_eval:
-        quant_ppl, quant_command, quant_returncode = _run_quant_eval(args, model_dir, output_dir)
+        quant_ppl, quant_command, quant_returncode = _run_quant_eval(
+            args, model_dir, output_dir
+        )
         if quant_returncode:
-            raise RuntimeError(f"quantization evaluation failed with exit code {quant_returncode}")
+            raise RuntimeError(
+                f"quantization evaluation failed with exit code {quant_returncode}"
+            )
     result = {
-        "model": "Qwen3.6-35B-A3B", "method": "mass_variance", "mode": "tolerance",
-        "tolerance": args.tolerance, "ratio_grid": args.ratio_grid, "post_process": "quant",
-        "model_for_quant": str(model_dir), "quant_seq_len": 4096, "quant_granularity": "block",
-        "quant_target": args.quant_target, "quant_dtype": args.quant_dtype,
-        "quant_ppl": quant_ppl, "quant_command": quant_command,
-        "quant_returncode": quant_returncode, "pruning_log_tail": prune_log[-4000:],
+        "model": "Qwen3.6-35B-A3B",
+        "method": "mass_variance",
+        "mode": "tolerance",
+        "tolerance": args.tolerance,
+        "ratio_grid": args.ratio_grid,
+        "post_process": "quant",
+        "model_for_quant": str(model_dir),
+        "quant_seq_len": 4096,
+        "quant_granularity": "block",
+        "quant_target": args.quant_target,
+        "quant_dtype": args.quant_dtype,
+        "quant_ppl": quant_ppl,
+        "quant_command": quant_command,
+        "quant_returncode": quant_returncode,
+        "pruning_log_tail": prune_log[-4000:],
         "baseline_ppl": nested_result.get("baseline_ppl"),
         "pruned_ppl": nested_result.get("pruned_ppl"),
         "post_process_ppl": quant_ppl,
@@ -170,7 +240,9 @@ def main() -> None:
         "pruning_result": str(nested_result_path),
     }
     result_path = output_dir / "result.json"
-    result_path.write_text(json.dumps(result, indent=2, ensure_ascii=True), encoding="utf-8")
+    result_path.write_text(
+        json.dumps(result, indent=2, ensure_ascii=True), encoding="utf-8"
+    )
     print("Saved:", result_path, flush=True)
 
 
