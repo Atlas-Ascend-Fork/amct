@@ -362,10 +362,10 @@ The script loads the complete model on the CPU and performs structured pruning, 
 Parameter Description:
 | Argument | Default | Required | Description |
 | --- | --- | --- | --- |
-| `--model_path` | none | Yes | Path to the local model directory (must be an existing directory) |
+| `--model_path` | none | Yes | Local model directory |
 | `--size_budget` | none | Yes | Target parameter budget; one of 0.9 / 0.8 / 0.5 |
-| `--seq_len` | 4096 | No | Calibration sequence length (must be a positive integer) |
-| `--calibration_samples` | 4 | No | Number of calibration samples (must be a positive integer) |
+| `--seq_len` | 4096 | No | Calibration sequence length |
+| `--calibration_samples` | 4 | Number of calibration samples |
 | `--pileval_source` | `huggingface` | No | Pileval data source: `huggingface` or `modelscope` |
 | `--ratio_grid` | `0.1,0.2,0.3` | No | Candidate expert pruning ratios tried by AMCT, comma-separated, each between 0 and 1 |
 | `--report_dir` | none | Yes | Directory for the JSON pruning report |
