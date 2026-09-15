@@ -131,9 +131,9 @@ def test_get_group_size_fp_128x128_uses_column_grouping():
     assert AutoRound._get_group_size(args) == 128
 
 
-def test_get_group_size_fp_1x128_falls_back_per_row():
+def test_get_group_size_fp_1x128_uses_group_size_128():
     args = SimpleNamespace(quant_dtype="fp", block_size_col=1)
-    assert AutoRound._get_group_size(args) == -1
+    assert AutoRound._get_group_size(args) == 128
 
 
 def test_get_group_size_fp_defaults_to_128_when_block_size_col_missing():
