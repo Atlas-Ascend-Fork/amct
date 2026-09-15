@@ -303,3 +303,256 @@ WikiText2 `test` split、`seq_len=4096` 的量化 PPL 评估。若默认网格�
 | Qwen3.6-35B-A3B | `mass_variance` + `quant` | `tolerance=0.1`, `ratio_grid=0.05`, W8A8 `attn-linear + moe` | 6.308547 | 6.354577 | 6.449746 | 34660610688 → 33023767168 | 0.0472 | 10.39 |
 
 结果来自 A3 双 NPU 实测；剪枝报告和量化日志保存在输出目录的 `result.json`。
+
+## 6 社区任务样例：Qwen3.6-35B-A3B MoE `activation_count` + `budget`（任务 3）
+
+本节对应 issue 183 的任务 3：基于 `activation_count` 的 MoE 专家结构化剪枝，使用
+`size_budget=0.9`、`0.8` 和 `0.5` 三档目标参数预算。
+
+### 6.1 任务目标与实验设置
+
+Qwen3.6-35B-A3B 包含 40 个 MoE 层，每层 256 个路由专家，每个 token 激活 8 个专家。原始 BF16 权重约占 64.56 GiB，完整模型可能超过单张 Ascend 910 卡的可用显存，因此剪枝阶段在 CPU 上加载完整模型；剪枝后模型可以继续进行 WikiText2 评测、量化或部署。
+
+```text
+模型：Qwen3.6-35B-A3B
+方法：activation_count
+目标：MoE experts
+模式：size_budget
+size_budget：0.9、0.8、0.5
+校准集：Pileval（mit-han-lab/pile-val-backup，validation）
+评估集：WikiText2（wikitext-2-raw-v1，test split）
+序列长度：4096
+校准样本数：4
+后处理：size_budget=0.5 档执行 300 步恢复训练
+```
+
+`activation_count` 根据校准数据统计专家激活情况，优先删除激活次数较少的专家，并同步收缩路由器和专家权重。
+
+### 6.2 模型准备
+
+将 [Qwen/Qwen3.6-35B-A3B 原始权重](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) 下载到本地模型目录，例如：
+
+```text
+./path/to/Qwen3.6-35B-A3B
+```
+
+该权重为 `bfloat16`，无需格式转换。目录中应包含：
+
+```text
+config.json
+model.safetensors.index.json
+model-00001-of-00026.safetensors
+...
+model-00026-of-00026.safetensors
+tokenizer.json
+tokenizer_config.json
+```
+
+首次运行脚本时会自动下载并缓存校准与评估数据集。
+
+### 6.3 运行剪枝
+
+在 `amct/examples/algorithms/pruning` 目录执行以下命令。每个预算都应从同一个原始模型目录独立运行：
+
+```bash
+python3 src/run_qwen3_6_35b_a3b_pruning_activation_count_budget.py \
+  --model_path ./path/to/Qwen3.6-35B-A3B \
+  --size_budget 0.9 \
+  --seq_len 4096 \
+  --calibration_samples 4 \
+  --pileval_source modelscope \
+  --ratio_grid 0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8 \
+  --report_dir ./outputs/qwen3_6_pruning_results \
+  --save_model_dir ./outputs/Qwen3.6-35B-A3B-pruned-budget09 \
+  --trust_remote_code
+
+python3 src/run_qwen3_6_35b_a3b_pruning_activation_count_budget.py \
+  --model_path ./path/to/Qwen3.6-35B-A3B \
+  --size_budget 0.8 \
+  --seq_len 4096 \
+  --calibration_samples 4 \
+  --pileval_source modelscope \
+  --ratio_grid 0.2,0.3,0.4 \
+  --report_dir ./outputs/qwen3_6_pruning_results \
+  --save_model_dir ./outputs/Qwen3.6-35B-A3B-pruned-budget08 \
+  --trust_remote_code
+
+python3 src/run_qwen3_6_35b_a3b_pruning_activation_count_budget.py \
+  --model_path ./path/to/Qwen3.6-35B-A3B \
+  --size_budget 0.5 \
+  --seq_len 4096 \
+  --calibration_samples 4 \
+  --pileval_source modelscope \
+  --ratio_grid 0.5,0.6,0.7 \
+  --report_dir ./outputs/qwen3_6_pruning_results \
+  --save_model_dir ./outputs/Qwen3.6-35B-A3B-pruned-budget05 \
+  --trust_remote_code
+```
+
+脚本在 CPU 上加载完整模型并执行结构化剪枝，完成后对剪枝模型执行一次前向检查。只有传入
+`--save_model_dir` 时，剪枝后的 config、tokenizer 和 safetensors 权重才会写入输出目录；未传该参数时，进程退出后只保留 JSON 报告。
+参数说明：
+| 参数 | 默认值 | 必填 | 含义 |
+| --- | --- | --- | --- |
+| `--model_path` | 无 | 是 | 本地模型目录 |
+| `--size_budget` | 无 | 是 | 目标参数预算，可选 0.9 / 0.8 / 0.5 |
+| `--seq_len` | 4096 | 否 | 校准序列长度 |
+| `--calibration_samples` | 4 | 否 | 校准样本数量 |
+| `--pileval_source` | `huggingface` | 否 | Pileval 数据来源：`huggingface` 或 `modelscope` |
+| `--ratio_grid` | `0.1,0.2,0.3` | 否 | AMCT 尝试的候选专家剪枝比例，逗号分隔且须在 0~1 之间 |
+| `--report_dir` | 无 | 是 | JSON 剪枝报告输出目录 |
+| `--save_model_dir` | `""` | 否 | 剪枝模型保存目录，为空则不保存权重 |
+| `--trust_remote_code` | `False` | 否 | 允许执行模型目录内自定义代码；默认关闭。--model_path 必须是本地目录；仅对信任的本地权重开启 |
+
+### 6.4 诊断与报告
+
+正式脚本调用 `amct_pytorch.pruning.prune_diagnose`，例如 size_budget=0.9 时诊断结果如下：
+
+```text
+{
+  "targets": {
+    "cnn": 0,
+    "dense": 40,
+    "moe": 40
+  },
+  "prune_works": true,
+  "prune_reduction": 0.09444977959183498,
+  "prune_forward_ok": true,
+  "search_works": true,
+  "search_chosen_ratio": 0.5,
+  "notes": []
+}
+```
+
+正式剪枝后的 `PruneReport` 核心内容：
+
+```text
+params_before: 34660610688
+params_after: 28239147648
+budget_unreachable: False
+prunable_fraction: 0.9335997444269842
+```
+
+完整内容保存在脚本输出的 JSON 报告中。
+
+### 6.5 WikiText2 评测与结果
+
+PPL 评测使用 `wikitext-2-raw-v1` 的 test split，固定 `seq_len=4096`。Pileval 只用于校准，不能用于 PPL 评估。原始模型或剪枝模型无法完整放入单卡时，使用 AMCT 的 blockwise 评测入口：
+
+```bash
+python3 -m amct_pytorch.eval \
+  --trust_remote_code \
+  --model ./path/to/Qwen3.6-35B-A3B \
+  --model_name qwen3_6_moe \
+  --seq_len 4096 \
+  --granularity block \
+  --device npu:0 \
+  --eval_mode bf16 \
+  --bit_config amct_pytorch/configs/bf16.yaml
+```
+
+评测剪枝模型时，只替换 `--model` 路径，例如：
+
+```bash
+python3 -m amct_pytorch.eval \
+  --trust_remote_code \
+  --model ./outputs/Qwen3.6-35B-A3B-pruned-budget09 \
+  --model_name qwen3_6_moe \
+  --seq_len 4096 \
+  --granularity block \
+  --device npu:0 \
+  --eval_mode bf16 \
+  --bit_config amct_pytorch/configs/bf16.yaml
+```
+
+| 模型            | 方法               | 实验设置          |          基线 PPL |         剪枝后 PPL |        后处理 PPL | 参数量（前 → 后）               | 参数削减率 | 剪枝时长（min） |
+| --------------- | ------------------ | ----------------- | ----------------: | -----------------: | ----------------: | ------------------------------- | ---------: | --------------: |
+| Qwen3.6-35B-A3B | `activation_count` | `size_budget=0.9` | 6.308547019958496 |  6.664599895477295 |               N/A | 34,660,610,688 → 28,239,147,648 |   18.5267% |           20.11 |
+| Qwen3.6-35B-A3B | `activation_count` | `size_budget=0.8` | 6.308547019958496 | 7.1991167068481445 |               N/A | 34,660,610,688 → 24,965,460,608 |   27.9717% |           15.44 |
+| Qwen3.6-35B-A3B | `activation_count` | `size_budget=0.5` | 6.308547019958496 |  9.780414581298828 | 8.294227600097656 | 34,660,610,688 → 15,270,310,528 |   55.9433% |           15.07 |
+
+### 6.6 `size_budget=0.5` 恢复训练
+
+本次仅对参数量最小、可在单张 64 GiB Ascend 910 上完成全参数训练的 `size_budget=0.5` 模型执行恢复训练。恢复训练从剪枝模型开始，未重新执行剪枝，也未覆盖剪枝模型。
+
+```text
+输入模型：./outputs/Qwen3.6-35B-A3B-pruned-budget05
+输出模型：./outputs/Qwen3.6-35B-A3B-pruned-budget05-finetuned
+训练集：WikiText2 wikitext-2-raw-v1 train split
+训练批次：300 个互不重复的连续 token 块
+batch size：1
+seq_len：512
+训练 token 数：153,600
+训练步数：300
+优化器：SGD
+学习率：1e-2
+momentum：0.0
+warmup：20 步
+梯度裁剪：1.0
+gradient checkpointing：启用，use_reentrant=False
+训练设备：npu:0
+训练耗时：27.371 min
+峰值已分配显存：58.219 GiB
+峰值保留显存：59.793 GiB
+```
+
+选择无动量 SGD 是为了避免 AdamW 为参数额外维护一阶、二阶动量状态。由于 SGD 不会像 AdamW 一样按梯度统计量自适应缩放，本次使用 `lr=1e-2`，而不是直接沿用 AdamW 常见的 `1e-5` 或 `2e-5` 量级。
+
+`prune_finetune()` 的默认因果语言模型损失接受包含 `input_ids` 的字典，并将 `input_ids` 同时作为 labels。本次显式传入无动量 SGD：
+
+```python
+import os
+import torch
+from amct_pytorch.pruning import prune_finetune
+
+model.config.use_cache = False
+model.gradient_checkpointing_enable(
+    gradient_checkpointing_kwargs={"use_reentrant": False}
+)
+model.to("npu:0")
+
+params = [p for p in model.parameters() if p.requires_grad]
+optimizer = torch.optim.SGD(params, lr=1e-2, momentum=0.0)
+result = prune_finetune(
+    model,
+    batches,
+    steps=300,
+    lr=1e-2,
+    warmup=20,
+    optimizer=optimizer,
+    device="npu:0",
+    grad_clip=1.0,
+    log_every=25,
+)
+
+model.to("cpu")
+model.save_pretrained(
+    os.environ["RECOVERY_OUTPUT_DIR"],
+    safe_serialization=True,
+)
+```
+
+实际运行时还需在导入 Transformers 前屏蔽不兼容的可选 `torchaudio`，保存 tokenizer，并保留剪枝模型外层 `config.json` 中的 Qwen3.6 wrapper 配置。恢复训练完成后，使用本节相同的 WikiText2 test、`seq_len=4096`、blockwise BF16 命令评测输出目录。
+
+本次恢复训练结果：
+
+```text
+原始模型 PPL：      6.308547019958496
+剪枝后 PPL：        9.780414581298828
+恢复训练后 PPL：    8.294227600097656
+```
+
+相对未经恢复的剪枝模型，PPL 绝对下降 `1.486186981201172`，相对下降约 `15.20%`；若以剪枝造成的 PPL 增量为损失，本次恢复约 `42.81%`。恢复后 PPL 仍比原始模型高 `1.985680580139160`，因此当前结果是有所恢复但尚未恢复到基线。
+
+### 6.7 继续恢复时可调整的参数
+
+若需要继续提高恢复程度，可每次只改变少量参数，并用相同的 WikiText2 test 命令比较 PPL：
+
+1. `steps` 和训练数据量：增加独立训练 batch 和训练步数。若 `steps` 超过 batch 数，`prune_finetune()` 会循环复用数据，应优先增加不同的训练 token。
+2. `lr`：`1e-2` 是无动量 SGD 的起点，可对照 `3e-3` 和 `1e-2` 等值；学习率过高可能使 loss 发散。
+3. `warmup`：训练步数增加时同步增加 warmup，并保持合理比例。本次为 `20/300`。
+4. `seq_len`：更长上下文更接近 `seq_len=4096` 评测，但会增加激活显存；本次峰值保留显存已达 `59.793 GiB`，提高前必须重新做 1 步和 10 步显存测试。
+5. 训练数据：可增加数量和多样性，但不得使用 WikiText2 test split 训练。
+6. `grad_clip`：本次为 `1.0`；若梯度或 loss 不稳定可以调小，最终仍以固定评测集 PPL 为准。
+
+多组恢复参数应使用独立报告和输出目录，避免覆盖剪枝模型。BF16 的 `size_budget=0.5` 权重约占 28.4 GiB；磁盘不足时，记录 PPL 和报告后再清理不再需要的恢复模型。

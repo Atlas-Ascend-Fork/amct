@@ -317,3 +317,256 @@ classic `amct.quantize` API.
 
 Results are from an A3 dual-NPU run. The pruning report and quantization log are retained in the
 output directory's `result.json`.
+
+## 6 Community Task Example: Qwen3.6-35B-A3B MoE `activation_count` + `budget` (Task 3)
+
+This section corresponds to Task 3 in issue 183: structured MoE expert pruning based on `activation_count`, using three target parameter budgets: `size_budget=0.9`, `0.8`, and `0.5`.
+
+### 6.1 Task Objective and Experimental Setup
+
+Qwen3.6-35B-A3B contains 40 MoE layers, with 256 routed experts per layer and 8 experts activated for each token. The original BF16 weights occupy approximately 64.56 GiB. Because the complete model may exceed the available memory of a single Ascend 910 card, the pruning stage loads the complete model on the CPU. The pruned model can then be evaluated on WikiText2, quantized, or deployed.
+
+```text
+Model:               Qwen3.6-35B-A3B
+Method:              activation_count
+Target:              MoE experts
+Mode:                size_budget
+size_budget:         0.9, 0.8, 0.5
+Calibration set:     Pileval (mit-han-lab/pile-val-backup, validation)
+Evaluation set:      WikiText2 (wikitext-2-raw-v1, test split)
+Sequence length:     4096
+Calibration samples: 4
+Post-processing:     300-step recovery fine-tuning for size_budget=0.5
+```
+
+`activation_count` counts expert activations using the calibration data, preferentially removes experts with fewer activations, and shrinks the router and expert weights accordingly.
+
+### 6.2 Model Preparation
+
+Download the original [Qwen/Qwen3.6-35B-A3B weights](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) to a local model directory, for example:
+
+```text
+./path/to/Qwen3.6-35B-A3B
+```
+
+The weights are in `bfloat16` format and do not require conversion. The directory should contain:
+
+```text
+config.json
+model.safetensors.index.json
+model-00001-of-00026.safetensors
+...
+model-00026-of-00026.safetensors
+tokenizer.json
+tokenizer_config.json
+```
+
+The calibration and evaluation datasets are downloaded and cached automatically on the first run.
+
+### 6.3 Run Pruning
+
+Run the following commands from `amct/examples/algorithms/pruning`. Each budget must be evaluated independently from the same original model directory:
+
+```bash
+python3 src/run_qwen3_6_35b_a3b_pruning_activation_count_budget.py \
+  --model_path ./path/to/Qwen3.6-35B-A3B \
+  --size_budget 0.9 \
+  --seq_len 4096 \
+  --calibration_samples 4 \
+  --pileval_source modelscope \
+  --ratio_grid 0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8 \
+  --report_dir ./outputs/qwen3_6_pruning_results \
+  --save_model_dir ./outputs/Qwen3.6-35B-A3B-pruned-budget09 \
+  --trust_remote_code
+
+python3 src/run_qwen3_6_35b_a3b_pruning_activation_count_budget.py \
+  --model_path ./path/to/Qwen3.6-35B-A3B \
+  --size_budget 0.8 \
+  --seq_len 4096 \
+  --calibration_samples 4 \
+  --pileval_source modelscope \
+  --ratio_grid 0.2,0.3,0.4 \
+  --report_dir ./outputs/qwen3_6_pruning_results \
+  --save_model_dir ./outputs/Qwen3.6-35B-A3B-pruned-budget08 \
+  --trust_remote_code
+
+python3 src/run_qwen3_6_35b_a3b_pruning_activation_count_budget.py \
+  --model_path ./path/to/Qwen3.6-35B-A3B \
+  --size_budget 0.5 \
+  --seq_len 4096 \
+  --calibration_samples 4 \
+  --pileval_source modelscope \
+  --ratio_grid 0.5,0.6,0.7 \
+  --report_dir ./outputs/qwen3_6_pruning_results \
+  --save_model_dir ./outputs/Qwen3.6-35B-A3B-pruned-budget05 \
+  --trust_remote_code
+```
+
+The script loads the complete model on the CPU and performs structured pruning, then runs one forward-pass check on the pruned model. The pruned config, tokenizer, and safetensors weights are written to the output directory only when `--save_model_dir` is provided. If the argument is omitted, only the JSON report remains after the process exits.
+Parameter Description:
+| Argument | Default | Required | Description |
+| --- | --- | --- | --- |
+| `--model_path` | none | Yes | Local model directory |
+| `--size_budget` | none | Yes | Target parameter budget; one of 0.9 / 0.8 / 0.5 |
+| `--seq_len` | 4096 | No | Calibration sequence length |
+| `--calibration_samples` | 4 | Number of calibration samples |
+| `--pileval_source` | `huggingface` | No | Pileval data source: `huggingface` or `modelscope` |
+| `--ratio_grid` | `0.1,0.2,0.3` | No | Candidate expert pruning ratios tried by AMCT, comma-separated, each between 0 and 1 |
+| `--report_dir` | none | Yes | Directory for the JSON pruning report |
+| `--save_model_dir` | `""` | No | Directory to save the pruned model; if empty, weights are not saved |
+| `--trust_remote_code` | `False` | No | Allows execution of custom code within the model directory; disabled by default. --model_path must be a local directory; enable only for trusted local weights. |
+
+
+### 6.4 Diagnosis and Reports
+
+The pruning script calls `amct_pytorch.pruning.prune_diagnose`.For example, when size_budget=0.9, the diagnostic results are as follows:
+
+```text
+{
+  "targets": {
+    "cnn": 0,
+    "dense": 40,
+    "moe": 40
+  },
+  "prune_works": true,
+  "prune_reduction": 0.09444977959183498,
+  "prune_forward_ok": true,
+  "search_works": true,
+  "search_chosen_ratio": 0.5,
+  "notes": []
+}
+```
+
+The key fields in the `PruneReport` produced by the formal pruning runs are:
+
+```text
+params_before: 34660610688
+params_after: 28239147648
+budget_unreachable: False
+prunable_fraction: 0.9335997444269842
+```
+
+The full content is saved in the JSON report output by the script.
+
+
+### 6.5 WikiText2 Evaluation and Results
+
+PPL evaluation uses the `wikitext-2-raw-v1` test split with a fixed `seq_len=4096`. Pileval is used only for calibration and must not be used for PPL evaluation. When the original or pruned model cannot fit completely on a single card, use the AMCT blockwise evaluation entry point:
+
+```bash
+python3 -m amct_pytorch.eval \
+  --trust_remote_code \
+  --model ./path/to/Qwen3.6-35B-A3B \
+  --model_name qwen3_6_moe \
+  --seq_len 4096 \
+  --granularity block \
+  --device npu:0 \
+  --eval_mode bf16 \
+  --bit_config amct_pytorch/configs/bf16.yaml
+```
+
+To evaluate a pruned model, replace only the `--model` path, for example:
+
+```bash
+python3 -m amct_pytorch.eval \
+  --trust_remote_code \
+  --model ./outputs/Qwen3.6-35B-A3B-pruned-budget09 \
+  --model_name qwen3_6_moe \
+  --seq_len 4096 \
+  --granularity block \
+  --device npu:0 \
+  --eval_mode bf16 \
+  --bit_config amct_pytorch/configs/bf16.yaml
+```
+
+| Model           | Method             | Setting           |      Baseline PPL |         Pruned PPL |  Post-process PPL | Parameters (before -> after)     | Reduction | Pruning Time (min) |
+| --------------- | ------------------ | ----------------- | ----------------: | -----------------: | ----------------: | -------------------------------- | --------: | -----------------: |
+| Qwen3.6-35B-A3B | `activation_count` | `size_budget=0.9` | 6.308547019958496 |  6.664599895477295 |               N/A | 34,660,610,688 -> 28,239,147,648 |  18.5267% |              20.11 |
+| Qwen3.6-35B-A3B | `activation_count` | `size_budget=0.8` | 6.308547019958496 | 7.1991167068481445 |               N/A | 34,660,610,688 -> 24,965,460,608 |  27.9717% |              15.44 |
+| Qwen3.6-35B-A3B | `activation_count` | `size_budget=0.5` | 6.308547019958496 |  9.780414581298828 | 8.294227600097656 | 34,660,610,688 -> 15,270,310,528 |  55.9433% |              15.07 |
+
+### 6.6 Recovery Fine-tuning for `size_budget=0.5`
+
+Recovery fine-tuning was performed only for the smallest `size_budget=0.5` model, which supports full-parameter training on a single 64 GiB Ascend 910. Recovery starts from the pruned model, does not run pruning again, and does not overwrite the pruned model.
+
+```text
+Input model:       ./outputs/Qwen3.6-35B-A3B-pruned-budget05
+Output model:      ./outputs/Qwen3.6-35B-A3B-pruned-budget05-finetuned
+Training set:      WikiText2 wikitext-2-raw-v1 train split
+Training batches:  300 distinct contiguous token blocks
+Batch size:        1
+seq_len:           512
+Training tokens:   153,600
+Training steps:    300
+Optimizer:         SGD
+Learning rate:     1e-2
+Momentum:          0.0
+Warmup:            20 steps
+Gradient clipping: 1.0
+Checkpointing:     enabled, use_reentrant=False
+Device:            npu:0
+Training time:     27.371 min
+Peak allocated:    58.219 GiB
+Peak reserved:     59.793 GiB
+```
+
+Momentum-free SGD was selected to avoid the first- and second-moment optimizer states maintained by AdamW. Because SGD does not adaptively scale updates using gradient statistics, this run used `lr=1e-2` instead of directly reusing a typical AdamW learning rate such as `1e-5` or `2e-5`.
+
+The default causal language modeling loss in `prune_finetune()` accepts a dictionary containing `input_ids` and also uses `input_ids` as the labels. This run explicitly passes momentum-free SGD:
+
+```python
+import os
+import torch
+from amct_pytorch.pruning import prune_finetune
+
+model.config.use_cache = False
+model.gradient_checkpointing_enable(
+    gradient_checkpointing_kwargs={"use_reentrant": False}
+)
+model.to("npu:0")
+
+params = [p for p in model.parameters() if p.requires_grad]
+optimizer = torch.optim.SGD(params, lr=1e-2, momentum=0.0)
+result = prune_finetune(
+    model,
+    batches,
+    steps=300,
+    lr=1e-2,
+    warmup=20,
+    optimizer=optimizer,
+    device="npu:0",
+    grad_clip=1.0,
+    log_every=25,
+)
+
+model.to("cpu")
+model.save_pretrained(
+    os.environ["RECOVERY_OUTPUT_DIR"],
+    safe_serialization=True,
+)
+```
+
+At runtime, the incompatible optional `torchaudio` package must also be masked before importing Transformers, as done by the pruning script. Save the tokenizer and preserve the outer Qwen3.6 wrapper configuration from the pruned model's `config.json`. After recovery training, evaluate the output directory using the same WikiText2 test, `seq_len=4096`, and blockwise BF16 command described in this section.
+
+The results of this recovery run are:
+
+```text
+Original-model PPL: 6.308547019958496
+Pruned PPL:         9.780414581298828
+Recovered PPL:      8.294227600097656
+```
+
+Compared with the unrecovered pruned model, PPL decreased by `1.486186981201172`, or approximately `15.20%`. If the PPL increase caused by pruning is treated as the recovery target, this run recovered approximately `42.81%`. The recovered PPL remains `1.985680580139160` above the original-model baseline, so the result demonstrates clear but incomplete recovery.
+
+### 6.7 Parameters for Further Recovery
+
+To improve recovery further, change only a small number of parameters in each experiment and compare PPL using the same WikiText2 test command:
+
+1. `steps` and training-data volume: increase the number of distinct training batches and training steps. If `steps` exceeds the batch count, `prune_finetune()` cycles through the batches; increasing the number of distinct training tokens should be preferred.
+2. `lr`: `1e-2` is the starting point for momentum-free SGD in this run. Values such as `3e-3` and `1e-2` can be compared; an excessive learning rate may cause the loss to diverge.
+3. `warmup`: increase warmup when increasing the number of training steps, while maintaining a reasonable proportion. This run used `20/300`.
+4. `seq_len`: longer contexts more closely match the `seq_len=4096` evaluation but increase activation memory. Peak reserved memory already reached `59.793 GiB`; run new one-step and ten-step memory tests before increasing it.
+5. Training data: increase its volume and diversity, but never use the WikiText2 test split for training.
+6. `grad_clip`: this run used `1.0`. Reduce it if gradients or loss become unstable, while continuing to use PPL on a fixed evaluation set as the final criterion.
+
+Use separate reports and output directories for different recovery configurations to avoid overwriting the pruned model. The BF16 `size_budget=0.5` weights occupy approximately 28.4 GiB. When disk space is limited, record the PPL and report before removing recovery models that are no longer needed.
