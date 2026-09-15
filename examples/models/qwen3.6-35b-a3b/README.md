@@ -21,7 +21,9 @@ MoE 模型量化目标为 `attn-linear` + `moe`（适配器不支持 `mlp`）。
 - 校准集：Pileval（`mit-han-lab/pile-val-backup`），CLI 默认 `nsamples=128`
 - 评估集：WikiText2 `wikitext-2-raw-v1` test；`--seq_len 4096`；`--granularity block`
 - BF16 与量化评估使用同一权重目录、同一评估配置
-- 量化覆盖 Attention（`attn-linear`）与 MoE；每种格式都要跑完 extract → PTQ(attn) → PTQ(moe) → 带 PTQ 参数的量化评估
+- 量化覆盖 Attention（`attn-linear`）与 MoE（评估时 `--quant_target attn-linear moe`）
+- **autoround PTQ 默认只跑 Attention**（与官方 [Qwen3.6-Moe.md](../qwen3.6/Qwen3.6-Moe.md) 一致）。全量 MoE 为约 `40×256` 个专家 unit，单卡 autoround 可达数天，不作为本样例默认路径；`ptq_mlp.sh` 默认 SKIP，仅当 `RUN_MOE_PTQ=1` 时强制跑
+- 每种格式：extract → PTQ(attn) → 量化评估（加载 attn PTQ 参数；MoE 按 bit_config 假量化）
 - 产物目录为相对占位路径，不提交数据/权重
 
 在仓库根目录执行：
@@ -33,23 +35,22 @@ export MODEL=/path/to/Qwen3.6-35B-A3B   # 占位，改为本地权重
 # 1) BF16 基线（两种格式共用）
 bash examples/models/qwen3.6-35b-a3b/scripts/eval_bf16.sh
 
-# 2) 提取 PTQ 离线数据（attn + moe，两种格式共用）
+# 2) 提取 PTQ 离线数据（attn + moe，两种格式共用；moe 数据可留作可选全量 PTQ）
 bash examples/models/qwen3.6-35b-a3b/scripts/extract_ptq_data.sh
 
-# 3) int4/int4：PTQ(attn) → PTQ(moe) → 量化评估
+# 3) int4/int4：PTQ(attn) → 量化评估
 export QUANT_DTYPE=int
 bash examples/models/qwen3.6-35b-a3b/scripts/ptq_attn.sh
-bash examples/models/qwen3.6-35b-a3b/scripts/ptq_mlp.sh
+bash examples/models/qwen3.6-35b-a3b/scripts/ptq_mlp.sh   # 默认 SKIP
 bash examples/models/qwen3.6-35b-a3b/scripts/eval_quant.sh
 
-# 4) mxfp4/mxfp4：将 QUANT_DTYPE 改为 mxfp 后各跑一遍
+# 4) mxfp4/mxfp4
 export QUANT_DTYPE=mxfp
 bash examples/models/qwen3.6-35b-a3b/scripts/ptq_attn.sh
-bash examples/models/qwen3.6-35b-a3b/scripts/ptq_mlp.sh
 bash examples/models/qwen3.6-35b-a3b/scripts/eval_quant.sh
 ```
 
-也可直接使用 README 中的 `python3 -m ...` 命令；脚本启动时会打印完整运行参数。`ptq_mlp.sh` 名称沿用任务模板，实际 `quant_target=moe`。
+也可直接使用 README 中的 `python3 -m ...` 命令；脚本启动时会打印完整运行参数。
 
 主要参数：
 

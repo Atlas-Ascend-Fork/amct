@@ -20,6 +20,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/common.sh"
 print_runtime_args "eval_quant"
 
+# MoE param dir is optional: empty / missing => MoE still quantized by bit_config
+# without loading per-expert autoround params (recommended default).
+EVAL_EXTRA=()
+if [ -d "${MOE_PARAM_DIR}" ] && [ -n "$(ls -A "${MOE_PARAM_DIR}" 2>/dev/null || true)" ]; then
+  EVAL_EXTRA+=(--moe_mlp_param_dir "${MOE_PARAM_DIR}")
+fi
+
 # shellcheck disable=SC2086
 "${AMCT_CLI[@]}" amct_pytorch.eval \
   --trust_remote_code \
@@ -34,4 +41,4 @@ print_runtime_args "eval_quant"
   --algos ${ALGOS} \
   --bit_config "${BIT_CONFIG}" \
   --attn_linear_param_dir "${ATTN_PARAM_DIR}" \
-  --moe_mlp_param_dir "${MOE_PARAM_DIR}"
+  "${EVAL_EXTRA[@]}"
