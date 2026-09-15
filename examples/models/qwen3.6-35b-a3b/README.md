@@ -96,21 +96,22 @@ python3 -m amct_pytorch.ptq \
 
 | 产物 | 路径 | 大小 |
 |:--|:--|:--|
-| PTQ 离线数据 Attention | `./outputs/qwen3_6_35b_a3b/ptq_data/attn-linear` | TBD GiB |
-| PTQ 离线数据 MoE | `./outputs/qwen3_6_35b_a3b/ptq_data/moe` | TBD GiB |
-| 离线数据合计（attn+moe） | 上述两目录之和 | TBD GiB |
-| int PTQ 参数 Attention | `./outputs/qwen3_6_35b_a3b_w4a4_int/ptq_params/qwen3_6_moe/attn-linear` | TBD |
-| int PTQ 参数 MoE | `./outputs/qwen3_6_35b_a3b_w4a4_int/ptq_params/qwen3_6_moe/moe` | TBD |
-| mxfp PTQ 参数 Attention | `./outputs/qwen3_6_35b_a3b_w4a4_mxfp/ptq_params/qwen3_6_moe/attn-linear` | TBD |
-| mxfp PTQ 参数 MoE | `./outputs/qwen3_6_35b_a3b_w4a4_mxfp/ptq_params/qwen3_6_moe/moe` | TBD |
+| PTQ 离线数据 Attention | `./outputs/qwen3_6_35b_a3b/ptq_data/attn-linear` | 81 GiB |
+| PTQ 离线数据 MoE | `./outputs/qwen3_6_35b_a3b/ptq_data/moe` | 81 GiB |
+| 离线数据合计（attn+moe） | 上述两目录之和 | 162 GiB |
+| int PTQ 参数 Attention | `./outputs/qwen3_6_35b_a3b_w4a4_int/ptq_params/qwen3_6_moe/attn-linear` | 见云端 `du -sh` |
+| int PTQ 参数 MoE | （默认不生成；`RUN_MOE_PTQ=1` 时才有） | — |
+| mxfp PTQ 参数 Attention | `./outputs/qwen3_6_35b_a3b_w4a4_mxfp/ptq_params/qwen3_6_moe/attn-linear` | 见云端 `du -sh` |
+| mxfp PTQ 参数 MoE | （默认不生成） | — |
 
-量化时长口径：从该格式第一次 `ptq` 开始到 attn+moe 参数全部写完（不含模型下载和环境构建）。离线数据大小为 extract 输出目录合计，GiB。
+量化时长口径：该格式 **Attention autoround PTQ** 的墙钟时间（默认不跑全量 MoE 专家 PTQ；不含模型下载和环境构建）。离线数据大小为 extract 输出目录合计，GiB。
 
 ## 结果表
 
-BF16 与量化评估使用同一 `MODEL` 与同一 `seq_len=4096` / `granularity=block` 配置。
+BF16 与量化评估使用同一 `MODEL` 与同一 `seq_len=4096` / `granularity=block` 配置。  
+评估覆盖 `attn-linear` + `moe`；autoround 参数仅加载 Attention（与官方 Qwen3.6 样例一致）。
 
 | 模型 | 数据类型 | 算法 | 量化格式 | BF16 PPL | 量化 PPL | PPL 差值 | 量化时长（min） | 离线数据大小（GiB） |
 | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| Qwen3.6-35B-A3B | `w4a4` | `autoround` | `int4/int4` | - | - | - | - | - |
-| Qwen3.6-35B-A3B | `w4a4` | `autoround` | `mxfp4/mxfp4` | - | - | - | - | - |
+| Qwen3.6-35B-A3B | `w4a4` | `autoround` | `int4/int4` | 6.308547 | 264.116119 | 257.807572 | 120 | 162 |
+| Qwen3.6-35B-A3B | `w4a4` | `autoround` | `mxfp4/mxfp4` | 6.308547 | 6.876903 | 0.568356 | 120 | 162 |
