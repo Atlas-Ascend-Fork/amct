@@ -80,9 +80,16 @@ class QuantKimiLinear(QuantLinear):
     transforms next to the weight quantizer they feed.
     """
 
-    def __init__(self, quant_args, linear: nn.Linear, name: str):
+    def __init__(
+        self,
+        quant_args,
+        linear: nn.Linear,
+        name: str,
+        group: str = "attn-linear",
+    ):
         ensure_bit_policy(quant_args)
-        bits = quant_args.bit_policy["attn-linear"][name]
+        self.group = group
+        bits = quant_args.bit_policy[group][name]
         super().__init__(quant_args, linear, w_bits=bits.w, name=name)
         self.input_quant = ActivationQuantizer(quant_args, bits.a)
         ctx = AlgoBuildContext(matrix_size=128, dim_size=linear.in_features)
@@ -100,9 +107,9 @@ class QuantKimiLinear(QuantLinear):
 class QuantKimiMLAAttention(nn.Module):
     """Absorbed Kimi MLA with selected linear and latent-cache fake quant.
 
-    Only q_a_proj, q_b_proj and kv_a_proj_with_mqa participate in
-    ``attn-linear``.  kv_b_proj, output projection and output gate remain
-    floating point. ``attn-cache`` applies per-token-per-head FP quantization
+    q_a_proj, q_b_proj, kv_a_proj_with_mqa and o_proj participate in
+    ``attn-linear``. kv_b_proj and output gate remain floating point.
+    ``attn-cache`` applies per-token-per-head FP quantization
     to joined Q, and per-tensor FP quantization to joined latent KV and the
     attention probabilities. Kimi-K3 MLA uses NoPE, so neither branch receives
     rotary position embeddings.
@@ -141,7 +148,9 @@ class QuantKimiMLAAttention(nn.Module):
         )
         self.kv_a_layernorm = attention.kv_a_layernorm
         self.kv_b_proj = attention.kv_b_proj
-        self.o_proj = attention.o_proj
+        self.o_proj = self._linear(
+            quant_args, attention.o_proj, "o_proj",
+        )
         if self.use_output_gate:
             self.g_proj = attention.g_proj
 

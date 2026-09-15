@@ -510,13 +510,24 @@ class KimiK3(BaseModel):
 
     def build_quant_block(self, layer_idx):
         decoder_layer = self.block(layer_idx)
-        if any(
+        quantize_attention = any(
             target in self.quant_target
             for target in ("attn-linear", "attn-cache")
-        ) and not getattr(decoder_layer, "is_linear_attn", False):
+        )
+        is_linear_attn = getattr(decoder_layer, "is_linear_attn", False)
+        if quantize_attention and not is_linear_attn:
             decoder_layer.self_attn = QuantKimiMLAAttention(
                 self.args, decoder_layer.self_attn,
             )
+        elif "attn-linear" in self.quant_target and is_linear_attn:
+            for name in ("q_proj", "k_proj", "v_proj", "o_proj"):
+                linear = getattr(decoder_layer.self_attn, name)
+                if not isinstance(linear, QuantKimiLinear):
+                    setattr(
+                        decoder_layer.self_attn,
+                        name,
+                        QuantKimiLinear(self.args, linear, name=name),
+                    )
 
         if "mlp" in self.quant_target and hasattr(decoder_layer, "mlp"):
             decoder_layer.mlp = QuantKimiMLP(
@@ -537,15 +548,43 @@ class KimiK3(BaseModel):
                     shared_experts,
                     group="moe.shared",
                 )
+            for name in (
+                "routed_expert_down_proj",
+                "routed_expert_up_proj",
+            ):
+                linear = getattr(moe, name, None)
+                if linear is not None and not isinstance(linear, QuantKimiLinear):
+                    setattr(
+                        moe,
+                        name,
+                        QuantKimiLinear(
+                            self.args,
+                            linear,
+                            name=name,
+                            group="moe.routed",
+                        ),
+                    )
         return decoder_layer
 
     def iter_ptq_units(self, layer_idx, block):
+        attention = getattr(block, "self_attn", None)
+        has_quant_kda_linear = (
+            "attn-linear" in self.quant_target
+            and attention is not None
+            and any(
+                isinstance(getattr(attention, name, None), QuantKimiLinear)
+                for name in ("q_proj", "k_proj", "v_proj", "o_proj")
+            )
+        )
         if any(
             target in self.quant_target
             for target in ("attn-linear", "attn-cache")
-        ) and isinstance(getattr(block, "self_attn", None), QuantKimiMLAAttention):
+        ) and (
+            isinstance(attention, QuantKimiMLAAttention)
+            or has_quant_kda_linear
+        ):
             yield make_ptq_unit(
-                "attn", "self_attn", layer_idx, getattr(block, "self_attn", None),
+                "attn", "self_attn", layer_idx, attention,
             )
 
         if "mlp" in self.quant_target:

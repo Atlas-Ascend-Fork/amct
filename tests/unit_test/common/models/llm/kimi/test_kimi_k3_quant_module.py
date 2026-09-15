@@ -192,8 +192,21 @@ def _tensorwise_pipeline(target):
         "language_model.model.layers.0.self_attn.q_a_proj.weight": "model-0.safetensors",
         "language_model.model.layers.0.self_attn.q_b_proj.weight": "model-0.safetensors",
         "language_model.model.layers.0.self_attn.kv_a_proj_with_mqa.weight": "model-0.safetensors",
+        "language_model.model.layers.0.self_attn.o_proj.weight": "model-0.safetensors",
         "language_model.model.layers.0.self_attn.kv_b_proj.weight": "model-0.safetensors",
+        "language_model.model.layers.1.self_attn.q_proj.weight": "model-0.safetensors",
+        "language_model.model.layers.1.self_attn.k_proj.weight": "model-0.safetensors",
+        "language_model.model.layers.1.self_attn.v_proj.weight": "model-0.safetensors",
         "language_model.model.layers.1.self_attn.q_conv1d.weight": "model-0.safetensors",
+        "language_model.model.layers.1.block_sparse_moe.routed_expert_down_proj.weight": (
+            "model-0.safetensors"
+        ),
+        "language_model.model.layers.1.block_sparse_moe.routed_expert_up_proj.weight": (
+            "model-0.safetensors"
+        ),
+        "language_model.model.layers.1.block_sparse_moe.shared_experts.gate_proj.weight": (
+            "model-0.safetensors"
+        ),
         "language_model.model.layers.1.block_sparse_moe.experts.0.w1.weight_packed": (
             "model-0.safetensors"
         ),
@@ -271,13 +284,21 @@ def test_quant_kimi_expert_keeps_checkpoint_projection_names():
     torch.testing.assert_close(quant_expert(x), expected)
 
 
-def test_kimi_adapter_leaves_kda_untouched_for_attention_targets():
+def test_kimi_adapter_quantizes_only_selected_kda_linears():
     from amct_pytorch.common.models.llm.kimi.kimi_k3.kimi_k3 import KimiK3
+    from amct_pytorch.common.models.llm.kimi.kimi_k3.quant_module import (
+        QuantKimiLinear,
+    )
 
     block = nn.Module()
     block.is_linear_attn = True
     block.self_attn = _Attention()
-    attention = block.self_attn
+    hidden_states = torch.randn(2, 3, 8)
+    expected = block.self_attn(hidden_states)
+    untouched = {
+        name: getattr(block.self_attn, name)
+        for name in ("f_a_proj", "f_b_proj", "b_proj", "g_a_proj", "g_b_proj")
+    }
     pipeline = KimiK3.__new__(KimiK3)
     pipeline.args = _args(["attn-linear", "attn-cache"])
     pipeline.quant_target = pipeline.args.quant_target
@@ -285,17 +306,39 @@ def test_kimi_adapter_leaves_kda_untouched_for_attention_targets():
 
     result = pipeline.build_quant_block(0)
 
-    assert result.self_attn is attention
-    assert all(
-        isinstance(getattr(result.self_attn, name), nn.Linear)
-        for name in (
-            "q_proj", "k_proj", "v_proj", "f_a_proj", "f_b_proj",
-            "b_proj", "g_a_proj", "g_b_proj", "o_proj",
-        )
-    )
+    assert all(isinstance(getattr(result.self_attn, name), QuantKimiLinear)
+               for name in ("q_proj", "k_proj", "v_proj", "o_proj"))
+    assert all(getattr(result.self_attn, name) is module
+               for name, module in untouched.items())
+    _disable_quant(result.self_attn)
+    torch.testing.assert_close(result.self_attn(hidden_states), expected)
+    units = list(pipeline.iter_ptq_units(0, result))
+    assert [(unit.kind, unit.name) for unit in units] == [("attn", "self_attn")]
 
 
-def test_quant_kimi_mla_only_quantizes_three_selected_projections():
+def test_kimi_adapter_leaves_kda_untouched_for_attn_cache_only():
+    from amct_pytorch.common.models.llm.kimi.kimi_k3.kimi_k3 import KimiK3
+
+    block = nn.Module()
+    block.is_linear_attn = True
+    block.self_attn = _Attention()
+    original_linears = {
+        name: getattr(block.self_attn, name)
+        for name in ("q_proj", "k_proj", "v_proj", "o_proj")
+    }
+    pipeline = KimiK3.__new__(KimiK3)
+    pipeline.args = _args(["attn-cache"])
+    pipeline.quant_target = pipeline.args.quant_target
+    pipeline.block = lambda _: block
+
+    result = pipeline.build_quant_block(0)
+
+    assert all(getattr(result.self_attn, name) is module
+               for name, module in original_linears.items())
+    assert list(pipeline.iter_ptq_units(0, result)) == []
+
+
+def test_quant_kimi_mla_only_quantizes_four_selected_projections():
     from amct_pytorch.common.models.llm.kimi.kimi_k3.quant_module import (
         QuantKimiMLAAttention,
     )
@@ -307,9 +350,9 @@ def test_quant_kimi_mla_only_quantizes_three_selected_projections():
     assert isinstance(result.q_a_proj, QuantLinear)
     assert isinstance(result.q_b_proj, QuantLinear)
     assert isinstance(result.kv_a_proj_with_mqa, QuantLinear)
+    assert isinstance(result.o_proj, QuantLinear)
     assert result.kv_b_proj is source.kv_b_proj
     assert result.g_proj is source.g_proj
-    assert result.o_proj is source.o_proj
 
 
 def test_quant_kimi_mla_quantizes_joined_q_and_kv_before_score():
@@ -523,7 +566,10 @@ def test_quant_kimi_mla_ptq_params_can_be_exported_and_reloaded():
 
 def test_kimi_adapter_builds_dense_and_moe_targets_without_cross_wrapping():
     from amct_pytorch.common.models.llm.kimi.kimi_k3.kimi_k3 import KimiK3
-    from amct_pytorch.common.models.llm.kimi.kimi_k3.quant_module import QuantKimiMLP
+    from amct_pytorch.common.models.llm.kimi.kimi_k3.quant_module import (
+        QuantKimiLinear,
+        QuantKimiMLP,
+    )
 
     block = nn.Module()
     block.self_attn = _MLAAttention()
@@ -531,9 +577,21 @@ def test_kimi_adapter_builds_dense_and_moe_targets_without_cross_wrapping():
     block.block_sparse_moe = nn.Module()
     block.block_sparse_moe.experts = nn.ModuleList([_Expert(), _Expert()])
     block.block_sparse_moe.shared_experts = _DenseMLP()
+    block.block_sparse_moe.routed_expert_down_proj = nn.Linear(8, 4, bias=False)
+    block.block_sparse_moe.routed_expert_up_proj = nn.Linear(4, 8, bias=False)
 
     pipeline = KimiK3.__new__(KimiK3)
     pipeline.args = _args(["attn-linear", "mlp", "moe"])
+    pipeline.args.bit_policy = BitPolicy({
+        "w_bits": 16,
+        "a_bits": 16,
+        "attn-linear": {"w_bits": 8, "a_bits": 8},
+        "mlp": {"w_bits": 8, "a_bits": 8},
+        "moe": {
+            "routed": {"w_bits": 4, "a_bits": 8},
+            "shared": {"w_bits": 8, "a_bits": 8},
+        },
+    })
     pipeline.quant_target = pipeline.args.quant_target
     pipeline.block = lambda _: block
 
@@ -542,7 +600,19 @@ def test_kimi_adapter_builds_dense_and_moe_targets_without_cross_wrapping():
     assert isinstance(quant_block.mlp, QuantKimiMLP)
     assert all(isinstance(expert, QuantKimiMLP) for expert in quant_block.block_sparse_moe.experts)
     assert isinstance(quant_block.block_sparse_moe.shared_experts, QuantKimiMLP)
+    assert isinstance(
+        quant_block.block_sparse_moe.routed_expert_down_proj,
+        QuantKimiLinear,
+    )
+    assert isinstance(
+        quant_block.block_sparse_moe.routed_expert_up_proj,
+        QuantKimiLinear,
+    )
+    assert quant_block.block_sparse_moe.routed_expert_down_proj.group == "moe.routed"
+    assert quant_block.block_sparse_moe.routed_expert_down_proj.w_bits == 4
+    assert quant_block.block_sparse_moe.routed_expert_up_proj.w_bits == 4
     assert isinstance(quant_block.self_attn.q_a_proj, QuantLinear)
+    assert isinstance(quant_block.self_attn.o_proj, QuantLinear)
 
     units = list(pipeline.iter_ptq_units(3, quant_block))
     assert [(unit.kind, unit.name) for unit in units] == [
