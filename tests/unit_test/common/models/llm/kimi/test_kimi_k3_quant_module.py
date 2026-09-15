@@ -188,6 +188,7 @@ def _tensorwise_pipeline(target):
     pipeline = KimiK3.__new__(KimiK3)
     pipeline.args = _args(target, quant_dtype="mxfp")
     pipeline.quant_target = pipeline.args.quant_target
+    pipeline.quant_dtype = pipeline.args.quant_dtype
     pipeline._weight_map = {
         "language_model.model.layers.0.self_attn.q_a_proj.weight": "model-0.safetensors",
         "language_model.model.layers.0.self_attn.q_b_proj.weight": "model-0.safetensors",
@@ -247,6 +248,34 @@ def test_kimi_tensorwise_moe_target_does_not_select_mla_projections():
     assert quant_layers == {
         "language_model.model.layers.1.block_sparse_moe.experts.0.w1": 4,
     }
+
+
+def test_kimi_tensorwise_mxfp4_moe_exports_packed_weight_and_scale_names():
+    from amct_pytorch.common.models.llm.common.deploy_export import quant_payload
+    from amct_pytorch.quantization.dtypes.mxfp import QuantDequantMx
+
+    pipeline = _tensorwise_pipeline(["moe"])
+    source_name = (
+        "language_model.model.layers.1.block_sparse_moe.experts.0.w1.weight_packed"
+    )
+    output_name = pipeline.tensorwise_output_weight_name(source_name)
+    payload = quant_payload(QuantDequantMx, output_name, torch.ones(1, 32), 4)
+
+    assert set(payload) == {
+        source_name,
+        "language_model.model.layers.1.block_sparse_moe.experts.0.w1.weight_scale",
+    }
+    assert payload[source_name].dtype == torch.uint8
+
+
+@pytest.mark.parametrize("target, dtype", [(["attn-linear"], "mxfp"), (["moe"], "bf16")])
+def test_kimi_tensorwise_unquantized_moe_exports_unpacked_weight_name(target, dtype):
+    pipeline = _tensorwise_pipeline(target)
+    pipeline.quant_dtype = dtype
+
+    assert pipeline.tensorwise_output_weight_name(
+        "language_model.model.layers.1.block_sparse_moe.experts.0.w1.weight_packed"
+    ) == "language_model.model.layers.1.block_sparse_moe.experts.0.w1.weight"
 
 
 def test_quant_kimi_mlp_preserves_situ_forward_when_quant_is_disabled():

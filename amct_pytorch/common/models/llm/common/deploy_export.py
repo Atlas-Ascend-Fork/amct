@@ -171,6 +171,6 @@ def quant_payload(quant_cls, weight_name, weight, bit):
     for extra_name, extra_tensor in payload.items():
         if extra_name == "qweight" or extra_tensor is None:
             continue
-        extra_key = weight_name.replace(".weight", f".{extra_name}")
+        extra_key = f"{weight_name.rsplit('.', 1)[0]}.{extra_name}"
         tensors[extra_key] = extra_tensor
     return tensors

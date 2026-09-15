@@ -608,6 +608,13 @@ class KimiK3(BaseModel):
 
     def tensorwise_output_weight_name(self, weight_name):
         if weight_name.endswith(".weight_packed"):
+            quantize_moe = not self.quant_target or "moe" in self.quant_target
+            if (
+                self.quant_dtype == "mxfp"
+                and quantize_moe
+                and self._is_kimi_moe_weight_packed(weight_name)
+            ):
+                return weight_name
             return weight_name.replace(".weight_packed", ".weight")
         return weight_name
 
