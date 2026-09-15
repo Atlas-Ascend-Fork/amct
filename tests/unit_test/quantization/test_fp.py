@@ -175,6 +175,13 @@ def test_fp_deploy_bits4_returns_packed_uint8():
     assert ex_mx.shape == (4, 32)
 
 
+def test_fp_deploy_scale_rank_uniform_across_scale_dtype():
+    x = torch.randn(256, 256)
+    _, scale_fp32 = QuantDequantFP(bits=8).deploy(x)
+    _, scale_e8m0 = QuantDequantFP(bits=4, scale_dtype="e8m0").deploy(x)
+    assert scale_fp32.shape == scale_e8m0.shape == (2, 2)
+
+
 def test_fp_export_deploy_returns_dict():
     qdq = QuantDequantFP(bits=8)
     x = torch.randn(4, 64)

@@ -84,6 +84,9 @@ class QuantDequantFP(torch.nn.Module):
         if self.scale_dtype == "e8m0":
             scale = round_to_decimal(amax) - self.emax
             scale = scale.clamp(min=-127, max=1e10)
+            # e8m0 scale is exported as the float32 multiplier 2**e, not the
+            # OCP E8M0 uint8 exponent bytes; deploy/runtime must read it as
+            # float32 (weight_dequant passes float scales through unchanged).
             scale = 2**scale
         else:
             scale = amax / self.max_norm
@@ -119,8 +122,9 @@ class QuantDequantFP(torch.nn.Module):
         else:
             ex_mx = f32_to_f4_unpacked(ex_mx.float().cpu())
             ex_mx = pack_uint4(ex_mx)
-        if self.scale_dtype == "fp32":
-            scale = scale.squeeze(-1).squeeze(-1)
+        # Drop the trailing (1, 1) block dims for every scale_dtype so the
+        # exported weight_scale rank stays uniform (fp32 and e8m0 both 2-D).
+        scale = scale.squeeze(-1).squeeze(-1)
         return ex_mx, scale
 
     def export_deploy(self, x: Tensor, v: Tensor | float = 0.0):
