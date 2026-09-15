@@ -570,4 +570,3 @@ To improve recovery further, change only a small number of parameters in each ex
 6. `grad_clip`: this run used `1.0`. Reduce it if gradients or loss become unstable, while continuing to use PPL on a fixed evaluation set as the final criterion.
 
 Use separate reports and output directories for different recovery configurations to avoid overwriting the pruned model. The BF16 `size_budget=0.5` weights occupy approximately 28.4 GiB. When disk space is limited, record the PPL and report before removing recovery models that are no longer needed.
-
