@@ -597,9 +597,7 @@ def test_quant_payload_fp4_e8m0_does_not_raise():
 
     fp_cls = DTYPE_REGISTRY.get("fp")
     weight = torch.randn(4, 64)
-    result = quant_payload(
-        fp_cls, "layer.weight", weight, bit=4, scale_dtype="e8m0"
-    )
+    result = quant_payload(fp_cls, "layer.weight", weight, bit=4, scale_dtype="e8m0")
     assert "layer.weight" in result
     assert "layer.weight_scale" in result
 
