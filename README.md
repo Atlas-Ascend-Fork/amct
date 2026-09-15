@@ -86,6 +86,7 @@ AMCT 是昇腾 NPU 原生的模型量化压缩工具。量化后模型体积减�
 # 1. 拉取源码并安装依赖
 git clone https://gitcode.com/cann/amct.git
 cd amct
+# requirements.txt 会从 PyTorch 官方 CPU wheel 索引安装 torch==2.7.1+cpu
 pip3 install -r requirements.txt
 
 # 2. 源码构建打包

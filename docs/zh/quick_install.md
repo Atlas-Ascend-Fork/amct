@@ -120,7 +120,7 @@ docker run --name cann_container --device /dev/davinci0 --device /dev/davinci_ma
 python3 -c "import torch; assert '+cpu' in torch.__version__, 'must use CPU torch for NPU path'"
 ```
 
-此处以Python3.11、PyTorch2.7.1版本为例，安装业务运行时依赖的Python第三方库，安装命令如下。`requirements.txt` 已通过 PyTorch CPU wheel 索引固定 CPU 版 PyTorch；PyTorch2.1.0版本安装依赖命令请参见《[AMCT模型压缩工具](https://www.hiascend.com/document/redirect/CannCommunityToolAmctInstalDepdence)》：
+此处以Python3.11、PyTorch2.7.1版本为例，安装业务运行时依赖的Python第三方库，安装命令如下。`requirements.txt` 已声明 PyTorch 官方 CPU wheel 索引，并固定 CPU 版 PyTorch；PyTorch2.1.0版本安装依赖命令请参见《[AMCT模型压缩工具](https://www.hiascend.com/document/redirect/CannCommunityToolAmctInstalDepdence)》：
 
 ```bash
 pip3 install -r requirements.txt
