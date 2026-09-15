@@ -182,6 +182,60 @@ def _disable_quant(module):
     set_model_weight_quant_state(module, False)
 
 
+def _tensorwise_pipeline(target):
+    from amct_pytorch.common.models.llm.kimi.kimi_k3.kimi_k3 import KimiK3
+
+    pipeline = KimiK3.__new__(KimiK3)
+    pipeline.args = _args(target, quant_dtype="mxfp")
+    pipeline.quant_target = pipeline.args.quant_target
+    pipeline._weight_map = {
+        "language_model.model.layers.0.self_attn.q_a_proj.weight": "model-0.safetensors",
+        "language_model.model.layers.0.self_attn.q_b_proj.weight": "model-0.safetensors",
+        "language_model.model.layers.0.self_attn.kv_a_proj_with_mqa.weight": "model-0.safetensors",
+        "language_model.model.layers.0.self_attn.kv_b_proj.weight": "model-0.safetensors",
+        "language_model.model.layers.1.self_attn.q_conv1d.weight": "model-0.safetensors",
+        "language_model.model.layers.1.block_sparse_moe.experts.0.w1.weight_packed": (
+            "model-0.safetensors"
+        ),
+    }
+    return pipeline
+
+
+def test_kimi_tensorwise_attn_linear_selects_only_mla_projections():
+    pipeline = _tensorwise_pipeline(["attn-linear"])
+
+    quant_layers = pipeline.generate_tensorwise_quant_layers()
+
+    assert quant_layers == {
+        "language_model.model.layers.0.self_attn.q_a_proj": 8,
+        "language_model.model.layers.0.self_attn.q_b_proj": 8,
+        "language_model.model.layers.0.self_attn.kv_a_proj_with_mqa": 8,
+    }
+
+
+def test_kimi_tensorwise_combines_moe_and_attn_linear_targets():
+    pipeline = _tensorwise_pipeline(["moe", "attn-linear"])
+
+    quant_layers = pipeline.generate_tensorwise_quant_layers()
+
+    assert quant_layers == {
+        "language_model.model.layers.0.self_attn.q_a_proj": 8,
+        "language_model.model.layers.0.self_attn.q_b_proj": 8,
+        "language_model.model.layers.0.self_attn.kv_a_proj_with_mqa": 8,
+        "language_model.model.layers.1.block_sparse_moe.experts.0.w1": 4,
+    }
+
+
+def test_kimi_tensorwise_moe_target_does_not_select_mla_projections():
+    pipeline = _tensorwise_pipeline(["moe"])
+
+    quant_layers = pipeline.generate_tensorwise_quant_layers()
+
+    assert quant_layers == {
+        "language_model.model.layers.1.block_sparse_moe.experts.0.w1": 4,
+    }
+
+
 def test_quant_kimi_mlp_preserves_situ_forward_when_quant_is_disabled():
     from amct_pytorch.common.models.llm.kimi.kimi_k3.quant_module import QuantKimiMLP
 

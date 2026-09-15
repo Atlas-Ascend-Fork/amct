@@ -50,6 +50,7 @@ from amct_pytorch.common.models.llm.kimi.kimi_k3.quant_module import (
     QuantKimiMLAAttention,
     QuantKimiMLP,
 )
+from amct_pytorch.quantization.bit_policy import ensure_bit_policy
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
@@ -71,6 +72,10 @@ class KimiK3(BaseModel):
 
     _MOE_WEIGHT_RE = re.compile(
         r"^language_model\.model\.layers\.\d+\.block_sparse_moe\.experts\.\d+\.w[123]\.weight_packed$"
+    )
+    _MLA_WEIGHT_RE = re.compile(
+        r"^language_model\.model\.layers\.\d+\.self_attn\."
+        r"(q_a_proj|q_b_proj|kv_a_proj_with_mqa)\.weight$"
     )
 
     def __init__(self, args):
@@ -572,14 +577,25 @@ class KimiK3(BaseModel):
         return weight_name
 
     def generate_tensorwise_quant_layers(self):
-        if self.quant_target and "moe" not in self.quant_target:
-            return {}
         quant_layers = {}
+        quantize_moe = not self.quant_target or "moe" in self.quant_target
+        quantize_mla = "attn-linear" in self.quant_target
+        attn_bits = (
+            ensure_bit_policy(self.args)["attn-linear"]
+            if quantize_mla else None
+        )
         for weight_name in self._load_weight_map():
-            if not self._is_kimi_moe_weight_packed(weight_name):
+            if quantize_moe and self._is_kimi_moe_weight_packed(weight_name):
+                output_name = self.tensorwise_output_weight_name(weight_name)
+                quant_layers[output_name.rsplit(".", 1)[0]] = 4
                 continue
-            output_name = self.tensorwise_output_weight_name(weight_name)
-            quant_layers[output_name.rsplit(".", 1)[0]] = 4
+
+            mla_match = self._MLA_WEIGHT_RE.match(weight_name)
+            if quantize_mla and mla_match is not None:
+                projection_name = mla_match.group(1)
+                quant_layers[weight_name.rsplit(".", 1)[0]] = (
+                    attn_bits[projection_name].w
+                )
         return quant_layers
 
     def generate_tensorwise_ignore_layers(self):
