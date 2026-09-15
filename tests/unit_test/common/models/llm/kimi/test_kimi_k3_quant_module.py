@@ -316,6 +316,36 @@ def test_kimi_adapter_quantizes_only_selected_kda_linears():
     assert [(unit.kind, unit.name) for unit in units] == [("attn", "self_attn")]
 
 
+def test_quantize_kimi_kda_linears_reuses_wrappers_on_repeat_call():
+    from amct_pytorch.common.models.llm.kimi.kimi_k3.quant_module import (
+        QuantKimiLinear,
+        quantize_kimi_kda_linears,
+    )
+
+    attention = _Attention()
+    hidden_states = torch.randn(2, 3, 8)
+    expected = attention(hidden_states)
+    untouched = attention.f_a_proj
+
+    result = quantize_kimi_kda_linears(_args(["attn-linear"]), attention)
+    first_wrappers = tuple(
+        getattr(attention, name)
+        for name in ("q_proj", "k_proj", "v_proj", "o_proj")
+    )
+    repeated = quantize_kimi_kda_linears(_args(["attn-linear"]), attention)
+
+    assert result is attention
+    assert repeated is attention
+    assert all(isinstance(module, QuantKimiLinear) for module in first_wrappers)
+    assert first_wrappers == tuple(
+        getattr(attention, name)
+        for name in ("q_proj", "k_proj", "v_proj", "o_proj")
+    )
+    assert attention.f_a_proj is untouched
+    _disable_quant(attention)
+    torch.testing.assert_close(attention(hidden_states), expected)
+
+
 def test_kimi_adapter_leaves_kda_untouched_for_attn_cache_only():
     from amct_pytorch.common.models.llm.kimi.kimi_k3.kimi_k3 import KimiK3
 

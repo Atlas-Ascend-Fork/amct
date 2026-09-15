@@ -49,6 +49,7 @@ from amct_pytorch.common.models.llm.kimi.kimi_k3.quant_module import (
     QuantKimiLinear,
     QuantKimiMLAAttention,
     QuantKimiMLP,
+    quantize_kimi_kda_linears,
 )
 from amct_pytorch.quantization.bit_policy import ensure_bit_policy
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
@@ -520,14 +521,9 @@ class KimiK3(BaseModel):
                 self.args, decoder_layer.self_attn,
             )
         elif "attn-linear" in self.quant_target and is_linear_attn:
-            for name in ("q_proj", "k_proj", "v_proj", "o_proj"):
-                linear = getattr(decoder_layer.self_attn, name)
-                if not isinstance(linear, QuantKimiLinear):
-                    setattr(
-                        decoder_layer.self_attn,
-                        name,
-                        QuantKimiLinear(self.args, linear, name=name),
-                    )
+            decoder_layer.self_attn = quantize_kimi_kda_linears(
+                self.args, decoder_layer.self_attn,
+            )
 
         if "mlp" in self.quant_target and hasattr(decoder_layer, "mlp"):
             decoder_layer.mlp = QuantKimiMLP(

@@ -104,6 +104,19 @@ class QuantKimiLinear(QuantLinear):
         return super().forward(hidden_states, structure_transform=self.input_transform)
 
 
+def quantize_kimi_kda_linears(quant_args, attention):
+    """Replace only KDA q/k/v/output projections, preserving its forward."""
+    for name in ("q_proj", "k_proj", "v_proj", "o_proj"):
+        linear = getattr(attention, name)
+        if not isinstance(linear, QuantKimiLinear):
+            setattr(
+                attention,
+                name,
+                QuantKimiLinear(quant_args, linear, name=name),
+            )
+    return attention
+
+
 class QuantKimiMLAAttention(nn.Module):
     """Absorbed Kimi MLA with selected linear and latent-cache fake quant.
 
