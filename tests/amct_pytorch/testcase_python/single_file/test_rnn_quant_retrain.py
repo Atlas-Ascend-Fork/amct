@@ -763,25 +763,29 @@ class TestConvLinearPTQA8W4(unittest.TestCase):
             config_defination=self.cfg,
         )
         self.assertTrue(os.path.exists(config_file))
-        # cfg entry drives weight INT4; Net001 has group/depthwise conv whose Cin
-        # axis cannot be nibble-packed, so those layers are downgraded to INT8.
+        # The cfg drives weight INT4. Layers with an odd final Deploy pack axis
+        # are skipped instead of being downgraded to INT8.
         with open(config_file) as fh:
             cfg = _json.load(fh)
         wts_bits = []
+        skipped_layers = []
+        enabled_layers = []
         for layer, lcfg in cfg.items():
             if isinstance(lcfg, dict) and 'weight_quant_params' in lcfg:
                 nb = lcfg['weight_quant_params'].get('num_bits')
                 if nb is not None:
                     wts_bits.append(nb)
+                    target = (
+                        enabled_layers if lcfg.get('quant_enable') else skipped_layers
+                    )
+                    target.append(layer)
         self.assertTrue(wts_bits, 'no weight_quant_params.num_bits found in config')
-        # regular conv/linear stay INT4; group/depthwise conv downgraded to INT8
-        self.assertIn(4, wts_bits, 'A8W4 cfg should yield INT4 for regular layers')
-        self.assertIn(
-            8,
-            wts_bits,
-            'group/depthwise conv should be downgraded to INT8, got {}'.format(
-                wts_bits
-            ),
+        self.assertTrue(enabled_layers, 'packable A8W4 layers should remain enabled')
+        self.assertTrue(skipped_layers, 'odd-axis A8W4 layers should be skipped')
+        self.assertEqual(
+            set(wts_bits),
+            {4},
+            'skipped A8W4 layers must not be downgraded to INT8',
         )
 
     @unittest.skipUnless(_INT4_SUPPORTED, _SKIP_INT4_MSG)
@@ -973,6 +977,7 @@ class TestConvTransposePTQA8W4(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.model = models.NetConvDeconv()
+        cls.model.layer2[0] = torch.nn.ConvTranspose2d(16, 16, kernel_size=2, bias=True)
         cls.model.eval()
         cls.input = torch.randn(1, 2, 28, 28)
         cls.temp_folder = os.path.join(CUR_DIR, 'test_convtranspose_ptq_a8w4')
@@ -1017,7 +1022,7 @@ class TestConvTranspose1dPTQA8W4(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.model = rnn_model.ConvTranspose1dNet()
+        cls.model = rnn_model.ConvTranspose1dNet(kernel_size=2)
         cls.model.eval()
         cls.input = torch.randn(1, 3, 32)
         cls.temp_folder = os.path.join(CUR_DIR, 'test_convtranspose1d_ptq_a8w4')

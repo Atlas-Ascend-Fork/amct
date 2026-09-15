@@ -301,6 +301,50 @@ class TestQatOp(unittest.TestCase):
         self.assertEqual(mod.act_num_bits, 16)
         self.assertEqual(mod.wts_num_bits, 8)
 
+    def test_int4_weight_rejects_int16_activation(self):
+        quant_conf = {
+            RETRAIN_DATA_CONFIG: {'dst_type': 'INT16'},
+            'retrain_weight_config': {
+                'dst_type': 'INT4',
+                'channel_wise': False,
+            },
+        }
+
+        with self.assertRaisesRegex(ValueError, r'INT4 weight.*INT8 activation'):
+            LinearQAT(4, 4, config=quant_conf)
+
+    def test_non_target_qat_ops_reject_int4_weights(self):
+        config = {
+            RETRAIN_DATA_CONFIG: {'dst_type': 'INT8'},
+            'retrain_weight_config': {
+                'dst_type': 'INT4',
+                'channel_wise': False,
+            },
+        }
+        constructors = (
+            lambda: Conv1dQAT(2, 4, 2, config=config),
+            lambda: Conv3dQAT(2, 4, 2, config=config),
+            lambda: ConvTranspose1dQAT(2, 4, 2, config=config),
+            lambda: ConvTranspose2dQAT(2, 4, 2, config=config),
+        )
+        for construct in constructors:
+            with (
+                self.subTest(construct=construct),
+                self.assertRaisesRegex(ValueError, r"dst_type for weight.*INT8"),
+            ):
+                construct()
+
+    def test_activation_channel_wise_config_raises(self):
+        config = {
+            RETRAIN_DATA_CONFIG: {
+                'dst_type': 'INT8',
+                'channel_wise': True,
+            },
+            'retrain_weight_config': {'dst_type': 'INT8'},
+        }
+        with self.assertRaisesRegex(ValueError, r'(?i)activation.*per-tensor'):
+            LinearQAT(4, 4, config=config)
+
 
 class TestConv2dQAT(unittest.TestCase):
     @classmethod
@@ -375,6 +419,40 @@ class TestConv2dQAT(unittest.TestCase):
         mod = Conv2dQAT(3, 16, 1)
         with self.assertRaises(RuntimeError):
             mod.forward(torch.randn((3, 224, 224)))
+
+    def test_conv2d_qat_accepts_int4_per_tensor_and_per_channel(self):
+        for channel_wise, expected_scales in ((False, 1), (True, 4)):
+            config = {
+                RETRAIN_DATA_CONFIG: {'dst_type': 'INT8'},
+                'retrain_weight_config': {
+                    'dst_type': 'INT4',
+                    'channel_wise': channel_wise,
+                },
+            }
+            mod = Conv2dQAT(2, 4, 2, config=config)
+            self.assertEqual(mod.wts_num_bits, 4)
+            self.assertEqual(mod.wts_scales.numel(), expected_scales)
+
+    def test_conv2d_qat_int4_odd_kernel_width_raises(self):
+        config = {
+            RETRAIN_DATA_CONFIG: {'dst_type': 'INT8'},
+            'retrain_weight_config': {
+                'dst_type': 'INT4',
+                'channel_wise': False,
+            },
+        }
+        with self.assertRaisesRegex(ValueError, r'Conv2d.*weight shape.*axis W.*odd'):
+            Conv2dQAT(2, 4, (2, 3), config=config)
+
+    def test_grouped_conv2d_qat_int4_even_width_is_supported(self):
+        config = {
+            'retrain_weight_config': {
+                'dst_type': 'INT4',
+                'channel_wise': True,
+            }
+        }
+        mod = Conv2dQAT(4, 4, 2, groups=4, config=config)
+        self.assertEqual(mod.weight.shape, torch.Size([4, 1, 2, 2]))
 
 
 class TestConvTranspose2dQAT(unittest.TestCase):
@@ -519,9 +597,68 @@ class TestLinearQAT(unittest.TestCase):
     def test_down(self):
         pass
 
-    def test_lineard_qat_limit_check_01(self):
-        with self.assertRaises(RuntimeError):
-            LinearQAT(1, 1, config={'retrain_weight_config': {'channel_wise': True}})
+    def test_linear_qat_a8w8_channel_wise(self):
+        mod = LinearQAT(
+            3,
+            4,
+            config={
+                RETRAIN_DATA_CONFIG: {'dst_type': 'INT8'},
+                'retrain_weight_config': {
+                    'dst_type': 'INT8',
+                    'channel_wise': True,
+                },
+            },
+        )
+        self.assertEqual(mod.wts_scales.numel(), 4)
+
+    def test_linear_qat_accepts_int4_per_tensor_and_per_channel(self):
+        for channel_wise, expected_scales in ((False, 1), (True, 4)):
+            config = {
+                RETRAIN_DATA_CONFIG: {'dst_type': 'INT8'},
+                'retrain_weight_config': {
+                    'dst_type': 'INT4',
+                    'channel_wise': channel_wise,
+                },
+            }
+            mod = LinearQAT(3, 4, config=config)
+            self.assertEqual(mod.wts_num_bits, 4)
+            self.assertEqual(mod.wts_scales.numel(), expected_scales)
+
+    def test_linear_qat_int4_odd_out_features_raises(self):
+        config = {
+            'retrain_weight_config': {
+                'dst_type': 'INT4',
+                'channel_wise': False,
+            }
+        }
+        with self.assertRaisesRegex(
+            ValueError, r'Linear.*weight shape.*out_features.*odd'
+        ):
+            LinearQAT(4, 3, config=config)
+
+    def test_linear_qat_int4_multidimensional_weight_checks_out_features(self):
+        config = {
+            RETRAIN_DATA_CONFIG: {'dst_type': 'INT8'},
+            'retrain_weight_config': {'dst_type': 'INT8', 'channel_wise': True},
+        }
+        mod = LinearQAT(4, 4, config=config)
+        mod.retrain_weight_config['dst_type'] = 'INT4'
+        mod.weight = torch.nn.Parameter(torch.randn(4, 2, 3))
+        self.assertTrue(mod.check_quantifiable())
+
+        mod.weight = torch.nn.Parameter(torch.randn(3, 2, 4))
+        with self.assertRaisesRegex(ValueError, r'out_features.*odd'):
+            mod.check_quantifiable()
+
+    def test_linear_qat_int4_odd_in_features_is_supported(self):
+        config = {
+            'retrain_weight_config': {
+                'dst_type': 'INT4',
+                'channel_wise': False,
+            }
+        }
+        mod = LinearQAT(3, 4, config=config)
+        self.assertEqual(mod.weight.shape, torch.Size([4, 3]))
 
     def test_lineard_qat_forward(self):
         qat_op = LinearQAT(

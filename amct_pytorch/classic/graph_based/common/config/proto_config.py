@@ -185,9 +185,9 @@ class ProtoConfig:  # pylint: disable=too-many-instance-attributes, too-few-publ
                     common_config = self._get_conv_calibration_config()
                 if hasattr(self.proto_config, FC_CALIBRATION_CONFIG):
                     fc_config = self._get_fc_calibration_config()
-                    for item in set(self.quantizable_type) - set(
-                        self.channel_wise_types
-                    ):
+                    fc_types = set(self.quantizable_type) - set(self.channel_wise_types)
+                    fc_types.add('Linear')
+                    for item in fc_types:
                         type_config[item] = copy.deepcopy(fc_config)
             else:
                 if hasattr(self.proto_config, CONV_CALIBRATION_CONFIG):

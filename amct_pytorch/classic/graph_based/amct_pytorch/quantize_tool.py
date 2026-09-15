@@ -63,7 +63,7 @@ def create_quant_config(
     Function: Create quantize configuration json file for amct_pytorch tool
     Parameter: config_file: file path of quantize configuration json file
                model: user mode instance of Torch.nn.Module
-               input_data: used to compile model, can be ramdom data
+               input_data: used to compile model, can be random data
                skip_layers: list of layers that not do quantize, default empty
                batch_num: number of batch that used for calibration
                activation_offset: whether activation quantize with offset
@@ -104,7 +104,7 @@ def quantize_preprocess(config_file, record_file, model, input_data):
                    path information).
         record_file: a string, the name of file recording quantization factor.
         graph: a torch.nn.Module.
-        input_data: used to compile model, can be ramdom data
+        input_data: used to compile model, can be random data
     Returns:
         None
     """
@@ -168,7 +168,7 @@ def quantize_model(
                fusion.
                record_file: temporary file to store scale and offset
                model: user pytorch model's model file
-               input_data: used to compile model, can be ramdom data
+               input_data: used to compile model, can be random data
                input_names: list of strings, names to assign to the
                    input nodes of the graph, in order
                output_names: names to assign to the
@@ -211,7 +211,7 @@ def inner_quantize_model(
                fusion.
                record_file: temporary file to store scale and offset
                model: user pytorch model's model file
-               input_data: used to compile model, can be ramdom data
+               input_data: used to compile model, can be random data
                input_names: list of strings, names to assign to the
                    input nodes of the graph, in order
                output_names: names to assign to the
@@ -362,7 +362,7 @@ def create_quant_retrain_config(config_file, model, input_data, config_definatio
         tool
     Parameter: config_file: file path of quantize configuration json file
                model: user mode instance of Torch.nn.Module
-               input_data: used to compile model, can be ramdom data
+               input_data: used to compile model, can be random data
                config_defination: simply config file from user to set
     Return: None
     """
@@ -400,7 +400,7 @@ def create_quant_retrain_model(config_file, model, record_file, input_data):
     Parameter: config_file: retrain quantize configuration json file
                model: user pytorch model's model file
                record_file: temporary file to store scale and offset
-               input_data: used to compile model, can be ramdom data
+               input_data: used to compile model, can be random data
     Return: model: modified pytorch model for retrain.
     """
     config_file = os.path.realpath(config_file)
@@ -440,7 +440,7 @@ def restore_quant_retrain_model(
     Parameter: config_file: retrain quantize configuration json file
                model: user pytorch model's model file
                record_file: temporary file to store scale and offset
-               input_data: used to compile model, can be ramdom data
+               input_data: used to compile model, can be random data
                pth_file: user quant aware training checkpoint file path
                state_dict_name: key value of weight parameter in pth_file
     Return: model: modified pytorch model for retrain.
@@ -489,7 +489,7 @@ def save_quant_retrain_model(
         model: retrain model
         record_file: temporary file to store scale and offset
         save_path: a string, the path where to store model and model's name.
-        input_data: used to compile model, can be ramdom data
+        input_data: used to compile model, can be random data
         input_names: list of strings, names to assign to the input nodes of
             the graph, in order
         output_names: names to assign to the output nodes of the graph
@@ -585,7 +585,7 @@ def _modify_original_model(model, input_data, config_file, record_file):
     Function: Modify the original model to quantify retraining.
     Inputs:
         model: original model
-        input_data: used to compile model, can be ramdom data
+        input_data: used to compile model, can be random data
         config_file: retrain quantize configuration json file
         record_file: temporary file to store scale and offset
     Returns:
@@ -639,7 +639,7 @@ def _preprocess_retrain_model(model, input_data, config_file=None):
             2. fuse bn
     Inputs:
         model: retrain model
-        input_data: used to compile model, can be ramdom data
+        input_data: used to compile model, can be random data
         config_file: retrain quantize configuration json file
     Returns:
         model_copy: a model processed
@@ -722,9 +722,7 @@ def _generate_model(graph, records, save_path):
     graph_copy = graph.deep_copy()
 
     # generate and save deploy model
-    # PackInt4WeightPass must run BEFORE ReplaceRNNPass to pack INT4 while RNN nodes are still present.
     deploy_optimizer = opt.GraphOptimizer()
-    deploy_optimizer.add_pass(opt.PackInt4WeightPass(records))
     deploy_optimizer.add_pass(opt.ReplaceRNNPass(records))
     deploy_optimizer.do_optimizer(graph)
     deploy_file = generate_onnx_file_name(save_dir, save_prefix, 'Deploy')

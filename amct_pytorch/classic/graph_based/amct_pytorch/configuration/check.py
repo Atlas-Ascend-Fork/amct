@@ -325,30 +325,28 @@ class GraphQuerier:
         return layers
 
     @staticmethod
-    def check_int4_cin_pack_supported(graph, layer_name):
+    def is_int4_weight_pack_axis_even(graph, layer_name):
+        """Check the final Deploy pack axis of weights for RETRAIN_ONNX_TYPES.
+
+        Check both main and recurrence weights. The pack axis is the last
+        dimension, except Gemm with transB=1, whose final layout uses axis 0.
+        Empty shapes, invalid axes and odd axis sizes cannot be packed.
+        Operators outside the weight-check capacity do not need this check.
         """
-        Whether the layer's weight can be INT4-packed along the Cin axis.
-        INT4 packs two values along Cin, so it is NOT supported when:
-        - the conv is grouped (groups > 1): the onnx weight Cin dim is Cin/groups
-          (1 for depthwise), which cannot be nibble-packed along Cin;
-        - the Cin axis length is odd (e.g. first conv with Cin=3).
-        RNN also checks its recurrence_weight Cin.
-        Returns True when packable, False otherwise.
-        """
-        # layer_name 预期能取到 node，取不到属于异常，交由 get_node_by_name 抛出
         node = graph.get_node_by_name(layer_name)
-        cin_axis = QuantOpInfo.get_cin_axis(node)
-        if cin_axis is None:
-            # 非量化算子类型，不涉及 INT4 pack，视为无需拦截（可放行）
+        if node.type not in RETRAIN_ONNX_TYPES:
             return True
-        # group/depthwise conv: onnx weight Cin dim is Cin/groups, cannot pack
-        if node.type in ('Conv', 'ConvTranspose'):
+
+        pack_axis = -1
+        min_rank = 2 if node.type in ('Gemm', 'MatMul') else 3
+        if node.type == 'Gemm':
             attr_helper = AttributeProtoHelper(node.proto)
             if (
-                attr_helper.has_attr('group')
-                and attr_helper.get_attr_value('group') > 1
+                attr_helper.has_attr('transB')
+                and attr_helper.get_attr_value('transB') == 1
             ):
-                return False
+                pack_axis = 0
+
         for wnode in (
             QuantOpInfo.get_weight_node(node),
             QuantOpInfo.get_recurrence_weight_node(node),
@@ -356,7 +354,27 @@ class GraphQuerier:
             if wnode is None:
                 continue
             dims = QuantOpInfo.get_node_tensor(wnode).dims
-            if cin_axis < len(dims) and dims[cin_axis] % 2 == 1:
+            if (
+                not dims
+                or len(dims) < min_rank
+                or not -len(dims) <= pack_axis < len(dims)
+            ):
+                LOGGER.logw(
+                    "Cannot pack INT4 weights for layer '{}': weight shape {} "
+                    "is invalid for {} Deploy pack axis {} (minimum rank {}).".format(
+                        layer_name, dims, node.type, pack_axis, min_rank
+                    ),
+                    module_name='Configuration',
+                )
+                return False
+            if dims[pack_axis] % 2 == 1:
+                LOGGER.logw(
+                    "Skip INT4 weights for layer '{}': ONNX weight shape {} has odd Deploy "
+                    "pack axis {} (size {}).".format(
+                        layer_name, list(dims), pack_axis, dims[pack_axis]
+                    ),
+                    module_name='Configuration',
+                )
                 return False
         return True
 

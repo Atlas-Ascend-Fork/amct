@@ -17,6 +17,7 @@
 # ----------------------------------------------------------------------------
 
 import os
+import inspect
 from shutil import copyfileobj
 from io import BytesIO
 import pathlib
@@ -114,6 +115,18 @@ class Parser:
             export_setting = {}
         else:
             Parser.validate_export_setting(export_setting)
+        # QuantIdentity relies on the legacy exporter symbolic path to keep
+        # marker nodes that are consumed by the internal graph parser. Torch
+        # 2.10 defaults torch.onnx.export to Dynamo, so preserve the legacy
+        # behavior unless the caller explicitly selects another exporter.
+        if 'dynamo' in inspect.signature(torch.onnx.export).parameters:
+            export_setting.setdefault('dynamo', False)
+        elif export_setting.get('dynamo'):
+            raise ValueError(
+                'This PyTorch version does not support dynamo ONNX export.'
+            )
+        else:
+            export_setting.pop('dynamo', None)
         if torch.__version__ == '2.1.0':
             export_setting['opset_version'] = 16
         else:

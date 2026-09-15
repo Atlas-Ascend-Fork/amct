@@ -22,6 +22,7 @@ from unittest import mock
 
 import torch
 import torch.nn as nn
+from onnx import helper
 
 from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
 from amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node import (
@@ -118,6 +119,37 @@ class TestQuantOpInfo(unittest.TestCase):
 
         self.assertEqual(QuantOpInfo.get_scale_shape(node1, False), ([4], 4))
         self.assertEqual(QuantOpInfo.get_scale_shape(node2, False), ([3], 3))
+
+    def test_get_scale_shape_linear_per_channel(self):
+        weight = mock.MagicMock()
+        node = mock.MagicMock()
+
+        weight.dims = [3, 4]
+        node.type = 'MatMul'
+        node.has_attr.return_value = False
+        with mock.patch.object(QuantOpInfo, 'get_weight_tensor', return_value=weight):
+            self.assertEqual(QuantOpInfo.get_scale_shape(node, True), ([4], 4))
+
+        weight.dims = [2, 3, 4]
+        with mock.patch.object(QuantOpInfo, 'get_weight_tensor', return_value=weight):
+            self.assertEqual(QuantOpInfo.get_scale_shape(node, True), ([4], 4))
+
+        weight.dims = [4, 3]
+        node.has_attr.return_value = True
+        node.get_attr.return_value = True
+        with mock.patch.object(QuantOpInfo, 'get_weight_tensor', return_value=weight):
+            self.assertEqual(QuantOpInfo.get_scale_shape(node, True), ([4], 4))
+
+        weight.dims = [3, 4]
+        node.type = 'Gemm'
+        node.proto = helper.make_node('Gemm', ['x', 'w'], ['y'], transB=0)
+        with mock.patch.object(QuantOpInfo, 'get_weight_tensor', return_value=weight):
+            self.assertEqual(QuantOpInfo.get_scale_shape(node, True), ([4], 4))
+
+        weight.dims = [4, 3]
+        node.proto = helper.make_node('Gemm', ['x', 'w'], ['y'], transB=1)
+        with mock.patch.object(QuantOpInfo, 'get_weight_tensor', return_value=weight):
+            self.assertEqual(QuantOpInfo.get_scale_shape(node, True), ([4], 4))
 
     def test_get_bias_for_matmul(self):
         class MatmulAddModel(torch.nn.Module):

@@ -365,14 +365,18 @@ class TestRetrainConfigForPrune(unittest.TestCase):
         )
         RetrainConfig.init(self.graph, config_defination, True, True)
 
-    def test_compressed_only_quant_only_data_weight_cfg(self):
+    def test_compressed_only_quant_only_data_weight_channelwise_cfg(self):
         config_defination = os.path.join(
             CUR_DIR,
             "./utils/compressed_cfg/net_001_compressed_quant_only_data_weight.cfg",
         )
-        self.assertRaises(
-            ValueError, RetrainConfig.init, self.graph, config_defination, True, True
-        )
+        RetrainConfig.init(self.graph, config_defination, True, True)
+
+        for layer_name in ('fc.0', 'fc.2', 'fc.5'):
+            weight_config = RetrainConfig.retrain_config[layer_name][
+                'retrain_weight_config'
+            ]
+            self.assertTrue(weight_config['channel_wise'])
 
     def test_compressed_only_quant_only_data_weight_no_channelwise_cfg(self):
         config_defination = os.path.join(
