@@ -268,6 +268,16 @@ def test_kimi_tensorwise_mxfp4_moe_exports_packed_weight_and_scale_names():
     assert payload[source_name].dtype == torch.uint8
 
 
+def test_kimi_tensorwise_only_four_bit_moe_is_passthrough():
+    pipeline = _tensorwise_pipeline(["moe"])
+    weight_name = (
+        "language_model.model.layers.1.block_sparse_moe.experts.0.w1.weight_packed"
+    )
+
+    assert pipeline.tensorwise_passthrough_weight(weight_name, 4)
+    assert not pipeline.tensorwise_passthrough_weight(weight_name, 8)
+
+
 @pytest.mark.parametrize("target, dtype", [(["attn-linear"], "mxfp"), (["moe"], "bf16")])
 def test_kimi_tensorwise_unquantized_moe_exports_unpacked_weight_name(target, dtype):
     pipeline = _tensorwise_pipeline(target)

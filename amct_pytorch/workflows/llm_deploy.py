@@ -273,16 +273,35 @@ class LlmDeployWorkflow:
                 scale_prefix, scale_inv_name = self.pipeline.get_scale_name(weight_name)
                 if weight_name.endswith(scale_prefix):
                     continue
-                # FP8 -> bf16
-                block_size = self.pipeline.block_size(weight)
                 output_name_fn = self._pipeline_hook("tensorwise_output_weight_name")
                 output_weight_name = (
                     output_name_fn(weight_name) if callable(output_name_fn) else weight_name
                 )
                 should_quantize = False
+                layer_name = output_weight_name.rsplit(".", 1)[0]
                 if self.quant_dtype in ["int", "mxfp", "fp"]:
-                    new_weight_name = output_weight_name.rsplit(".", 1)[0]
-                    should_quantize = new_weight_name in quant_layers
+                    should_quantize = layer_name in quant_layers
+                bit = quant_layers[layer_name] if should_quantize else None
+                passthrough_fn = self._pipeline_hook("tensorwise_passthrough_weight")
+                if (
+                    should_quantize
+                    and callable(passthrough_fn)
+                    and passthrough_fn(weight_name, bit)
+                ):
+                    if weight.dtype != torch.uint8:
+                        raise TypeError(f"Packed MXFP4 weight must be uint8: {weight_name}")
+                    scale_file = original_weight_map.get(scale_inv_name)
+                    if scale_file is None:
+                        raise KeyError(f"Missing scale for packed weight: {scale_inv_name}")
+                    if scale_file not in loaded_files:
+                        loaded_files[scale_file] = load_file(model_dir / scale_file, device="cpu")
+                    scale = loaded_files[scale_file].get(scale_inv_name)
+                    if scale is None:
+                        raise KeyError(f"Missing scale tensor: {scale_inv_name}")
+                    new_state_dict[output_weight_name] = weight.cpu()
+                    new_state_dict[scale_inv_name] = scale.cpu()
+                    continue
+                block_size = self.pipeline.block_size(weight)
                 compute_device = self._tensorwise_compute_device(
                     should_quantize=should_quantize,
                     needs_dequant=weight.element_size() == 1,
@@ -297,7 +316,6 @@ class LlmDeployWorkflow:
                 if should_quantize:
                     weight = weight.to(compute_device)
                     quant_cls = DTYPE_REGISTRY.get(self.quant_dtype)
-                    bit = quant_layers[output_weight_name.rsplit(".", 1)[0]]
                     state_dict = quant_payload(quant_cls, output_weight_name, weight, bit)
                     new_state_dict.update(state_dict)
                 else:

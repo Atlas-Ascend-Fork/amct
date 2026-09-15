@@ -850,6 +850,104 @@ def test_run_tensorwise_uses_adapter_output_weight_name(monkeypatch, tmp_path):
     assert saved["other.weight"].dtype == torch.bfloat16
 
 
+@pytest.mark.parametrize("scale_shard", [KEY_SHARD1_SAFETENSORS, "shard2.safetensors"])
+def test_kimi_tensorwise_mxfp4_moe_copies_original_packed_weight_and_scale(
+    monkeypatch, tmp_path, scale_shard,
+):
+    from amct_pytorch.common.models.llm.kimi.kimi_k3.kimi_k3 import KimiK3
+
+    src = tmp_path / "src"
+    dst = tmp_path / "dst"
+    src.mkdir()
+    dst.mkdir()
+    (src / CONFIG_JSON).write_text(json.dumps({"torch_dtype": "bfloat16"}))
+    weight_name = (
+        "language_model.model.layers.1.block_sparse_moe.experts.0.w1.weight_packed"
+    )
+    scale_name = (
+        "language_model.model.layers.1.block_sparse_moe.experts.0.w1.weight_scale"
+    )
+    packed_weight = torch.arange(16, dtype=torch.uint8).reshape(1, 16)
+    weight_scale = torch.tensor([[128]], dtype=torch.uint8)
+    source_tensors = {
+        weight_name: packed_weight,
+        "other.weight": torch.ones(1, 4, dtype=torch.bfloat16),
+    }
+    if scale_shard == KEY_SHARD1_SAFETENSORS:
+        source_tensors[scale_name] = weight_scale
+    else:
+        save_file({scale_name: weight_scale}, str(src / scale_shard))
+    save_file(source_tensors, str(src / KEY_SHARD1_SAFETENSORS))
+    (src / SAFETENSORS_INDEX_JSON).write_text(json.dumps({
+        "metadata": {},
+        "weight_map": {
+            weight_name: KEY_SHARD1_SAFETENSORS,
+            scale_name: scale_shard,
+            "other.weight": KEY_SHARD1_SAFETENSORS,
+        },
+    }))
+
+    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.logger", MagicMock())
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.tqdm",
+        lambda iterable, desc="": iterable,
+    )
+    def reject_moe_dequant(weight, name, *args, **kwargs):
+        if name == weight_name:
+            raise AssertionError("MXFP4 MoE should bypass dequantization")
+        return weight
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.convert_state_dict",
+        reject_moe_dequant,
+    )
+
+    wf = _make_workflow(model_path=str(src), output_dir=str(dst), quant_dtype="mxfp")
+    wf.pipeline = KimiK3(SimpleNamespace(
+        granularity="tensor", model=str(src), quant_target=["moe"], quant_dtype="mxfp",
+    ))
+    wf._run_tensorwise()
+
+    saved = load_file(dst / KEY_SHARD1_SAFETENSORS)
+    refreshed_index = json.loads((dst / SAFETENSORS_INDEX_JSON).read_text())
+    assert torch.equal(saved[weight_name], packed_weight)
+    assert torch.equal(saved[scale_name], weight_scale)
+    assert saved["other.weight"].dtype == torch.bfloat16
+    assert refreshed_index["weight_map"][weight_name] == KEY_SHARD1_SAFETENSORS
+    assert refreshed_index["weight_map"][scale_name] == KEY_SHARD1_SAFETENSORS
+
+
+def test_kimi_tensorwise_mxfp4_moe_requires_source_weight_scale(tmp_path):
+    from amct_pytorch.common.models.llm.kimi.kimi_k3.kimi_k3 import KimiK3
+
+    src = tmp_path / "src"
+    dst = tmp_path / "dst"
+    src.mkdir()
+    dst.mkdir()
+    (src / CONFIG_JSON).write_text(json.dumps({"torch_dtype": "bfloat16"}))
+    weight_name = (
+        "language_model.model.layers.1.block_sparse_moe.experts.0.w1.weight_packed"
+    )
+    scale_name = (
+        "language_model.model.layers.1.block_sparse_moe.experts.0.w1.weight_scale"
+    )
+    save_file(
+        {weight_name: torch.ones(1, 16, dtype=torch.uint8)},
+        str(src / KEY_SHARD1_SAFETENSORS),
+    )
+    (src / SAFETENSORS_INDEX_JSON).write_text(json.dumps({
+        "metadata": {},
+        "weight_map": {weight_name: KEY_SHARD1_SAFETENSORS},
+    }))
+
+    wf = _make_workflow(model_path=str(src), output_dir=str(dst), quant_dtype="mxfp")
+    wf.pipeline = KimiK3(SimpleNamespace(
+        granularity="tensor", model=str(src), quant_target=["moe"], quant_dtype="mxfp",
+    ))
+
+    with pytest.raises(KeyError, match=scale_name):
+        wf._run_tensorwise()
+
+
 
 def test_load_weight_index_single_shard_synthesizes(tmp_path):
     # Single model.safetensors (no index.json) -> synthesize equivalent index

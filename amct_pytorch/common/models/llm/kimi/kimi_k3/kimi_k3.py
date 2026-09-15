@@ -618,6 +618,15 @@ class KimiK3(BaseModel):
             return weight_name.replace(".weight_packed", ".weight")
         return weight_name
 
+    def tensorwise_passthrough_weight(self, weight_name, bit):
+        quantize_moe = not self.quant_target or "moe" in self.quant_target
+        return (
+            self.quant_dtype == "mxfp"
+            and quantize_moe
+            and int(bit) == 4
+            and self._is_kimi_moe_weight_packed(weight_name)
+        )
+
     def generate_tensorwise_quant_layers(self):
         quant_layers = {}
         quantize_moe = not self.quant_target or "moe" in self.quant_target
