@@ -42,9 +42,6 @@ oat_reports/
 log/
 
 # Local community-sample artifacts (PTQ data / reports)
-<<<<<<< HEAD
 examples/models/qwen3/outputs/
-=======
 examples/models/qwen3.6-35b-a3b/outputs/
 examples/models/deepseek-v4-flash/outputs/
->>>>>>> 0b5aea8 (feat: add Qwen3.6-35B-A3B w4a4 autoround sample for issue 182 task 24)
