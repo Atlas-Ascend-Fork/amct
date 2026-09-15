@@ -31,7 +31,7 @@ from amct_pytorch.quantization.dtypes.int_impl import (
     weight_quant,
 )
 from amct_pytorch.quantization.dtypes.mxfp import QuantDequantMx
-from amct_pytorch.quantization.dtypes.mxfp_impl import (
+from amct_pytorch.quantization.dtypes.fp_impl import (
     down_size,
     f4_unpacked_to_f32,
     pack_uint4 as mx_pack_uint4,
@@ -531,7 +531,7 @@ def test_hifp_export_deploy_bits4_returns_qweight_and_scale():
 
 
 def test_weight_dequant_decodes_e8m0_integer_scale():
-    from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
+    from amct_pytorch.quantization.dtypes.fp_impl import weight_dequant
 
     w8 = torch.zeros(2, 32, dtype=torch.float8_e4m3fn)
     w8[0, 0] = torch.finfo(torch.float8_e4m3fn).max  # 448 in fp32
@@ -544,7 +544,7 @@ def test_weight_dequant_decodes_e8m0_integer_scale():
 
 
 def test_weight_dequant_e8m0_0xff_scale_poisons_block_with_nan():
-    from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
+    from amct_pytorch.quantization.dtypes.fp_impl import weight_dequant
 
     w8 = torch.zeros(2, 64, dtype=torch.float8_e4m3fn)
     w8[0, 0] = torch.finfo(torch.float8_e4m3fn).max  # 448 in fp32
@@ -558,7 +558,7 @@ def test_weight_dequant_e8m0_0xff_scale_poisons_block_with_nan():
 
 
 def test_weight_dequant_float_scale_passes_through():
-    from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
+    from amct_pytorch.quantization.dtypes.fp_impl import weight_dequant
 
     w8 = torch.zeros(1, 32, dtype=torch.float8_e4m3fn)
     w8[0, 0] = 448.0

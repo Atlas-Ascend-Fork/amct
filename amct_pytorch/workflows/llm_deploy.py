@@ -347,7 +347,14 @@ class LlmDeployWorkflow:
                 new_weight_name = weight_name.rsplit(".", 1)[0]
                 if new_weight_name in quant_layers:
                     bit = quant_layers[new_weight_name]
-                    state_dict = quant_payload(quant_cls, weight_name, weight, bit)
+                    state_dict = quant_payload(
+                        quant_cls,
+                        weight_name,
+                        weight,
+                        bit,
+                        block_size_col=getattr(self.args, "block_size_col", 128),
+                        scale_dtype=getattr(self.args, "scale_dtype", "fp32"),
+                    )
                     new_state_dict.update(state_dict)
         self._write_safetensor_file(source_file, new_state_dict)
         return {weight_name: source_file for weight_name in new_state_dict}

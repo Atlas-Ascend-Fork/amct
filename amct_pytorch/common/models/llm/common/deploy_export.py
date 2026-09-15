@@ -24,7 +24,7 @@ from amct_pytorch.common.models.llm.common.weight_path_validation import (
     collect_safetensors_files,
     resolve_safetensors_path,
 )
-from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
+from amct_pytorch.quantization.dtypes.fp_impl import weight_dequant
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
@@ -253,8 +253,10 @@ def convert_state_dict(
     return weight
 
 
-def quant_payload(quant_cls, weight_name, weight, bit):
-    quant_obj = quant_cls(bits=int(bit))
+def quant_payload(
+    quant_cls, weight_name, weight, bit, block_size_col=128, scale_dtype="fp32"
+):
+    quant_obj = quant_cls(int(bit), False, block_size_col, scale_dtype)
     payload = quant_obj.export_deploy(weight)
     tensors = {weight_name: payload["qweight"]}
     for extra_name, extra_tensor in payload.items():
