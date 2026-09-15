@@ -223,7 +223,6 @@ def main():
         low_cpu_mem_usage=True,
     ).eval()
 
-    
     calibration = load_pileval(
         tokenizer,
         args.seq_len,
