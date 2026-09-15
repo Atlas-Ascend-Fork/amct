@@ -21,7 +21,9 @@ One-stop platform example: `source /home/developer/Ascend/cann/set_env.sh`. Set 
 - Calibration: Pileval (`mit-han-lab/pile-val-backup`), default `nsamples=128`
 - Evaluation: WikiText2 `wikitext-2-raw-v1` test; `--seq_len 4096`; `--granularity block`
 - BF16 and quantized eval must use the same weight dir and eval settings
-- Cover Attention (`attn-linear`) and MoE; for each format run extract → PTQ(attn) → PTQ(moe) → quantized eval with PTQ params
+- Cover Attention (`attn-linear`) and MoE at eval (`--quant_target attn-linear moe`)
+- **autoround PTQ defaults to Attention only** (same as official [Qwen3.6-Moe.md](../qwen3.6/Qwen3.6-Moe.md)). Full MoE is ~`40×256` expert units and can take days on one NPU; `ptq_mlp.sh` SKIPs unless `RUN_MOE_PTQ=1`
+- Per format: extract → PTQ(attn) → quantized eval (load attn PTQ params; MoE fake-quant via bit_config)
 - Artifact paths are relative placeholders; do not commit data/weights
 
 From the repository root:
@@ -30,26 +32,20 @@ From the repository root:
 source /path/to/cann/set_env.sh
 export MODEL=/path/to/Qwen3.6-35B-A3B   # placeholder
 
-# 1) BF16 baseline (shared by both formats)
 bash examples/models/qwen3.6-35b-a3b/scripts/eval_bf16.sh
-
-# 2) Extract PTQ offline data (attn + moe, shared)
 bash examples/models/qwen3.6-35b-a3b/scripts/extract_ptq_data.sh
 
-# 3) int4/int4
 export QUANT_DTYPE=int
 bash examples/models/qwen3.6-35b-a3b/scripts/ptq_attn.sh
-bash examples/models/qwen3.6-35b-a3b/scripts/ptq_mlp.sh
+bash examples/models/qwen3.6-35b-a3b/scripts/ptq_mlp.sh   # SKIP by default
 bash examples/models/qwen3.6-35b-a3b/scripts/eval_quant.sh
 
-# 4) mxfp4/mxfp4
 export QUANT_DTYPE=mxfp
 bash examples/models/qwen3.6-35b-a3b/scripts/ptq_attn.sh
-bash examples/models/qwen3.6-35b-a3b/scripts/ptq_mlp.sh
 bash examples/models/qwen3.6-35b-a3b/scripts/eval_quant.sh
 ```
 
-Scripts print the full runtime arguments on start. `ptq_mlp.sh` follows the issue template name but uses `quant_target=moe`.
+Scripts print the full runtime arguments on start.
 
 Main parameters:
 

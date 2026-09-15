@@ -14,13 +14,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-# Note: script name follows the issue template (ptq_mlp.sh). For this MoE
-# model the target is quant_target=moe (adapter rejects mlp).
+# Issue template keeps the name ptq_mlp.sh. For Qwen3.6-35B-A3B + autoround,
+# do NOT run expert-wise MoE PTQ by default: 40 layers x 256 experts makes a
+# full autoround pass impractical for a community sample. MoE is still covered
+# at eval time via --quant_target moe (W4A4 fake-quant without per-expert
+# autoround params), matching the official Qwen3.6-Moe.md autoround path which
+# PTQs attn-linear only.
+#
+# To force full MoE autoround anyway: RUN_MOE_PTQ=1 bash ptq_mlp.sh
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/common.sh"
-print_runtime_args "ptq_moe"
+print_runtime_args "ptq_moe_skip_or_run"
+
+if [ "${RUN_MOE_PTQ:-0}" != "1" ]; then
+  cat <<EOF
+[qwen3.6-35b-a3b.w4a4.autoround.ptq_moe] SKIPPED by default.
+  Reason: expert-wise autoround is ~40*256 PTQ units and can take days on 1 NPU.
+  Workflow: PTQ attn only (ptq_attn.sh), then eval_quant.sh with
+            --quant_target attn-linear moe and --attn_linear_param_dir set.
+  Override: RUN_MOE_PTQ=1 bash $0
+EOF
+  exit 0
+fi
 
 # shellcheck disable=SC2086
 "${AMCT_CLI[@]}" amct_pytorch.ptq \
