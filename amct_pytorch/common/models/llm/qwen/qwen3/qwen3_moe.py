@@ -114,8 +114,8 @@ class Qwen3Moe(BaseModel):
                 decoder_layer.mlp = QuantQwen3MLP(self.args, mlp)
         return decoder_layer
 
-    def iter_ptq_units(self, layer_idx, block):
-        yield from super().iter_ptq_units(layer_idx, block)
+    def iter_ptq_units(self, layer_idx, block, *, for_load=False):
+        yield from super().iter_ptq_units(layer_idx, block, for_load=for_load)
 
     def iter_deploy_bindings(self, layer_idx, block):
         weight_prefix = self.get_layer_weight_prefix(layer_idx)

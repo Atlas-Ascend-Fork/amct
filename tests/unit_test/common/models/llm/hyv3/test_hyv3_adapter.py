@@ -613,3 +613,66 @@ def test_hyv3_get_scale_name_uses_scale_suffix():
     prefix, inv_name = stub.get_scale_name("model.layers.0.self_attn.q_proj.weight")
     assert prefix == "_scale"
     assert inv_name == "model.layers.0.self_attn.q_proj.weight_scale"
+
+
+def test_load_layer_updates_runtime_expert_lac_params(tmp_path):
+    from unittest.mock import patch
+
+    from amct_pytorch.algorithms.quant.auto_clip import LAC
+    from amct_pytorch.common.models.llm.common.base import BaseModel
+    from amct_pytorch.common.models.llm.qwen.moe_common import QuantGatedExperts
+    from tests.unit_test.common.models.llm.hyv3.common import quant_args
+
+    args = quant_args(("moe",))
+    args.model = "/fake/model"
+    args.algos = ["lac"]
+    args.is_per_tensor = False
+    args.moe_mlp_param_dir = str(tmp_path)
+    model = HyV3.__new__(HyV3)
+    with (
+        patch("amct_pytorch.common.models.llm.common.base.AutoConfig.from_pretrained"),
+        patch(
+            "amct_pytorch.common.models.llm.common.base.AutoTokenizer.from_pretrained"
+        ),
+    ):
+        BaseModel.__init__(model, args)
+    packed = nn.Module()
+    packed.num_experts = 2
+    packed.hidden_dim = 4
+    packed.intermediate_dim = 8
+    packed.act_fn = nn.SiLU()
+    packed.gate_up_proj = nn.Parameter(torch.randn(2, 16, 4))
+    packed.down_proj = nn.Parameter(torch.randn(2, 4, 8))
+    experts = QuantGatedExperts(args, packed)
+    block = SimpleNamespace(mlp=SimpleNamespace(experts=experts))
+    train_units = list(model.iter_ptq_units(0, block))
+    runtime_lac = next(
+        m for m in experts.expert_modules[0].modules() if isinstance(m, LAC)
+    )
+    initial = runtime_lac.clip_factor_max.detach().clone()
+    for idx, unit in enumerate(train_units):
+        assert unit.module is not experts.expert_modules[idx]
+        assert unit.module.gate_proj.linear._weight is not None
+        for module in unit.module.modules():
+            if isinstance(module, LAC):
+                with torch.no_grad():
+                    module.clip_factor_max.fill_(idx + 1.25)
+        torch.save(
+            model.ptq_param_handler.export_unit(unit),
+            tmp_path / f"layer_0_{unit.save_name}.pt",
+        )
+    assert torch.equal(runtime_lac.clip_factor_max, initial)
+    result = model.load_selected_layer_ptq_params(0, block)
+    assert result["moe"] == {"loaded": ["expert_0", "expert_1"], "missing": []}
+    for idx, runtime in enumerate(experts.expert_modules):
+        assert runtime.gate_proj.linear._weight is None
+        for module in runtime.modules():
+            if isinstance(module, LAC):
+                torch.testing.assert_close(
+                    module.clip_factor_max,
+                    torch.full_like(module.clip_factor_max, idx + 1.25),
+                )
+    load_units = list(model.iter_ptq_units(0, block, for_load=True))
+    for train, loaded, runtime in zip(train_units, load_units, experts.expert_modules):
+        assert loaded.module is runtime
+        assert (train.save_name, train.metadata) == (loaded.save_name, loaded.metadata)

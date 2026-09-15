@@ -100,8 +100,8 @@ class LongcatNext(LongcatLite):
     def build_quant_block(self, layer_idx):
         return super().build_quant_block(layer_idx)
 
-    def iter_ptq_units(self, layer_idx, block):
-        yield from super().iter_ptq_units(layer_idx, block)
+    def iter_ptq_units(self, layer_idx, block, *, for_load=False):
+        yield from super().iter_ptq_units(layer_idx, block, for_load=for_load)
 
     def iter_deploy_bindings(self, layer_idx, block):
         yield from super().iter_deploy_bindings(layer_idx, block)
