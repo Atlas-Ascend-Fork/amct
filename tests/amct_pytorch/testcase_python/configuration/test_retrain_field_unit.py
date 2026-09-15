@@ -116,7 +116,9 @@ class TestSimpleFields(unittest.TestCase):
 
     def test_channel_wise(self):
         item = _item(rf.ChannelWise)
-        self.assertRaises(ValueError, item.build, True, [LAYER, 'Linear'])
+        item.build(True, [LAYER, 'Linear'])
+        self.assertTrue(item.value)
+        self.assertRaises(ValueError, item.build, True, [LAYER, 'MatMul'])
         item.build(True, [LAYER, 'Conv2d'])
         self.assertTrue(item.value)
         item.build_default([LAYER, 'Linear'])

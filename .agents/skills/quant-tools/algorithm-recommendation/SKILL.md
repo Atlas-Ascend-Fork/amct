@@ -1,6 +1,6 @@
 ---
 name: algorithm-recommendation
-description: 为已适配模型推荐下一步值得尝试的量化算法（仅限已注册：lwc/lac/omniquant/autoround）。触发场景：已知直转掉点想按特征选后续算法 / 无直转结果时先据 casebook+结构+仓库算法能力给先验候选。不适用于：跑算法训练、判算法收益（执行→ $quant-run，判读→ $algorithm-validation）。
+description: 为已适配模型推荐下一步值得尝试的量化算法（仅限已注册：lwc/lac/let/autoround）。触发场景：已知直转掉点想按特征选后续算法 / 无直转结果时先据 casebook+结构+仓库算法能力给先验候选。不适用于：跑算法训练、判算法收益（执行→ $quant-run，判读→ $algorithm-validation）。
 ---
 
 # 量化算法推荐
@@ -25,7 +25,7 @@ description: 为已适配模型推荐下一步值得尝试的量化算法（仅�
 2. 已有个案再读最相近 `<series>/<case>.md`
 3. 确认量化口径读 [../references/metrics-and-thresholds.md](../references/metrics-and-thresholds.md)
 4. 确认直转判读规则读 [../references/direct-quant.md](../references/direct-quant.md)
-5. 可用算法**以 new-path `register_algorithms()` 实际 import 的为准** = `autoround / lac / lwc / omniquant`（gptq/awq/mxfp 视分支移植，先确认在 ALGO_REGISTRY）；**别用 `grep amct_pytorch/algorithms` 命中名册判定可用**——classic 图量化 path 列了 gptq/awq 等但 LLM PTQ 不走，据此选会运行期 `KeyError: '...' is not registered in 'algo'`。
+5. 可用算法**以 new-path `register_algorithms()` 实际 import 的为准** = `autoround / lac / lwc / let`（`lwc` + `let`为完整的omniquant算法）（gptq/awq/mxfp 视分支移植，先确认在 ALGO_REGISTRY）；**别用 `grep amct_pytorch/algorithms` 命中名册判定可用**——classic 图量化 path 列了 gptq/awq 等但 LLM PTQ 不走，据此选会运行期 `KeyError: '...' is not registered in 'algo'`。
 
 ## 当前算法分组
 
@@ -33,7 +33,7 @@ description: 为已适配模型推荐下一步值得尝试的量化算法（仅�
 
 - `weight` 类：`lwc`、`autoround`
 - `activation` 类：`lac`
-- `structure` 类：`omniquant`
+- `structure` 类：`let`（OmniQuant 论文中的 LET 等价变换；复现论文完整 OmniQuant 需与 `lwc` 组合使用：`--algos let lwc`）
 
 > **不要推荐以下未注册算法**：`awq` / `gptq` / `svdquant` / `smoothquant` / `flatquant` / `learnable_had`（源在 AMCT-Q，需分支移植后才进 `ALGO_REGISTRY`；当前 `--algos` 传入会运行期 `KeyError: '...' is not registered in 'algo'`）。upstream 示例脚本里出现这些名字也不代表可用。
 

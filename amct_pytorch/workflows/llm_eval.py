@@ -29,6 +29,7 @@ from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.algorithms.quant import register_algorithms
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.utils.run_logging import setup_run_logging
+from amct_pytorch.common.utils.seed_utils import seed_everything
 from amct_pytorch.quantization.bit_policy import ensure_bit_policy
 
 
@@ -40,6 +41,11 @@ class LlmEvalWorkflow:
         self.seq_len = args.seq_len
         self.device = args.device
         self.granularity = args.granularity
+        if self.granularity not in ("block", "model"):
+            raise ValueError(
+                f"eval only supports granularity 'block' or 'model', "
+                f"got '{self.granularity}'."
+            )
         self.eval_mode = args.eval_mode
         self.pipeline = None
         self.data_provider = None
@@ -47,6 +53,8 @@ class LlmEvalWorkflow:
         self.quant_target = args.quant_target
         self.quant_dtype = args.quant_dtype
         self.bit_policy = ensure_bit_policy(args)
+        self.seed = args.seed
+        seed_everything(self.seed)
 
     @staticmethod
     def _register_components():

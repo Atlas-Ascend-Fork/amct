@@ -109,6 +109,29 @@ class TestInsertRetrainPass(unittest.TestCase):
         self.assertIsInstance(named_module_dict['linear'], CompModuleLinear)
 
 
+class TestCompModuleLinearChannelWise(unittest.TestCase):
+    def test_channel_wise_weight_quantization_matches_linear_output_channels(self):
+        module = torch.nn.Linear(4, 4)
+        comp_module = CompModuleLinear(
+            module=module,
+            act_config={},
+            wts_config={
+                'algo': 'arq_retrain',
+                'num_bits': 8,
+                'channel_wise': True,
+            },
+            common_config={'device': 'cpu'},
+        )
+        comp_module.comp_algs.append('quant')
+
+        quantized_weight = comp_module.wts_comp(
+            module.weight, comp_module.wts_config, comp_module.common_config
+        )
+
+        self.assertEqual(comp_module.wts_scales.shape, (4,))
+        self.assertEqual(quantized_weight.shape, module.weight.shape)
+
+
 class TestInsertRetrainConv3dPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

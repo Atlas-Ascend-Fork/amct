@@ -264,12 +264,52 @@ no prune ratio met tolerance 0.100 across 3 candidates; model left unchanged.
 说明：`0.1` / `0.2` 在默认网格下无候选满足绝对 PPL 容差（与任务 1 同类，属有效结果）；
 `0.5` 档 ΔPPL≈0.278 ≤ 0.5，剪枝生效，削减率约 9.45%。字段来自各档 `result.json`。
 
-## 5 社区任务样例：Qwen3.6-35B-A3B MoE `activation_count` + `budget`（任务 3）
+## 5 社区任务样例：`mass_variance` + 量化（任务 18）
+
+任务 18 在 `tolerance=0.1` 的 MoE 专家剪枝后，继续使用 Qwen3.6 的公开
+`amct_pytorch.eval` blockwise 流程做 W8A8 `attn-linear + moe` 量化评估。脚本位于
+[`src/run_qwen3_6_35b_a3b_pruning_mass_variance_tolerance_quant.py`](src/run_qwen3_6_35b_a3b_pruning_mass_variance_tolerance_quant.py)。
+模型权重和数据集均不提交，路径为占位的相对路径。
+
+### 5.1 运行说明
+
+```bash
+python3 examples/algorithms/pruning/src/run_qwen3_6_35b_a3b_pruning_mass_variance_tolerance_quant.py \
+  --model ./path/to/Qwen3.6-35B-A3B \
+  --trust-remote-code \
+  --device-map auto \
+  --tolerance 0.1 \
+  --ratio-grid 0.05 \
+  --bit-config amct_pytorch/configs/w8a8.yaml \
+  --quant-target attn-linear moe --quant-dtype int \
+  --output-dir ./output/qwen3_6_35b_a3b_mass_variance_quant
+```
+
+脚本会先从原始模型收集 Pileval 校准数据，并执行 `mass_variance` 容差搜索；随后对剪枝模型执行
+WikiText2 `test` split、`seq_len=4096` 的量化 PPL 评估。若默认网格下没有候选满足容差，剪枝模型
+保持原样，量化仍会对原始模型执行。完整命令、剪枝日志尾部、量化 PPL 和返回码写入 `result.json`。
+`--skip-quant-eval` 只用于检查剪枝流程，不属于正式结果。
+
+### 5.2 诊断与报告
+
+启动时打印完整参数、剪枝命令和量化命令。剪枝阶段的 `prune_diagnose()` 与 `PruneReport` 保存在
+子任务输出目录的 `result.json`；量化阶段输出 `PPL evaluation completed: ...`，并记录为 `quant_ppl`。
+量化使用 `amct_pytorch.eval` 而不是经典 `amct.quantize`，因为 Qwen3.6 的融合 MoE 需要专用模型工作流。
+
+### 5.3 结果表
+
+| 模型 | 方法 | 实验设置 | 基线 PPL | 剪枝后 PPL | 后处理 PPL | 参数量（前 → 后） | 参数削减率 | 剪枝时长（min） |
+| --- | --- | --- | ---: | ---: | ---: | --- | ---: | ---: |
+| Qwen3.6-35B-A3B | `mass_variance` + `quant` | `tolerance=0.1`, `ratio_grid=0.05`, W8A8 `attn-linear + moe` | 6.308547 | 6.354577 | 6.449746 | 34660610688 → 33023767168 | 0.0472 | 10.39 |
+
+结果来自 A3 双 NPU 实测；剪枝报告和量化日志保存在输出目录的 `result.json`。
+
+## 6 社区任务样例：Qwen3.6-35B-A3B MoE `activation_count` + `budget`（任务 3）
 
 本节对应 issue 183 的任务 3：基于 `activation_count` 的 MoE 专家结构化剪枝，使用
 `size_budget=0.9`、`0.8` 和 `0.5` 三档目标参数预算。
 
-### 5.1 任务目标与实验设置
+### 6.1 任务目标与实验设置
 
 Qwen3.6-35B-A3B 包含 40 个 MoE 层，每层 256 个路由专家，每个 token 激活 8 个专家。原始 BF16 权重约占 64.56 GiB，完整模型可能超过单张 Ascend 910 卡的可用显存，因此剪枝阶段在 CPU 上加载完整模型；剪枝后模型可以继续进行 WikiText2 评测、量化或部署。
 
@@ -288,7 +328,7 @@ size_budget：0.9、0.8、0.5
 
 `activation_count` 根据校准数据统计专家激活情况，优先删除激活次数较少的专家，并同步收缩路由器和专家权重。
 
-### 5.2 模型准备
+### 6.2 模型准备
 
 将 [Qwen/Qwen3.6-35B-A3B 原始权重](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) 下载到本地模型目录，例如：
 
@@ -310,7 +350,7 @@ tokenizer_config.json
 
 首次运行脚本时会自动下载并缓存校准与评估数据集。
 
-### 5.3 运行剪枝
+### 6.3 运行剪枝
 
 在 `amct/examples/algorithms/pruning` 目录执行以下命令。每个预算都应从同一个原始模型目录独立运行：
 
@@ -364,7 +404,7 @@ python3 src/run_qwen3_6_35b_a3b_pruning_activation_count_budget.py \
 | `--save_model_dir` | `""` | 否 | 剪枝模型保存目录，为空则不保存权重 |
 | `--trust_remote_code` | `False` | 否 | 允许执行模型目录内自定义代码；默认关闭。--model_path 必须是本地目录；仅对信任的本地权重开启 |
 
-### 5.4 诊断与报告
+### 6.4 诊断与报告
 
 正式脚本调用 `amct_pytorch.pruning.prune_diagnose`，例如 size_budget=0.9 时诊断结果如下：
 
@@ -395,7 +435,7 @@ prunable_fraction: 0.9335997444269842
 
 完整内容保存在脚本输出的 JSON 报告中。
 
-### 5.5 WikiText2 评测与结果
+### 6.5 WikiText2 评测与结果
 
 PPL 评测使用 `wikitext-2-raw-v1` 的 test split，固定 `seq_len=4096`。Pileval 只用于校准，不能用于 PPL 评估。原始模型或剪枝模型无法完整放入单卡时，使用 AMCT 的 blockwise 评测入口：
 
@@ -431,7 +471,7 @@ python3 -m amct_pytorch.eval \
 | Qwen3.6-35B-A3B | `activation_count` | `size_budget=0.8` | 6.308547019958496 | 7.1991167068481445 |               N/A | 34,660,610,688 → 24,965,460,608 |   27.9717% |           15.44 |
 | Qwen3.6-35B-A3B | `activation_count` | `size_budget=0.5` | 6.308547019958496 |  9.780414581298828 | 8.294227600097656 | 34,660,610,688 → 15,270,310,528 |   55.9433% |           15.07 |
 
-### 5.6 `size_budget=0.5` 恢复训练
+### 6.6 `size_budget=0.5` 恢复训练
 
 本次仅对参数量最小、可在单张 64 GiB Ascend 910 上完成全参数训练的 `size_budget=0.5` 模型执行恢复训练。恢复训练从剪枝模型开始，未重新执行剪枝，也未覆盖剪枝模型。
 
@@ -504,7 +544,7 @@ model.save_pretrained(
 
 相对未经恢复的剪枝模型，PPL 绝对下降 `1.486186981201172`，相对下降约 `15.20%`；若以剪枝造成的 PPL 增量为损失，本次恢复约 `42.81%`。恢复后 PPL 仍比原始模型高 `1.985680580139160`，因此当前结果是有所恢复但尚未恢复到基线。
 
-### 5.7 继续恢复时可调整的参数
+### 6.7 继续恢复时可调整的参数
 
 若需要继续提高恢复程度，可每次只改变少量参数，并用相同的 WikiText2 test 命令比较 PPL：
 

@@ -224,7 +224,7 @@ class Graph(GraphBase):  # pylint: disable=no-member
                     )
                 if delete_node.get_output_anchor(0).get_peer_input_anchor():
                     LOGGER.logd(
-                        'Node "%s" still connect to other node, cannot '
+                        'Node "%s" is still connected to another node and cannot '
                         "remove it now." % (delete_node.name)
                     )
                     return

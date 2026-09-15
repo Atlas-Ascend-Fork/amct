@@ -20,8 +20,8 @@ from tqdm import tqdm
 from datasets import load_dataset
 
 
-def pileval_awq(calib_dataset, tokenizer, n_samples, seq_len):
-    dataset = calib_dataset.shuffle(seed=42)
+def pileval_awq(calib_dataset, tokenizer, n_samples, seq_len, seed=42):
+    dataset = calib_dataset.shuffle(seed=seed)
     samples = []
     total_tokens = 0
     target_tokens = n_samples * seq_len
@@ -51,10 +51,10 @@ def pileval_awq(calib_dataset, tokenizer, n_samples, seq_len):
     return samples
 
 
-def get_pileval(tokenizer, n_samples, seq_len=512):
+def get_pileval(tokenizer, n_samples, seq_len=512, seed=42):
     testdata = load_dataset('mit-han-lab/pile-val-backup', split='validation')
 
-    samples = pileval_awq(testdata, tokenizer, n_samples, seq_len)
+    samples = pileval_awq(testdata, tokenizer, n_samples, seq_len, seed=seed)
 
     return samples
 

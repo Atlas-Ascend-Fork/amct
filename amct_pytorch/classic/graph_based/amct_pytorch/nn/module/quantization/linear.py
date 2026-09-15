@@ -22,7 +22,8 @@ import torch.nn.functional as F
 
 from .....amct_pytorch.utils.log import LOGGER
 from .....amct_pytorch.nn.module.quantization.qat_base import QATBase
-from .....amct_pytorch.utils.vars import CHANNEL_WISE
+from .....amct_pytorch.common.utils.vars_util import INT4, INT8
+from .....amct_pytorch.utils.vars import CHANNEL_WISE, DST_TYPE
 
 RETRAIN_WEIGHT_CONFIG = 'retrain_weight_config'
 
@@ -35,6 +36,7 @@ class LinearQAT(nn.Linear, QATBase):
 
     _float_module = nn.Linear
     _required_params = ("in_features", "out_features", "bias")
+    _supported_weight_dst_types = (INT8, INT4)
 
     def __init__(
         self, in_features, out_features, bias=True, device=None, dtype=None, config=None
@@ -79,8 +81,16 @@ class LinearQAT(nn.Linear, QATBase):
 
     def check_quantifiable(self):
         """check qat config for LinearQat"""
-        if self.retrain_weight_config.get(CHANNEL_WISE, True):
-            raise RuntimeError('Do not support Linear with channel_wise.')
+        if (
+            self.retrain_weight_config.get(DST_TYPE, INT8) == INT4
+            and self.weight.shape[0] % 2 == 1
+        ):
+            raise ValueError(
+                'Linear INT4 weight shape {} has out_features pack axis '
+                '(size {}) that is odd.'.format(
+                    list(self.weight.shape), self.weight.shape[0]
+                )
+            )
         return True
 
     def forward(self, input):

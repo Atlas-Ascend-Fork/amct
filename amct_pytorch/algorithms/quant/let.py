@@ -22,11 +22,16 @@ from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
 
 
 @ALGO_REGISTRY.register(
-    name="omniquant",
-    description="omniquant",
+    name="let",
+    description="Learnable equivalent transformation",
     targets=("structure",),
 )
-class OmniQuant(QuantAlgorithmBase):
+class LET(QuantAlgorithmBase):
+    """Learnable equivalent transformation from the OmniQuant paper.
+
+    For the full OmniQuant method, use together with LWC: ``--algos let lwc``.
+    """
+
     def __init__(self, args, ctx):
         super().__init__()
         self.args = args

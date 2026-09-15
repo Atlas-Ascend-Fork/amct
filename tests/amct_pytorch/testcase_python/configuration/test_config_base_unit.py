@@ -17,6 +17,7 @@
 # ----------------------------------------------------------------------------
 import logging
 import unittest
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from amct_pytorch.classic.graph_based.amct_pytorch.capacity import CAPACITY
@@ -25,6 +26,9 @@ from amct_pytorch.classic.graph_based.amct_pytorch.common.config.config_base imp
     GraphObjects,
     check_config_quant_enable,
     check_config_dmq_balancer,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.common.config.proto_config import (
+    ProtoConfig,
 )
 
 logger = logging.getLogger(__name__)
@@ -98,6 +102,28 @@ class TestConfigBaseStatic(unittest.TestCase):
         self.assertEqual(act.get('fakequant_precision_mode'), 'FORCE_FP16')
         self.assertEqual(wgt.get('num_bits'), 8)
         self.assertEqual(wgt.get('wts_algo'), 'arq_quantize')
+
+    def test_legacy_fc_config_still_applies_to_linear(self):
+        proto_config = ProtoConfig.__new__(ProtoConfig)
+        proto_config.proto_config = SimpleNamespace(
+            conv_calibration_config=object(), fc_calibration_config=object()
+        )
+        proto_config.quantizable_type = ['Conv2d', 'Linear']
+        proto_config.channel_wise_types = ['Conv2d', 'Linear']
+        proto_config._get_global_config = MagicMock(return_value={})
+        proto_config._get_override_layer_configs = MagicMock(return_value={})
+        proto_config._get_override_layer_types = MagicMock(return_value={})
+        proto_config._get_common_config = MagicMock(return_value={})
+        proto_config._get_conv_calibration_config = MagicMock(
+            return_value={'config': 'conv'}
+        )
+        proto_config._get_fc_calibration_config = MagicMock(
+            return_value={'config': 'fc'}
+        )
+
+        config = proto_config.get_proto_config()
+
+        self.assertEqual(config.type_config['Linear'], {'config': 'fc'})
 
 
 class TestConfigBaseModuleFuncs(unittest.TestCase):

@@ -760,6 +760,8 @@ class ChannelWiseField(LeafField):
         layer_name = PARAM_POOL.get_layer_name()
         layer_type = PARAM_POOL.get_layer_type()
         channel_wise_types = self.capacity.get_value('CHANNEL_WISE_TYPES')
+        if layer_type[layer_name] == 'Linear':
+            return False
         return layer_type[layer_name] in channel_wise_types
 
     def check(self, name, value):

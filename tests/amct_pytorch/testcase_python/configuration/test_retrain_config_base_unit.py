@@ -16,7 +16,10 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import logging
+import json
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock
 
 from amct_pytorch.classic.graph_based.amct_pytorch.capacity import CAPACITY
@@ -119,37 +122,66 @@ class TestRetrainConfigBase(unittest.TestCase):
         obj.set_config_by_graph_construct({}, GRAPH)
 
 
-class TestDowngradeInt4UnpackableLayers(unittest.TestCase):
-    def test_downgrade_unpackable_int4_layer_to_int8(self):
+class TestSkipInt4UnpackableLayers(unittest.TestCase):
+    def test_skip_unpackable_int4_layer_without_int8_downgrade(self):
         obj, querier, _ = _make()
-        # conv1 不支持沿 Cin pack -> 降级；conv2 支持 -> 保持 INT4
-        querier.check_int4_cin_pack_supported.side_effect = lambda graph, layer: (
+        querier.is_int4_weight_pack_axis_even.side_effect = lambda graph, layer: (
             layer != 'conv1'
         )
         config = {
-            'conv1': {'retrain_weight_config': {'dst_type': 'INT4'}},
-            'conv2': {'retrain_weight_config': {'dst_type': 'INT4'}},
-            'version': 'v1',  # 非 dict 之外的全局项也应被安全跳过
+            'conv1': {
+                'retrain_enable': True,
+                'retrain_weight_config': {'dst_type': 'INT4'},
+            },
+            'conv2': {
+                'retrain_enable': True,
+                'retrain_weight_config': {'dst_type': 'INT4'},
+            },
+            'version': 'v1',
         }
-        obj.downgrade_int4_unpackable_layers(None, config)
-        self.assertEqual(config['conv1']['retrain_weight_config']['dst_type'], 'INT8')
+
+        obj.skip_int4_unpackable_layers(None, config)
+
+        self.assertFalse(config['conv1']['retrain_enable'])
+        self.assertEqual(config['conv1']['retrain_weight_config']['dst_type'], 'INT4')
+        self.assertTrue(config['conv2']['retrain_enable'])
         self.assertEqual(config['conv2']['retrain_weight_config']['dst_type'], 'INT4')
 
     def test_non_int4_layer_untouched(self):
         obj, querier, _ = _make()
-        querier.check_int4_cin_pack_supported.return_value = False
-        config = {'fc': {'retrain_weight_config': {'dst_type': 'INT8'}}}
-        obj.downgrade_int4_unpackable_layers(None, config)
-        # 非 INT4 层即便 not supported 也不动
+        querier.is_int4_weight_pack_axis_even.return_value = False
+        config = {
+            'fc': {
+                'retrain_enable': True,
+                'retrain_weight_config': {'dst_type': 'INT8'},
+            }
+        }
+        obj.skip_int4_unpackable_layers(None, config)
         self.assertEqual(config['fc']['retrain_weight_config']['dst_type'], 'INT8')
+        self.assertTrue(config['fc']['retrain_enable'])
 
-    def test_no_querier_method_is_noop(self):
-        obj, _, _ = _make()
-        # graph_querier 无 check_int4_cin_pack_supported 时直接返回，不报错
-        obj.graph_querier = object()
-        config = {'conv': {'retrain_weight_config': {'dst_type': 'INT4'}}}
-        obj.downgrade_int4_unpackable_layers(None, config)
-        self.assertEqual(config['conv']['retrain_weight_config']['dst_type'], 'INT4')
+    def test_parse_config_file_applies_int4_pack_axis_filter(self):
+        obj, _, checker = _make()
+        obj.get_supported_layers = MagicMock(return_value={'conv': 'Conv2d'})
+        obj._check_reduant_config = MagicMock()
+        obj._del_reduant_config = MagicMock()
+        obj.config_tree = MagicMock()
+        quant_config = {
+            'conv': {
+                'retrain_enable': True,
+                'retrain_weight_config': {'dst_type': 'INT4'},
+            }
+        }
+        obj.config_tree.dump.return_value = quant_config
+        obj.config_tree.get_global_keys.return_value = []
+        obj.skip_int4_unpackable_layers = MagicMock()
+        checker.check_weights_shared = MagicMock()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_file = Path(temp_dir) / 'config.json'
+            config_file.write_text(json.dumps(quant_config), encoding='utf-8')
+            obj.parse_config_file(str(config_file), GRAPH)
+
+        obj.skip_int4_unpackable_layers.assert_called_once_with(GRAPH, quant_config)
 
 
 if __name__ == '__main__':

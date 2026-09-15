@@ -435,7 +435,7 @@ class TestCheckModel(unittest.TestCase):
 
     def test_get_support_dmq_balancer_types(self):
         ret = GraphQuerier.get_support_dmq_balancer_types()
-        ans = set(
+        expected = set(
             [
                 CONV2D,
                 CONV3D,
@@ -449,12 +449,12 @@ class TestCheckModel(unittest.TestCase):
                 'ConvTranspose1d',
             ]
         )
-        self.assertEqual(set(ret), ans)
+        self.assertEqual(set(ret), expected)
 
     def test_get_support_dmq_balancer_layers(self):
         self.graph.add_model(self.model_001)
         layer_names = GraphQuerier.get_support_dmq_balancer_layers(self.graph)
-        ans = [
+        expected = [
             'layer1.0',
             'layer2.0',
             'layer3.0',
@@ -465,7 +465,7 @@ class TestCheckModel(unittest.TestCase):
             'fc.2',
             'fc.5',
         ]
-        self.assertEqual(layer_names, ans)
+        self.assertEqual(layer_names, expected)
 
 
 class TestCheckGraph(unittest.TestCase):
@@ -826,7 +826,7 @@ class TestCheckGraph(unittest.TestCase):
 
     def test_get_support_dmq_balancer_layers(self):
         layer_names = GraphQuerier.get_support_dmq_balancer_layers(self.graph)
-        ans = [
+        expected = [
             'layer1.0',
             'layer2.0',
             'layer3.0',
@@ -837,7 +837,7 @@ class TestCheckGraph(unittest.TestCase):
             'fc.2',
             'fc.5',
         ]
-        self.assertEqual(layer_names, ans)
+        self.assertEqual(layer_names, expected)
 
     def test_check_distill_type_conv2d(self):
         mod_name = CONV1
@@ -903,15 +903,11 @@ class TestCheckGraph(unittest.TestCase):
         self.assertFalse(GraphChecker.check_rnn_limit(mod_type, mod_name, mod))
 
 
-class TestCheckInt4CinPackSupported(unittest.TestCase):
-    """GraphQuerier.check_int4_cin_pack_supported 各分支，不依赖 onnx 原生 INT4。"""
+class TestIsInt4WeightPackAxisEven(unittest.TestCase):
+    """INT4 support is determined by the final Deploy ONNX pack axis."""
 
     _QOI = (
         'amct_pytorch.classic.graph_based.amct_pytorch.configuration.check.QuantOpInfo'
-    )
-    _ATTR = (
-        'amct_pytorch.classic.graph_based.amct_pytorch.configuration.check.'
-        'AttributeProtoHelper'
     )
 
     @staticmethod
@@ -921,54 +917,132 @@ class TestCheckInt4CinPackSupported(unittest.TestCase):
         return graph
 
     def test_unknown_type_supported(self):
-        # get_cin_axis 对未知类型返回 None -> 非量化算子，放行(supported=True)
         node = mock.MagicMock()
         node.type = 'Relu'
         with mock.patch(self._QOI) as m_qoi:
-            m_qoi.get_cin_axis.return_value = None
-            ret = GraphQuerier.check_int4_cin_pack_supported(
+            m_qoi.get_weight_node.return_value = None
+            ret = GraphQuerier.is_int4_weight_pack_axis_even(
                 self._graph_with(node), 'relu'
             )
         self.assertTrue(ret)
 
-    def test_group_conv_not_supported(self):
+    def test_missing_weight_dimensions_rejected(self):
         node = mock.MagicMock()
         node.type = 'Conv'
-        with mock.patch(self._QOI) as m_qoi, mock.patch(self._ATTR) as m_attr:
-            m_qoi.get_cin_axis.return_value = 1
-            m_attr.return_value.has_attr.return_value = True
-            m_attr.return_value.get_attr_value.return_value = 16  # groups>1
-            ret = GraphQuerier.check_int4_cin_pack_supported(
-                self._graph_with(node), 'conv'
-            )
-        self.assertFalse(ret)
+        with mock.patch(self._QOI) as m_qoi:
+            m_qoi.get_recurrence_weight_node.return_value = None
+            for dims in (None, [], [2], [2, 2]):
+                with self.subTest(dims=dims):
+                    m_qoi.get_node_tensor.return_value.dims = dims
+                    self.assertFalse(
+                        GraphQuerier.is_int4_weight_pack_axis_even(
+                            self._graph_with(node), 'conv'
+                        )
+                    )
 
-    def test_odd_cin_not_supported(self):
+    def test_group_conv_with_even_last_axis_supported(self):
         node = mock.MagicMock()
         node.type = 'Conv'
         wnode = mock.MagicMock()
-        with mock.patch(self._QOI) as m_qoi, mock.patch(self._ATTR) as m_attr:
-            m_qoi.get_cin_axis.return_value = 1
-            m_attr.return_value.has_attr.return_value = False  # 非 group
+        with mock.patch(self._QOI) as m_qoi:
             m_qoi.get_weight_node.return_value = wnode
             m_qoi.get_recurrence_weight_node.return_value = None
-            m_qoi.get_node_tensor.return_value.dims = [8, 3, 3, 3]  # cin=3 奇
-            ret = GraphQuerier.check_int4_cin_pack_supported(
-                self._graph_with(node), 'conv'
-            )
-        self.assertFalse(ret)
-
-    def test_even_cin_supported(self):
-        node = mock.MagicMock()
-        node.type = 'Conv'
-        wnode = mock.MagicMock()
-        with mock.patch(self._QOI) as m_qoi, mock.patch(self._ATTR) as m_attr:
-            m_qoi.get_cin_axis.return_value = 1
-            m_attr.return_value.has_attr.return_value = False
-            m_qoi.get_weight_node.return_value = wnode
-            m_qoi.get_recurrence_weight_node.return_value = None
-            m_qoi.get_node_tensor.return_value.dims = [8, 4, 3, 3]  # cin=4 偶
-            ret = GraphQuerier.check_int4_cin_pack_supported(
+            m_qoi.get_node_tensor.return_value.dims = [8, 1, 3, 2]
+            ret = GraphQuerier.is_int4_weight_pack_axis_even(
                 self._graph_with(node), 'conv'
             )
         self.assertTrue(ret)
+
+    def test_conv_with_odd_last_axis_not_supported(self):
+        node = mock.MagicMock()
+        node.type = 'Conv'
+        wnode = mock.MagicMock()
+        with (
+            mock.patch(self._QOI) as m_qoi,
+            mock.patch(
+                'amct_pytorch.classic.graph_based.amct_pytorch.configuration.'
+                'check.LOGGER'
+            ) as logger,
+        ):
+            m_qoi.get_weight_node.return_value = wnode
+            m_qoi.get_recurrence_weight_node.return_value = None
+            m_qoi.get_node_tensor.return_value.dims = [8, 4, 3, 3]
+            ret = GraphQuerier.is_int4_weight_pack_axis_even(
+                self._graph_with(node), 'conv'
+            )
+        self.assertFalse(ret)
+        self.assertIn('axis -1', logger.logw.call_args.args[0])
+
+    def test_conv_with_odd_cin_and_even_last_axis_supported(self):
+        node = mock.MagicMock()
+        node.type = 'Conv'
+        wnode = mock.MagicMock()
+        with mock.patch(self._QOI) as m_qoi:
+            m_qoi.get_weight_node.return_value = wnode
+            m_qoi.get_recurrence_weight_node.return_value = None
+            m_qoi.get_node_tensor.return_value.dims = [8, 3, 3, 2]
+            ret = GraphQuerier.is_int4_weight_pack_axis_even(
+                self._graph_with(node), 'conv'
+            )
+        self.assertTrue(ret)
+
+    def test_gemm_transb_one_checks_axis_zero(self):
+        node = mock.MagicMock()
+        node.type = 'Gemm'
+        wnode = mock.MagicMock()
+        attr = mock.MagicMock()
+        attr.has_attr.return_value = True
+        attr.get_attr_value.return_value = 1
+        with (
+            mock.patch(self._QOI) as m_qoi,
+            mock.patch(
+                'amct_pytorch.classic.graph_based.amct_pytorch.configuration.'
+                'check.AttributeProtoHelper',
+                return_value=attr,
+            ),
+        ):
+            m_qoi.get_weight_node.return_value = wnode
+            m_qoi.get_recurrence_weight_node.return_value = None
+            m_qoi.get_node_tensor.return_value.dims = [6, 3]
+            self.assertTrue(
+                GraphQuerier.is_int4_weight_pack_axis_even(
+                    self._graph_with(node), 'gemm'
+                )
+            )
+            m_qoi.get_node_tensor.return_value.dims = [5, 4]
+            self.assertFalse(
+                GraphQuerier.is_int4_weight_pack_axis_even(
+                    self._graph_with(node), 'gemm'
+                )
+            )
+
+    def test_gemm_transb_zero_and_matmul_check_last_axis(self):
+        wnode = mock.MagicMock()
+        attr = mock.MagicMock()
+        attr.has_attr.return_value = True
+        attr.get_attr_value.return_value = 0
+        with (
+            mock.patch(self._QOI) as m_qoi,
+            mock.patch(
+                'amct_pytorch.classic.graph_based.amct_pytorch.configuration.'
+                'check.AttributeProtoHelper',
+                return_value=attr,
+            ),
+        ):
+            m_qoi.get_weight_node.return_value = wnode
+            m_qoi.get_recurrence_weight_node.return_value = None
+            for node_type in ('Gemm', 'MatMul'):
+                node = mock.MagicMock()
+                node.type = node_type
+                m_qoi.get_node_tensor.return_value.dims = [3, 6]
+                self.assertTrue(
+                    GraphQuerier.is_int4_weight_pack_axis_even(
+                        self._graph_with(node), node_type.lower()
+                    )
+                )
+                m_qoi.get_node_tensor.return_value.dims = [4, 5]
+                self.assertFalse(
+                    GraphQuerier.is_int4_weight_pack_axis_even(
+                        self._graph_with(node), node_type.lower()
+                    )
+                )

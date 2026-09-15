@@ -25,10 +25,15 @@ from ....amct_pytorch.custom_op import arq_retrain_backward_pytorch
 from ....amct_pytorch.custom_op.utils import check_quant_data
 from ....amct_pytorch.custom_op.utils import check_group_param
 from ....amct_pytorch.custom_op.utils import process_tensor_shape
-from ....amct_pytorch.utils.vars import QUANTIZE_LINEAR
-from ....amct_pytorch.utils.vars import DEQUANTIZE_LINEAR
 from ....amct_pytorch.utils.vars import TRANSPOSE
 from ....amct_pytorch.utils.weight_quant_api import adjust_axis_for_group_wise
+from ....amct_pytorch.custom_op.qdq_symbolic import (
+    add_qdq,
+    add_weight_qdq_dynamo,
+    check_int4_export,
+    check_int4_dynamo_export,
+    is_dynamo_export,
+)
 
 
 class ArqRetrainFunction(Function):
@@ -49,8 +54,25 @@ class ArqRetrainFunction(Function):
         axis=0,
     ):
         """
-        Function: ArqRetrain foward funtion.
+        Function: ArqRetrain forward function.
         """
+        if is_dynamo_export():
+            if wts_param.get('num_bits', 8) == 4:
+                check_int4_dynamo_export(wts_param)
+            zero_point = offset_deploy if offset_deploy is not None else offset
+            return (
+                add_weight_qdq_dynamo(
+                    weight_tensor,
+                    scale,
+                    zero_point,
+                    wts_param.get('num_bits', 8),
+                    wts_param.get('module_type'),
+                    wts_param.get('channel_wise', False),
+                    wts_param.get('module'),
+                ),
+                scale,
+                offset,
+            )
         # check weight tensor
         check_quant_data(weight_tensor, 'weight')
         weight_tensor_processed = process_tensor_shape(
@@ -86,7 +108,7 @@ class ArqRetrainFunction(Function):
     @staticmethod
     def backward(ctx, grad_outputs, grad_scale, grad_offset):
         """
-        Function: ArqRetrain backward funtion required by torch torch.autograd.
+        Function: ArqRetrain backward function required by torch torch.autograd.
         """
         grad_input = arq_retrain_backward_pytorch(grad_outputs)
         ret = (grad_input, None, None, None, None)
@@ -101,28 +123,46 @@ class ArqRetrainFuncQAT(ArqRetrainFunction):
         Args:
             g (Graph): graph to write the ONNX representation into.
         """
-        module_type = inputs[3].get('module_type')
+        wts_param = inputs[3]
+        module_type = wts_param.get('module_type')
+        num_bits = wts_param.get('num_bits', 8)
+        if num_bits == 4:
+            check_int4_export(wts_param)
+        channel_axis = 1 if wts_param.get('channel_wise', False) else None
         if module_type in ["ConvTranspose1d", "ConvTranspose2d"]:
-            quant = g.op(QUANTIZE_LINEAR, inputs[0], inputs[1], inputs[4])
-            out_node = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[4])
+            out_node = add_qdq(
+                g, inputs[0], inputs[1], inputs[4], num_bits, channel_axis
+            )
         elif module_type == 'Conv1d':
             transpose = g.op(TRANSPOSE, inputs[0], perm_i=list([1, 0, 2]))
-            quant = g.op(QUANTIZE_LINEAR, transpose, inputs[1], inputs[4])
-            dequant = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[4])
+            dequant = add_qdq(
+                g, transpose, inputs[1], inputs[4], num_bits, channel_axis
+            )
             out_node = g.op(TRANSPOSE, dequant, perm_i=list([1, 0, 2]))
         elif module_type == 'Conv2d':
             transpose = g.op(TRANSPOSE, inputs[0], perm_i=list([1, 0, 2, 3]))
-            quant = g.op(QUANTIZE_LINEAR, transpose, inputs[1], inputs[4])
-            dequant = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[4])
+            dequant = add_qdq(
+                g, transpose, inputs[1], inputs[4], num_bits, channel_axis
+            )
             out_node = g.op(TRANSPOSE, dequant, perm_i=list([1, 0, 2, 3]))
         elif module_type == 'Conv3d':
             transpose = g.op(TRANSPOSE, inputs[0], perm_i=list([1, 0, 2, 3, 4]))
-            quant = g.op(QUANTIZE_LINEAR, transpose, inputs[1], inputs[4])
-            dequant = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[4])
+            dequant = add_qdq(
+                g, transpose, inputs[1], inputs[4], num_bits, channel_axis
+            )
             out_node = g.op(TRANSPOSE, dequant, perm_i=list([1, 0, 2, 3, 4]))
         elif module_type == 'Linear':
-            quant = g.op(QUANTIZE_LINEAR, inputs[0], inputs[1], inputs[4])
-            out_node = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[4])
+            if channel_axis is None:
+                out_node = add_qdq(g, inputs[0], inputs[1], inputs[4], num_bits)
+            else:
+                weight_dim = wts_param.get('module').weight.dim()
+                transpose_axes = list(range(weight_dim))
+                transpose_axes[0], transpose_axes[1] = 1, 0
+                transpose = g.op(TRANSPOSE, inputs[0], perm_i=transpose_axes)
+                dequant = add_qdq(
+                    g, transpose, inputs[1], inputs[4], num_bits, channel_axis
+                )
+                out_node = g.op(TRANSPOSE, dequant, perm_i=transpose_axes)
         elif module_type in RNN_TENSOR_NUM:
             shape = g.op(
                 "Constant",
@@ -137,8 +177,7 @@ class ArqRetrainFuncQAT(ArqRetrainFunction):
                 ),
             )
             reshape = g.op('Reshape', inputs[0], shape)
-            quant = g.op(QUANTIZE_LINEAR, reshape, inputs[1], inputs[4])
-            out_node = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[4])
+            out_node = add_qdq(g, reshape, inputs[1], inputs[4], num_bits, channel_axis)
         LOGGER.logi(
             "Convert ARQ op to onnx QuantizeLinear and DequantizeLinear op successfully."
         )

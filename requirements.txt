@@ -1,5 +1,7 @@
 # NPU 场景需使用 CPU 版 PyTorch 与 torch_npu 配套。
 # 如已安装非 CPU 版 torch，请先执行：pip3 uninstall -y torch
+# torch 的 +cpu wheel 不发布在 PyPI，仅从官方 torch wheel 目录获取。
+--find-links https://download.pytorch.org/whl/cpu/torch/
 torch==2.7.1+cpu
 torch_npu==2.7.1.post4
 setuptools

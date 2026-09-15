@@ -274,11 +274,55 @@ Notes: `0.1` / `0.2` find no acceptable candidate on the default grid (same clas
 outcome as task 1). At `0.5`, ΔPPL≈0.278 ≤ 0.5 so pruning applies (~9.45% cut). Values come
 from each tier's `result.json`.
 
-## 5 Community Task Example: Qwen3.6-35B-A3B MoE `activation_count` + `budget` (Task 3)
+## 5 Community Task Sample: `mass_variance` + Quantization (Task 18)
+
+Task 18 runs Qwen3.6's public `amct_pytorch.eval` blockwise workflow for W8A8
+`attn-linear + moe` quantization after MoE expert pruning with `tolerance=0.1`. The script is
+[`src/run_qwen3_6_35b_a3b_pruning_mass_variance_tolerance_quant.py`](src/run_qwen3_6_35b_a3b_pruning_mass_variance_tolerance_quant.py).
+Weights and datasets are not committed; paths below are relative placeholders.
+
+### 5.1 Run Instructions
+
+```bash
+python3 examples/algorithms/pruning/src/run_qwen3_6_35b_a3b_pruning_mass_variance_tolerance_quant.py \
+  --model ./path/to/Qwen3.6-35B-A3B \
+  --trust-remote-code \
+  --device-map auto \
+  --tolerance 0.1 \
+  --ratio-grid 0.05 \
+  --bit-config amct_pytorch/configs/w8a8.yaml \
+  --quant-target attn-linear moe --quant-dtype int \
+  --output-dir ./output/qwen3_6_35b_a3b_mass_variance_quant
+```
+
+The script collects Pileval calibration data and runs the `mass_variance` tolerance search from the
+original model, then evaluates quantization on the pruned model using the WikiText2 `test` split at
+`seq_len=4096`. If no default-grid candidate meets the tolerance, pruning legitimately leaves the model
+unchanged and quantization is still evaluated on the original checkpoint. Commands, the pruning log tail,
+quantized PPL, and the return code are written to `result.json`. `--skip-quant-eval` is for debugging only.
+
+### 5.2 Diagnosis and Report
+
+The full arguments, pruning command, and quantization command are printed at startup. The pruning
+`prune_diagnose()` output and `PruneReport` are retained in the nested task output `result.json`; the
+quantization stage emits `PPL evaluation completed: ...`, captured as `quant_ppl`. Qwen3.6's fused MoE
+requires this dedicated workflow, so the script intentionally uses `amct_pytorch.eval` instead of the
+classic `amct.quantize` API.
+
+### 5.3 Results
+
+| Model | Method | Setting | Baseline PPL | Pruned PPL | Post PPL | Params (before → after) | Cut rate | Prune time (min) |
+| --- | --- | --- | ---: | ---: | ---: | --- | ---: | ---: |
+| Qwen3.6-35B-A3B | `mass_variance` + `quant` | `tolerance=0.1`, `ratio_grid=0.05`, W8A8 `attn-linear + moe` | 6.308547 | 6.354577 | 6.449746 | 34660610688 → 33023767168 | 0.0472 | 10.39 |
+
+Results are from an A3 dual-NPU run. The pruning report and quantization log are retained in the
+output directory's `result.json`.
+
+## 6 Community Task Example: Qwen3.6-35B-A3B MoE `activation_count` + `budget` (Task 3)
 
 This section corresponds to Task 3 in issue 183: structured MoE expert pruning based on `activation_count`, using three target parameter budgets: `size_budget=0.9`, `0.8`, and `0.5`.
 
-### 5.1 Task Objective and Experimental Setup
+### 6.1 Task Objective and Experimental Setup
 
 Qwen3.6-35B-A3B contains 40 MoE layers, with 256 routed experts per layer and 8 experts activated for each token. The original BF16 weights occupy approximately 64.56 GiB. Because the complete model may exceed the available memory of a single Ascend 910 card, the pruning stage loads the complete model on the CPU. The pruned model can then be evaluated on WikiText2, quantized, or deployed.
 
@@ -297,7 +341,7 @@ Post-processing:     300-step recovery fine-tuning for size_budget=0.5
 
 `activation_count` counts expert activations using the calibration data, preferentially removes experts with fewer activations, and shrinks the router and expert weights accordingly.
 
-### 5.2 Model Preparation
+### 6.2 Model Preparation
 
 Download the original [Qwen/Qwen3.6-35B-A3B weights](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) to a local model directory, for example:
 
@@ -319,7 +363,7 @@ tokenizer_config.json
 
 The calibration and evaluation datasets are downloaded and cached automatically on the first run.
 
-### 5.3 Run Pruning
+### 6.3 Run Pruning
 
 Run the following commands from `amct/examples/algorithms/pruning`. Each budget must be evaluated independently from the same original model directory:
 
@@ -373,7 +417,7 @@ Parameter Description:
 | `--trust_remote_code` | `False` | No | Allows execution of custom code within the model directory; disabled by default. --model_path must be a local directory; enable only for trusted local weights. |
 
 
-### 5.4 Diagnosis and Reports
+### 6.4 Diagnosis and Reports
 
 The pruning script calls `amct_pytorch.pruning.prune_diagnose`.For example, when size_budget=0.9, the diagnostic results are as follows:
 
@@ -405,7 +449,7 @@ prunable_fraction: 0.9335997444269842
 The full content is saved in the JSON report output by the script.
 
 
-### 5.5 WikiText2 Evaluation and Results
+### 6.5 WikiText2 Evaluation and Results
 
 PPL evaluation uses the `wikitext-2-raw-v1` test split with a fixed `seq_len=4096`. Pileval is used only for calibration and must not be used for PPL evaluation. When the original or pruned model cannot fit completely on a single card, use the AMCT blockwise evaluation entry point:
 
@@ -441,7 +485,7 @@ python3 -m amct_pytorch.eval \
 | Qwen3.6-35B-A3B | `activation_count` | `size_budget=0.8` | 6.308547019958496 | 7.1991167068481445 |               N/A | 34,660,610,688 -> 24,965,460,608 |  27.9717% |              15.44 |
 | Qwen3.6-35B-A3B | `activation_count` | `size_budget=0.5` | 6.308547019958496 |  9.780414581298828 | 8.294227600097656 | 34,660,610,688 -> 15,270,310,528 |  55.9433% |              15.07 |
 
-### 5.6 Recovery Fine-tuning for `size_budget=0.5`
+### 6.6 Recovery Fine-tuning for `size_budget=0.5`
 
 Recovery fine-tuning was performed only for the smallest `size_budget=0.5` model, which supports full-parameter training on a single 64 GiB Ascend 910. Recovery starts from the pruned model, does not run pruning again, and does not overwrite the pruned model.
 
@@ -514,7 +558,7 @@ Recovered PPL:      8.294227600097656
 
 Compared with the unrecovered pruned model, PPL decreased by `1.486186981201172`, or approximately `15.20%`. If the PPL increase caused by pruning is treated as the recovery target, this run recovered approximately `42.81%`. The recovered PPL remains `1.985680580139160` above the original-model baseline, so the result demonstrates clear but incomplete recovery.
 
-### 5.7 Parameters for Further Recovery
+### 6.7 Parameters for Further Recovery
 
 To improve recovery further, change only a small number of parameters in each experiment and compare PPL using the same WikiText2 test command:
 
