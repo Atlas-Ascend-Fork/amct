@@ -16,6 +16,7 @@
 # ----------------------------------------------------------------------------
 
 from abc import ABCMeta
+from functools import partial
 import gc
 import torch
 from accelerate import init_empty_weights
@@ -81,7 +82,7 @@ class BaseModel(metaclass=ABCMeta):
         )
         self.ptq_param_handler = PtqParamHandler()
         self.ptq_param_store = PtqParamStore(
-            self.ptq_param_handler, self.iter_ptq_units
+            self.ptq_param_handler, partial(self.iter_ptq_units, for_load=True)
         )
 
     @staticmethod
@@ -307,7 +308,13 @@ class BaseModel(metaclass=ABCMeta):
     def get_layer_weight_prefix(self, layer_idx: int) -> str:
         pass
 
-    def iter_ptq_units(self, layer_idx, block):
+    def iter_ptq_units(self, layer_idx, block, *, for_load=False):
+        """Yield training units, or runtime parameter destinations for loading.
+
+        Training may materialize independent expert weights. ``for_load=True``
+        selects the experts used by forward instead, regardless of module mode.
+        Overrides must accept and forward this flag when delegating to super().
+        """
         if "attn-linear" in self.quant_target or "attn-cache" in self.quant_target:
             layer_type = getattr(block, "layer_type", None)
             attn_name = (
@@ -322,7 +329,7 @@ class BaseModel(metaclass=ABCMeta):
             raise ValueError(f"Unsupported quant target '{self.quant_target}'.")
         if "moe" in self.quant_target:
             experts = getattr(mlp, "experts", [])
-            if hasattr(experts, "iter_ptq_expert_modules"):
+            if not for_load and hasattr(experts, "iter_ptq_expert_modules"):
                 experts = experts.iter_ptq_expert_modules()
             elif hasattr(experts, "expert_modules"):
                 experts = experts.expert_modules

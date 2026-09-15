@@ -253,7 +253,7 @@ class DeepseekV4(BaseModel):
     def iter_deploy_bindings(self, layer_idx, block):
         yield from super().iter_deploy_bindings(layer_idx, block)
 
-    def iter_ptq_units(self, layer_idx, block):
+    def iter_ptq_units(self, layer_idx, block, *, for_load=False):
         if "attn-linear" in self.quant_target or "attn-cache" in self.quant_target:
             attn = getattr(block, "attn", None)
             yield make_ptq_unit("attn", "attn", layer_idx, attn)

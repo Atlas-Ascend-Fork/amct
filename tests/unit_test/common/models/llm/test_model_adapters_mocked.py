@@ -1798,3 +1798,44 @@ class TestMoeCommon:
         }
         with pytest.raises(KeyError, match="Inconsistent expert weights"):
             pack_gated_expert_weights(dict(sd))
+
+
+@pytest.mark.parametrize(
+    "adapter_path,class_name",
+    [
+        ("qwen.qwen3.qwen3", "Qwen3"),
+        ("qwen.qwen3.qwen3_moe", "Qwen3Moe"),
+        ("qwen.qwen3_next.qwen3_next", "Qwen3Next"),
+        ("qwen.qwen3_5.qwen3_5", "Qwen3_5"),
+        ("qwen.qwen3_5.qwen3_5_moe", "Qwen3_5Moe"),
+        ("hyv3.hyv3", "HyV3"),
+        ("longcat.longcat_next.longcat_next", "LongcatNext"),
+        ("deepseek.deepseek_v3_2.deepseekv3_2", "DeepseekV32"),
+    ],
+)
+def test_adapter_for_load_selects_runtime_experts(adapter_path, class_name):
+    from importlib import import_module
+
+    class Experts(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.expert_modules = nn.ModuleList([nn.Linear(2, 2)])
+
+        def iter_ptq_expert_modules(self):
+            yield nn.Linear(2, 2)
+
+    adapter_cls = getattr(
+        import_module(f"amct_pytorch.common.models.llm.{adapter_path}"), class_name
+    )
+    model = adapter_cls.__new__(adapter_cls)
+    model.quant_target = ["moe"]
+    block = nn.Module()
+    block.mlp = nn.Module()
+    block.mlp.experts = Experts()
+    runtime = block.mlp.experts.expert_modules[0]
+    train_unit = list(model.iter_ptq_units(0, block))[0]
+    loaded_unit = list(model.iter_ptq_units(0, block, for_load=True))[0]
+    assert train_unit.module is not runtime
+    assert loaded_unit.module is runtime
+    assert train_unit.save_name == loaded_unit.save_name == "expert_0"
+    assert train_unit.metadata == loaded_unit.metadata
