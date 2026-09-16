@@ -75,7 +75,7 @@
 - 当前已注册的 solver：
   - `block`
 - `amct_pytorch/common/optimization/global_solver.py` 文件存在，但当前没有注册到 solver 主链。
-- `amct_pytorch/workflows/llm_deploy.py` 当前已接到主流程，支持按 block 写 `layer_xxx.safetensors`、补 `rest_xxxxx.safetensors` 并刷新 `model.safetensors.index.json`。
+- `amct_pytorch/workflows/llm_deploy.py` 当前已接到主流程，支持按 block 写 `layer_xxx.safetensors`、补 `rest_xxxxx.safetensors` 并刷新 `model.safetensors.index.json`；Ascend tensorwise deploy 可由模型 adapter 提供虚拟权重 inventory 和 packed tensor 展开钩子。
 
 ### 2. 核心模型抽象
 

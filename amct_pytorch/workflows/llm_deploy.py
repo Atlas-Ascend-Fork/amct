@@ -413,6 +413,10 @@ class LlmDeployWorkflow:
         )
         current_state_dict = load_file(str(source_path), device="cpu")
         is_ascend = getattr(self.args, "deploy_format", "legacy") == "ascend"
+        if is_ascend and hasattr(self.pipeline, "expand_ascend_deploy_tensors"):
+            current_state_dict = self.pipeline.expand_ascend_deploy_tensors(
+                current_state_dict
+            )
         if not is_ascend:
             loaded_files[source_file] = current_state_dict
 
