@@ -62,7 +62,9 @@ def tolerance_auto_prune():
         model = make_mlp()
         calib = mlp_data()
         report = PruneReport()
-        amct.prune(model, data=calib, tolerance=tol, report=report)
+        amct.prune(
+            model, data=calib, tolerance=tol, evaluator="fidelity", report=report
+        )
         cut = 1 - report.params_after / report.params_before
         note = report.warnings[0] if report.warnings else "met the tolerance"
         print(

@@ -583,7 +583,7 @@ def main() -> None:
             flush=True,
         )
     else:
-        evaluator = None
+        evaluator = "fidelity"
         print(
             "Using AMCT built-in fidelity evaluator for tolerance search "
             "(not aligned with final WikiText2 PPL; not for README table).",

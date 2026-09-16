@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import copy
+import math
 from collections import namedtuple
 from dataclasses import dataclass, field, fields
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple, Union
@@ -293,7 +294,7 @@ def _attach_budget_fields(
     return result
 
 
-def _model_logits(model: nn.Module, batch: Any, batch_adapter: Optional[BatchAdapter]):
+def _model_inputs(batch, batch_adapter):
     if batch_adapter is not None:
         args, kwargs = batch_adapter(batch)
     elif isinstance(batch, Mapping):
@@ -302,6 +303,11 @@ def _model_logits(model: nn.Module, batch: Any, batch_adapter: Optional[BatchAda
         args, kwargs = tuple(batch), {}
     else:
         args, kwargs = (batch,), {}
+    return args, kwargs
+
+
+def _model_logits(model: nn.Module, batch: Any, batch_adapter: Optional[BatchAdapter]):
+    args, kwargs = _model_inputs(batch, batch_adapter)
     out = model(*args, **kwargs)
     if hasattr(out, "logits"):
         return out.logits
@@ -310,7 +316,7 @@ def _model_logits(model: nn.Module, batch: Any, batch_adapter: Optional[BatchAda
     if isinstance(out, (tuple, list)) and out:
         return out[0]
     raise TypeError(
-        "Cannot extract logits from model output for fidelity metric; "
+        "Cannot extract logits from model output for built-in metric; "
         "pass an explicit evaluator."
     )
 
@@ -323,7 +329,7 @@ def _make_fidelity_quality(
     """Build a top-1 agreement quality function using the original model's top-1 predictions as reference."""
     if not eval_batches:
         raise ValueError(
-            "Default fidelity metric needs eval data; pass data=/eval_data= "
+            "fidelity metric needs eval data; pass data=/eval_data= "
             "or provide a custom evaluator."
         )
     refs = []
@@ -342,6 +348,215 @@ def _make_fidelity_quality(
                 agree += (pred == ref).sum().item()
                 total += ref.numel()
         return agree / total if total else 1.0
+
+    return quality
+
+
+def _make_js_quality(model, eval_batches, batch_adapter) -> QualityFn:
+    """``1 - JS(p_orig || p_cand) / ln 2`` averaged over unmasked positions (higher is better, 1.0 == identical).
+
+    For 3D token logits, positions outside ``attention_mask`` (e.g. padding) are
+    excluded from the averaged divergence. 2D classification logits are averaged
+    per sample without applying the token mask.
+    """
+    if not eval_batches:
+        raise ValueError(
+            "js metric needs eval data; pass data=/eval_data= or provide a custom evaluator."
+        )
+
+    prepared = []
+    for batch in eval_batches:
+        args, kwargs, metadata = _metric_inputs(batch, batch_adapter)
+        prepared.append((args, kwargs, metadata.get("attention_mask")))
+
+    def run(model_, args, kwargs):
+        return _model_logits(model_, None, lambda _: (args, kwargs))
+
+    refs = []
+    valid_total = 0
+    model.eval()
+    with torch.no_grad():
+        for args, kwargs, mask in prepared:
+            logits = run(model, args, kwargs).float()
+            if mask is not None and logits.ndim == 3:
+                if mask.shape != logits.shape[:-1]:
+                    raise ValueError(
+                        "js metric: attention_mask must match logits' [batch, sequence] shape."
+                    )
+                valid_total += int(mask.to(logits.device).bool().sum())
+            else:
+                # No mask, or non-token (e.g. 2D classification) logits: every position counts.
+                valid_total += logits.numel() // logits.shape[-1]
+            # Cache the reference distribution in fp16.
+            refs.append(torch.softmax(logits, dim=-1).half())
+    if valid_total == 0:
+        raise ValueError("js metric: no valid evaluation positions.")
+
+    def quality(candidate: nn.Module) -> float:
+        candidate.eval()
+        js_sum = 0.0
+        n = 0
+        with torch.no_grad():
+            for (args, kwargs, mask), p_half in zip(prepared, refs):
+                p = p_half.float()
+                q = torch.softmax(run(candidate, args, kwargs).float(), dim=-1)
+                m = 0.5 * (p + q)
+                log_m = m.clamp_min(1e-12).log()
+                kl_pm = (p * (p.clamp_min(1e-12).log() - log_m)).sum(-1)
+                kl_qm = (q * (q.clamp_min(1e-12).log() - log_m)).sum(-1)
+                js = 0.5 * (kl_pm + kl_qm)  # nats, in [0, ln 2]
+                if mask is not None and p.ndim == 3:
+                    if mask.shape != js.shape:
+                        raise ValueError(
+                            "js metric: attention_mask must match logits' [batch, sequence] shape."
+                        )
+                    valid = mask.to(js.device).bool()
+                    js_sum += js[valid].sum().item()
+                    n += int(valid.sum())
+                else:
+                    js_sum += js.sum().item()
+                    n += js.numel()
+        if n == 0:
+            raise ValueError("js metric: no valid evaluation positions.")
+        mean_js = js_sum / n
+        return 1.0 - mean_js / math.log(2.0)
+
+    return quality
+
+
+def _long_tensor(value, ndim):
+    return (
+        isinstance(value, torch.Tensor)
+        and value.ndim == ndim
+        and value.dtype == torch.long
+    )
+
+
+def _metric_inputs(batch, adapter, *, paired_labels=False):
+    """Strip explicit labels; interpret paired tuples only for classification."""
+    paired = (
+        paired_labels
+        and isinstance(batch, (tuple, list))
+        and len(batch) == 2
+        and isinstance(batch[1], torch.Tensor)
+        and batch[1].ndim == 1
+    )
+    metadata = dict(batch) if isinstance(batch, Mapping) else {}
+    if paired:
+        metadata["labels"] = batch[1]
+    args, kwargs = _model_inputs(
+        batch[0] if paired and adapter is None else batch, adapter
+    )
+    metadata.update(kwargs)
+    return args, {k: v for k, v in kwargs.items() if k != "labels"}, metadata
+
+
+def _calibration_adapter(evaluator, batch_adapter):
+    """Adapt model inputs for calibration without changing the evaluation adapter."""
+    builtin = evaluator is None or (
+        isinstance(evaluator, str)
+        and evaluator in ("auto", "js", "classification", "ppl", "causal_lm")
+    )
+    if not builtin:
+        return batch_adapter
+
+    def inputs(batch):
+        return _metric_inputs(
+            batch, batch_adapter, paired_labels=evaluator == "classification"
+        )[:2]
+
+    return inputs
+
+
+def _make_ppl_quality(model, eval_batches, batch_adapter) -> QualityFn:
+    """Causal-LM PPL ratio; accept an increase up to tolerance / (1 - tolerance).
+
+    Use unshifted labels when supplied, otherwise input_ids. Ignore -100 labels
+    and transitions involving a masked token (including left padding).
+    """
+    prepared = []
+    for batch in eval_batches:
+        args, kwargs, metadata = _metric_inputs(batch, batch_adapter)
+        labels = metadata.get("labels")
+        if labels is None:
+            labels = metadata.get("input_ids", args[0] if args else None)
+        if not _long_tensor(labels, 2):
+            raise ValueError(
+                "ppl metric needs int64 [batch, sequence] token IDs or labels."
+            )
+        targets = labels[:, 1:].clone()
+        mask = metadata.get("attention_mask")
+        if mask is not None:
+            if mask.shape != labels.shape:
+                raise ValueError("ppl metric: attention_mask must match labels shape.")
+            valid = mask[:, 1:].bool() & mask[:, :-1].bool()
+            targets.masked_fill_(~valid.to(targets.device), -100)
+        prepared.append((args, kwargs, targets))
+    n_tokens = sum(int((targets != -100).sum()) for _, _, targets in prepared)
+    if not n_tokens:
+        raise ValueError("ppl metric: eval batches produced no target tokens.")
+
+    def mean_nll(candidate):
+        candidate.eval()
+        total = 0.0
+        with torch.no_grad():
+            for args, kwargs, targets in prepared:
+                logits = _model_logits(
+                    candidate, None, lambda _: (args, kwargs)
+                ).float()
+                if logits.ndim != 3 or logits.shape[:2] != (
+                    targets.shape[0],
+                    targets.shape[1] + 1,
+                ):
+                    raise ValueError(
+                        "ppl metric: logits must match labels batch and sequence."
+                    )
+                total += nn.functional.cross_entropy(
+                    logits[:, :-1, :].reshape(-1, logits.size(-1)),
+                    targets.reshape(-1).to(logits.device),
+                    ignore_index=-100,
+                    reduction="sum",
+                ).item()
+        return total / n_tokens
+
+    baseline = mean_nll(model)
+
+    def quality(candidate):
+        # Compute the ratio directly to avoid exponentiating two large PPL values.
+        return math.exp(baseline - mean_nll(candidate))
+
+    return quality
+
+
+def _make_classification_quality(model, eval_batches, batch_adapter) -> QualityFn:
+    """Sample-weighted top-1 accuracy against integer class labels, in [0, 1]."""
+    prepared = []
+    for batch in eval_batches:
+        args, kwargs, metadata = _metric_inputs(
+            batch, batch_adapter, paired_labels=True
+        )
+        labels = metadata.get("labels")
+        if not _long_tensor(labels, 1):
+            raise ValueError("classification needs one int64 class label per sample.")
+        prepared.append((args, kwargs, labels))
+    total = sum(labels.numel() for _, _, labels in prepared)
+    if not total:
+        raise ValueError("classification needs labeled evaluation samples.")
+
+    def quality(candidate):
+        candidate.eval()
+        correct = 0
+        with torch.no_grad():
+            for args, kwargs, labels in prepared:
+                logits = _model_logits(candidate, None, lambda _: (args, kwargs))
+                if logits.ndim != 2 or logits.shape[0] != labels.numel():
+                    raise ValueError(
+                        "classification logits must have shape [batch, classes]."
+                    )
+                if ((labels < 0) | (labels >= logits.shape[1])).any():
+                    raise ValueError("classification label is outside the class range.")
+                correct += (logits.argmax(-1) == labels.to(logits.device)).sum().item()
+        return correct / total
 
     return quality
 
@@ -385,13 +600,59 @@ def _make_evaluator_quality(evaluator: Any, eval_iterations: int) -> QualityFn:
     return quality
 
 
+def _auto_metric(model, eval_batches, batch_adapter):
+    """Infer only supported tasks; unknown models use JS."""
+
+    chosen, reason = "js", "task not established from model and evaluation batch"
+    if eval_batches:
+        args, kwargs, metadata = _metric_inputs(eval_batches[0], batch_adapter)
+        model.eval()
+        with torch.no_grad():
+            logits = _model_logits(model, None, lambda _: (args, kwargs))
+        labels = metadata.get("labels")
+        if (
+            _long_tensor(labels, 1)
+            and logits.ndim == 2
+            and logits.shape[0] == labels.numel()
+        ):
+            chosen, reason = "classification", "class labels and classifier logits"
+        else:
+            config = getattr(model, "config", None)
+            architectures = getattr(config, "architectures", None) or []
+            causal = any(name.endswith("ForCausalLM") for name in architectures)
+            ids = metadata.get("input_ids", args[0] if args else None)
+            causal = causal and not getattr(config, "is_encoder_decoder", False)
+            token_logits = _long_tensor(ids, 2) and logits.ndim == 3
+            if causal and token_logits and logits.shape[:2] == ids.shape:
+                chosen, reason = "ppl", "causal-LM architecture and token logits"
+    LOGGER.logi(f"evaluator=auto selected {chosen}: {reason}.")
+    return chosen, batch_adapter
+
+
+_EVALUATOR_ALIASES = {"preservation": "fidelity", "causal_lm": "ppl"}
+
+
 def _resolve_quality(model, evaluator, eval_iterations, eval_batches, batch_adapter):
-    """Resolve the accuracy source (evaluator or default top-1 fidelity). Returns (quality_fn, baseline)."""
-    if evaluator is not None:
-        qf = _make_evaluator_quality(evaluator, eval_iterations)
-        return qf, qf(model)
-    qf = _make_fidelity_quality(model, eval_batches, batch_adapter)
-    return qf, 1.0
+    """Resolve a callable evaluator or a built-in; default to JS distribution similarity."""
+    if evaluator is None:
+        evaluator = "js"
+    if isinstance(evaluator, str) and evaluator == "auto":
+        evaluator, batch_adapter = _auto_metric(model, eval_batches, batch_adapter)
+    if isinstance(evaluator, str):
+        evaluator = _EVALUATOR_ALIASES.get(evaluator, evaluator)
+        builders = {
+            "fidelity": _make_fidelity_quality,
+            "js": _make_js_quality,
+            "ppl": _make_ppl_quality,
+            "classification": _make_classification_quality,
+        }
+        if evaluator not in builders:
+            valid = sorted(list(builders) + ["auto"] + list(_EVALUATOR_ALIASES))
+            raise ValueError(f"Unknown evaluator {evaluator!r}; choose from {valid}.")
+        qf = builders[evaluator](model, eval_batches, batch_adapter)
+        return qf, qf(model) if evaluator == "classification" else 1.0
+    qf = _make_evaluator_quality(evaluator, eval_iterations)
+    return qf, qf(model)
 
 
 def _prepare_search_inputs(
@@ -1016,6 +1277,7 @@ def _menu_measure(
     quality_fn, baseline_quality = _resolve_quality(
         model, evaluator, eval_iterations, eval_batches, batch_adapter
     )
+    batch_adapter = _calibration_adapter(evaluator, batch_adapter)
     quality, pa_by_name = _menu_trial(
         model,
         base_cfg,
@@ -1067,6 +1329,7 @@ def _run_menu_mode(
             finetune_fn=finetune_fn,
             quant_fn=quant_fn,
         )
+    batch_adapter = _calibration_adapter(evaluator, batch_adapter)
     chosen, _fb_q, _gain = _menu_select(quality, fallback_name)
     report, params_after = _menu_apply(
         model,
@@ -1156,6 +1419,7 @@ def _tolerance_search_body(
     quality_fn, baseline_quality = _resolve_quality(
         model, evaluator, eval_iterations, eval_batches, batch_adapter
     )
+    batch_adapter = _calibration_adapter(evaluator, batch_adapter)
     trial = _make_trial_fn(
         model,
         base_cfg,
@@ -1206,12 +1470,12 @@ def _accuracy_based_auto_prune(
     Function: search the grid for the largest prune ratio within tolerance and apply it in place
     Parameter: model: model to prune (mutated in place when apply=True)
                config: dict / PruneConfig / None; None uses the three-domain defaults
-               data: calibration data; also the default fidelity eval set when eval_data is not given
+               data: calibration data; also the default evaluation set when eval_data is not given
                tolerance: upper bound on acceptable accuracy loss; default 0.02
                evaluator: Callable[[model], float] or any object exposing .evaluate(model) -> float;
-                          None = default fidelity
+                          None = default JS; "fidelity" / "js" / "ppl" selects a built-in
                eval_iterations: iteration count passed to evaluator.evaluate
-               eval_data: eval batches for the default fidelity metric; falls back to data
+               eval_data: eval batches for the built-in metric; falls back to data
                ratio_grid: candidate prune ratios (ascending)
                batch_adapter: maps a data batch to (args, kwargs) for the model forward
                safe_skip_attention: merges attention submodules into skip_layers; default True
@@ -1360,13 +1624,13 @@ def _size_budget_prune(
     Function: binary-search the smallest ratio whose params fit the target; report that point's (size, accuracy)
     Parameter: model: model to prune (mutated in place when apply=True)
                config: dict / PruneConfig / None; None uses the three-domain defaults
-               data: calibration data; also the default fidelity eval set when eval_data is not given
+               data: calibration data; also the default evaluation set when eval_data is not given
                target_keep_ratio: fraction of params to keep; use either this or target_params
                target_params: direct upper bound on the target param count
                evaluator: Callable[[model], float] or any object exposing .evaluate(model) -> float;
-                          None = default fidelity
+                          None = default JS; "fidelity" / "js" / "ppl" selects a built-in
                eval_iterations: iteration count passed to evaluator.evaluate
-               eval_data: eval batches for the default fidelity metric; falls back to data
+               eval_data: eval batches for the built-in metric; falls back to data
                ratio_grid: candidate prune ratios (ascending)
                batch_adapter: maps a data batch to (args, kwargs) for the model forward
                safe_skip_attention: merges attention submodules into skip_layers; default True
@@ -1416,6 +1680,7 @@ def _size_budget_body(
     quality_fn, baseline_quality = _resolve_quality(
         model, evaluator, eval_iterations, setup.eval_batches, batch_adapter
     )
+    batch_adapter = _calibration_adapter(evaluator, batch_adapter)
     trial = _make_trial_fn(
         model,
         setup.base_cfg,

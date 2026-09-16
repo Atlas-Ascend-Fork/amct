@@ -26,11 +26,12 @@ import copy
 import os
 import sys
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import torch
 
 sys.path.insert(0, os.path.dirname(__file__))
-
 from mini_models import (
     create_mini_mlp,
     MiniMoEConfig,
@@ -47,6 +48,9 @@ from amct_pytorch.pruning import (
 )
 from amct_pytorch.pruning.presets import _MOE_CRITERION_MENU
 from amct_pytorch.pruning.accuracy_based_auto_prune import (
+    _auto_metric,
+    _make_js_quality,
+    _resolve_quality,
     _accuracy_based_auto_prune as accuracy_based_auto_prune,
     _size_budget_prune as size_budget_prune,
 )
@@ -1007,6 +1011,306 @@ class TestRecoveryKwarg(unittest.TestCase):
             data=data,
         )
         return model
+
+
+class _MetricModel(torch.nn.Module):
+    def __init__(self, logits=None):
+        super().__init__()
+        self.register_buffer("logits", logits)
+        self.config = SimpleNamespace(architectures=[], is_encoder_decoder=False)
+
+    def forward(self, input_ids, attention_mask=None):
+        return input_ids if self.logits is None else self.logits
+
+
+class _ClassifierMLP(MiniMLPModel):
+    def forward(self, input_ids):
+        return super().forward(input_ids).mean(1)
+
+
+class TestBuiltinEvaluators(unittest.TestCase):
+    def setUp(self):
+        rng = torch.random.fork_rng(devices=[])
+        rng.__enter__()
+        self.addCleanup(rng.__exit__, None, None, None)
+        torch.manual_seed(0)
+
+    def test_js_masks_padding(self):
+        model = _MetricModel(torch.zeros(1, 4, 3))
+        # Differ from the reference only at the padded (mask=0) position.
+        changed = _MetricModel(
+            torch.tensor(
+                [[[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [9.0, 0.0, 0.0]]]
+            )
+        )
+        input_ids = torch.tensor([[0, 1, 2, 0]])
+        for mask, expect_identical in (
+            (torch.tensor([[1, 1, 1, 0]]), True),
+            (torch.tensor([[0, 1, 1, 1]]), False),
+            (None, False),
+        ):
+            batch = dict(input_ids=input_ids)
+            if mask is not None:
+                batch["attention_mask"] = mask
+            q, baseline = _resolve_quality(model, "js", 1, [batch], None)
+            if expect_identical:
+                self.assertAlmostEqual(q(changed), baseline, places=6)
+            else:
+                self.assertLess(q(changed), baseline - 1e-6)
+        # A shape-mismatched mask must fail while the builder prepares reference
+        # distributions, before any candidate is ever searched.
+        batch = dict(input_ids=input_ids, attention_mask=torch.tensor([[1, 1, 0]]))
+        with self.assertRaises(ValueError):
+            _resolve_quality(model, "js", 1, [batch], None)
+
+    def test_js_classifier_with_token_mask(self):
+        model = _MetricModel(torch.tensor([[9.0, 0.0], [0.0, 9.0]]))
+        changed = _MetricModel(model.logits.flip(-1))
+        inputs = torch.tensor([[0, 1, 2], [2, 1, 0]])
+        unmasked = _make_js_quality(model, [dict(input_ids=inputs)], None)
+        for mask in (torch.ones_like(inputs), torch.zeros_like(inputs)):
+            for evaluator in (None, "js", "auto"):
+                with self.subTest(mask=mask.tolist(), evaluator=evaluator):
+                    batch = dict(input_ids=inputs, attention_mask=mask)
+                    quality, baseline = _resolve_quality(
+                        model, evaluator, 1, [batch], None
+                    )
+                    self.assertAlmostEqual(quality(model), baseline, places=5)
+                    self.assertAlmostEqual(
+                        quality(changed), unmasked(changed), places=6
+                    )
+                    self.assertLess(quality(changed), baseline)
+
+    def test_js_rejects_all_masked_positions(self):
+        model = _MetricModel(torch.tensor([[[9.0, 0.0], [0.0, 9.0]]]))
+        batch = dict(input_ids=torch.tensor([[0, 1]]), attention_mask=torch.zeros(1, 2))
+        # Every batch is fully masked, so the builder itself must reject it
+        # before any candidate is ever evaluated.
+        with self.assertRaisesRegex(ValueError, "js metric.*no valid"):
+            _make_js_quality(model, [batch, batch], None)
+
+    def test_js_aggregates_valid_positions_across_batches(self):
+        model = _MetricModel(torch.tensor([[[9.0, 0.0], [0.0, 9.0]]]))
+        changed = _MetricModel(model.logits.flip(-1))
+        empty = dict(input_ids=torch.tensor([[0, 1]]), attention_mask=torch.zeros(1, 2))
+        valid = dict(
+            input_ids=empty["input_ids"], attention_mask=torch.tensor([[1, 0]])
+        )
+        expected = _make_js_quality(model, [valid], None)(changed)
+        for batches in ([empty, valid], [valid, empty]):
+            with self.subTest(empty_first=batches[0] is empty):
+                quality = _make_js_quality(model, batches, None)
+                self.assertAlmostEqual(quality(changed), expected, places=6)
+
+    def test_presets_identity_and_distribution_shift(self):
+        model = _MetricModel(torch.tensor([[[3.0, 2.0, 1.0], [1.0, 2.0, 3.0]]]))
+        data = [torch.tensor([[0, 1]])]
+        for name in (None, "fidelity", "preservation", "js", "ppl", "causal_lm"):
+            q, baseline = _resolve_quality(model, name, 1, data, None)
+            self.assertAlmostEqual(q(model), baseline, places=5)
+        changed = _MetricModel(model.logits * 0.1)
+        fidelity, _ = _resolve_quality(model, "fidelity", 1, data, None)
+        js, _ = _resolve_quality(model, "js", 1, data, None)
+        self.assertEqual(fidelity(changed), 1)
+        self.assertLess(js(changed), 0.999)
+        for name in (None, "auto"):
+            default, _ = _resolve_quality(model, name, 1, data, None)
+            self.assertAlmostEqual(default(changed), js(changed), places=6)
+
+    def test_ppl_masks_labels_and_padding(self):
+        model = _MetricModel(torch.zeros(1, 4, 3))
+        changed = _MetricModel(
+            torch.tensor(
+                [[[0.0, 2.0, 0.0], [0.0, 0.0, 2.0], [8.0, 0.0, 0.0], [0.0, 0.0, 0.0]]]
+            )
+        )
+        data = dict(input_ids=torch.tensor([[0, 1, 2, 0]]))
+        for metadata in (
+            dict(
+                labels=torch.tensor([[-100, 1, -100, 0]]),
+                attention_mask=torch.tensor([[1, 1, 1, 0]]),
+            ),
+            dict(attention_mask=torch.tensor([[0, 1, 1, 0]])),
+        ):
+            batch = dict(data, **metadata)
+            q, _ = _resolve_quality(
+                model, "ppl", 1, [batch], lambda b: ((b["input_ids"],), {})
+            )
+            self.assertAlmostEqual(
+                q(changed),
+                3 * torch.softmax(torch.tensor([0.0, 2.0, 0.0]), -1)[1].item(),
+                places=6,
+            )
+        for labels in (torch.full((1, 4), -100), torch.zeros(1, 4)):
+            with self.assertRaises(ValueError):
+                _resolve_quality(model, "ppl", 1, [dict(data, labels=labels)], None)
+
+    def test_classification_accuracy_and_auto_adapters(self):
+        pairs = [
+            (torch.tensor([[3.0, 0.0], [0.0, 3.0]]), torch.tensor([0, 0])),
+            (torch.tensor([[0.0, 3.0]]), torch.tensor([1])),
+        ]
+        variants = [
+            (pairs, None),
+            ([dict(input_ids=x, labels=y) for x, y in pairs], None),
+            (pairs, lambda b: ((), dict(input_ids=b[0], labels=b[1]))),
+        ]
+        for data, adapter in variants:
+            names = (
+                ("classification",)
+                if data is pairs and adapter is None
+                else ("classification", "auto")
+            )
+            for name in names:
+                q, baseline = _resolve_quality(_MetricModel(), name, 1, data, adapter)
+                self.assertAlmostEqual(baseline, 2 / 3)
+                self.assertAlmostEqual(q(_MetricModel()), 2 / 3)
+        for labels in (
+            None,
+            torch.tensor([[0]]),
+            torch.tensor([0.0]),
+            torch.tensor([-1]),
+            torch.tensor([2]),
+        ):
+            with self.assertRaises(ValueError):
+                _resolve_quality(
+                    _MetricModel(),
+                    "classification",
+                    1,
+                    [dict(input_ids=torch.ones(1, 2), labels=labels)],
+                    None,
+                )
+
+    def test_auto_requires_causal_metadata_and_preserves_fallback(self):
+        model = _MetricModel(torch.tensor([[[3.0, 2.0, 1.0], [1.0, 2.0, 3.0]]]))
+        data = [torch.tensor([[0, 1]])]
+        self.assertEqual(_auto_metric(model, data, None)[0], "js")
+        model.config.architectures = ["ExampleForCausalLM"]
+        self.assertEqual(_auto_metric(model, data, None)[0], "ppl")
+        auto, _ = _resolve_quality(model, "auto", 1, data, None)
+        ppl, _ = _resolve_quality(model, "ppl", 1, data, None)
+        self.assertEqual(auto(model), ppl(model))
+        model.config.is_encoder_decoder = True
+        self.assertEqual(_auto_metric(model, data, None)[0], "js")
+        for name in ("auto", "ppl", "classification", "js", "unknown"):
+            with self.assertRaises(ValueError):
+                _resolve_quality(model, name, 1, [], None)
+
+    def test_pruning_preserves_multiple_model_inputs(self):
+        class ScaledMLP(MiniMLPModel):
+            def forward(self, input_ids, scale):
+                return super().forward(input_ids) * scale[:, None, None]
+
+        modes = [{}] + [
+            dict(evaluator=evaluator, **search)
+            for evaluator in (None, "js", "auto")
+            for search in ({"tolerance": 0.99}, {"size_budget": 0.9})
+        ]
+        modes += [
+            dict(mode, batch_adapter=lambda batch: (tuple(batch), {})) for mode in modes
+        ]
+        for dtype in (torch.float32, torch.long):
+            for mode in modes:
+                with self.subTest(dtype=dtype, mode=mode):
+                    model = ScaledMLP(MiniMLPConfig()).eval()
+                    ids = torch.randint(0, 1000, (2, 8))
+                    scale = torch.tensor([1, 2], dtype=dtype)
+                    before = sum(p.numel() for p in model.parameters())
+                    config = {
+                        "methods": {
+                            "dense": {
+                                "name": "low_variance",
+                                "kwargs": {"prune_ratio": 0.2},
+                            }
+                        },
+                        "missing_data_policy": "raise",
+                    }
+                    prune(model, config, data=[(ids, scale)], **mode)
+                    self.assertLess(sum(p.numel() for p in model.parameters()), before)
+                    self.assertTrue(torch.isfinite(model(ids, scale)).all())
+
+    def test_classification_calibration_labels_in_search_modes(self):
+        for mapping in (False, True):
+            for search in ({"tolerance": 1.0}, {"size_budget": 0.9}):
+                with self.subTest(mapping=mapping, search=search):
+                    model = _ClassifierMLP(MiniMLPConfig()).eval()
+                    ids = torch.randint(0, 1000, (2, 8))
+                    labels = model(ids).argmax(-1)
+                    batch = (
+                        dict(input_ids=ids, labels=labels) if mapping else (ids, labels)
+                    )
+                    before = sum(p.numel() for p in model.parameters())
+                    prune(
+                        model,
+                        DENSE_CFG,
+                        data=[batch],
+                        evaluator="classification",
+                        **search,
+                    )
+                    self.assertLess(sum(p.numel() for p in model.parameters()), before)
+                    self.assertTrue(torch.isfinite(model(ids)).all())
+
+    def test_adapter_labels_preserved_for_evaluation_only(self):
+        def adapter(batch):
+            return (), dict(input_ids=batch["tokens"], labels=batch["targets"])
+
+        def checked_quality(*args, **kwargs):
+            quality, baseline = _resolve_quality(*args, **kwargs)
+            self.assertEqual(baseline, 0.5)
+            return quality, baseline
+
+        for evaluator in ("auto", "classification"):
+            for search in ({"tolerance": 1.0}, {"size_budget": 0.9}, {}):
+                with self.subTest(evaluator=evaluator, search=search):
+                    model = _ClassifierMLP(MiniMLPConfig()).eval()
+                    ids = torch.randint(0, 1000, (2, 8))
+                    logits = model(ids)
+                    labels = logits.argmax(-1)
+                    labels[1] = (labels[1] + 1) % logits.shape[-1]
+                    original_labels = labels.clone()
+                    data = [dict(tokens=ids, targets=labels)]
+                    config = copy.deepcopy(DENSE_CFG)
+                    if not search:
+                        config["methods"]["dense"].update(
+                            kwargs={"prune_ratio": 0.2},
+                            menu=[("variance", {"name": "low_variance"})],
+                        )
+                    before = sum(p.numel() for p in model.parameters())
+                    with patch(
+                        "amct_pytorch.pruning.accuracy_based_auto_prune._resolve_quality",
+                        side_effect=checked_quality,
+                    ):
+                        prune(
+                            model,
+                            config,
+                            data=data,
+                            evaluator=evaluator,
+                            batch_adapter=adapter,
+                            **search,
+                        )
+                    self.assertLess(sum(p.numel() for p in model.parameters()), before)
+                    self.assertNotIn("labels", data[0])
+                    self.assertTrue(torch.equal(data[0]["targets"], original_labels))
+
+    def test_named_metrics_through_prune_and_budget(self):
+        for name in (None, "auto", "classification", "preservation", "js"):
+            model = _ClassifierMLP(MiniMLPConfig()).eval()
+            data = [torch.randint(0, 1000, (2, 8))]
+            evaluation = (
+                [dict(input_ids=data[0], labels=model(data[0]).argmax(-1))]
+                if name in (None, "auto", "classification", "js")
+                else data
+            )
+            before = sum(p.numel() for p in model.parameters())
+            prune(
+                model,
+                DENSE_CFG,
+                data=evaluation if name in (None, "auto", "js") else data,
+                eval_data=None if name == "auto" else evaluation,
+                evaluator=name,
+                **({"tolerance": 1.0} if name == "auto" else {"size_budget": 0.9}),
+            )
+            self.assertLess(sum(p.numel() for p in model.parameters()), before)
 
 
 if __name__ == "__main__":
