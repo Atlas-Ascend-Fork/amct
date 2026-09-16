@@ -241,7 +241,7 @@ def convert_state_dict(
                 weight, scale_inv, block_size=n // scale_cols, is_mx=True
             )
 
-        # FP8 (float block scale)
+        # Standard FP8 dequantization with a floating-point block scale.
         else:
             weight = weight_dequant(weight, scale_inv, block_size=block_size)
 
