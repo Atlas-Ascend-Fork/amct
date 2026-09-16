@@ -58,23 +58,41 @@ ADA权重量化算法用于PTQ流程，由于量化后的权重舍入模式会�
 
 量化后的weight计算公式如下：
 
-![](./figures/zh-cn_formulaimage_0000002548668767.png)，其中n和p分别是量化后的上下界。
+$$
+
+W_q = \mathrm{clip}\left( \left| \frac{W}{\mathrm{scale}} \right| + h(alpha), n, p \right)
+
+$$
+
+，其中n和p分别是量化后的上下界。
 
 训练过程主要是对alpha参数进行优化，目标是使得h\(alpha\)等于0或1：
 
-![](./figures/zh-cn_formulaimage_0000002548668773.png)
+$$
 
-，其中![](./figures/zh-cn_formulaimage_0000002548668765.png)和![](./figures/zh-cn_formulaimage_0000002548788779.png)是伸缩参数，分别取值为1.1和-0.1。
+alpha = -\ln\left( \frac{\varsigma-\gamma}{\dfrac{W}{\mathrm{scale}} - \left\lfloor \dfrac{W}{\mathrm{scale}} \right\rfloor} - 1 \right)
+
+$$
+
+，其中$\varsigma$和$\gamma$是伸缩参数，分别取值为1.1和-0.1。
 
 将原始weight量化，量化完成后加上h\(alpha\)将其反量化，将反量化的weight引入最后的算子计算中，最终输出带量化误差的结果：
 
-![](./figures/zh-cn_formulaimage_0000002548788781.png)
+$$
+
+h(alpha) = \mathrm{clip}\big(\mathrm{sigmoid}(alpha) \times (\varsigma-\gamma),\, 0,\, 1\big)
+
+$$
 
 损失函数计算如下：
 
-![](./figures/zh-cn_formulaimage_0000002548668771.png)
+$$
 
-正则项（Loss函数的后半部分），用以约束h\(alpha\)向0和1两个值收敛，在迭代初期![](./figures/zh-cn_formulaimage_0000002548668769.png)较大值可以使得正则项对整体损失的影响比重变大，就会促使优化过程快速调整h\(alpha\)，接近最优解的区域。迭代后期，此时h\(alpha\)已经处于最优解区域，使用较小![](./figures/zh-cn_formulaimage_0000002548668769.png)，不会因为微小的参数变动导致正则项剧烈变化，从而让模型在微调参数时更加稳健，避免因过度调整而错过最优解，使h\(alpha\)逼近最优解。
+\mathrm{Loss} = \left\| WX - \widetilde{W}X \right\|^2 + \lambda \sum 1 - \left| 2h(alpha) - 1 \right|^\beta
+
+$$
+
+正则项（Loss函数的后半部分），用以约束h\(alpha\)向0和1两个值收敛，在迭代初期$\beta$较大值可以使得正则项对整体损失的影响比重变大，就会促使优化过程快速调整h\(alpha\)，接近最优解的区域。迭代后期，此时h\(alpha\)已经处于最优解区域，使用较小$\beta$，避免因过度调整而错过最优解，使h\(alpha\)逼近最优解。
 
 ### AutoRound
 
@@ -245,15 +263,29 @@ ULQ（Universal Linear Quantization）算法在训练过程中不断训练量化
 
 该问题为组合优化问题，建模为背包问题，已知所有物品各自的价值v<sub>i</sub>和重量F<sub>i</sub>，求背包容量C下能够装下总价值最多的物品，可以用公式表示为：
 
-最大化：![](./figures/zh-cn_formulaimage_0000002517188876.png)
+最大化：
 
-受限于：![](./figures/zh-cn_formulaimage_0000002548668755.png)
+$$
+
+\max_{b}\sum_{i} b_i v_i
+
+$$
+
+受限于：
+
+$$
+\text{s.t.}\quad \sum_{i} b_i F_i \le c,\; b_i \in \{0,1\}
+$$
 
 其中，v<sub>i</sub>相当于稀疏敏感度；F<sub>i</sub>为比特复杂度；b为通道稀疏方案，即该通道是否保留；C为用户设置的压缩率。
 
 对于通道稀疏任务，重量F<sub>i</sub>为第i个通道的计算量，v<sub>i</sub>为裁剪第i个通道后网络w的损失函数变化：
 
-![](./figures/zh-cn_formulaimage_0000002517188878.png)
+$$
+
+v_i = \text{loss}(w) - \text{loss}(w - W_i)
+
+$$
 
 其中，loss\(w - w<sub>i</sub>\)可以通过一阶或者二阶泰勒展开式来做近似估计。
 
