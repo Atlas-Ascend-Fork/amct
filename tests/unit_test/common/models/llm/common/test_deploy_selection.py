@@ -132,6 +132,7 @@ def _args(**overrides):
 
 def test_valid_ascend_args_and_legacy_defaults():
     validate_ascend_deploy_args(_args())
+    validate_ascend_deploy_args(_args(model_name="qwen3_6_moe"))
     validate_ascend_deploy_args(SimpleNamespace())
 
 
