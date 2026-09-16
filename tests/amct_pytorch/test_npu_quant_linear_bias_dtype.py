@@ -68,7 +68,11 @@ def _call_init_bias(
     linear.act_type = act_type
     linear.wts_type = wts_type
     linear.scale_w_tensor = (
-        scale_w if scale_w is not None else torch.ones(bias_tensor.shape[0])
+        scale_w
+        if scale_w is not None
+        else torch.ones(
+            bias_tensor.shape[0] if bias_tensor is not None else offset_bias.shape[0]
+        )
     )
     linear.offset_bias = offset_bias
 
@@ -207,6 +211,18 @@ class TestInitBiasDtype(unittest.TestCase):
         module.bias = None
         linear._init_bias(module)
         self.assertIsNone(linear.bias)
+
+    def test_none_bias_with_offset_bias_is_registered_buffer(self):
+        # Issue #200: when the original Linear has no bias and asymmetric activation
+        # quant produces offset_bias, the final bias passed to npu_quant_matmul must
+        # be a registered buffer. torchair .air export inlines a Data node into Const
+        # iff id(tensor) is found in named_buffers() + named_parameters(); a plain
+        # attribute is missed and the exported QBMM keeps a Data bias instead of Const.
+        offset_bias = torch.arange(-2, 3, dtype=torch.int32)
+        linear = _call_init_bias(INT8, INT8, None, offset_bias=offset_bias)
+        self.assertIn('bias', dict(linear.named_buffers(recurse=False)))
+        self.assertTrue(torch.equal(linear.bias, offset_bias))
+        self.assertEqual(linear.bias.dtype, torch.int32)
 
 
 if __name__ == '__main__':
