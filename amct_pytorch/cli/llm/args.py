@@ -45,7 +45,7 @@ def parser_gen(command=None):
             "--deploy_format",
             choices=["legacy", "ascend"],
             default="legacy",
-            help="Deployment format. Ascend exports GLM-5.2 W8A8_DYNAMIC for vllm-ascend.",
+            help="Deployment format. Ascend exports modelslim-compatible W8A8_DYNAMIC metadata for vllm-ascend.",
         )
         parser.add_argument(
             "--quant_layers_config",

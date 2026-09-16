@@ -49,6 +49,8 @@ def build_ascend_deploy_plan(
     excluded_mtp records matches removed by the mandatory MTP exclusion, after
     the user's ignore rules have been applied.
     """
+    if hasattr(adapter, "expand_ascend_deploy_weight_map"):
+        weight_map = adapter.expand_ascend_deploy_weight_map(weight_map)
     names = {key.rsplit(".", 1)[0] for key in weight_map}
     selected, counts = match_deploy_modules(names, selection)
     excluded_mtp = adapter.get_ascend_deploy_mtp_modules(selected)
@@ -151,8 +153,11 @@ def validate_ascend_deploy_args(args) -> None:
         return
     if not selection_path:
         raise ValueError("Ascend deployment requires --quant_layers_config")
+    if getattr(args, "model_name", None) not in {"glm5_2", "qwen3_6_moe"}:
+        raise ValueError(
+            "Ascend deployment requires --model_name one of ['glm5_2', 'qwen3_6_moe']"
+        )
     for key, expected in (
-        ("model_name", "glm5_2"),
         ("granularity", "tensor"),
         ("quant_dtype", "int"),
     ):
