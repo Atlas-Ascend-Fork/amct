@@ -556,3 +556,49 @@ model.save_pretrained(
 6. `grad_clip`：本次为 `1.0`；若梯度或 loss 不稳定可以调小，最终仍以固定评测集 PPL 为准。
 
 多组恢复参数应使用独立报告和输出目录，避免覆盖剪枝模型。BF16 的 `size_budget=0.5` 权重约占 28.4 GiB；磁盘不足时，记录 PPL 和报告后再清理不再需要的恢复模型。
+
+
+## 7 社区任务样例：Qwen3-0.6B dense FFN 剪枝（`reconstruct` + `finetune`，任务 17）
+
+本节对应 issue 183 的任务 17：dense FFN 中间维 `reconstruct`（最小二乘恢复）固定 `prune_ratio=0.5`
+剪枝，剪枝后进行恢复微调（finetune）。
+
+### 7.1 运行说明
+
+- 校准集：Pileval，`8` 个样本、`seq_len=2048`（共 16384 行校准 token；`reconstruct` 的最小二乘
+  恢复要求校准行数不低于保留神经元数，否则自动回退朴素切片并在日志中给出告警）
+- 评估集：WikiText2 test split，固定 `seq_len=4096`，使用全量测试集（73 个 batch）
+- 微调集：WikiText2 train split，300 个互不重复的连续 512-token 块（不使用 test split 训练）
+- 微调设置：无动量 SGD（lr=1e-2）、warmup=20、300 步、grad_clip=1.0、gradient checkpointing
+- 输出目录为相对路径占位，脚本保存微调后的模型、`PruneReport`、诊断摘要与运行参数（启动时打印完整参数）
+
+运行命令：
+
+```bash
+python3 src/run_qwen3_0_6b_pruning_reconstruct_ratio_finetune.py \
+  --model-path ./path/to/Qwen3-0.6B \
+  --save-dir ./outputs/qwen3_0_6b_reconstruct_ratio_finetune/r0_5 \
+  --prune-ratio 0.5
+```
+
+不使用微调（仅剪枝）时可加 `--no-finetune`；`--preview-prune-ratio` 仅用于 `prune_diagnose()` 的
+dry-run，默认 `0.1`；`--eval-batches` 仅用于快速截断评测批次，默认不传即全量 WikiText2 test split。
+
+### 7.2 诊断与报告
+
+`prune_diagnose()` 在单卡 910B3 上识别出 dense 域 28 个可剪目标（28 层 FFN），固定剪枝率
+dry-run 可用；`PruneReport` 输出参数量变化；剪枝后模型 `config` 的 `intermediate_size` 已同步
+收窄，可直接 `save_pretrained/from_pretrained` 往返。
+
+### 7.3 结果表
+
+以下结果在单张 Ascend 910B3（64 GiB）上实测；评估集为全量 WikiText2 test split、`seq_len=4096`
+（73 个 batch，逐条前向）；校准集 Pileval 8 个样本、`seq_len=2048`。
+
+| 模型 | 方法 | 实验设置 | 基线 PPL | 剪枝后 PPL | 后处理 PPL | 参数量（前 → 后） | 参数削减率 | 剪枝时长（min） |
+| --- | --- | --- | ---: | ---: | ---: | --- | ---: | ---: |
+| Qwen3-0.6B | `reconstruct` + `finetune` | `prune_ratio=0.5` | 19.157549 | 74.244453 | 31.369858 | 596049920 -> 463929344 | 22.17% | 0.06 |
+
+> 后处理 PPL 为恢复微调（finetune）后的结果；微调从剪枝模型开始，未重新执行剪枝。相对剪枝模型
+> PPL 绝对下降 `42.874595`，按"剪枝造成的 PPL 增量"计恢复约 `77.8%`；恢复后 PPL 仍高于原始模型
+> `12.212309`。剪枝时长（0.06 min）为 `amct.prune` 调用本身耗时，不含数据准备与评测。
