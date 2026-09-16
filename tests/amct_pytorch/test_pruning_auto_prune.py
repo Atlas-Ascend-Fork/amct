@@ -47,6 +47,7 @@ from amct_pytorch.pruning import (
 from amct_pytorch.pruning.presets import _MOE_CRITERION_MENU
 from amct_pytorch.pruning.accuracy_based_auto_prune import (
     _auto_metric,
+    _make_js_quality,
     _resolve_quality,
     _accuracy_based_auto_prune as accuracy_based_auto_prune,
     _size_budget_prune as size_budget_prune,
@@ -1058,6 +1059,47 @@ class TestBuiltinEvaluators(unittest.TestCase):
             batch = dict(input_ids=input_ids, attention_mask=torch.tensor([[1, 1, 0]]))
             q, _ = _resolve_quality(model, "js", 1, [batch], None)
             q(changed)
+
+    def test_js_classifier_with_token_mask(self):
+        model = _MetricModel(torch.tensor([[9.0, 0.0], [0.0, 9.0]]))
+        changed = _MetricModel(model.logits.flip(-1))
+        inputs = torch.tensor([[0, 1, 2], [2, 1, 0]])
+        unmasked = _make_js_quality(model, [dict(input_ids=inputs)], None)
+        for mask in (torch.ones_like(inputs), torch.zeros_like(inputs)):
+            for evaluator in (None, "js", "auto"):
+                with self.subTest(mask=mask.tolist(), evaluator=evaluator):
+                    batch = dict(input_ids=inputs, attention_mask=mask)
+                    quality, baseline = _resolve_quality(
+                        model, evaluator, 1, [batch], None
+                    )
+                    self.assertAlmostEqual(quality(model), baseline, places=5)
+                    self.assertAlmostEqual(
+                        quality(changed), unmasked(changed), places=6
+                    )
+                    self.assertLess(quality(changed), baseline)
+
+    def test_js_rejects_all_masked_positions(self):
+        model = _MetricModel(torch.tensor([[[9.0, 0.0], [0.0, 9.0]]]))
+        changed = _MetricModel(model.logits.flip(-1))
+        batch = dict(input_ids=torch.tensor([[0, 1]]), attention_mask=torch.zeros(1, 2))
+        quality = _make_js_quality(model, [batch, batch], None)
+        for candidate in (model, changed):
+            with self.subTest(candidate=candidate):
+                with self.assertRaisesRegex(ValueError, "js metric.*no valid"):
+                    quality(candidate)
+
+    def test_js_aggregates_valid_positions_across_batches(self):
+        model = _MetricModel(torch.tensor([[[9.0, 0.0], [0.0, 9.0]]]))
+        changed = _MetricModel(model.logits.flip(-1))
+        empty = dict(input_ids=torch.tensor([[0, 1]]), attention_mask=torch.zeros(1, 2))
+        valid = dict(
+            input_ids=empty["input_ids"], attention_mask=torch.tensor([[1, 0]])
+        )
+        expected = _make_js_quality(model, [valid], None)(changed)
+        for batches in ([empty, valid], [valid, empty]):
+            with self.subTest(empty_first=batches[0] is empty):
+                quality = _make_js_quality(model, batches, None)
+                self.assertAlmostEqual(quality(changed), expected, places=6)
 
     def test_presets_identity_and_distribution_shift(self):
         model = _MetricModel(torch.tensor([[[3.0, 2.0, 1.0], [1.0, 2.0, 3.0]]]))

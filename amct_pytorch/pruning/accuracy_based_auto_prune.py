@@ -355,8 +355,9 @@ def _make_fidelity_quality(
 def _make_js_quality(model, eval_batches, batch_adapter) -> QualityFn:
     """``1 - JS(p_orig || p_cand) / ln 2`` averaged over unmasked positions (higher is better, 1.0 == identical).
 
-    Positions outside ``attention_mask`` (e.g. padding) are excluded from both the
-    reference-distribution cache and the averaged divergence.
+    For 3D token logits, positions outside ``attention_mask`` (e.g. padding) are
+    excluded from the averaged divergence. 2D classification logits are averaged
+    per sample without applying the token mask.
     """
     if not eval_batches:
         raise ValueError(
@@ -392,7 +393,7 @@ def _make_js_quality(model, eval_batches, batch_adapter) -> QualityFn:
                 kl_pm = (p * (p.clamp_min(1e-12).log() - log_m)).sum(-1)
                 kl_qm = (q * (q.clamp_min(1e-12).log() - log_m)).sum(-1)
                 js = 0.5 * (kl_pm + kl_qm)  # nats, in [0, ln 2]
-                if mask is not None:
+                if mask is not None and p.ndim == 3:
                     if mask.shape != js.shape:
                         raise ValueError(
                             "js metric: attention_mask must match logits' [batch, sequence] shape."
@@ -403,7 +404,9 @@ def _make_js_quality(model, eval_batches, batch_adapter) -> QualityFn:
                 else:
                     js_sum += js.sum().item()
                     n += js.numel()
-        mean_js = js_sum / n if n else 0.0
+        if n == 0:
+            raise ValueError("js metric: no valid evaluation positions.")
+        mean_js = js_sum / n
         return 1.0 - mean_js / math.log(2.0)
 
     return quality
