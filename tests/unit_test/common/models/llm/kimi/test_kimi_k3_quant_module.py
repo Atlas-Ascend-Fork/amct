@@ -250,22 +250,15 @@ def test_kimi_tensorwise_moe_target_does_not_select_mla_projections():
     }
 
 
-def test_kimi_tensorwise_mxfp4_moe_exports_packed_weight_and_scale_names():
-    from amct_pytorch.common.models.llm.common.deploy_export import quant_payload
-    from amct_pytorch.quantization.dtypes.mxfp import QuantDequantMx
-
+def test_kimi_tensorwise_output_name_normalizes_packed_weight_for_compute_path():
     pipeline = _tensorwise_pipeline(["moe"])
     source_name = (
         "language_model.model.layers.1.block_sparse_moe.experts.0.w1.weight_packed"
     )
-    output_name = pipeline.tensorwise_output_weight_name(source_name)
-    payload = quant_payload(QuantDequantMx, output_name, torch.ones(1, 32), 4)
 
-    assert set(payload) == {
-        source_name,
-        "language_model.model.layers.1.block_sparse_moe.experts.0.w1.weight_scale",
-    }
-    assert payload[source_name].dtype == torch.uint8
+    assert pipeline.tensorwise_output_weight_name(source_name) == (
+        "language_model.model.layers.1.block_sparse_moe.experts.0.w1.weight"
+    )
 
 
 def test_kimi_tensorwise_only_four_bit_moe_is_passthrough():

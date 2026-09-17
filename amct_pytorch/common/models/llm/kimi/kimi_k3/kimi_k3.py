@@ -19,6 +19,7 @@ import gc
 import json
 import re
 from collections import defaultdict
+from contextlib import ExitStack
 from pathlib import Path
 
 import torch
@@ -52,6 +53,7 @@ from amct_pytorch.common.models.llm.kimi.kimi_k3.quant_module import (
     quantize_kimi_kda_linears,
 )
 from amct_pytorch.quantization.bit_policy import ensure_bit_policy
+from amct_pytorch.quantization.dtypes.mxfp import NpuMxLinear
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
@@ -176,9 +178,170 @@ class KimiK3(BaseModel):
         return f"language_model.model.layers.{layer_idx}."
 
     def block(self, layer_idx):
+        if getattr(self.args, "eval_mode", None) == "npu":
+            return self._block_npu(layer_idx)
         if getattr(self, "sharded_block", False):
             return self._block_sharded(layer_idx)
         return super().block(layer_idx)
+
+    def _npu_linear_bits(self, name, block):
+        """Resolve only projections owned by the existing K3 quantization targets."""
+        policy = ensure_bit_policy(self.args)
+        projection = name.rsplit(".", 1)[-1]
+        group = None
+        if name.startswith("block_sparse_moe.experts.") and projection in ("w1", "w2", "w3"):
+            group = "moe.routed"
+            projection = {"w1": "gate_proj", "w3": "up_proj", "w2": "down_proj"}[projection]
+        elif name.startswith("block_sparse_moe.shared_experts."):
+            group = "moe.shared"
+        elif name in ("block_sparse_moe.routed_expert_up_proj", "block_sparse_moe.routed_expert_down_proj"):
+            group = "moe.routed"
+        elif name.startswith("mlp."):
+            group = "mlp"
+        elif name.startswith("self_attn."):
+            names = ("q_proj", "k_proj", "v_proj", "o_proj") if getattr(block, "is_linear_attn", False) else (
+                "q_a_proj", "q_b_proj", "kv_a_proj_with_mqa", "o_proj",
+            )
+            if projection in names:
+                group = "attn-linear"
+        if group is None or group.split(".")[0] not in self.quant_target:
+            return 16, 16
+        bits = policy[group][projection]
+        if (bits.w, bits.a) not in ((4, 4), (8, 8), (16, 16)):
+            raise ValueError(f"{name}: eval_mode=npu does not support A{bits.a}W{bits.w}")
+        return bits.w, bits.a
+
+    @staticmethod
+    def _validate_mx_checkpoint(name, weight, scale, bits, n, k):
+        """K3 canonical E2M1/E4M3 + E8M0 checkpoint contract, before conversion."""
+        if bits not in (4, 8) or k % 32 or (bits == 4 and n % 2):
+            raise ValueError(f"{name}: unsupported MXFP bits or dimensions N={n}, K={k}, bits={bits}")
+        dtype = torch.uint8 if bits == 4 else torch.float8_e4m3fn
+        shape = (n, k // 2 if bits == 4 else k)
+        if weight.dtype != dtype or tuple(weight.shape) != shape:
+            raise ValueError(f"{name}: expected weight {dtype} {shape}, got {weight.dtype} {tuple(weight.shape)}")
+        if scale is None or scale.dtype != torch.uint8 or tuple(scale.shape) != (n, k // 32):
+            raise ValueError(f"{name}: expected uint8 E8M0 scale {(n, k // 32)}")
+        if torch.any(scale == 255).item():
+            raise ValueError(f"{name}: scale contains E8M0 NaN encoding 255")
+        if bits == 8 and not torch.isfinite(weight.float()).all().item():
+            raise ValueError(f"{name}: FP8 weight contains non-finite values")
+
+    def _block_npu(self, layer_idx):
+        """Stream a mixed checkpoint without constructing full BF16 expert copies.
+
+        All checkpoint interpretation is K3-specific. Low-bit projections are
+        replaced before loading, and never enter the fake-quant wrapper path.
+        """
+        if getattr(self.args, "quant_dtype", None) != "mxfp":
+            raise ValueError("Kimi NPU evaluation requires quant_dtype=mxfp")
+        param_dirs = ("attn_linear_param_dir", "attn_cache_param_dir", "moe_mlp_param_dir")
+        if getattr(self.args, "algos", []) or any(getattr(self.args, key, "") for key in param_dirs):
+            raise ValueError("Kimi NPU evaluation does not apply PTQ parameters; use a finalized checkpoint")
+        if "attn-cache" in self.quant_target or ensure_bit_policy(self.args).has_quant_cache():
+            raise ValueError("Kimi NPU evaluation currently supports Linear quantization only")
+        with init_empty_weights(include_buffers=False):
+            block = self.cls(self.config, layer_idx)
+        device_map = self._build_block_device_map(block) or {"": str(self.args.device)}
+        expected = {name: (value.shape, value.dtype) for name, value in block.state_dict().items()}
+        quant_linears = {}
+        for name, module in list(block.named_modules()):
+            if not isinstance(module, torch.nn.Linear):
+                continue
+            w_bits, a_bits = self._npu_linear_bits(name, block)
+            if w_bits == 16:
+                continue
+            quant = NpuMxLinear(module, w_bits, a_bits)
+            parent_name, leaf = name.rsplit(".", 1)
+            setattr(block.get_submodule(parent_name), leaf, quant)
+            quant_linears[name] = quant
+
+        prefix = self.get_layer_weight_prefix(layer_idx)
+        weight_map = self._load_weight_map()
+        layer_keys = {name for name in weight_map if name.startswith(prefix)}
+        routes, used = {}, set()
+        for name in expected:
+            key = prefix + name
+            module_name = name.rsplit(".", 1)[0]
+            packed_key = key.removesuffix(".weight") + ".weight_packed"
+            scale_key = key.removesuffix(".weight") + ".weight_scale"
+            is_weight = name.endswith(".weight")
+            is_quantized = is_weight and (packed_key in layer_keys or scale_key in layer_keys)
+            if is_quantized:
+                quant = quant_linears.get(module_name)
+                if quant is None:
+                    raise ValueError(f"{key}: quantized checkpoint conflicts with BF16 policy or quant_target")
+                source_key = packed_key if packed_key in layer_keys else key
+                if source_key == packed_key and key in layer_keys:
+                    raise ValueError(f"{key}: ambiguous weight and weight_packed entries")
+                if source_key not in layer_keys or scale_key not in layer_keys:
+                    raise ValueError(f"{key}: missing paired weight or scale: {scale_key}")
+                if (source_key == packed_key) != (quant.w_bits == 4):
+                    raise ValueError(f"{key}: checkpoint packing conflicts with W{quant.w_bits}")
+                required_format = "e2m1-e8m0" if quant.w_bits == 4 else "e4m3-e8m0"
+                declared_format = getattr(self.args, "mxfp_checkpoint_format", None)
+                if declared_format not in (required_format, "mixed-e8m0"):
+                    raise ValueError(
+                        f"{key}: explicitly declare --mxfp_checkpoint_format {required_format}; "
+                        "an index cannot identify FP4/scale encoding"
+                    )
+                routes[name] = (source_key, scale_key)
+                used.update((source_key, scale_key))
+            else:
+                if key not in layer_keys:
+                    raise ValueError(f"Missing checkpoint tensor: {key}")
+                routes[name] = (key, None)
+                used.add(key)
+        unexpected = layer_keys - used
+        if unexpected:
+            raise ValueError(f"Unexpected Kimi checkpoint tensors: {sorted(unexpected)[:5]}")
+
+        # Keep file handles open for this layer, but read only one projection at a time.
+        with ExitStack() as stack:
+            files = {}
+
+            def read(key):
+                filename = weight_map[key]
+                if filename not in files:
+                    files[filename] = stack.enter_context(safe_open(
+                        str(Path(self.model_path) / filename), framework="pt", device="cpu",
+                    ))
+                return files[filename].get_tensor(key)
+
+            for name, (weight_key, scale_key) in routes.items():
+                device = self._resolve_param_device(name, device_map)
+                weight = read(weight_key)
+                if scale_key is not None:
+                    quant = quant_linears[name.rsplit(".", 1)[0]]
+                    scale = read(scale_key)
+                    self._validate_mx_checkpoint(
+                        weight_key, weight, scale, quant.w_bits, quant.out_features, quant.in_features,
+                    )
+                    quant.load_quantized(weight, scale)
+                    quant.qweight = quant.qweight.to(device)
+                    quant.w_scale = quant.w_scale.to(device)
+                    del scale
+                else:
+                    weight = self._prepare_layer_tensor(name, weight)
+                    shape, dtype = expected[name]
+                    if weight.shape != shape:
+                        raise ValueError(f"{weight_key}: expected shape {tuple(shape)}, got {tuple(weight.shape)}")
+                    if dtype.is_floating_point:
+                        if weight.dtype not in (torch.bfloat16, torch.float16, torch.float32):
+                            raise ValueError(f"{weight_key}: expected floating weight; low-bit weight requires scale")
+                        dtype = torch.bfloat16
+                    set_module_tensor_to_device(block, name, device, value=weight.to(dtype), dtype=dtype)
+                del weight
+        # Preserve the exact dtype of loaded low-bit buffers; move derived buffers too.
+        for name, buffer in list(block.named_buffers()):
+            if buffer.is_meta:
+                raise RuntimeError(f"Unresolved Kimi buffer: {name}")
+            device = self._resolve_param_device(name, device_map)
+            set_module_tensor_to_device(block, name, device, value=buffer, dtype=buffer.dtype)
+        unresolved = [name for name, value in block.named_parameters() if value.is_meta]
+        if unresolved:
+            raise RuntimeError(f"Unresolved Kimi parameters: {unresolved[:5]}")
+        return block.eval()
 
     def _block_sharded(self, layer_idx):
         """Build on meta and stream a floating checkpoint onto target NPUs.
@@ -511,6 +674,8 @@ class KimiK3(BaseModel):
 
     def build_quant_block(self, layer_idx):
         decoder_layer = self.block(layer_idx)
+        if getattr(self.args, "eval_mode", None) == "npu":
+            return decoder_layer
         quantize_attention = any(
             target in self.quant_target
             for target in ("attn-linear", "attn-cache")
@@ -608,13 +773,6 @@ class KimiK3(BaseModel):
 
     def tensorwise_output_weight_name(self, weight_name):
         if weight_name.endswith(".weight_packed"):
-            quantize_moe = not self.quant_target or "moe" in self.quant_target
-            if (
-                self.quant_dtype == "mxfp"
-                and quantize_moe
-                and self._is_kimi_moe_weight_packed(weight_name)
-            ):
-                return weight_name
             return weight_name.replace(".weight_packed", ".weight")
         return weight_name
 
@@ -637,8 +795,7 @@ class KimiK3(BaseModel):
         )
         for weight_name in self._load_weight_map():
             if quantize_moe and self._is_kimi_moe_weight_packed(weight_name):
-                output_name = self.tensorwise_output_weight_name(weight_name)
-                quant_layers[output_name.rsplit(".", 1)[0]] = 4
+                quant_layers[weight_name.rsplit(".", 1)[0]] = 4
                 continue
 
             mla_match = self._MLA_WEIGHT_RE.match(weight_name)

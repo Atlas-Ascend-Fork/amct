@@ -298,7 +298,7 @@ class LlmDeployWorkflow:
                     scale = loaded_files[scale_file].get(scale_inv_name)
                     if scale is None:
                         raise KeyError(f"Missing scale tensor: {scale_inv_name}")
-                    new_state_dict[output_weight_name] = weight.cpu()
+                    new_state_dict[weight_name] = weight.cpu()
                     new_state_dict[scale_inv_name] = scale.cpu()
                     continue
                 block_size = self.pipeline.block_size(weight)

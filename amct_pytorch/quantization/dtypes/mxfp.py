@@ -19,9 +19,14 @@ from __future__ import annotations
 
 import torch
 from torch import Tensor
+
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY
 from amct_pytorch.quantization.dtypes.mxfp_impl import (
-    f32_to_f4_unpacked, pack_uint4, quantize_elewise, shared_exponents,
+    f32_to_f4_unpacked,
+    pack_uint4,
+    quantize_elewise,
+    shared_exponents,
+    unpack_uint4,
 )
 
 
@@ -77,3 +82,113 @@ class QuantDequantMx(torch.nn.Module):
             self.ebits, self.mbits, self.emax, self.max_norm, self.shift_val, self.min_exp = 4, 5, 8, 448.0, 8, -6
         else:
             self.ebits, self.mbits, self.emax, self.max_norm, self.shift_val, self.min_exp = 2, 3, 2, 6.0, 2, 0
+
+
+class NpuMxLinear(torch.nn.Module):
+    """Inference-only MXFP Linear; fake-quantization interfaces remain unchanged.
+
+    Checkpoint input uses [N, K] (FP4 packed along K) and [N, K/32]
+    E8M0 bytes. Runtime uses [K, N] (FP4 packed along N) and
+    [ceil(K/64), N, 2] interleaved scale bytes. No dequantization or
+    rounding is performed when converting checkpoint layouts.
+    """
+
+    def __init__(self, linear, w_bits, a_bits):
+        super().__init__()
+        if (a_bits, w_bits) not in ((4, 4), (8, 8)):
+            raise ValueError(f"NPU MXFP requires A4W4 or A8W8, got A{a_bits}W{w_bits}")
+        self.in_features = linear.in_features
+        self.out_features = linear.out_features
+        self.w_bits, self.a_bits = w_bits, a_bits
+        if self.in_features % 32 or (w_bits == 4 and self.out_features % 2):
+            raise ValueError("NPU MXFP requires K divisible by 32 and FP4 requires even N")
+        self.register_parameter("weight", linear.weight)
+        self.register_parameter("bias", linear.bias)
+        self.register_buffer("qweight", None)
+        self.register_buffer("w_scale", None)
+
+    @staticmethod
+    def checkpoint_layout(qweight, scale, bits):
+        """Convert canonical checkpoint codes to the non-transposed NPU layout."""
+        if bits == 4:
+            codes = unpack_uint4(qweight.contiguous())
+            qweight = pack_uint4(codes.t().contiguous())
+        elif bits == 8:
+            qweight = qweight.t().contiguous()
+        else:
+            raise ValueError(f"Unsupported MXFP weight bits: {bits}")
+        n, groups = scale.shape
+        if groups % 2:
+            scale = torch.nn.functional.pad(scale, (0, 1), value=0)
+        scale = scale.reshape(n, -1, 2).permute(1, 0, 2).contiguous()
+        return qweight, scale
+
+    @torch.no_grad()
+    def load_quantized(self, qweight, scale):
+        self.qweight, self.w_scale = self.checkpoint_layout(qweight, scale, self.w_bits)
+        # Do not retain a full BF16 copy (or a meta placeholder) of packed weights.
+        self.weight = None
+
+    @torch.no_grad()
+    def prepare_weight(self):
+        if self.qweight is not None:
+            return
+        if self.weight is None or self.weight.is_meta:
+            raise RuntimeError("NPU MXFP weight has not been loaded")
+        import torch_npu
+
+        weight = self.weight.detach().to(torch.bfloat16)
+        if self.w_bits == 8:
+            quant, scale = torch_npu.npu_dynamic_mx_quant(
+                weight, dst_type=torch.float8_e4m3fn, axis=-1, block_size=32,
+            )
+            self.qweight = quant.t().contiguous()
+            self.w_scale = scale.transpose(0, 1).contiguous()
+        else:
+            self.qweight, self.w_scale = torch_npu.npu_dynamic_mx_quant(
+                weight.t().contiguous(), dst_type=torch_npu.float4_e2m1fn_x2,
+                axis=0, block_size=32,
+            )
+            self.qweight = self.qweight.contiguous()
+            self.w_scale = self.w_scale.contiguous()
+        self.weight = None
+
+    @torch.no_grad()
+    def forward(self, x):
+        if x.shape[-1] != self.in_features:
+            raise ValueError(f"NPU MXFP input K={x.shape[-1]}, expected {self.in_features}")
+        if x.numel() == 0:
+            return x.new_empty((*x.shape[:-1], self.out_features), dtype=torch.bfloat16)
+        self.prepare_weight()
+        if x.device != self.qweight.device or x.device != self.w_scale.device:
+            raise ValueError("NPU MXFP activation, weight and scale must share a device")
+        if self.a_bits == 8:
+            return self.forward_a8w8(x, self.bias)
+        return self.forward_a4w4(x, self.bias)
+
+    def forward_a8w8(self, x, bias=None):
+        import torch_npu
+
+        return self._quant_matmul(x, bias, torch.float8_e4m3fn, torch_npu)
+
+    def forward_a4w4(self, x, bias=None):
+        import torch_npu
+
+        return self._quant_matmul(x, bias, torch_npu.float4_e2m1fn_x2, torch_npu)
+
+    def _quant_matmul(self, x, bias, dtype, torch_npu):
+        shape = x.shape[:-1]
+        x = x.reshape(-1, self.in_features).to(torch.bfloat16)
+        quant, scale = torch_npu.npu_dynamic_mx_quant(x, dst_type=dtype, axis=-1, block_size=32)
+        kwargs = {}
+        if self.a_bits == 4:
+            kwargs.update(x1_dtype=dtype, x2_dtype=dtype)
+        output = torch_npu.npu_quant_matmul(
+            quant, self.qweight, self.w_scale,
+            pertoken_scale=scale,
+            bias=None if bias is None else bias.float(),
+            scale_dtype=torch_npu.float8_e8m0fnu,
+            pertoken_scale_dtype=torch_npu.float8_e8m0fnu,
+            output_dtype=torch.bfloat16, group_sizes=[1, 1, 32], **kwargs,
+        )
+        return output.reshape(*shape, self.out_features)

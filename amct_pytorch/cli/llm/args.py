@@ -23,6 +23,18 @@ from amct_pytorch.quantization.bit_policy import BitPolicy
 
 
 def _validate_eval_mode(args):
+    if args.eval_mode == "npu":
+        if args.model_name != "kimi_k3" or args.granularity != "block" or args.quant_dtype != "mxfp":
+            raise ValueError("eval_mode=npu requires model_name=kimi_k3, granularity=block, quant_dtype=mxfp")
+        if not str(args.device).startswith("npu"):
+            raise ValueError("eval_mode=npu requires an NPU device")
+        if args.algos or any(getattr(args, key, "") for key in (
+            "attn_linear_param_dir", "attn_cache_param_dir", "moe_mlp_param_dir",
+        )):
+            raise ValueError("eval_mode=npu does not apply PTQ parameters; use a finalized checkpoint")
+        if "attn-cache" in args.quant_target or args.bit_policy.has_quant_cache():
+            raise ValueError("eval_mode=npu currently supports Linear quantization only")
+        return
     if args.eval_mode != "bf16":
         return
     policy = args.bit_policy
@@ -60,9 +72,13 @@ def parser_gen(command=None):
 
     parser.add_argument('--nsamples', type=int, default=128,
                         help='Number of calibration data samples.')
-    parser.add_argument('--eval_mode', type=str, default='bf16', choices=['bf16', 'quant'],
+    parser.add_argument('--eval_mode', type=str, default='bf16', choices=['bf16', 'quant', 'npu'],
                         help='bf16 uses the original model path; '
-                             'quant rebuilds quant modules and toggles quantizers by bit-widths.')
+                             'quant rebuilds fake quant modules; npu enables Kimi K3 blockwise MXFP inference.')
+    parser.add_argument('--mxfp_checkpoint_format', default=None,
+                        choices=['e2m1-e8m0', 'e4m3-e8m0', 'mixed-e8m0'],
+                        help='Explicit encoding of prequantized Kimi weights and uint8 E8M0 scales. '
+                             'Not needed for floating checkpoints.')
 
     parser.add_argument("--quant_dtype", type=str, default="", choices=['int', 'mxfp', 'fp', 'bf16'],
                         help='Quantization data type.')
@@ -107,6 +123,8 @@ def parser_gen(command=None):
 
     if command == "eval":
         _validate_eval_mode(args)
+    elif args.eval_mode == "npu":
+        raise ValueError("eval_mode=npu is supported only by the eval command")
 
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
 

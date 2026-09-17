@@ -1,0 +1,18 @@
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+# Licensed under the Apache License, Version 2.0.
+# Only routed experts w1/w2/w3 use A4W4; all other projections remain BF16.
+w_bits: 16
+a_bits: 16
+moe:
+  routed:
+    w_bits: 4
+    a_bits: 4
+    routed_expert_up_proj:
+      w_bits: 16
+      a_bits: 16
+    routed_expert_down_proj:
+      w_bits: 16
+      a_bits: 16
+  shared:
+    w_bits: 16
+    a_bits: 16
