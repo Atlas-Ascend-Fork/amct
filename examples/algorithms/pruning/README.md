@@ -11,7 +11,7 @@ MoE 剪枝样例。
 ### 1.1 安装依赖
 
 依赖见 [requirements.txt](requirements.txt)：`torch` 与 `transformers`（随 amct_pytorch 导入链需要）。
-在 NPU 上运行时另需与 Python/torch 版本匹配的 `torch_npu` 及已安装的 CANN 包。
+在 NPU 上运行时另需与 Python/torch 版本匹配的 `TorchNPU` 及已安装的 CANN 包。
 
 ### 1.2 模型与数据准备
 

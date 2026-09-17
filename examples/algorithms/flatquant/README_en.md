@@ -9,7 +9,7 @@
 
 The dependency packages for this sample can be found in [requirements.txt](requirements.txt)
 
-Note that the torch_npu package version needs to match the Python and torch package versions, and the CANN package needs to be installed
+Note that the TorchNPU package version needs to match the Python and torch package versions, and the CANN package needs to be installed
 
 ### 1.2 Model and Dataset Preparation
 

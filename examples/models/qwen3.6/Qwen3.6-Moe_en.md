@@ -1,11 +1,14 @@
 # Qwen3.6-MoE Quantization on NPU
+
 ## Overview
-The Tongyi team has released the Qwen3.6 series models. This practice uses the quantization tool in amct_pytorch to perform quantization, data extraction, and PTQ training on the Qwen3.6-MoE model, achieving model PPL drop within 0.1 under BF16 and A8W4 quantization, supporting deployment on the Ascend `Atlas A3 Pod` platform and `950PR/DT` platform.
+
+The Tongyi team has released the Qwen3.6 series models. This practice uses the quantization tool in amct_pytorch to perform quantization, data extraction, and PTQ training on the Qwen3.6-MoE model, achieving model PPL drop within 0.1 under BF16 and A8W4 quantization.
 
 ---
 
 ## Hardware Requirements
-Product Model: Atlas A3 Pod Series
+
+Product Model: Taking the Atlas A3 Products as an example
 
 Operating System: Linux ARM
 
@@ -24,7 +27,6 @@ The one-stop platform has pre-configured deployment runtime environment. When us
 - **Environment Deployment**: The platform has set up the runtime environment; no need to obtain docker image or launch docker container.
 - **CANN Path**: The CANN installation path is `/home/developer/Ascend/cann`. For scripts involving `cann_path` (such as the `source` command before weight conversion), please use this path.
 
-
 > The standard operations for each step in the following quick start chapter are applicable to non-one-stop platform environments. One-stop platform users please adjust corresponding steps according to the above differences.
 
 ---
@@ -34,12 +36,15 @@ The one-stop platform has pre-configured deployment runtime environment. When us
 ### Download Source Code
 
   Execute the following command on each node to download amct-pytorch source code.
+
   ```shell
   mkdir -p /home/code; cd /home/code/
   git clone https://gitcode.com/cann/amct.git
   cd amct
   ```
+
 ### Download Dataset
+
   When executing eval in amct_pytorch, the required dataset will be automatically downloaded
 
 ### Download Weights
@@ -47,6 +52,7 @@ The one-stop platform has pre-configured deployment runtime environment. When us
   Download [Qwen/Qwen3.6-35B-A3B original weights](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) and upload to a fixed path on each node, such as `/data/models/Qwen3.6-35B-A3B`.
 
 ### Local Package Build
+
   For local package build process, please check [Environment Installation & Verification](../../../README_en.md#installation--verification)
 
 ### Baseline Test
@@ -64,7 +70,9 @@ python -m amct_pytorch.eval \
      --eval_mode bf16 \
      --bit_config amct_pytorch/configs/bf16.yaml
   ```
+
 Required parameter explanation:
+
 - seq_len: Input sequence length used for calibration and evaluation, can be adjusted according to memory
 - granularity: Supports blockwise and modelwise inference, currently supports block
 - eval_mode: In `quant` mode, need to synchronously configure `bit_config`; under `bf16`, can not configure or refer to sample
@@ -76,7 +84,9 @@ Baseline test accuracy result:
 For more detailed parameter explanation, please refer to [Parameter Description](../../../docs/zh/AMCT_Pytorch_LLM.md#31-通用参数)
 
 ### Direct Conversion Quantization Accuracy Evaluation
+
 According to YAML bit configuration, perform direct conversion quantization accuracy test, evaluate the gap with baseline accuracy. Current solution defaults to full A8W4 int quantization on `quant-target`:
+
   ```shell
 python -m amct_pytorch.eval \
     --trust_remote_code \
@@ -90,7 +100,9 @@ python -m amct_pytorch.eval \
     --quant_dtype int \
     --bit_config amct_pytorch/configs/w4a8.yaml
   ```
+
 Required parameter explanation:
+
 - quant_target: Quantization object, currently quantize linear layers in Attention
 - quant_dtype: Quantization data format, currently supports int, mxfp
 
@@ -100,7 +112,9 @@ Direct conversion quantization accuracy result:
 For more detailed parameter explanation, please refer to [Parameter Description](../../../docs/zh/AMCT_Pytorch_LLM.md#32-ppl-评估参数)
 
 ### PTQ Data Extraction
+
 Extract corresponding PTQ calibration dataset according to different quantization objects `quant_target`:
+
   ```shell
 python -m amct_pytorch.extract_ptq_data \
     --trust_remote_code \
@@ -112,14 +126,19 @@ python -m amct_pytorch.extract_ptq_data \
     --data_dir ptq_data/qwen3_6_moe/attn-linear \
     --quant_target attn-linear
   ```
+
 Required parameter explanation:
+
 - data_dir: Extracted data directory
 
 For more detailed parameter explanation, please refer to [Parameter Description](../../../docs/zh/AMCT_Pytorch_LLM.md#33-数据提取参数)
 
 ### Post-Training Quantization
+
 Introduce quantization algorithm to optimize the quantization process to reduce quantization loss, using autoround as an example:
+
 #### Single-Card Environment
+
   ```shell
 python -m amct_pytorch.ptq \
     --trust_remote_code \
@@ -137,20 +156,25 @@ python -m amct_pytorch.ptq \
     --epochs 10 \
     --output_dir ptq_result/
   ```
+
 Required parameter explanation:
+
 - base_lr: Learning rate, can be adjusted according to model/algorithm, etc.
 - algos: Quantization algorithm used, currently supports lwc/lac/let/autoround
 - output_dir: PTQ training result save path
 - epoches: Iteration rounds, adjust according to algorithm and optimization effect
 
 #### Multi-Card Environment
+
 To improve training efficiency, we provide training scripts under multi-card
 For multi-card environment, please refer to script [ptq_multi_npu](../../ptq_multi_npu.sh)
 
 For more detailed parameter explanation, please refer to [Parameter Description](../../../docs/zh/AMCT_Pytorch_LLM.md#35-ptq-参数)
 
 ### Direct Conversion Quantization Accuracy Evaluation Based on Post-Training Quantization
+
 After completing PTQ, add quantization algorithm in direct conversion quantization accuracy evaluation, compare with baseline test and direct conversion quantization accuracy without quantization algorithm, verify quantization algorithm effectiveness:
+
   ```shell
 python -m amct_pytorch.eval \
   --trust_remote_code \
@@ -166,11 +190,15 @@ python -m amct_pytorch.eval \
   --algos autoround \
   --attn_linear_param_dir ptq_result/ptq_params/qwen3_6_moe/attn-linear
   ```
+
 Required parameter explanation:
+
 - attn_linear_param_dir: When `quant_target` is `attn-linear`, quantization algorithm parameter save path
 
 ### Quantized Weight Exporting
+
 After all the preceding steps are complete, export the quantized weights for loading. The weight_map corresponding to the weights is consistent with that on the huggingface official website.
+
   ```shell
 python -m amct_pytorch.deploy \
   --trust_remote_code \
@@ -184,5 +212,7 @@ python -m amct_pytorch.deploy \
   --attn_linear_param_dir ptq_result/ptq_params/qwen3_6_moe/attn-linear \
   --output_dir ./output/Qwen3.6-35B-A8W4-INT
   ```
+
 Required parameter explanation:
+
 - output_dir：Path for saving the exported weights

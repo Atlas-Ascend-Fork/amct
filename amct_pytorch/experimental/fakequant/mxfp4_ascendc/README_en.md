@@ -2,7 +2,7 @@
 
 An Ascend-C custom kernel that implements the MXFP4 (Microscaling FP4 E2M1) fake-quant operator on Ascend NPU. The directory layout is aligned with `amct_ops/hifloat8_cast` (`op_kernel` / `op_extension` / `python`). The implementation remains under `amct_pytorch/experimental/fakequant/` (experimental; not part of `amct_ops`).
 
-Compared with the torch_npu software path: **3.3x speedup** (large matrices), **18x speedup** (small matrices). Correctness is bit-exact against the PyTorch reference implementation.
+Compared with the TorchNPU software path: **3.3x speedup** (large matrices), **18x speedup** (small matrices). Correctness is bit-exact against the PyTorch reference implementation.
 
 ## Runtime Environment
 
@@ -12,7 +12,7 @@ Compared with the torch_npu software path: **3.3x speedup** (large matrices), **
 | CANN | 8.2.RC1+ |
 | Python | 3.10 (aarch64) |
 | PyTorch | 2.6.0 |
-| torch_npu | 2.6.0.post4 |
+| TorchNPU | 2.6.0.post4 |
 
 > The open-source repository does not ship prebuilt `.so` files. Compile locally against your SoC / CANN / Python ABI.
 
@@ -91,7 +91,7 @@ For training use (differentiable fake quant with STE), see `../mxfp4_qat/`. Its 
 
 ### Performance
 
-| Shape | torch_npu | Ascend-C | Speedup |
+| Shape | TorchNPU | Ascend-C | Speedup |
 |-------|-----------|----------|---------|
 | (64, 4096) | 0.69 ms | 0.038 ms | **18.1x** |
 | (256, 4096) | 0.72 ms | 0.059 ms | **12.3x** |

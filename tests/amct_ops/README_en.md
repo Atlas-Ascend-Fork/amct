@@ -46,7 +46,7 @@ python3 -m unittest tests.amct_ops.test_svd_quant
 ## Environment Requirements
 
 - Have sourced CANN environment variables, such as `$ASCEND_HOME_PATH/set_env.sh`
-- Current environment has available `torch`, `torch_npu`
+- Current environment has available `torch`, `TorchNPU`
 - Current machine can access NPU, tests will call `torch.npu.set_device(0)`
 - Specific operators may have extra dependencies or platform constraints. For
   example, `test_svd_quant` depends on a built or installed SVDQuant custom
@@ -61,7 +61,7 @@ It covers zeros, signed values, powers of two, boundary values, and seeded
 random data, then emits JSON with shape/dtype/device contracts and error metrics.
 
 ```bash
-# Validate only the native torch_npu HiFloat8 cast
+# Validate only the native TorchNPU HiFloat8 cast
 python3 tests/amct_ops/run_hifloat8_dtype_smoke.py --backend native
 
 # Validate only amct_ops hifloat8_cast
@@ -75,7 +75,7 @@ python3 tests/amct_ops/run_hifloat8_dtype_smoke.py --backend auto
 
 Use `--device npu:1` to select another device. A successful run exits with `0`
 and sets `hardware_path_verified: true`; a shape, dtype, or device contract
-failure exits with `1`; a missing NPU, `torch_npu`, `amct_ops`, or backend
+failure exits with `1`; a missing NPU, `TorchNPU`, `amct_ops`, or backend
 execution failure emits an error JSON object and exits non-zero.
 
 Passing `py_compile`, `--help`, or CPU unit tests does not validate a hardware

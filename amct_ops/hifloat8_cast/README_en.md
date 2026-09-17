@@ -89,7 +89,7 @@ hifloat8_cast/
 
 - CANN 9.0.0
 - Python ≥ 3.9
-- PyTorch + torch_npu (matching corresponding CANN version)
+- PyTorch + TorchNPU (matching corresponding CANN version)
 
 ## Compilation
 

@@ -2,7 +2,7 @@
 
 在 Ascend NPU 上实现 MXFP4（Microscaling FP4 E2M1）伪量化算子的 Ascend-C 自定义 kernel。目录布局对齐 `amct_ops/hifloat8_cast`（`op_kernel` / `op_extension` / `python`），实现仍保留在 `amct_pytorch/experimental/fakequant/`（试验特性，不进入 `amct_ops`）。
 
-对比 torch_npu 软件路径：**3.3x 加速**（大矩阵），**18x 加速**（小矩阵）。正确性与 PyTorch 参考实现 bit-exact 一致。
+对比 TorchNPU 软件路径：**3.3x 加速**（大矩阵），**18x 加速**（小矩阵）。正确性与 PyTorch 参考实现 bit-exact 一致。
 
 ## 运行环境
 
@@ -12,7 +12,7 @@
 | CANN | 8.2.RC1+ |
 | Python | 3.10 (aarch64) |
 | PyTorch | 2.6.0 |
-| torch_npu | 2.6.0.post4 |
+| TorchNPU | 2.6.0.post4 |
 
 > 开源仓不附带预编译 `.so`，需在本地按本机 SoC / CANN / Python ABI 自行编译。
 
@@ -91,7 +91,7 @@ AIV 核数由 host 侧 `PlatformAscendC::GetCoreNumAiv()` 运行时查询，无�
 
 ### 性能
 
-| Shape | torch_npu | Ascend-C | 加速比 |
+| Shape | TorchNPU | Ascend-C | 加速比 |
 |-------|-----------|----------|--------|
 | (64, 4096) | 0.69 ms | 0.038 ms | **18.1x** |
 | (256, 4096) | 0.72 ms | 0.059 ms | **12.3x** |
