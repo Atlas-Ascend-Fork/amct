@@ -43,7 +43,7 @@
 
 推荐容器：`quay.io/ascend/vllm-ascend:v0.18.0rc1-a3`
 
-`torch` / `torch_npu` 建议直接使用容器内自带版本；其余 Python 依赖见 `requirements.txt`：
+`torch` / `TorchNPU` 建议直接使用容器内自带版本；其余 Python 依赖见 `requirements.txt`：
 
 ```bash
 cd /workspace/amct/amct_pytorch/experimental/quantization/MiniMax-M2.7

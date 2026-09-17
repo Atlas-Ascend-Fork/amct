@@ -9,7 +9,7 @@
 
 本sample依赖包可参考[requirements.txt](requirements.txt)
 
-需要注意的是torch_npu包版本需要与Python、torch包版本相匹配，需要安装CANN包
+需要注意的是TorchNPU包版本需要与Python、torch包版本相匹配，需要安装CANN包
 
 ### 1.2 模型和数据集准备
 

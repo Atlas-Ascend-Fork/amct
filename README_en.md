@@ -31,7 +31,7 @@ English | [简体中文](./README.md)
 AMCT is an Ascend NPU native model quantization compression tool. After quantization, the model size decreases, enabling low-bit operations on Ascend NPU, significantly improving inference performance. The deployment architecture is as follows:
 
 <div align="center">
-  <img src="docs/zh/figures/amct_architecture.png" alt="AMCT Architecture" width="720">
+  <img src="docs/en/figures/amct_architecture.png" alt="AMCT Architecture" width="720">
 </div>
 
 **Highlights:**
@@ -72,11 +72,11 @@ Quantization significantly reduces deployment costs:
 | Dependency | Version |
 |------|------|
 | Python | >=3.9 |
-| PyTorch | 2.7.1 or 2.1.0 (NPU acceleration backend requires CPU PyTorch and matching `torch_npu`) |
+| PyTorch | 2.7.1 or 2.1.0 (NPU acceleration backend requires CPU PyTorch and matching `TorchNPU`) |
 | GCC / CMake / patch | ≥ 7.3 / ≥ 3.16 (recommended 3.20) / ≥ 2.7 |
 | CANN (Toolkit & Ops) | ≥ 8.5.0 (requires pre-installed NPU driver / firmware) |
 
-> ⚠️ For the NPU acceleration backend, install CPU PyTorch before installing the matching `torch_npu`. Do not mix non-CPU PyTorch and `torch_npu` in the same environment.
+> ⚠️ For the NPU acceleration backend, install CPU PyTorch before installing the matching `TorchNPU`. Do not mix non-CPU PyTorch and `TorchNPU` in the same environment.
 
 For complete environment deployment, please refer to [Quick Installation](docs/zh/quick_install.md).
 

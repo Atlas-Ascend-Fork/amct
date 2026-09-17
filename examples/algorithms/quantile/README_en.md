@@ -6,13 +6,14 @@
 
 The dependency packages for this sample can be found in [requirements.txt](requirements.txt)
 
-Note that the torch_npu package version needs to match the Python and torch package versions, and the CANN package needs to be installed
+Note that the TorchNPU package version needs to match the Python and torch package versions, and the CANN package needs to be installed
 
 ### 1.2 Model and Dataset Preparation
 
 This sample uses Llama2-7b, qwen2-7b, and qwen3-8b models, pileval data, and wikitext2 dataset as examples. Data is loaded online, and models need to be downloaded by users themselves and the model path needs to be specified when executing the script.
 
 ### 1.3 Simple Quantization Configuration
+
 The quantization configuration used in this sample is built into the tool and can be obtained and used in the following ways:
 
 HIF8 full quantization configuration:
@@ -43,7 +44,7 @@ If you need to modify the detailed configuration, please refer to the documentat
 The Quantile algorithm supports weight-only quantization and full quantization. The supported quantization types and quantization configurations are:
 
 | Field | Type | Description | Value Range | Notes |
-| :------------------| :------:| :--------------------| :------------------:| :-----------------------------------------------------------------------------------------------------------------------|
+| :------------------ | :------: | :-------------------- | :------------------: | :----------------------------------------------------------------------------------------------------------------------- |
 | batch_num | uint32 | Number of batches used for quantization | 1 | / |
 | skip_layers | str | Layers to skip quantization | / | Skip quantization layers support fuzzy matching. When the configured string is a layer name substring or matches the layer name, skip quantization for that layer and do not generate quantization configuration. The string must contain numbers or letters |
 | weights.type | str | Quantized weight type | 'hifloat8' | The Quantile algorithm is mainly optimized for HIF8 data type |
@@ -85,10 +86,9 @@ Score:  5.477707
 Where Score is the quantized model PPL. For specific values, refer to the following table:
 
 | Model | Calibration Set | Dataset | Pre-quantization PPL | Post-quantization PPL |
-| :---------:| :-------:| :---------:| :---------:| :---------:|
+| :---------: | :-------: | :---------: | :---------: | :---------: |
 | LLAMA2-7B | pileval | wikitext2 | 5.472 | 5.507 |
 | QWEN2-7B | pileval | wikitext2 | 7.137 | 7.169 |
 | QWEN3-8B | pileval | wikitext2 | 9.715 | 9.760 |
-
 
 After inference succeeds, a quantization log file ./amct_log/amct_pytorch.log is generated in the current directory
