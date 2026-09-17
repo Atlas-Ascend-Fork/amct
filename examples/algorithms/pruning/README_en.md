@@ -587,8 +587,9 @@ This section corresponds to issue 183 task 17: dense FFN intermediate-dim `recon
   (the test split is never used for training)
 - Finetune setup: momentum-free SGD (lr=1e-2), warmup=20, 300 steps, grad_clip=1.0,
   gradient checkpointing
-- The output directory is a placeholder relative path; the script saves the finetuned model,
-  `PruneReport`, diagnosis summary and runtime arguments (full arguments are printed at startup)
+- The output directory is a placeholder relative path; the script saves `PruneReport`, diagnosis
+  summary and runtime arguments (full arguments are printed at startup). To also save the finetuned
+  model weights, append the optional `--save-model` flag to the run command
 
 Run:
 
