@@ -1,6 +1,6 @@
 # Kimi K3 MXFP NPU Implementation Plan
 
-**Goal:** Add opt-in `eval_mode=npu` blockwise evaluation for Kimi K3, retaining BF16 layers.
+**Goal:** Add opt-in `--real_quant` to Kimi K3 blockwise quant evaluation, retaining BF16 layers.
 
 **Architecture:** Kimi owns checkpoint naming, validation and streaming loading. An inference-only Linear in `mxfp.py` owns low-bit buffers, lossless layout conversion and A8W8/A4W4 execution. Existing fake quantizers and other model loaders remain unchanged.
 

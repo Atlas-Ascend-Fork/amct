@@ -178,7 +178,7 @@ class KimiK3(BaseModel):
         return f"language_model.model.layers.{layer_idx}."
 
     def block(self, layer_idx):
-        if getattr(self.args, "eval_mode", None) == "npu":
+        if getattr(self.args, "real_quant", False):
             return self._block_npu(layer_idx)
         if getattr(self, "sharded_block", False):
             return self._block_sharded(layer_idx)
@@ -208,7 +208,7 @@ class KimiK3(BaseModel):
             return 16, 16
         bits = policy[group][projection]
         if (bits.w, bits.a) not in ((4, 4), (8, 8), (16, 16)):
-            raise ValueError(f"{name}: eval_mode=npu does not support A{bits.a}W{bits.w}")
+            raise ValueError(f"{name}: real_quant does not support A{bits.a}W{bits.w}")
         return bits.w, bits.a
 
     @staticmethod
@@ -674,7 +674,7 @@ class KimiK3(BaseModel):
 
     def build_quant_block(self, layer_idx):
         decoder_layer = self.block(layer_idx)
-        if getattr(self.args, "eval_mode", None) == "npu":
+        if getattr(self.args, "real_quant", False):
             return decoder_layer
         quantize_attention = any(
             target in self.quant_target

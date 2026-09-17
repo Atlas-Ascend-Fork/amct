@@ -60,7 +60,7 @@ class LlmEvalWorkflow:
         register_algorithms()
 
     def setup(self):
-        if self.eval_mode == "npu":
+        if getattr(self.args, "real_quant", False):
             from amct_pytorch.cli.llm.args import _validate_eval_mode
             _validate_eval_mode(self.args)
         self._register_components()
@@ -121,8 +121,8 @@ class LlmEvalWorkflow:
             self.bit_policy = ensure_bit_policy(self.args)
         if self.eval_mode == "bf16":
             return False, False, "Eval mode=bf16: use original BF16 blocks."
-        if self.eval_mode == "npu":
-            return True, True, "Eval mode=npu: Kimi MXFP A4W4/A8W8 kernels with per-projection BF16 bypass."
+        if getattr(self.args, "real_quant", False):
+            return True, True, "Eval mode=quant with real_quant: Kimi MXFP NPU kernels with BF16 bypass."
 
         if self._has_relevant_quant():
             return True, True, "Eval mode=quant: run quant modules with quantization enabled."

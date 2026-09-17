@@ -1,7 +1,7 @@
 # Kimi K3 MXFP 真量化评测
 
-`--eval_mode npu` 在 Kimi K3 的 block 粒度评测中启用 MXFP A4W4/A8W8
-NPU 矩阵乘。各投影的位宽由 bit YAML 决定，A16W16 投影保留 BF16。
+`--eval_mode quant --real_quant` 在 Kimi K3 的 block 粒度量化评测中启用
+MXFP A4W4/A8W8 NPU 矩阵乘。各投影的位宽由 bit YAML 决定，A16W16 投影保留 BF16。
 默认 `bf16`、`quant` 路径及其他模型的加载逻辑不变。
 
 ## 运行
@@ -10,7 +10,8 @@ NPU 矩阵乘。各投影的位宽由 bit YAML 决定，A16W16 投影保留 BF16
 python -m amct_pytorch.cli.llm.eval \
   --model /path/to/kimi-k3 \
   --model_name kimi_k3 \
-  --eval_mode npu \
+  --eval_mode quant \
+  --real_quant \
   --granularity block \
   --device npu:0 \
   --quant_dtype mxfp \

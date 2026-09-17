@@ -82,7 +82,8 @@ def _pipeline(tmp_path):
 
     pipeline = KimiK3.__new__(KimiK3)
     pipeline.args = SimpleNamespace(
-        eval_mode="npu",
+        eval_mode="quant",
+        real_quant=True,
         quant_dtype="mxfp",
         device="cpu",
         algos=[],
@@ -307,7 +308,7 @@ def test_float_checkpoint_needs_no_format_declaration(tmp_path):
     assert isinstance(block.block_sparse_moe.shared_experts.gate_proj, torch.nn.Linear)
 
 
-def test_cli_npu_mode_and_guards(monkeypatch, tmp_path):
+def test_cli_real_quant_mode_and_guards(monkeypatch, tmp_path):
     import sys
 
     from amct_pytorch.cli.llm.args import parser_gen
@@ -319,22 +320,28 @@ def test_cli_npu_mode_and_guards(monkeypatch, tmp_path):
         "--granularity",
         "block",
         "--eval_mode",
-        "npu",
+        "quant",
+        "--real_quant",
         "--quant_dtype",
         "mxfp",
         "--quant_target",
         "moe",
     ]
     monkeypatch.setattr(sys, "argv", argv)
-    assert parser_gen(command="eval").eval_mode == "npu"
+    args = parser_gen(command="eval")
+    assert args.eval_mode == "quant"
+    assert args.real_quant is True
     monkeypatch.setattr(sys, "argv", argv + ["--granularity", "model"])
     with pytest.raises(ValueError, match="granularity=block"):
         parser_gen(command="eval")
     monkeypatch.setattr(sys, "argv", argv + ["--model_name", "qwen3"])
     with pytest.raises(ValueError, match="model_name=kimi_k3"):
         parser_gen(command="eval")
+    monkeypatch.setattr(sys, "argv", argv + ["--eval_mode", "bf16"])
+    with pytest.raises(ValueError, match="eval_mode=quant"):
+        parser_gen(command="eval")
     monkeypatch.setattr(sys, "argv", argv)
-    with pytest.raises(ValueError, match="only by the eval"):
+    with pytest.raises(ValueError, match="real_quant is supported only by the eval"):
         parser_gen(command="ptq")
 
 
