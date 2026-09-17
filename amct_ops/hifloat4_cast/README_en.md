@@ -66,7 +66,7 @@ hifloat4_cast/
 
 - CANN 9.0.0
 - Python ≥ 3.9
-- PyTorch + torch_npu (matching the corresponding CANN version)
+- PyTorch + TorchNPU (matching the corresponding CANN version)
 
 ## Compilation
 

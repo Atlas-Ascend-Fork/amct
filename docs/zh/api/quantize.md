@@ -131,7 +131,7 @@ quantize(model, config)
 
 原始模型中数据类型为float16（fp16）、bfloat16（bf16）时，可以通过本节介绍的内容，仅权重量化后转换为HIFloat8（HiF8）、float8（fp8）、MXFP4、float4数据格式，通过对权重的压缩，实现模型轻量化。
 
-**注意：** 由于torch_npu暂不支持Ascend 950PR/Ascend 950DT，以下功能特性暂时只支持wts_type: INT8 或 wts_type: INT4。
+**注意：** 由于TorchNPU暂不支持Ascend 950PR/Ascend 950DT，以下功能特性暂时只支持wts_type: INT8 或 wts_type: INT4。
 
 该特性支持的层如下：
 
