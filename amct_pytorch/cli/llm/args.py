@@ -79,11 +79,6 @@ def parser_gen(command=None):
                              'quant rebuilds quant modules and enables quantization by bit-widths.')
     parser.add_argument('--real_quant', action='store_true', default=False,
                         help='Use the Kimi K3 NPU MXFP kernels during quant eval instead of fake quantization.')
-    parser.add_argument('--mxfp_checkpoint_format', default=None,
-                        choices=['e2m1-e8m0', 'e4m3-e8m0', 'mixed-e8m0'],
-                        help='Explicit encoding of prequantized Kimi weights and uint8 E8M0 scales. '
-                             'Not needed for floating checkpoints.')
-
     parser.add_argument("--quant_dtype", type=str, default="", choices=['int', 'mxfp', 'fp', 'bf16'],
                         help='Quantization data type.')
 

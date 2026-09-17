@@ -6,7 +6,7 @@
 
 **Spec:** User-approved design in this task: paired checkpoint weight/scale loading, per-projection bit policy, dynamic activation quantization, isolated Kimi validation.
 
-**Constraints:** Preserve existing workspace changes. No NPU hardware available locally; CPU tests use an explicit operator double and are not hardware validation. First version supports direct quantization and prequantized checkpoints, not PTQ parameter application or cache quantization. Reject unsupported modes explicitly.
+**Constraints:** Preserve existing workspace changes. No NPU hardware available locally; CPU tests use an explicit operator double and are not hardware validation. Kimi real quantization consumes prequantized checkpoints and requires scale for every selected projection; it does not apply PTQ parameters or cache quantization.
 
 - [x] Add failing tests for layout preservation, dispatch, checkpoint validation and mixed precision loading.
 - [x] Implement NPU MXFP Linear and Kimi-specific streaming loader; preserve floating and packed tensor types.

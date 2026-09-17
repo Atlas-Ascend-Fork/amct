@@ -17,7 +17,6 @@ python -m amct_pytorch.cli.llm.eval \
   --quant_dtype mxfp \
   --quant_target moe \
   --bit_config amct_pytorch/configs/kimi_k3_mxfp4_npu.yaml \
-  --mxfp_checkpoint_format e2m1-e8m0 \
   --output_dir ./outputs/kimi_k3_npu
 ```
 
@@ -32,7 +31,7 @@ Kimi 适配器在 `kimi_k3.py` 中按每个投影的完整键名成对读取，�
 
 | 来源 | 权重 | scale | 执行前处理 |
 |---|---|---|---|
-| BF16/FP16/FP32 | `.weight`，逻辑 `[N,K]` | 无 | 转 BF16，在首次使用时按 W4/W8 动态量化并缓存 |
+| BF16/FP16/FP32 | `.weight`，逻辑 `[N,K]` | 无 | 仅用于 YAML 配置为 A16W16 的浮点投影 |
 | MXFP4 | `.weight_packed`，uint8 `[N,K/2]` | `.weight_scale`，uint8 `[N,K/32]` | 保留四位编码，转置后重新打包，不反量化、不重新舍入 |
 | MXFP8 | `.weight`，float8_e4m3fn `[N,K]` | `.weight_scale`，uint8 `[N,K/32]` | 转置低比特权重 |
 
@@ -40,16 +39,9 @@ Kimi 适配器在 `kimi_k3.py` 中按每个投影的完整键名成对读取，�
 不是普通浮点倍率。二维 scale 转为 NPU 所需的
 `[ceil(K/64), N, 2]` 布局，奇数分组补零。
 
-索引文件不能证明编码类型，因此加载低比特模型时需显式声明
-`--mxfp_checkpoint_format`：FP4 使用 `e2m1-e8m0`，FP8 使用
-`e4m3-e8m0`，同时包含两种格式时使用 `mixed-e8m0`。
-这是一项输入格式声明，必须与实际 checkpoint 相符；不会自动猜测 INT4、
-int32 打包、浮点 scale 或其他布局。纯浮点模型不需要该参数。
-
-适配器检查键名配对、有效位宽、dtype、shape、K 的 32 对齐、FP4 的 N 偶数、
-scale 的 E8M0 NaN 编码 255，以及 FP8 权重非有限值。
-文件中已经量化的权重若被配置为 A16W16，或者没有选中对应 quant_target，
-会报冲突，不会偷偷反量化或忽略权重。
+真量化且 YAML 选中的投影必须存在对应 `.weight_scale`；缺失时加载器直接报出
+具体键名。加载器不预检低比特 tensor 的 dtype、shape 或编码，格式错误由
+PyTorch 布局处理或 `torch_npu` 算子报告。
 
 ## 前向计算
 

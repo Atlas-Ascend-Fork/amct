@@ -211,22 +211,6 @@ class KimiK3(BaseModel):
             raise ValueError(f"{name}: real_quant does not support A{bits.a}W{bits.w}")
         return bits.w, bits.a
 
-    @staticmethod
-    def _validate_mx_checkpoint(name, weight, scale, bits, n, k):
-        """K3 canonical E2M1/E4M3 + E8M0 checkpoint contract, before conversion."""
-        if bits not in (4, 8) or k % 32 or (bits == 4 and n % 2):
-            raise ValueError(f"{name}: unsupported MXFP bits or dimensions N={n}, K={k}, bits={bits}")
-        dtype = torch.uint8 if bits == 4 else torch.float8_e4m3fn
-        shape = (n, k // 2 if bits == 4 else k)
-        if weight.dtype != dtype or tuple(weight.shape) != shape:
-            raise ValueError(f"{name}: expected weight {dtype} {shape}, got {weight.dtype} {tuple(weight.shape)}")
-        if scale is None or scale.dtype != torch.uint8 or tuple(scale.shape) != (n, k // 32):
-            raise ValueError(f"{name}: expected uint8 E8M0 scale {(n, k // 32)}")
-        if torch.any(scale == 255).item():
-            raise ValueError(f"{name}: scale contains E8M0 NaN encoding 255")
-        if bits == 8 and not torch.isfinite(weight.float()).all().item():
-            raise ValueError(f"{name}: FP8 weight contains non-finite values")
-
     def _block_npu(self, layer_idx):
         """Stream a mixed checkpoint without constructing full BF16 expert copies.
 
@@ -259,42 +243,25 @@ class KimiK3(BaseModel):
         prefix = self.get_layer_weight_prefix(layer_idx)
         weight_map = self._load_weight_map()
         layer_keys = {name for name in weight_map if name.startswith(prefix)}
-        routes, used = {}, set()
+        routes = {}
         for name in expected:
             key = prefix + name
             module_name = name.rsplit(".", 1)[0]
             packed_key = key.removesuffix(".weight") + ".weight_packed"
             scale_key = key.removesuffix(".weight") + ".weight_scale"
             is_weight = name.endswith(".weight")
-            is_quantized = is_weight and (packed_key in layer_keys or scale_key in layer_keys)
-            if is_quantized:
-                quant = quant_linears.get(module_name)
-                if quant is None:
-                    raise ValueError(f"{key}: quantized checkpoint conflicts with BF16 policy or quant_target")
-                source_key = packed_key if packed_key in layer_keys else key
-                if source_key == packed_key and key in layer_keys:
-                    raise ValueError(f"{key}: ambiguous weight and weight_packed entries")
-                if source_key not in layer_keys or scale_key not in layer_keys:
-                    raise ValueError(f"{key}: missing paired weight or scale: {scale_key}")
-                if (source_key == packed_key) != (quant.w_bits == 4):
-                    raise ValueError(f"{key}: checkpoint packing conflicts with W{quant.w_bits}")
-                required_format = "e2m1-e8m0" if quant.w_bits == 4 else "e4m3-e8m0"
-                declared_format = getattr(self.args, "mxfp_checkpoint_format", None)
-                if declared_format not in (required_format, "mixed-e8m0"):
-                    raise ValueError(
-                        f"{key}: explicitly declare --mxfp_checkpoint_format {required_format}; "
-                        "an index cannot identify FP4/scale encoding"
-                    )
+            quant = quant_linears.get(module_name) if is_weight else None
+            if quant is not None:
+                source_key = packed_key if quant.w_bits == 4 else key
+                if scale_key not in layer_keys:
+                    raise ValueError(f"{key}: real-quantized projection is missing scale {scale_key}")
+                if source_key not in layer_keys:
+                    raise ValueError(f"Missing checkpoint tensor: {source_key}")
                 routes[name] = (source_key, scale_key)
-                used.update((source_key, scale_key))
             else:
                 if key not in layer_keys:
                     raise ValueError(f"Missing checkpoint tensor: {key}")
                 routes[name] = (key, None)
-                used.add(key)
-        unexpected = layer_keys - used
-        if unexpected:
-            raise ValueError(f"Unexpected Kimi checkpoint tensors: {sorted(unexpected)[:5]}")
 
         # Keep file handles open for this layer, but read only one projection at a time.
         with ExitStack() as stack:
@@ -314,9 +281,6 @@ class KimiK3(BaseModel):
                 if scale_key is not None:
                     quant = quant_linears[name.rsplit(".", 1)[0]]
                     scale = read(scale_key)
-                    self._validate_mx_checkpoint(
-                        weight_key, weight, scale, quant.w_bits, quant.out_features, quant.in_features,
-                    )
                     quant.load_quantized(weight, scale)
                     quant.qweight = quant.qweight.to(device)
                     quant.w_scale = quant.w_scale.to(device)

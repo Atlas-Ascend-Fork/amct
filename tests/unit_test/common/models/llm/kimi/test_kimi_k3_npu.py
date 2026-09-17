@@ -28,42 +28,6 @@ def test_packed_layout_preserves_codes_and_scales():
     assert torch.count_nonzero(restored[:, 3]) == 0
 
 
-def test_kimi_rejects_missing_scale():
-    from amct_pytorch.common.models.llm.kimi.kimi_k3.kimi_k3 import KimiK3
-
-    with pytest.raises(ValueError, match="scale"):
-        KimiK3._validate_mx_checkpoint(
-            "expert.w1",
-            torch.zeros(8, 32, dtype=torch.uint8),
-            None,
-            4,
-            8,
-            64,
-        )
-
-
-@pytest.mark.parametrize("bad", ["dtype", "shape", "nan"])
-def test_kimi_rejects_bad_scale(bad):
-    from amct_pytorch.common.models.llm.kimi.kimi_k3.kimi_k3 import KimiK3
-
-    scale = torch.full((8, 2), 127, dtype=torch.uint8)
-    if bad == "dtype":
-        scale = scale.float()
-    elif bad == "shape":
-        scale = scale[:, :1]
-    else:
-        scale[0, 0] = 255
-    with pytest.raises(ValueError, match="scale"):
-        KimiK3._validate_mx_checkpoint(
-            "expert.w1",
-            torch.zeros(8, 32, dtype=torch.uint8),
-            scale,
-            4,
-            8,
-            64,
-        )
-
-
 class _Block(torch.nn.Module):
     def __init__(self, config, layer_idx):
         super().__init__()
@@ -88,7 +52,6 @@ def _pipeline(tmp_path):
         device="cpu",
         algos=[],
         quant_target=["moe"],
-        mxfp_checkpoint_format="e2m1-e8m0",
         bit_policy=BitPolicy(
             {"w_bits": 16, "a_bits": 16, "moe": {"routed": {"w_bits": 4, "a_bits": 4}}}
         ),
@@ -247,26 +210,13 @@ def _write_mixed(tmp_path, *, with_scale=True, bits=4):
 
 
 @pytest.mark.parametrize(
-    "case,match",
-    [
-        ("missing_scale", "missing paired"),
-        ("bf16_policy", "conflicts"),
-        ("mixed_bits", "A8W4"),
-        ("unknown_format", "explicitly declare"),
-        ("wrong_target", "conflicts"),
-    ],
+    "case,match", [("missing_scale", "missing scale"), ("mixed_bits", "A8W4")]
 )
 def test_loader_rejects_conflicting_checkpoint(tmp_path, case, match):
     pipeline = _pipeline(tmp_path)
     _write_mixed(tmp_path, with_scale=case != "missing_scale")
-    if case == "bf16_policy":
-        pipeline.args.bit_policy = BitPolicy()
-    elif case == "mixed_bits":
+    if case == "mixed_bits":
         pipeline.args.bit_policy = BitPolicy({"w_bits": 4, "a_bits": 8})
-    elif case == "unknown_format":
-        pipeline.args.mxfp_checkpoint_format = None
-    elif case == "wrong_target":
-        pipeline.quant_target = []
     with pytest.raises(ValueError, match=match):
         pipeline.block(0)
 
@@ -276,18 +226,14 @@ def test_fp8_checkpoint_preserves_dtype(tmp_path):
     pipeline.args.bit_policy = BitPolicy(
         {"w_bits": 16, "a_bits": 16, "moe": {"routed": {"w_bits": 8, "a_bits": 8}}}
     )
-    pipeline.args.mxfp_checkpoint_format = "e4m3-e8m0"
     _write_mixed(tmp_path, bits=8)
     module = pipeline.block(0).block_sparse_moe.experts[0].w1
     assert module.qweight.dtype == torch.float8_e4m3fn
     assert module.w_scale.dtype == torch.uint8
 
 
-def test_float_checkpoint_needs_no_format_declaration(tmp_path):
-    from amct_pytorch.quantization.dtypes.mxfp import NpuMxLinear
-
+def test_quantized_projection_requires_scale_for_float_weight(tmp_path):
     pipeline = _pipeline(tmp_path)
-    pipeline.args.mxfp_checkpoint_format = None
     prefix = pipeline.get_layer_weight_prefix(0)
     state = {
         prefix + key: value.to(torch.bfloat16)
@@ -301,11 +247,8 @@ def test_float_checkpoint_needs_no_format_declaration(tmp_path):
             }
         )
     )
-    block = pipeline.block(0)
-    assert isinstance(block.block_sparse_moe.experts[0].w1, NpuMxLinear)
-    assert block.block_sparse_moe.experts[0].w1.qweight is None
-    assert block.block_sparse_moe.experts[0].w1.weight.dtype == torch.bfloat16
-    assert isinstance(block.block_sparse_moe.shared_experts.gate_proj, torch.nn.Linear)
+    with pytest.raises(ValueError, match="missing scale"):
+        pipeline.block(0)
 
 
 def test_cli_real_quant_mode_and_guards(monkeypatch, tmp_path):
