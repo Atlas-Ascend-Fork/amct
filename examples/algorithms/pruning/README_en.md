@@ -11,7 +11,7 @@ Qwen3.6-35B-A3B community-task sample.
 ### 1.1 Install Dependencies
 
 Dependencies are in [requirements.txt](requirements.txt): `torch` and `transformers` (pulled in by the
-amct_pytorch import chain). To run on NPU you also need a `torch_npu` matching your Python/torch versions
+amct_pytorch import chain). To run on NPU you also need a `TorchNPU` matching your Python/torch versions
 and an installed CANN package.
 
 ### 1.2 Model and Data Preparation
