@@ -6,7 +6,7 @@
 
 The dependency packages for this sample can be found in [requirements.txt](requirements.txt)
 
-Note that the torch_npu package version needs to match the Python and torch package versions, and the CANN package needs to be installed
+Note that the TorchNPU package version needs to match the Python and torch package versions, and the CANN package needs to be installed
 
 ### 1.2 Model and Dataset Preparation
 
@@ -14,6 +14,7 @@ This sample uses Llama2-7b, qwen2-7b, and qwen3-8b models with pileval data and 
 Please download the models yourself and pass the model path to the script. The dataset is loaded online.
 
 ### 1.3 Simple Quantization Configuration
+
 The quantization configuration used in this sample is built into the tool and can be obtained and used in the following ways:
 
 `from amct_pytorch import HIFP8_OFMR_CFG`
@@ -52,7 +53,6 @@ python3 src/run_qwen_samples.py --model_path=/data/Qwen2-7b/
 python3 src/run_qwen_samples.py --model_path=/data/Qwen3-8B/
 ```
 
-
 If the following information appears, it indicates that quantization is successful:
 
 ```none
@@ -62,7 +62,7 @@ Score:  5.477707
 
 Where Score is the quantized model PPL. For specific values, refer to the following table:
 
-| Model | Calibration Set | Dataset | Pre-quantization PPL | Post-quantization PPL | 
+| Model | Calibration Set | Dataset | Pre-quantization PPL | Post-quantization PPL |
 | :-: | :-: | :-: | :-: | :-: |
 |LLAMA2-7B|pileval|wikitext2|5.472|5.505|
 |QWEN2-7B|pileval|wikitext2|7.137|7.196|

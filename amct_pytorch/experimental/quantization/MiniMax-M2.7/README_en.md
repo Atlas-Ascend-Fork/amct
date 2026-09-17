@@ -55,7 +55,7 @@ The three stages are:
 
 Recommended container: `quay.io/ascend/vllm-ascend:v0.18.0rc1-a3`
 
-Use the container-bundled `torch` / `torch_npu`; install the remaining Python
+Use the container-bundled `torch` / `TorchNPU`; install the remaining Python
 dependencies from `requirements.txt`:
 
 ```bash
