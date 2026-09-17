@@ -6,13 +6,14 @@
 
 本sample依赖包可参考[requirements.txt](requirements.txt)
 
-需要注意的是torch_npu包版本需要与Python、torch包版本相匹配，需要安装CANN包
+需要注意的是TorchNPU包版本需要与Python、torch包版本相匹配，需要安装CANN包
 
 ### 1.2 模型和数据集准备
 
 本sample以Llama2-7b，qwen2-7b，qwen3-8b模型，pileval数据，wikitext2数据集为示例, 数据为在线加载，模型需要用户自己下载并在执行脚本时指定模型路径。
 
 ### 1.3 简易量化配置
+
 本sample中使用的量化配置已经内置在工具中，可以通过下述方式获取并使用：
 
 HIF8全量化配置：
@@ -89,6 +90,5 @@ Score:  5.477707
 | LLAMA2-7B | pileval | wikitext2 | 5.472　　 | 5.507　　 |
 | QWEN2-7B　| pileval | wikitext2 | 7.137　　 | 7.169　　 |
 | QWEN3-8B　| pileval | wikitext2 | 9.715　　 | 9.760　　 |
-
 
 推理成功后，在当前目录会生成量化日志文件./amct_log/amct_pytorch.log

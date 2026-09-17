@@ -122,7 +122,7 @@ svd_quant/            # SVDQuant components
 
 - CANN ≥ 9.0.0
 - Python ≥ 3.9
-- PyTorch + torch_npu（适配对应 CANN 版本）
+- PyTorch + TorchNPU（适配对应 CANN 版本）
 
 ## 编译与使用说明
 
@@ -196,7 +196,7 @@ svd_quant_out = torch.ops.amct.svd_quant(x, w_quant, scale,  dp, up)
 通过以下条件进行准确性验证：
 
 **黄金数据**: 在低秩和低精度分支上，基于随机BF16数据（激活和权重张量）计算，使用反量化后的激活和权重  
-**MxFp4 权重**: 初步计算使用 `torch_npu` 中的 `npu_dynamic_mx_quant` 算子，参数为 `block_size=32` 和 `round_mode="round"`。  
+**MxFp4 权重**: 初步计算使用 `TorchNPU` 中的 `npu_dynamic_mx_quant` 算子，参数为 `block_size=32` 和 `round_mode="round"`。  
 **相对耐受性**: 阈值设置为 `1e-02`  
 
 ## 测试方法
