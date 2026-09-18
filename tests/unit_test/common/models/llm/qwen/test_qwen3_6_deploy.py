@@ -13,8 +13,12 @@ from amct_pytorch.common.models.llm.common.deploy_selection import (
     DeploySelection,
     build_ascend_deploy_plan,
 )
+from amct_pytorch.common.models.llm.common.packed_expert_export import (
+    PackedGatedExpertLayout,
+)
 from amct_pytorch.common.models.llm.qwen.qwen3_6.qwen3_6_moe import Qwen3_6Moe
 from amct_pytorch.quantization.bit_policy import BitPolicy
+from amct_pytorch.workflows.llm_deploy import LlmDeployWorkflow
 
 
 def _adapter():
@@ -56,7 +60,8 @@ def test_virtual_inventory_expands_packed_experts_for_json_selection():
         ("model.language_model.layers.*.self_attn.o_proj",),
     )
 
-    plan = build_ascend_deploy_plan(weight_map, selection, adapter)
+    layout = PackedGatedExpertLayout(num_experts=2, moe_intermediate_size=3)
+    plan = build_ascend_deploy_plan(layout.expand_weight_map(weight_map), selection, adapter)
 
     assert len(plan.selected_modules) == 9
     assert (
@@ -66,8 +71,34 @@ def test_virtual_inventory_expands_packed_experts_for_json_selection():
     assert not any(name.endswith("o_proj") for name in plan.selected_modules)
 
 
-def test_expand_packed_expert_tensors_uses_vllm_checkpoint_names():
+def test_workflow_detects_packed_experts_without_qwen_specific_expand_hooks():
     adapter = _adapter()
+    weight_map = {
+        "model.language_model.layers.0.mlp.experts.gate_up_proj": "a.safetensors",
+        "model.language_model.layers.0.mlp.experts.down_proj": "a.safetensors",
+    }
+    workflow = LlmDeployWorkflow.__new__(LlmDeployWorkflow)
+    workflow.pipeline = adapter
+    workflow.args = SimpleNamespace(
+        deploy_selection=DeploySelection(
+            (
+                "model.language_model.layers.*.mlp.experts.*.gate_proj",
+                "model.language_model.layers.*.mlp.experts.*.up_proj",
+                "model.language_model.layers.*.mlp.experts.*.down_proj",
+            )
+        ),
+        quant_target=None,
+    )
+
+    plan = workflow._prepare_ascend_deploy_plan({"weight_map": weight_map})
+
+    assert not hasattr(adapter, "expand_ascend_deploy_weight_map")
+    assert not hasattr(adapter, "expand_ascend_deploy_tensors")
+    assert workflow.ascend_checkpoint_layout.num_experts == 2
+    assert len(plan.selected_weight_keys) == 6
+
+
+def test_expand_packed_expert_tensors_uses_vllm_checkpoint_names():
     gate_up = torch.arange(2 * 6 * 4, dtype=torch.bfloat16).reshape(2, 6, 4)
     down = torch.arange(2 * 4 * 3, dtype=torch.bfloat16).reshape(2, 4, 3)
     state_dict = {
@@ -76,7 +107,9 @@ def test_expand_packed_expert_tensors_uses_vllm_checkpoint_names():
         "model.language_model.layers.0.mlp.gate.weight": torch.ones(2, 4),
     }
 
-    expanded = adapter.expand_ascend_deploy_tensors(state_dict)
+    expanded = PackedGatedExpertLayout(
+        num_experts=2, moe_intermediate_size=3
+    ).expand_tensors(state_dict)
 
     assert "model.language_model.layers.0.mlp.experts.gate_up_proj" not in expanded
     assert torch.equal(
@@ -95,13 +128,14 @@ def test_expand_packed_expert_tensors_uses_vllm_checkpoint_names():
 
 
 def test_expand_mtp_packed_experts_for_float_output():
-    adapter = _adapter()
     state_dict = {
         "mtp.layers.0.mlp.experts.gate_up_proj": torch.ones(2, 6, 4),
         "mtp.layers.0.mlp.experts.down_proj": torch.ones(2, 4, 3),
     }
 
-    expanded = adapter.expand_ascend_deploy_tensors(state_dict)
+    expanded = PackedGatedExpertLayout(
+        num_experts=2, moe_intermediate_size=3
+    ).expand_tensors(state_dict)
 
     assert "mtp.layers.0.mlp.experts.gate_up_proj" not in expanded
     assert "mtp.layers.0.mlp.experts.0.gate_proj.weight" in expanded
