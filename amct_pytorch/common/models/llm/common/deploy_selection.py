@@ -151,8 +151,11 @@ def validate_ascend_deploy_args(args) -> None:
         return
     if not selection_path:
         raise ValueError("Ascend deployment requires --quant_layers_config")
+    if getattr(args, "model_name", None) not in {"glm5_2", "qwen3_6_moe"}:
+        raise ValueError(
+            "Ascend deployment requires --model_name one of ['glm5_2', 'qwen3_6_moe']"
+        )
     for key, expected in (
-        ("model_name", "glm5_2"),
         ("granularity", "tensor"),
         ("quant_dtype", "int"),
     ):

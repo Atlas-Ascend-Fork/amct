@@ -49,6 +49,9 @@ from amct_pytorch.common.models.llm.common.deploy_selection import (
 from amct_pytorch.common.models.llm.common.deploy_validation import (
     validate_ascend_artifacts,
 )
+from amct_pytorch.common.models.llm.common.packed_expert_export import (
+    detect_packed_gated_expert_layout,
+)
 from amct_pytorch.common.models.llm.common.weight_path_validation import (
     collect_safetensors_files,
     resolve_safetensors_path,
@@ -73,6 +76,7 @@ class LlmDeployWorkflow:
         self.is_mx = self.quant_dtype.startswith("mx")
         self.is_int = self.quant_dtype.startswith("int")
         self.is_hif = self.quant_dtype.startswith("hif")
+        self.ascend_checkpoint_layout = None
 
     @staticmethod
     def _is_weight_file(path: Path) -> bool:
@@ -392,8 +396,16 @@ class LlmDeployWorkflow:
             for name in original_index["weight_map"]
         ):
             raise ValueError("Ascend source contains rotation weights")
+        self.ascend_checkpoint_layout = detect_packed_gated_expert_layout(
+            original_index["weight_map"], getattr(self.pipeline, "config", None)
+        )
+        plan_weight_map = original_index["weight_map"]
+        if self.ascend_checkpoint_layout is not None:
+            plan_weight_map = self.ascend_checkpoint_layout.expand_weight_map(
+                plan_weight_map
+            )
         self.ascend_deploy_plan = build_ascend_deploy_plan(
-            original_index["weight_map"], self.args.deploy_selection, self.pipeline
+            plan_weight_map, self.args.deploy_selection, self.pipeline
         )
         if getattr(self.args, "quant_target", None):
             logger.warning("Ascend JSON selection overrides quant_target")
@@ -413,6 +425,14 @@ class LlmDeployWorkflow:
         )
         current_state_dict = load_file(str(source_path), device="cpu")
         is_ascend = getattr(self.args, "deploy_format", "legacy") == "ascend"
+        checkpoint_layout = getattr(self, "ascend_checkpoint_layout", None)
+        if is_ascend and checkpoint_layout is not None:
+            selected_weight_keys = getattr(
+                getattr(self, "ascend_deploy_plan", None), "selected_weight_keys", None
+            )
+            current_state_dict = checkpoint_layout.expand_tensors(
+                current_state_dict, selected_weight_keys
+            )
         if not is_ascend:
             loaded_files[source_file] = current_state_dict
 
