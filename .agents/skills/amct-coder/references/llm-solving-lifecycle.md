@@ -63,7 +63,8 @@ workflow -> adapter PtqUnit + provider batch/GT
 本节是快照。事实附「核对」命令；作为落点依据前先执行，结果与断言冲突时以命令结果为准并更新本节。命令失效（符号搜不到）本身即过期信号。
 
 - `global_solver.py` 文件存在且有注册装饰器，但当前 `register_solvers()` 只导入 `BlockwiseSolver`，主流程接通的是 `block`。（核对：`rg -n -A4 "def register_solvers" amct_pytorch/common/optimization/__init__.py`）
-- `llm_ptq.run()` 当前在 granularity 分支前先查 registry；`model` 分支虽存在，但 `_run_modelwise()` 仍是占位并抛出“不支持”异常。（核对：`rg -n "SOLVER_REGISTRY.get|_run_modelwise" amct_pytorch/workflows/llm_ptq.py`）
+- `llm_ptq.run()` 当前在 granularity 分支前先查 registry。（核对：`rg -n "SOLVER_REGISTRY.get" amct_pytorch/workflows/llm_ptq.py`）
+- `model` 分支虽存在，但 `_run_modelwise()` 仍是占位、无条件抛 `ValueError`，即当前默认值对 ptq 不可用。（核对：`grep -n -A3 "def _run_modelwise" amct_pytorch/workflows/llm_ptq.py`，应看到 `raise ValueError`）
 - CLI 默认值应与已注册且可执行的 `block` 一致；当前 `--granularity` 默认值与已注册 solver 的差距是待核验事实，不是已冻结契约。（核对：`rg -n -A3 "granularity" amct_pytorch/cli/llm/args.py`）
 
 ### 当前训练保存活跃链

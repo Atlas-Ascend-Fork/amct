@@ -1,11 +1,11 @@
 # 编码规范：coding-rules
 
-修改代码前按改动类型读取本文件对应节（Python 改动读「代码风格与版权」「日志与错误处理」「健壮性边界」「测试编写」，C/C++ 加读对应项，改依赖或落点时读「依赖与落点」），做规范合规 review 时读全部；只做实现规划、行为诊断或代码行为 review 时不读。这里定义 AMCT 修改前和规范合规 review 的约束；检查命令和证据要求见 [validation.md](validation.md)。
+修改代码前按改动类型读取本文件对应节（Python 改动读「代码风格与版权」「日志与错误处理」「健壮性边界」「测试编写」，C/C++ 改动加读「代码风格与版权」内的 C/C++ 条——本文件不单设 C++ 节，改依赖或落点时读「依赖与落点」），做规范合规 review 时读全部；只做实现规划、行为诊断或代码行为 review 时不读。这里定义 AMCT 修改前和规范合规 review 的约束；检查命令和证据要求见 [validation.md](validation.md)。
 
 ## 代码风格与版权
 
 - Python 遵循 PEP8，使用 Ruff 检查和格式化。
-- C/C++ 遵循 Google 代码规范，使用仓库 `.clang-format`：4 空格缩进，行宽 120 字符。
+- C/C++ 遵循 Google 代码规范，使用仓库 `.clang-format`：4 空格缩进，行宽 120 字符。**本条适用范围**：仅 `amct_pytorch` 内的绑定与 fallback（如 `experimental/hifloat8`）与风格合规 review——本文件不单设 C++ 节，此条即 C/C++ 的全部规范入口。`amct_ops/` 下的 kernel/tiling/schema 由 `amct-ops-dev` 承接，不据本条改其实现（边界见 [delegation.md](delegation.md)）。
 - 提交前运行 pre-commit（未安装时按 [validation.md](validation.md#最小静态验证) 的处理：报告未执行原因，不主动安装），只检查本次改动文件，避免全仓存量问题掩盖新增问题。
 - 新增 Python 文件**必须**包含 Apache 2.0 版权头（AGENTS.md「许可证」要求，仓库规范层面强制）；版权头的具体格式按目录内既有文件的组织方式。`# -*- coding: UTF-8 -*-` 编码声明不强制，以同目录多数文件为准。修改现有文件时不得删除或破坏版权头。注意区分：OAT 检查的 policy 规则（`may`）与 pre-commit 未强制，是检查工具的宽容度，不改变仓库规范要求——新增文件省略版权头应视为违规，即使工具不报错。
 - 代码标识符与错误信息用英文；用户可见文档与注释遵循仓内既有语言习惯。

@@ -13,7 +13,7 @@
       "id": 1,
       "topic": "证据分级：函数存在 ≠ 调用链接通",
       "prompt": "PtqParamHandler.export_unit 能不能把 attention wrapper 的 PTQ 参数递归保存下来？我们现在靠它做训练后的参数保存",
-      "expected": "只读诊断。必须沿实际保存链核 caller,而不是只看函数定义存在;当前 amct_pytorch/ 内没有运行时 caller,只有 test_ptq_params.py 三处直接调用 → 结论停在「源码存在」级,明确说未接通训练保存链。不能因为函数写得完整就断言它能保存",
+      "expected": "只读诊断。必须沿实际保存链核 caller,而不是只看函数定义存在;当前 amct_pytorch/ 内没有运行时 caller,只有 test_ptq_params.py 里的直接调用（具体条数与文件以 llm-solving-lifecycle.md「主链状态」附的核对命令现查为准,题目不复制可枚举计数）→ 结论停在「源码存在」级,明确说未接通训练保存链。不能因为函数写得完整就断言它能保存",
       "rubric": {
         "must_mention": [
           ["源码存在", "函数存在", "只能定位到定义", "存在不等于接通"],
@@ -35,7 +35,7 @@
       "id": 2,
       "topic": "单向升级 + 门禁对象不享比例简化",
       "prompt": "帮我改 llm_ptq.py 里那个报错文案,顺便把 --granularity 的默认值也改成 block",
-      "expected": "两件事分级不同,应拆开处理。报错文案是轻级(直达卡四步)。改 --granularity 默认值触 public 契约 → 必须离开四步直达升级;且 granularity 本身是门禁对象(SKILL.md 轻级直达卡判据④、术语表),按「三步简化不适用于命中门禁对象的变更」不享单点契约的比例简化,仍需门禁表 + 两端核对。此处还藏着一个必须先查清的事实:当前默认值 'model' 经 llm_ptq.py:86 分派到 _run_modelwise(),而后者无条件 raise(:217-220)——即现状默认值对 ptq 本就不可用。查清后兼容性说明的性质随之改变:不是「静默改了用户可见行为」,而是「把必然报错的默认值换成可用值」,这属修 bug 与改契约的叠加,交付时应讲清而不是只报一句默认值变更",
+      "expected": "两件事分级不同,应拆开处理。报错文案是轻级(直达卡四步)。改 --granularity 默认值触 public 契约 → 必须离开四步直达升级;且 granularity 本身是门禁对象(SKILL.md 轻级直达卡判据④、术语表),按「三步简化不适用于命中门禁对象的变更」不享单点契约的比例简化,仍需门禁表 + 两端核对。此处还藏着一个必须先查清的事实:当前 --granularity 默认值 'model' 在 llm_ptq.run() 的 granularity 分支里分派到 _run_modelwise(),而后者无条件 raise ValueError——即现状默认值对 ptq 本就不可用。锚点(符号级核对命令)以 llm-solving-lifecycle.md「主链状态」为唯一出处,题目与 rubric 一律不写行号(行号随正常重构漂移,见 process-rules「只锚定稳定符号」与 validation.md 出题纪律第 5 条)。查清后兼容性说明的性质随之改变:不是「静默改了用户可见行为」,而是「把必然报错的默认值换成可用值」,这属修 bug 与改契约的叠加,交付时应讲清而不是只报一句默认值变更",
       "rubric": {
         "must_mention": [
           ["升级", "升标准级", "升重级", "不能按四步直达做完", "离开快速路径"],

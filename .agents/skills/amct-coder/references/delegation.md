@@ -19,6 +19,7 @@
 | --- | --- | --- |
 | 模型层 | 已有 adapter/wrapper 的局部非结构 bug、契约 review | 新模型注册、`PtqUnit`/quant block、attention/MLP/MoE wrapper 的新增或结构性修改由 `model-adapter` skill 承接 |
 | NPU 算子 | `amct_pytorch` 调用、可选 import、fallback 和报错时机 | Ascend C kernel、C++ extension、schema、Meta、构建和 wheel 由 `amct-ops-dev` 承接 |
+| classic / graph_based | 其 **public 面**：导出与懒加载（`__getattr__`）、packaging 清单、文档承诺的一致性（主手册 `public-api-packaging`） | 具体量化实现（classic custom algorithm/config、graph pass、`quantize`/`convert` 的算法语义）无对应 skill，本 skill 也不承接——frontmatter 的「不用于 classic/graph_based」指实现侧，不指 public 面 |
 | eval/extract/PTQ | workflow、data I/O、PPL 等实现代码 | 实际运行命令、生成实验结果和结果判读由当前发现的执行或 reviewer skill 承接 |
 | deploy | deploy workflow、safetensors/index/config 等实现代码 | 实际生成 deploy-ready 目录和交付文档由当前发现的导出 skill 承接 |
 
