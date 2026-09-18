@@ -20,7 +20,7 @@
     {
       "id": 4,
       "prompt": "这个报错信息没说传了什么参数,帮我改一下报错文案",
-      "expected": "quick-path/轻级:普通局部修复,五步路径,不读 process-rules/repo-map"
+      "expected": "quick-path/轻级:普通局部修复,五步路径,不读 process-rules/repo-map/主手册（SKILL.md 分级表下注的主手册豁免）;豁免只免读取,轻级判据①~④与 BLOCKER 仍适用"
     },
     {
       "id": 5,

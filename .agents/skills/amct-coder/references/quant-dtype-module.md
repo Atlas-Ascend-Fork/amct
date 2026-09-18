@@ -99,7 +99,7 @@ PRODUCE（本子能力的产出物）：`DTYPE_REGISTRY` 条目、quantizer 实�
 - INT activation 当前是 dynamic per-token；INT weight 当前是 per-row scale。INT4 real quant 还会 packing 并生成辅助 bias。（核对：`rg -n "dynamic_per_token_quant|weight_quant|real_quant=True" amct_pytorch/quantization/dtypes/int.py`）
 - MXFP 当前 block size 为 32；8 bit 输出 float8 payload，4 bit 输出 packed E2M1 和共享指数 scale。（核对：`rg -n "block_size|float8|f32_to_f4" amct_pytorch/quantization/dtypes/mxfp.py`）
 - HiFp 当前只支持 4/8/16 bit：16 直通，8/4 走 fake quant；`export_deploy()` 只实现 4 bit（value + scale payload），8 bit 抛 `NotImplementedError`。`__init__` 接受 `is_act` 但不消费，weight 与 activation 是同一套 fake quant 语义，不像 INT 有 `is_act` 分流。（核对：`rg -n "is_act|bits == 16|export_deploy|NotImplementedError" amct_pytorch/quantization/dtypes/hifp.py`）
-- CLI `--quant_dtype` 当前 choices 为 `int`、`mxfp`、`hifp`。（核对：`rg -n -A2 "quant_dtype" amct_pytorch/cli/llm/args.py`）
+- CLI `--quant_dtype` 当前 choices 为 `int`、`mxfp`、`hifp`。（核对：`rg -n -A4 "quant_dtype" amct_pytorch/cli/llm/args.py`，`-A4` 才能覆盖到 `choices` 行）
 - 算法侧存在 hifp 分支：AutoRound 以 `quant_dtype == "hifp"` 进入 HiF4 分支（仅 4 bit，group size 整除约束），GPTQ 以 `wts_type == 'hifloat4'` 判断；这些是精确名称匹配，不是 `startswith` 前缀类。int 类精确匹配点当前只接受 `"int"`（AutoRound `_get_group_size`、GPTQ `__init__`）。（核对：`rg -n '"hifp"|hifloat4|quant_dtype' amct_pytorch/algorithms/quant/auto_round.py amct_pytorch/algorithms/quant/gptq.py`）
 - deploy 同时存在 `startswith("mx"/"int"/"hif")` 分类和 tensorwise `quant_dtype in ["int", "mxfp"]` 精确分支；新名字必须逐处判断，不能只更新 CLI。（核对：`rg -n 'startswith\(|quant_dtype in' amct_pytorch/workflows/llm_deploy.py`）
 - `generate_quant_config()` 当前以 `is_mx` 二分 float/int 格式；新类别不能默认套入任一侧。（核对：`rg -n -A3 "def generate_quant_config" amct_pytorch/common/models/llm/common/deploy_export.py`）
