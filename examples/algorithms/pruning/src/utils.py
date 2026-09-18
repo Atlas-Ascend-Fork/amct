@@ -24,6 +24,10 @@ network access or an NPU:
 
 from __future__ import annotations
 
+import json
+import importlib.util
+from pathlib import Path
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -161,3 +165,114 @@ def num_experts(m):
 
 def count_params(m):
     return sum(p.numel() for p in m.parameters())
+
+
+def _disable_torchaudio_for_transformers():
+    """Make transformers treat torchaudio as unavailable in this process.
+
+    Some environments ship a torchaudio build whose import crashes while
+    transformers is importing RNNT losses. Qwen3.6 does not need torchaudio,
+    so we mask it out instead of touching the system package.
+    """
+
+    if getattr(importlib.util.find_spec, "_amct_torchaudio_patched", False):
+        return
+
+    original_find_spec = importlib.util.find_spec
+
+    def _find_spec(name, package=None):
+        if name == "torchaudio":
+            return None
+        return original_find_spec(name, package)
+
+    _find_spec._amct_torchaudio_patched = True  # type: ignore[attr-defined]
+    importlib.util.find_spec = _find_spec
+
+
+def load_qwen36_moe(
+    model_path,
+    torch_dtype=torch.bfloat16,
+    trust_remote_code=True,
+    device_map=None,
+):
+    _disable_torchaudio_for_transformers()
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_path, trust_remote_code=trust_remote_code
+    )
+    model = AutoModelForCausalLM.from_pretrained(
+        model_path,
+        torch_dtype=torch_dtype,
+        trust_remote_code=trust_remote_code,
+        low_cpu_mem_usage=True,
+        device_map=device_map,
+    ).eval()
+    return model, tokenizer
+
+
+def build_pileval_batches(tokenizer, n_samples, seq_len):
+    from amct_pytorch.common.datasets.preproc import get_pileval
+
+    return get_pileval(tokenizer, n_samples=n_samples, seq_len=seq_len)
+
+
+def build_wikitext2_batches(tokenizer, seq_len=4096):
+    from amct_pytorch.common.datasets.preproc import get_wiki_inputs
+
+    return get_wiki_inputs(tokenizer, seq_len=seq_len)
+
+
+def iter_model_logits(model, batches, device="cpu"):
+    with torch.inference_mode():
+        for batch in batches:
+            outputs = model(batch.to(device))
+            yield outputs.logits[:, :-1, :].contiguous()
+
+
+def eval_wikitext2_ppl(model, batches, seq_len=4096, device="cpu"):
+    """Evaluate WikiText2 PPL on the device where logits actually land.
+
+    ``device`` is where model inputs are placed. For accelerate-dispatched
+    models outputs come back on the same device, but for sharded models
+    without dispatch hooks logits may stay on the lm_head device; the first
+    logits chunk is probed and the evaluation then runs on that device.
+    """
+    from amct_pytorch.common.evaluate.eval_ppl import wikitext2_ppl
+
+    logits_iter = iter_model_logits(model, batches, device=device)
+    first = next(logits_iter, None)
+
+    def _chained():
+        if first is not None:
+            yield first
+        yield from logits_iter
+
+    eval_device = str(first.device) if first is not None else device
+    return wikitext2_ppl(
+        _chained(),
+        batches,
+        device=eval_device,
+        seq_len=seq_len,
+    )
+
+
+class NegativePplEvaluator:
+    def __init__(self, batches, seq_len=4096, device="cpu"):
+        self.batches = batches
+        self.seq_len = seq_len
+        self.device = device
+
+    def evaluate(self, model):
+        return -eval_wikitext2_ppl(
+            model,
+            self.batches,
+            seq_len=self.seq_len,
+            device=self.device,
+        )
+
+
+def dump_json(path, payload):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")

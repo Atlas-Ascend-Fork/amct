@@ -959,13 +959,21 @@ AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模
 
 - 稀疏敏感度：稀疏敏感度定义为当前通道稀疏后对整网精度的影响估计，稀疏敏感度越大代表当前通道稀疏后整网精度损失越大，默认算法根据loss\(w - w<sub>i</sub>\)的泰勒展开计算通道稀疏敏感度。支持用户自定义计算方式。裁剪第i个通道后，稀疏敏感度计算公式如下：
 
-  ![](./zh/figures/zh-cn_formulaimage_0000002548697367.png)
+  $$
 
+  v_i=loss(w)-loss(w-W_i)
+
+  $$
+  
   采用近似估计的方法对loss\(w - w<sub>i</sub>\)进行泰勒展开，目前考虑到计算量只算一阶。
 
 - 稀疏收益：当前通道的稀疏收益用比特复杂度表示，为计算量化Flops与计算比特位宽之积：
 
-  ![](./zh/figures/zh-cn_formulaimage_0000002517217588.png)
+  $$
+
+  bit\_complexity = Flops \times act\_bit \times wts\_bit
+
+  $$
 
   其中，Flops为浮点计算量，act\_bit为数据的数据精度，wts\_bit为权重的数据精度。
 

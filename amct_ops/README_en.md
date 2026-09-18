@@ -1,12 +1,16 @@
 # amct_ops — AMCT NPU Custom Operators
 
+English | [简体中文](./README.md)
+
 ## Introduction
 
 **Positioning**:
-- `amct_ops` is the NPU custom operator layer of AMCT, responsible for carrying hardware-level operators such as low-bit quantization and data type conversion that PyTorch / torch_npu has not yet covered.
+
+- `amct_ops` is the NPU custom operator layer of AMCT, responsible for carrying hardware-level operators such as low-bit quantization and data type conversion that PyTorch / TorchNPU has not yet covered.
 - Unlike `amct_pytorch/` which focuses on quantization algorithms and compression process orchestration, `amct_ops` is closer to the underlying hardware implementation.
 
 **Independent Advantages**:
+
 - **Clear Responsibilities**: `amct_pytorch` calls operators through Python interfaces or `torch.ops.amct` without needing to pay attention to details such as Ascend C kernel, C++ extension, and CMake compilation
 - **Independent Development**: Operators can be developed, built, and tested as independent modules, avoiding mixing kernel and build logic in the main algorithm directory
 - **Flexible Extension**: When adding new low-bit types, quantization auxiliary operators, or adjusting NPU implementations, they do not interfere with each other
@@ -14,20 +18,21 @@
 **Division of Labor with `amct_pytorch/`**:
 
 | Dimension | `amct_pytorch/` | `amct_ops/` |
-|------|-----------------|------------|
+| ------ | ----------------- | ------------ |
 | Focus | Compression algorithms and process orchestration | Operator underlying implementation |
 | Language | Python | Ascend C kernel & C++ binding & Python interface |
 | Product | .tar.gz package (source code compression package) | wheel package (containing .so & Python interface) |
 | Reusability | Bound to AMCT process | Independent PyTorch extension, not strongly dependent on AMCT main process |
 
 **Usage**:
+
 - Independently installable PyTorch extension package (wheel format)
 - Supports two interfaces: `amct_ops.<op>` and `torch.ops.amct.<op>`
 
 ## Supported Operators
 
 | Operator | Description | Python Interface |
-|------|------|-------------|
+| ------ | ------ | ------------- |
 | [`hifloat8_cast`](./hifloat8_cast/) | FP16 / BF16 ↔ HiFloat8 bidirectional conversion | `encode_to_hifloat8(x)`<br>`decode_from_hifloat8(x, dtype)` |
 | [`hifloat4_cast`](./hifloat4_cast/) | FP16 / BF16 → HiFloat4 simulation (fake-quant, 64-element block scaling) | `hifloat4_fake_quant(x, qdim=-1)` |
 
@@ -52,9 +57,9 @@ All operators are compiled and packaged as wheel through the unified build scrip
 ### Dependency Requirements
 
 | Dependency | Version |
-|------|------|
+| ------ | ------ |
 | Python | >=3.9 |
-| PyTorch | 2.7.1 or 2.1.0 (requires matching `torch_npu`) |
+| PyTorch | 2.7.1 or 2.1.0 (requires matching `TorchNPU`) |
 | GCC / CMake | ≥ 7.3 / ≥ 3.16 (recommended 3.20) |
 | CANN (Toolkit & Ops) | ≥ 9.0.0 (requires pre-installed NPU driver / firmware) |
 
@@ -146,11 +151,12 @@ After adding, no need to modify `ops_build.sh` or `setup.py`; the build script w
 
 ### Namespace Constraints
 
-**All operators must be registered in the `amct` namespace**—consistent with the `amct_ops` package name, making it easy for callers to distinguish AMCT custom operators from `torch_npu` upstream operators.
+**All operators must be registered in the `amct` namespace**—consistent with the `amct_ops` package name, making it easy for callers to distinguish AMCT custom operators from `TorchNPU` upstream operators.
 
 - C++ side: `TORCH_LIBRARY_FRAGMENT(amct, m)` + `TORCH_LIBRARY_IMPL(amct, PrivateUse1, m)`
 - Python side: `torch.ops.amct.<operator_name>` or module import `from amct_ops.xxx import ...`
 - Operator names must be unique within `amct`. Before adding, check whether `torch.ops.amct` already has an operator with the same name.
 
 ## References
+
 [cann/ops-nn Operator Development Guide](https://gitcode.com/cann/ops-nn/blob/master/docs/zh/develop/torch_extension_develop_guide.md)

@@ -149,6 +149,9 @@ class AutoRound(QuantAlgorithmBase):
             group_size = -1
         elif args.quant_dtype == "mxfp":
             group_size = 32
+        elif args.quant_dtype == "fp":
+            # AutoRound only support 1x128 shape now
+            group_size = 128
         elif args.quant_dtype == "hifp":
             group_size = 64
         else:

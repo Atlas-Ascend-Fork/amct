@@ -198,6 +198,16 @@ class TestParamPool(unittest.TestCase):
 
 
 class TestContainerFields(unittest.TestCase):
+    def test_linear_channel_wise_is_allowed_but_disabled_by_default(self):
+        F.PARAM_POOL.clear()
+        F.PARAM_POOL.set_layer_type({'linear': 'Linear'})
+        F.PARAM_POOL.set_layer_name('linear')
+        field = _f(F.ChannelWiseField)
+
+        field.check('channel_wise', True)
+        self.assertFalse(field.default_value())
+        F.PARAM_POOL.clear()
+
     def test_skip_fusion_layers_field(self):
         F.PARAM_POOL.clear()
         F.PARAM_POOL.set_layer_type({'conv1': 'Conv2d', 'relu1': 'ReLU'})

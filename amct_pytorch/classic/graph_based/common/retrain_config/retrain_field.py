@@ -289,10 +289,7 @@ class ChannelWise(ConfigItem):
     def build(self, val, extra):
         '''inner method'''
         self.check_type('ChannelWise', val, bool, extra[0])
-        if (
-            extra[1] in ['Linear', 'MatMul', 'InnerProduct', 'Pooling', 'AvgPool']
-            and val is True
-        ):
+        if extra[1] in ['MatMul', 'InnerProduct', 'Pooling', 'AvgPool'] and val is True:
             raise ValueError(' %s layer can not be channewised' % extra[0])
         self.value = val
 

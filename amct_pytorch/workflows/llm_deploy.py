@@ -45,6 +45,7 @@ from amct_pytorch.common.models.llm.common.weight_path_validation import (
     validate_weight_map,
 )
 from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
+from amct_pytorch.common.utils.seed_utils import seed_everything
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY, register_dtype
 
 
@@ -54,6 +55,20 @@ class LlmDeployWorkflow:
     def __init__(self, args):
         self.args = args
         self.granularity = args.granularity
+        if self.granularity not in ("block", "tensor"):
+            raise ValueError(
+                f"deploy only supports granularity 'block' or 'tensor', "
+                f"got '{self.granularity}'."
+            )
+        if self.granularity == "block":
+            if not args.quant_target:
+                raise ValueError(
+                    "deploy with --granularity block requires: --quant_target."
+                )
+            if not args.quant_dtype:
+                raise ValueError(
+                    "deploy with --granularity block requires: --quant_dtype."
+                )
         self.pipeline = None
         self.model_name = args.model_name
         self.model_path = args.model
@@ -63,6 +78,8 @@ class LlmDeployWorkflow:
         self.is_mx = self.quant_dtype.startswith("mx")
         self.is_int = self.quant_dtype.startswith("int")
         self.is_hif = self.quant_dtype.startswith("hif")
+        self.seed = args.seed
+        seed_everything(self.seed)
 
     @staticmethod
     def _is_weight_file(path: Path) -> bool:
@@ -330,7 +347,14 @@ class LlmDeployWorkflow:
                 new_weight_name = weight_name.rsplit(".", 1)[0]
                 if new_weight_name in quant_layers:
                     bit = quant_layers[new_weight_name]
-                    state_dict = quant_payload(quant_cls, weight_name, weight, bit)
+                    state_dict = quant_payload(
+                        quant_cls,
+                        weight_name,
+                        weight,
+                        bit,
+                        block_size_col=getattr(self.args, "block_size_col", 128),
+                        scale_dtype=getattr(self.args, "scale_dtype", "fp32"),
+                    )
                     new_state_dict.update(state_dict)
         self._write_safetensor_file(source_file, new_state_dict)
         return {weight_name: source_file for weight_name in new_state_dict}

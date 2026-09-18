@@ -1573,3 +1573,20 @@ def test_generate_tensorwise_ignore_layers_raises_not_implemented():
     stub = _StubModel()
     with pytest.raises(NotImplementedError):
         stub.generate_tensorwise_ignore_layers()
+
+
+@pytest.mark.parametrize(
+    "target,attr",
+    [("attn-linear", "self_attn"), ("attn-cache", "linear_attn"), ("mlp", "mlp")],
+)
+def test_iter_ptq_units_for_load_keeps_non_moe_objects(target, attr):
+    model = _StubModel(quant_target=[target])
+    module = nn.Linear(2, 2)
+    block = SimpleNamespace(**{attr: module})
+    if attr == "linear_attn":
+        block.layer_type = "linear_attention"
+    train_unit = list(model.iter_ptq_units(2, block))[0]
+    load_unit = list(model.iter_ptq_units(2, block, for_load=True))[0]
+    assert train_unit.module is load_unit.module is module
+    assert train_unit.save_name == load_unit.save_name
+    assert train_unit.metadata == load_unit.metadata

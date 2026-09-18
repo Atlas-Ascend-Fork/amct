@@ -126,6 +126,21 @@ def test_get_group_size_unsupported_raises():
         AutoRound._get_group_size(args)
 
 
+def test_get_group_size_fp_128x128_uses_column_grouping():
+    args = SimpleNamespace(quant_dtype="fp", block_size_col=128)
+    assert AutoRound._get_group_size(args) == 128
+
+
+def test_get_group_size_fp_1x128_uses_group_size_128():
+    args = SimpleNamespace(quant_dtype="fp", block_size_col=1)
+    assert AutoRound._get_group_size(args) == 128
+
+
+def test_get_group_size_fp_defaults_to_128_when_block_size_col_missing():
+    args = SimpleNamespace(quant_dtype="fp")
+    assert AutoRound._get_group_size(args) == 128
+
+
 def test_auto_round_load_ptq_params():
     args = _auto_round_args(w_size=(4, 32), quant_dtype="int")
     ar = AutoRound(args, w_bits=8)

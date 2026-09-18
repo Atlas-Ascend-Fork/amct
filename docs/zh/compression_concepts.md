@@ -18,7 +18,15 @@ AMCT将量化和模型转换分开，实现对模型中可量化算子的独立�
 
 HIFloat8（HiF8）是AI处理器定制的新8比特浮点数据格式，由Sign位（符号位，表示数值的正负）、Dot位、Exponet位（指数位，用于表示数值的范围）和Mantissa位（尾数为，用于表示数值的有效数字）组成。HiF8在IEEE 754的基础上扩增了一个点位域（Dot），用于动态调整阶码域位宽和尾数域位宽。
 
-![](./figures/zh-cn_formulaimage_0000002517189006.png)
+$$
+
+X=
+\begin{cases}
+(-1)^S \times 2^E \times 1.M, & \text{NormalValue} \\
+(-1)^S \times 2^{M-23}, & \text{DenormalValue}
+\end{cases}
+
+$$
 
 其中，S为HiF8符号域数值，E为HiF8阶码域数值，M为HiF8尾数域数值，dot位为0b’0000时，HiF8数据为Denormal value。
 
@@ -66,7 +74,11 @@ FP8_E4M3FN是FP8数据格式的一种，一种8位浮点量化格式，包含4�
 
 - MXFP8数据格式转换：对于torch.nn.Linear算子Weight Tensor数据，按照-1轴方向，每32个数据计算一个shared exponent，计算公式如下：
 
-  ![](./figures/zh-cn_formulaimage_0000002517029086.png)
+  $$
+
+  exponent = \lfloor \log_2(\max(|x|)) \rfloor
+  $$
+
 
 #### MXFP4
 
@@ -80,7 +92,26 @@ FP4_E2M1是FP4数据格式的一种，一种4位浮点量化格式，包含2比�
 
 - MXFP4数据格式转换：对于torch.nn.Linear算子Weight Tensor数据，按照-1轴方向，每32个数据计算一个shared exponent，计算公式如下：
 
-  ![](./figures/zh-cn_formulaimage_0000002517029084.png)
+  $$
+
+  exponent = \lfloor \log_2(\max(|x|)) \rfloor
+
+  $$
+
+  $$
+
+  mantissa = \frac{\max(|x|)}{2^{exponent}}
+
+  $$
+
+  $$
+  
+  exponent = \begin{cases}
+  exponent + 1, & \text{if } mantissa > 1.75 \\
+  exponent, & \text{otherwise}
+  \end{cases}
+
+  $$
 
 #### FP4_E2M1
 

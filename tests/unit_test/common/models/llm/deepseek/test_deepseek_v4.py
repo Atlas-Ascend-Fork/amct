@@ -95,3 +95,35 @@ def test_top_level_hc_params_reject_shard_outside_model_directory(tmp_path):
 
     with pytest.raises(ValueError, match="not in the model directory allowlist"):
         model._load_top_level_hc_head_params()
+
+
+@pytest.mark.parametrize(
+    "target,attr", [("moe", "ffn"), ("attn-linear", "attn"), ("attn-cache", "attn")]
+)
+def test_iter_ptq_units_for_load_preserves_v4_module_paths(target, attr, tmp_path):
+    from amct_pytorch.common.models.llm.common.base import BaseModel
+
+    model = DeepseekV4.__new__(DeepseekV4)
+    args = SimpleNamespace(
+        model="/fake/model", quant_target=[target], quant_dtype="int"
+    )
+    with (
+        patch("amct_pytorch.common.models.llm.common.base.AutoConfig.from_pretrained"),
+        patch(
+            "amct_pytorch.common.models.llm.common.base.AutoTokenizer.from_pretrained"
+        ),
+    ):
+        BaseModel.__init__(model, args)
+    module = nn.Linear(2, 2, bias=False)
+    block = SimpleNamespace(
+        **{attr: SimpleNamespace(experts=[module]) if target == "moe" else module}
+    )
+    train_unit = list(model.iter_ptq_units(0, block))[0]
+    loaded_unit = list(model.iter_ptq_units(0, block, for_load=True))[0]
+    assert train_unit.module is loaded_unit.module is module
+    assert train_unit.save_name == loaded_unit.save_name
+    expected = torch.full_like(module.weight, 0.75)
+    torch.save({"weight": expected}, tmp_path / f"layer_0_{train_unit.save_name}.pt")
+    result = model.load_layer_ptq_params(0, block, str(tmp_path), strict=True)
+    assert result == {"loaded": [train_unit.name], "missing": []}
+    torch.testing.assert_close(module.weight, expected)

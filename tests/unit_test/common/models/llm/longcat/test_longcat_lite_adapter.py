@@ -125,3 +125,31 @@ class TestLongcatLiteAdapter:
 
         assert torch.equal(cached_inps, expected)
         assert kwargs == {"mask": "kept"}
+
+
+def test_iter_ptq_units_for_load_excludes_identity_experts():
+    from amct_pytorch.common.models.llm.longcat.moe_common import QuantLongcatExperts
+
+    model = LongcatLite.__new__(LongcatLite)
+    model.quant_target = ["moe"]
+    experts = QuantLongcatExperts.__new__(QuantLongcatExperts)
+    torch.nn.Module.__init__(experts)
+    experts.num_routed_experts = 2
+    experts.expert_modules = torch.nn.ModuleList(
+        [torch.nn.Linear(2, 2), torch.nn.Linear(2, 2), torch.nn.Identity()]
+    )
+    block = torch.nn.Module()
+    block.nested_moe = torch.nn.Module()
+    block.nested_moe.experts = experts
+    # Loading must never construct materialized training experts.
+    with patch.object(
+        experts,
+        "build_ptq_expert_module",
+        side_effect=AssertionError("temporary expert during load"),
+    ):
+        units = list(model.iter_ptq_units(3, block, for_load=True))
+    assert len(units) == 2
+    for idx, unit in enumerate(units):
+        assert unit.module is experts.expert_modules[idx]
+        assert unit.save_name == f"expert_{idx}"
+        assert unit.metadata == {"expert_idx": idx, "input_name": "moe"}

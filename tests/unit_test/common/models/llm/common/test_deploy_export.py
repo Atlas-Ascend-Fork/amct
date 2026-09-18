@@ -535,9 +535,14 @@ def test_quant_payload_basic():
     """quant_payload builds tensors dict from quant_cls.export_deploy."""
     from amct_pytorch.common.models.llm.common.deploy_export import quant_payload
 
+    captured = {}
+
     class FakeQuantCls:
-        def __init__(self, bits):
+        def __init__(self, bits, is_act=False, *args):
             self.bits = bits
+            captured["bits"] = bits
+            captured["is_act"] = is_act
+            captured["extra"] = args
 
         def export_deploy(self, weight):
             return {
@@ -546,10 +551,22 @@ def test_quant_payload_basic():
             }
 
     weight = torch.randn(4, 4)
-    result = quant_payload(FakeQuantCls, "layer.weight", weight, bit=8)
+    result = quant_payload(
+        FakeQuantCls,
+        "layer.weight",
+        weight,
+        bit=8,
+        block_size_col=1,
+        scale_dtype="e8m0",
+    )
     assert "layer.weight" in result
     assert torch.allclose(result["layer.weight"], torch.ones(4, 4) * 8)
     assert "layer.weight_scale" in result
+    # block_size_col / scale_dtype must reach the quant class (fp 4-bit needs
+    # scale_dtype="e8m0"; the fp32 default would raise).
+    assert captured["bits"] == 8
+    assert captured["is_act"] is False
+    assert captured["extra"] == (1, "e8m0")
 
 
 def test_quant_payload_skips_none_extras():
@@ -557,7 +574,7 @@ def test_quant_payload_skips_none_extras():
     from amct_pytorch.common.models.llm.common.deploy_export import quant_payload
 
     class FakeQuantCls:
-        def __init__(self, bits):
+        def __init__(self, bits, is_act=False, *args):
             pass
 
         def export_deploy(self, weight):
@@ -568,6 +585,21 @@ def test_quant_payload_skips_none_extras():
     result = quant_payload(FakeQuantCls, "layer.weight", weight, bit=4)
     assert "layer.weight" in result
     assert "layer.bias" not in result
+
+
+def test_quant_payload_fp4_e8m0_does_not_raise():
+    """4-bit fp export must pass scale_dtype='e8m0' instead of the fp32 default."""
+    from amct_pytorch.common.models.llm.common.deploy_export import quant_payload
+    from amct_pytorch.quantization.dtypes import register_dtype
+
+    register_dtype()
+    from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY
+
+    fp_cls = DTYPE_REGISTRY.get("fp")
+    weight = torch.randn(4, 64)
+    result = quant_payload(fp_cls, "layer.weight", weight, bit=4, scale_dtype="e8m0")
+    assert "layer.weight" in result
+    assert "layer.weight_scale" in result
 
 
 # ---- get_quant_ignore_linear_names: PlainLinear filtering -----------------

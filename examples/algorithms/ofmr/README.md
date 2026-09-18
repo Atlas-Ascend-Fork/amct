@@ -6,7 +6,7 @@
 
 本sample依赖包可参考[requirements.txt](requirements.txt)
 
-需要注意的是torch_npu包版本需要与Python、torch包版本相匹配，需要安装CANN包
+需要注意的是TorchNPU包版本需要与Python、torch包版本相匹配，需要安装CANN包
 
 ### 1.2 模型和数据集准备
 
@@ -14,6 +14,7 @@
 模型请用户自行下载，并传模型路径到脚本，数据集为在线加载。
 
 ### 1.3 简易量化配置
+
 本sample中使用的量化配置已经内置在工具中，可以通过下述方式获取并使用：
 
 `from amct_pytorch import HIFP8_OFMR_CFG`
@@ -22,10 +23,10 @@
 
 ofmr算法支持仅权重量化和全量化，支持的量化类型以及量化配置：
 
-| 字段 |类型| 说明 | 取值范围 | 注意事项 |
-|:--| :-: | :-- | :-: | :-- |
-|batch_num|uint32|量化使用的batch数量 |1|/|
-|skip_layers|str|跳过量化的层 |/|跳过量化层支持模糊匹配，当配置字符串为层名字串，或与层名一致时，跳过该层量化，不生成量化配置。字符串必须包含数字或字母|
+|字段|类型|说明|取值范围|注意事项|
+|:--|:-:|:--|:-:|:--|
+|batch_num|uint32|量化使用的batch数量|1|/|
+|skip_layers|str|跳过量化的层|/|跳过量化层支持模糊匹配，当配置字符串为层名字串，或与层名一致时，跳过该层量化，不生成量化配置。字符串必须包含数字或字母|
 |weights.type|str|量化后权重类型|'float8_e4m3fn'/'hifloat8'|/|
 |weights.symmtric|bool|对称量化|TRUE|/|
 |weights.strategy|str|量化粒度|'tensor'/'channel'|/|
@@ -52,7 +53,6 @@ python3 src/run_qwen_samples.py --model_path=/data/Qwen2-7b/
 python3 src/run_qwen_samples.py --model_path=/data/Qwen3-8B/
 ```
 
-
 若出现如下信息，则说明量化成功：
 
 ```none
@@ -62,7 +62,7 @@ Score:  5.477707
 
 其中Score为量化模型PPL，具体数值参考下表：
 
-| 模型 | 校准集 | 数据集 | 量化前PPL | 量化后PPL | 
+| 模型 | 校准集 | 数据集 | 量化前PPL | 量化后PPL |
 | :-: | :-: | :-: | :-: | :-: |
 |LLAMA2-7B|pileval|wikitext2|5.472|5.505|
 |QWEN2-7B|pileval|wikitext2|7.137|7.196|

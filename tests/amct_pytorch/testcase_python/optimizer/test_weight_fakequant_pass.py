@@ -22,7 +22,7 @@ from io import BytesIO
 
 import numpy as np
 import torch
-from onnx import onnx_pb
+from onnx import TensorProto, helper, numpy_helper, onnx_pb
 
 from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_quant_pass import (
@@ -426,3 +426,38 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
         node_name = 'conv1'
         node = graph.get_node_by_name(node_name)
         passer.do_pass(graph, node)
+
+    def test_matmul_transposed_weight_offset_broadcasts_on_output_channel(self):
+        weight = np.array([[2, 3], [4, 5], [6, 7], [8, 9]], dtype=np.int8)
+        model = helper.make_model(
+            helper.make_graph(
+                [
+                    helper.make_node(
+                        'Transpose', ['weight'], ['weight_t'], name='weight_trans'
+                    ),
+                    helper.make_node(
+                        'MatMul', ['inputs', 'weight_t'], ['output'], name='linear'
+                    ),
+                ],
+                'linear_graph',
+                [helper.make_tensor_value_info('inputs', TensorProto.FLOAT, [1, 2])],
+                [helper.make_tensor_value_info('output', TensorProto.FLOAT, [1, 4])],
+                [numpy_helper.from_array(weight, name='weight')],
+            )
+        )
+        graph = Graph(model)
+        node = graph.get_node_by_name('linear')
+        records = {
+            'linear': {
+                WEIGHT_SCALE: np.ones(4, dtype=np.float32),
+                WEIGHT_OFFSET: np.array([1, 2, 3, 4], dtype=np.int8),
+            }
+        }
+
+        WeightFakequantPass(records).do_pass(graph, node)
+
+        quantized = numpy_helper.to_array(graph.get_node_by_name('weight').proto)
+        np.testing.assert_array_equal(
+            quantized,
+            np.array([[1, 2], [2, 3], [3, 4], [4, 5]], dtype=np.float32),
+        )
