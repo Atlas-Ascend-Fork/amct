@@ -38,7 +38,7 @@ AMCT 源码级编码、实现规划、行为诊断与 review 的路由入口。�
 
 **交付格式**（唯一出处；任何 reference 只可引用、不得复制此清单）：开头一句话标分级；只汇总实际执行过的动作，不补写未执行步骤——改了代码（主场景、改动文件、事实与待确认项、复用抽象、已跑/未跑验证及阻塞原因、是否触及敏感层、repo-map/docs 是否需更新）/ 没改代码（边界、事实、方案、已核对与缺失证据）/ 纯规范检查（检查项、发现、证据）。敏感层指 workflow、solver、quant module、public API、ops build，触及即单独点明（影响面超出本次落点）。不适用的项写 `n/a`，不整项省略。
 
-**BLOCKER 只停错误方案不停任务**：替代路径明确且在用户目标内就直接继续；信息缺失先推进不依赖它的部分。
+**BLOCKER 只停错误方案不停任务**：替代路径明确且在用户目标内就直接继续；信息缺失先推进不依赖它的部分。轻级不读 process-rules，故此处内联其「全局 BLOCKER」里**轻级真能违反的三条**：① 不在 CLI、workflow、solver 或通用 quant module 中加模型专属分支；② 不混用 LLM CLI 的 `ALGO_REGISTRY` 与 classic `AlgorithmRegistry`；③ `PtqUnit.kind`、extract 文件命名、PTQ 参数保存/加载、`--algos` 与 deploy binding 保持一致。其余各条已被判据①~④ 排除（命中即非轻级）；完整清单以 process-rules「全局 BLOCKER」为准。
 
 ---
 
