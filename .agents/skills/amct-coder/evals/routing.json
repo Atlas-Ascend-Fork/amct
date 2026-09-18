@@ -56,7 +56,7 @@
     {
       "id": 4,
       "prompt": "这个报错信息没说传了什么参数,帮我改一下报错文案",
-      "expected": "quick-path/轻级:普通局部修复,五步路径,不读 process-rules/repo-map/主手册（SKILL.md 分级表下注的主手册豁免）;豁免只免读取,轻级判据①~④与 BLOCKER 仍适用",
+      "expected": "quick-path/轻级:普通局部修复,五步路径,不读 process-rules/repo-map/主手册,也不读 SKILL.md 分界线之后的内容（判据与豁免的操作性规则均以首段「轻级直达卡」为唯一出处）;豁免只免读取,①~④与 BLOCKER 仍适用",
       "rubric": {
         "must_mention": [["轻级", "quick-path", "快速路径"]],
         "must_not_claim": [
