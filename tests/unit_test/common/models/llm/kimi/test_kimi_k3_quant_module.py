@@ -538,7 +538,7 @@ def test_quant_kimi_mla_only_quantizes_four_selected_projections():
     assert result.g_proj is source.g_proj
 
 
-def test_quant_kimi_mla_quantizes_joined_q_and_kv_before_score():
+def test_quant_kimi_mla_quantizes_absorbed_q_and_kv_before_score():
     from amct_pytorch.common.models.llm.kimi.kimi_k3 import quant_module
 
     source = _MLAAttention()
@@ -566,11 +566,19 @@ def test_quant_kimi_mla_quantizes_joined_q_and_kv_before_score():
     hidden_states = torch.randn(1, 3, 8)
     raw_q = source.q_b_proj(source.q_a_layernorm(source.q_a_proj(hidden_states)))
     raw_q = raw_q.view(1, 3, source.num_heads, source.q_head_dim)
+    raw_q_nope, raw_q_rope = torch.split(raw_q, [2, 2], dim=-1)
+    kv_b_weight = source.kv_b_proj.weight.view(source.num_heads, 4, 3)
+    absorbed_q_nope = torch.einsum(
+        "bshd,hdc->bshc", raw_q_nope, kv_b_weight[:, :2],
+    )
     raw_kv = source.kv_a_proj_with_mqa(hidden_states)
     raw_kv_nope, raw_kv_rope = torch.split(raw_kv, [3, 2], dim=-1)
     output = wrapper(hidden_states, position_ids=torch.arange(3).unsqueeze(0))
 
-    torch.testing.assert_close(seen["q"], raw_q)
+    torch.testing.assert_close(
+        seen["q"], torch.cat((absorbed_q_nope, raw_q_rope), dim=-1),
+    )
+    assert seen["q"].shape == (1, 3, 2, 5)
     torch.testing.assert_close(
         seen["kv"], torch.cat([raw_kv_nope, raw_kv_rope], dim=-1),
     )

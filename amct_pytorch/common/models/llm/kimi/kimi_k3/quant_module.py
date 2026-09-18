@@ -122,10 +122,10 @@ class QuantKimiMLAAttention(nn.Module):
 
     q_a_proj, q_b_proj, kv_a_proj_with_mqa and o_proj participate in
     ``attn-linear``. kv_b_proj and output gate remain floating point.
-    ``attn-cache`` applies per-token-per-head FP quantization
-    to joined Q, and per-tensor FP quantization to joined latent KV and the
-    attention probabilities. Kimi-K3 MLA uses NoPE, so neither branch receives
-    rotary position embeddings.
+    ``attn-cache`` applies per-token-per-head FP quantization to joined Q after
+    the NoPE branch absorbs k_b, and per-tensor FP quantization to joined latent
+    KV and the attention probabilities. Kimi-K3 MLA uses NoPE, so neither
+    branch receives rotary position embeddings.
     """
 
     def __init__(self, quant_args, attention):
@@ -250,7 +250,6 @@ class QuantKimiMLAAttention(nn.Module):
         q_states = q_states.view(
             batch_size, seq_length, self.num_heads, self.q_head_dim,
         )
-        q_states = self.q_cache_quantizer(q_states)
         q_nope, q_rope = torch.split(
             q_states,
             [self.qk_nope_head_dim, self.qk_rope_head_dim],
@@ -293,6 +292,14 @@ class QuantKimiMLAAttention(nn.Module):
         k_b_weight = kv_b_weight[:, :self.qk_nope_head_dim]
         v_b_weight = kv_b_weight[:, -self.v_head_dim:]
         q_nope = torch.einsum("bshd,hdc->bshc", q_nope, k_b_weight)
+        q_states = self.q_cache_quantizer(
+            torch.cat((q_nope, q_rope), dim=-1)
+        )
+        q_nope, q_rope = torch.split(
+            q_states,
+            [self.kv_lora_rank, self.qk_rope_head_dim],
+            dim=-1,
+        )
         scores = (
             torch.einsum("bshc,btc->bsht", q_nope, kv_nope)
             + torch.einsum(
