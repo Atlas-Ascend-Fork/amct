@@ -78,7 +78,15 @@ class KimiK3(BaseModel):
     )
     _MLA_WEIGHT_RE = re.compile(
         r"^language_model\.model\.layers\.\d+\.self_attn\."
-        r"(q_a_proj|q_b_proj|kv_a_proj_with_mqa)\.weight$"
+        r"(q_a_proj|q_b_proj|kv_a_proj_with_mqa|o_proj)\.weight$"
+    )
+    _SHARED_EXPERT_WEIGHT_RE = re.compile(
+        r"^language_model\.model\.layers\.\d+\.block_sparse_moe\.shared_experts\."
+        r"(gate_proj|up_proj|down_proj)\.weight$"
+    )
+    _LATENT_MOE_WEIGHT_RE = re.compile(
+        r"^language_model\.model\.layers\.\d+\.block_sparse_moe\."
+        r"(routed_expert_down_proj|routed_expert_up_proj)\.weight$"
     )
 
     def __init__(self, args):
@@ -740,6 +748,12 @@ class KimiK3(BaseModel):
             return weight_name.replace(".weight_packed", ".weight")
         return weight_name
 
+    def tensorwise_quant_output_weight_name(self, weight_name, bit):
+        weight_name = self.tensorwise_output_weight_name(weight_name)
+        if self.quant_dtype == "mxfp" and int(bit) == 4:
+            return f"{weight_name.removesuffix('.weight')}.weight_packed"
+        return weight_name
+
     def tensorwise_passthrough_weight(self, weight_name, bit):
         quantize_moe = not self.quant_target or "moe" in self.quant_target
         return (
@@ -753,13 +767,33 @@ class KimiK3(BaseModel):
         quant_layers = {}
         quantize_moe = not self.quant_target or "moe" in self.quant_target
         quantize_mla = "attn-linear" in self.quant_target
+        bit_policy = (
+            ensure_bit_policy(self.args)
+            if quantize_moe or quantize_mla else None
+        )
         attn_bits = (
-            ensure_bit_policy(self.args)["attn-linear"]
+            bit_policy["attn-linear"]
             if quantize_mla else None
         )
         for weight_name in self._load_weight_map():
             if quantize_moe and self._is_kimi_moe_weight_packed(weight_name):
                 quant_layers[weight_name.rsplit(".", 1)[0]] = 4
+                continue
+
+            shared_match = self._SHARED_EXPERT_WEIGHT_RE.match(weight_name)
+            if quantize_moe and shared_match is not None:
+                projection_name = shared_match.group(1)
+                quant_layers[weight_name.rsplit(".", 1)[0]] = (
+                    bit_policy["moe.shared"][projection_name].w
+                )
+                continue
+
+            latent_match = self._LATENT_MOE_WEIGHT_RE.match(weight_name)
+            if quantize_moe and latent_match is not None:
+                projection_name = latent_match.group(1)
+                quant_layers[weight_name.rsplit(".", 1)[0]] = (
+                    bit_policy["moe.routed"][projection_name].w
+                )
                 continue
 
             mla_match = self._MLA_WEIGHT_RE.match(weight_name)

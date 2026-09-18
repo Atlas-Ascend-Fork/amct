@@ -208,6 +208,12 @@ def _tensorwise_pipeline(target):
         "language_model.model.layers.1.block_sparse_moe.shared_experts.gate_proj.weight": (
             "model-0.safetensors"
         ),
+        "language_model.model.layers.1.block_sparse_moe.shared_experts.up_proj.weight": (
+            "model-0.safetensors"
+        ),
+        "language_model.model.layers.1.block_sparse_moe.shared_experts.down_proj.weight": (
+            "model-0.safetensors"
+        ),
         "language_model.model.layers.1.block_sparse_moe.experts.0.w1.weight_packed": (
             "model-0.safetensors"
         ),
@@ -224,6 +230,7 @@ def test_kimi_tensorwise_attn_linear_selects_only_mla_projections():
         "language_model.model.layers.0.self_attn.q_a_proj": 8,
         "language_model.model.layers.0.self_attn.q_b_proj": 8,
         "language_model.model.layers.0.self_attn.kv_a_proj_with_mqa": 8,
+        "language_model.model.layers.0.self_attn.o_proj": 8,
     }
 
 
@@ -236,6 +243,12 @@ def test_kimi_tensorwise_combines_moe_and_attn_linear_targets():
         "language_model.model.layers.0.self_attn.q_a_proj": 8,
         "language_model.model.layers.0.self_attn.q_b_proj": 8,
         "language_model.model.layers.0.self_attn.kv_a_proj_with_mqa": 8,
+        "language_model.model.layers.0.self_attn.o_proj": 8,
+        "language_model.model.layers.1.block_sparse_moe.routed_expert_down_proj": 8,
+        "language_model.model.layers.1.block_sparse_moe.routed_expert_up_proj": 8,
+        "language_model.model.layers.1.block_sparse_moe.shared_experts.gate_proj": 8,
+        "language_model.model.layers.1.block_sparse_moe.shared_experts.up_proj": 8,
+        "language_model.model.layers.1.block_sparse_moe.shared_experts.down_proj": 8,
         "language_model.model.layers.1.block_sparse_moe.experts.0.w1": 4,
     }
 
@@ -246,8 +259,58 @@ def test_kimi_tensorwise_moe_target_does_not_select_mla_projections():
     quant_layers = pipeline.generate_tensorwise_quant_layers()
 
     assert quant_layers == {
+        "language_model.model.layers.1.block_sparse_moe.routed_expert_down_proj": 8,
+        "language_model.model.layers.1.block_sparse_moe.routed_expert_up_proj": 8,
+        "language_model.model.layers.1.block_sparse_moe.shared_experts.gate_proj": 8,
+        "language_model.model.layers.1.block_sparse_moe.shared_experts.up_proj": 8,
+        "language_model.model.layers.1.block_sparse_moe.shared_experts.down_proj": 8,
         "language_model.model.layers.1.block_sparse_moe.experts.0.w1": 4,
     }
+
+
+def test_kimi_tensorwise_reads_mla_shared_and_latent_bit_overrides():
+    pipeline = _tensorwise_pipeline(["moe", "attn-linear"])
+    pipeline.args.bit_policy = BitPolicy({
+        "w_bits": 8,
+        "a_bits": 8,
+        "attn-linear": {
+            "w_bits": 8,
+            "a_bits": 8,
+            "o_proj": {"w_bits": 4, "a_bits": 8},
+        },
+        "moe": {
+            "routed": {
+                "w_bits": 4,
+                "a_bits": 8,
+                "routed_expert_down_proj": {"w_bits": 8, "a_bits": 8},
+                "routed_expert_up_proj": {"w_bits": 8, "a_bits": 8},
+            },
+            "shared": {
+                "w_bits": 8,
+                "a_bits": 8,
+                "gate_proj": {"w_bits": 4, "a_bits": 8},
+            },
+        },
+    })
+
+    quant_layers = pipeline.generate_tensorwise_quant_layers()
+
+    assert quant_layers["language_model.model.layers.0.self_attn.o_proj"] == 4
+    assert quant_layers[
+        "language_model.model.layers.1.block_sparse_moe.experts.0.w1"
+    ] == 4
+    assert quant_layers[
+        "language_model.model.layers.1.block_sparse_moe.shared_experts.gate_proj"
+    ] == 4
+    assert quant_layers[
+        "language_model.model.layers.1.block_sparse_moe.shared_experts.up_proj"
+    ] == 8
+    assert quant_layers[
+        "language_model.model.layers.1.block_sparse_moe.routed_expert_down_proj"
+    ] == 8
+    assert quant_layers[
+        "language_model.model.layers.1.block_sparse_moe.routed_expert_up_proj"
+    ] == 8
 
 
 def test_kimi_tensorwise_output_name_normalizes_packed_weight_for_compute_path():
@@ -269,6 +332,22 @@ def test_kimi_tensorwise_only_four_bit_moe_is_passthrough():
 
     assert pipeline.tensorwise_passthrough_weight(weight_name, 4)
     assert not pipeline.tensorwise_passthrough_weight(weight_name, 8)
+
+
+@pytest.mark.parametrize(
+    "bit,expected_suffix",
+    [(4, ".weight_packed"), (8, ".weight")],
+)
+def test_kimi_tensorwise_quant_output_name_follows_mxfp_bit(bit, expected_suffix):
+    pipeline = _tensorwise_pipeline(["moe"])
+    weight_name = (
+        "language_model.model.layers.1.block_sparse_moe.shared_experts."
+        "gate_proj.weight"
+    )
+
+    output_name = pipeline.tensorwise_quant_output_weight_name(weight_name, bit)
+
+    assert output_name.endswith(expected_suffix)
 
 
 @pytest.mark.parametrize("target, dtype", [(["attn-linear"], "mxfp"), (["moe"], "bf16")])

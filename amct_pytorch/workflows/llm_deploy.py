@@ -316,7 +316,17 @@ class LlmDeployWorkflow:
                 if should_quantize:
                     weight = weight.to(compute_device)
                     quant_cls = DTYPE_REGISTRY.get(self.quant_dtype)
-                    state_dict = quant_payload(quant_cls, output_weight_name, weight, bit)
+                    quant_output_name_fn = self._pipeline_hook(
+                        "tensorwise_quant_output_weight_name"
+                    )
+                    quant_output_weight_name = (
+                        quant_output_name_fn(output_weight_name, bit)
+                        if callable(quant_output_name_fn)
+                        else output_weight_name
+                    )
+                    state_dict = quant_payload(
+                        quant_cls, quant_output_weight_name, weight, bit
+                    )
                     new_state_dict.update(state_dict)
                 else:
                     new_state_dict[output_weight_name] = weight.cpu()

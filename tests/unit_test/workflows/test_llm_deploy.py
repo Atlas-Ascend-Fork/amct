@@ -948,6 +948,62 @@ def test_kimi_tensorwise_mxfp4_moe_requires_source_weight_scale(tmp_path):
         wf._run_tensorwise()
 
 
+def test_kimi_tensorwise_new_mxfp4_moe_weight_uses_packed_suffix(tmp_path):
+    from amct_pytorch.common.models.llm.kimi.kimi_k3.kimi_k3 import KimiK3
+    from amct_pytorch.quantization.bit_policy import BitPolicy
+    from amct_pytorch.quantization.dtypes import register_dtype
+
+    register_dtype()
+    src = tmp_path / "src"
+    dst = tmp_path / "dst"
+    src.mkdir()
+    dst.mkdir()
+    (src / CONFIG_JSON).write_text(json.dumps({"torch_dtype": "bfloat16"}))
+    weight_name = (
+        "language_model.model.layers.1.block_sparse_moe.shared_experts."
+        "gate_proj.weight"
+    )
+    packed_name = weight_name.replace(".weight", ".weight_packed")
+    scale_name = weight_name.replace(".weight", ".weight_scale")
+    save_file(
+        {weight_name: torch.arange(32, dtype=torch.bfloat16).reshape(1, 32)},
+        str(src / KEY_SHARD1_SAFETENSORS),
+    )
+    (src / SAFETENSORS_INDEX_JSON).write_text(json.dumps({
+        "metadata": {},
+        "weight_map": {weight_name: KEY_SHARD1_SAFETENSORS},
+    }))
+    bit_policy = BitPolicy({
+        "w_bits": 8,
+        "a_bits": 8,
+        "moe": {
+            "shared": {
+                "w_bits": 8,
+                "a_bits": 8,
+                "gate_proj": {"w_bits": 4, "a_bits": 8},
+            },
+        },
+    })
+    args = SimpleNamespace(
+        granularity="tensor",
+        model=str(src),
+        quant_target=["moe"],
+        quant_dtype="mxfp",
+        bit_policy=bit_policy,
+        device="cpu",
+    )
+    wf = _make_workflow(model_path=str(src), output_dir=str(dst), quant_dtype="mxfp")
+    wf.args.device = "cpu"
+    wf.pipeline = KimiK3(args)
+
+    wf._run_tensorwise()
+
+    saved = load_file(dst / KEY_SHARD1_SAFETENSORS)
+    assert packed_name in saved
+    assert scale_name in saved
+    assert weight_name not in saved
+
+
 
 def test_load_weight_index_single_shard_synthesizes(tmp_path):
     # Single model.safetensors (no index.json) -> synthesize equivalent index
