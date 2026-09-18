@@ -97,14 +97,14 @@ MoE 目标把 `--quant_target` 换成 `moe`、`--data_dir` 换成 `.../ptq_data/
 
 相对占位目录（默认在本样例目录下）：
 
-| 产物 | 路径 |
-|:--|:--|
-| PTQ 离线数据 Attention | `./outputs/qwen3_6_35b_a3b/ptq_data/attn-linear` |
-| PTQ 离线数据 MoE | `./outputs/qwen3_6_35b_a3b/ptq_data/moe` |
-| int PTQ 参数 Attention | `./outputs/qwen3_6_35b_a3b_w4a8_int/ptq_params/qwen3_6_moe/attn-linear` |
-| int PTQ 参数 MoE | `./outputs/qwen3_6_35b_a3b_w4a8_int/ptq_params/qwen3_6_moe/moe` |
-| mxfp PTQ 参数 Attention | `./outputs/qwen3_6_35b_a3b_w4a8_mxfp/ptq_params/qwen3_6_moe/attn-linear` |
-| mxfp PTQ 参数 MoE | `./outputs/qwen3_6_35b_a3b_w4a8_mxfp/ptq_params/qwen3_6_moe/moe` |
+| 产物 | 路径 | 大小（实测，GiB） |
+|:--|:--|--:|
+| PTQ 离线数据 Attention | `./outputs/qwen3_6_35b_a3b/ptq_data/attn-linear` | ~81 |
+| PTQ 离线数据 MoE | `./outputs/qwen3_6_35b_a3b/ptq_data/moe` | ~21 |
+| int PTQ 参数 Attention | `./outputs/qwen3_6_35b_a3b_w4a8_int/ptq_params/qwen3_6_moe/attn-linear` | ~5 |
+| int PTQ 参数 MoE | `./outputs/qwen3_6_35b_a3b_w4a8_int/ptq_params/qwen3_6_moe/moe` | ~120 |
+| mxfp PTQ 参数 Attention | `./outputs/qwen3_6_35b_a3b_w4a8_mxfp/ptq_params/qwen3_6_moe/attn-linear` | ~5 |
+| mxfp PTQ 参数 MoE | `./outputs/qwen3_6_35b_a3b_w4a8_mxfp/ptq_params/qwen3_6_moe/moe` | ~128 |
 
 量化时长口径：从该格式第一次 `ptq` 开始到 attn+moe 参数全部写完（不含模型下载和环境构建），脚本会打印起止时间。离线数据大小为 extract 输出目录合计，GiB。
 
@@ -112,6 +112,10 @@ MoE 目标把 `--quant_target` 换成 `moe`、`--data_dir` 换成 `.../ptq_data/
 
 BF16 与量化评估使用同一 `MODEL` 与同一 `seq_len=4096` / `granularity=block` 配置。
 评估覆盖 `attn-linear` + `moe`，两者均加载 autoround PTQ 参数。
+
+结果表实测取值：Attention 用默认协议（`nsamples=128` / `epochs=10` / `cali_bsz=4`）；
+MoE 覆盖为 `MOE_NSAMPLES=32` / `MOE_EPOCHS=1` / `MOE_CALI_BSZ=8`（Atlas A3 单卡，10240 个专家单元）。
+复现结果表请使用同一组取值；量化时长为墙钟时间，含单元 I/O。
 
 | 模型 | 数据类型 | 算法 | 量化格式 | BF16 PPL | 量化 PPL | PPL 差值 | 量化时长（min） | 离线数据大小（GiB） |
 | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |

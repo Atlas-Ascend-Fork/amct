@@ -97,14 +97,14 @@ Main parameters:
 
 Relative placeholder directories (under this sample directory by default):
 
-| Artifact | Path |
-|:--|:--|
-| PTQ offline data, Attention | `./outputs/qwen3_6_35b_a3b/ptq_data/attn-linear` |
-| PTQ offline data, MoE | `./outputs/qwen3_6_35b_a3b/ptq_data/moe` |
-| int PTQ params, Attention | `./outputs/qwen3_6_35b_a3b_w4a8_int/ptq_params/qwen3_6_moe/attn-linear` |
-| int PTQ params, MoE | `./outputs/qwen3_6_35b_a3b_w4a8_int/ptq_params/qwen3_6_moe/moe` |
-| mxfp PTQ params, Attention | `./outputs/qwen3_6_35b_a3b_w4a8_mxfp/ptq_params/qwen3_6_moe/attn-linear` |
-| mxfp PTQ params, MoE | `./outputs/qwen3_6_35b_a3b_w4a8_mxfp/ptq_params/qwen3_6_moe/moe` |
+| Artifact | Path | Measured size (GiB) |
+|:--|:--|--:|
+| PTQ offline data, Attention | `./outputs/qwen3_6_35b_a3b/ptq_data/attn-linear` | ~81 |
+| PTQ offline data, MoE | `./outputs/qwen3_6_35b_a3b/ptq_data/moe` | ~21 |
+| int PTQ params, Attention | `./outputs/qwen3_6_35b_a3b_w4a8_int/ptq_params/qwen3_6_moe/attn-linear` | ~5 |
+| int PTQ params, MoE | `./outputs/qwen3_6_35b_a3b_w4a8_int/ptq_params/qwen3_6_moe/moe` | ~120 |
+| mxfp PTQ params, Attention | `./outputs/qwen3_6_35b_a3b_w4a8_mxfp/ptq_params/qwen3_6_moe/attn-linear` | ~5 |
+| mxfp PTQ params, MoE | `./outputs/qwen3_6_35b_a3b_w4a8_mxfp/ptq_params/qwen3_6_moe/moe` | ~128 |
 
 Quantization wall time: measured from the first `ptq` of a format until all attn+moe params are written (model download and environment setup excluded); scripts print start/end timestamps. Offline data size is the combined extract output in GiB.
 
@@ -112,6 +112,11 @@ Quantization wall time: measured from the first `ptq` of a format until all attn
 
 BF16 and quantized evaluations share the same `MODEL` and the same `seq_len=4096` / `granularity=block` configuration.
 The eval covers `attn-linear` + `moe`, loading autoround PTQ params for both.
+
+Measured settings behind the result table: Attention uses the default protocol
+(`nsamples=128` / `epochs=10` / `cali_bsz=4`); MoE is overridden with
+`MOE_NSAMPLES=32` / `MOE_EPOCHS=1` / `MOE_CALI_BSZ=8` (single Atlas A3 card, 10240 expert units).
+Use the same settings to reproduce the table; quantization time is wall-clock including unit I/O.
 
 | Model | Dtype | Algorithm | Format | BF16 PPL | Quant PPL | PPL delta | Quant time (min) | Offline data (GiB) |
 | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
