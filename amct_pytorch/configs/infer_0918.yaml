@@ -1,0 +1,50 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
+
+# Kimi-K3 inference scheme:
+# - MLA/KDA attention linears: MXFP8 A8W8
+# - Routed experts w1/w2/w3: MXFP4 A8W4
+# - Shared experts and latent MoE projections: MXFP8 A8W8
+# - MLA q/kv/p cache tensors: FP8
+w_bits: 8
+a_bits: 8
+
+attn-linear:
+  w_bits: 8
+  a_bits: 8
+  q_a_proj: { w_bits: 8, a_bits: 8 }
+  q_b_proj: { w_bits: 8, a_bits: 8 }
+  kv_a_proj_with_mqa: { w_bits: 8, a_bits: 8 }
+  o_proj: { w_bits: 8, a_bits: 8 }
+
+moe:
+  routed:
+    w_bits: 4
+    a_bits: 4
+    routed_expert_down_proj:
+      w_bits: 8
+      a_bits: 8
+    routed_expert_up_proj:
+      w_bits: 8
+      a_bits: 8
+  shared:
+    w_bits: 8
+    a_bits: 8
+
+attn-cache:
+  q: 8
+  kv: 8
+  p: 8
