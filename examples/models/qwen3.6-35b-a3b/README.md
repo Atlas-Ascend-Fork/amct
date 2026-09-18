@@ -16,7 +16,7 @@ CLI 入口与 [Qwen3.6-Moe.md](../qwen3.6/Qwen3.6-Moe.md) 一致：`python3 -m a
 
 ## 运行说明
 
-环境：单卡 `npu:0` 起步（MoE PTQ 耗时以天计，可用 [`examples/ptq_multi_npu.sh`](../../../examples/ptq_multi_npu.sh) 的按层切分方式并行缩短）。先按本机 CANN 安装路径配置环境，并安装 `amct_pytorch`（或设置 `PYTHONPATH` 指向仓库根目录）。
+环境：单卡 `npu:0` 起步。默认协议（`MOE_NSAMPLES=128` / `MOE_EPOCHS=10`）下 MoE PTQ 每格式约需数天；本样例结果表改用 `MOE_NSAMPLES=32` / `MOE_EPOCHS=1`，单卡实测 attn+moe 全程 int 264.4 min、mxfp 303.2 min（见结果表）。需按默认协议跑或进一步提速时，可用 [`examples/ptq_multi_npu.sh`](../../../examples/ptq_multi_npu.sh) 的按层切分方式并行。先按本机 CANN 安装路径配置环境，并安装 `amct_pytorch`（或设置 `PYTHONPATH` 指向仓库根目录）。
 一站式平台示例：`source /home/developer/Ascend/cann/set_env.sh`。若需镜像下载校准/评估数据，可自行设置 `HF_ENDPOINT`。
 
 - 模型：本地 Qwen3.6-35B-A3B 权重；`--model_name qwen3_6_moe`；`--trust_remote_code`
@@ -90,9 +90,9 @@ MoE 目标把 `--quant_target` 换成 `moe`、`--data_dir` 换成 `.../ptq_data/
 | `--algos autoround` | 量化算法 |
 | `--bit_config` | `amct_pytorch/configs/w4a8.yaml` |
 | `--quant_target` | extract/PTQ 每次一个目标：`attn-linear` 或 `moe`；量化评估同时加载两者 |
-| `--nsamples` | Pileval 校准条数，默认 128 |
-| `--epochs` / `--base_lr` | autoround 默认 `10` / `1e-3`（可调） |
-| `MOE_NSAMPLES` / `MOE_EPOCHS` / `MOE_BASE_LR` | MoE 侧单独覆盖校准条数 / 迭代轮数 / 学习率（默认与 Attention 相同）；专家级 autoround 单元数约为 `40×256`，预算紧张时可下调以控制卡时，结果表按实际取值填写 |
+| `--nsamples` / `--cali_bsz` | Pileval 校准条数（CLI 默认 128）/ 校准 batch size（CLI 默认 4） |
+| `--epochs` / `--base_lr` | 本样例取值 `10` / `1e-3`（CLI 默认 `15` / `1e-5`）；可调 |
+| `MOE_NSAMPLES` / `MOE_EPOCHS` / `MOE_BASE_LR` / `MOE_CALI_BSZ` | MoE 侧单独覆盖校准条数 / 迭代轮数 / 学习率 / 校准 batch size（默认与 Attention 相同）；专家级 autoround 单元数约为 `40×256`，预算紧张时可下调以控制卡时，结果表按实际取值填写 |
 | `--end_block_idx` | 默认 40（exclusive；超出层数会被 PTQ 截断） |
 | `RUN_MOE_PTQ` | 默认 `1`（执行 MoE PTQ）；置 `0` 仅用于冒烟测试，结果表不适用 |
 
@@ -108,10 +108,11 @@ MoE 目标把 `--quant_target` 换成 `moe`、`--data_dir` 换成 `.../ptq_data/
 | int PTQ 参数 MoE | `./outputs/qwen3_6_35b_a3b_w4a8_int/ptq_params/qwen3_6_moe/moe` | ~120 |
 | mxfp PTQ 参数 Attention | `./outputs/qwen3_6_35b_a3b_w4a8_mxfp/ptq_params/qwen3_6_moe/attn-linear` | ~5 |
 | mxfp PTQ 参数 MoE | `./outputs/qwen3_6_35b_a3b_w4a8_mxfp/ptq_params/qwen3_6_moe/moe` | ~128 |
+| BF16 基线日志（两种格式共用） | `./outputs/qwen3_6_35b_a3b_bf16/logs/eval_qwen3_6_moe_bf16.log` | — |
 
-量化时长口径：从该格式第一次 `ptq` 开始到 attn+moe 参数全部写完（不含模型下载和环境构建），脚本会打印起止时间。离线数据大小为 extract 输出目录合计，GiB。
+量化时长口径：从该格式第一次 `ptq`（`ptq_attn.sh`）开始到 attn+moe 参数全部写完（不含模型下载和环境构建），`ptq_attn.sh` 与 `ptq_mlp.sh` 均打印 `start:` / `end:` 时间戳。离线数据大小为 extract 输出目录合计，GiB。
 
-评估日志：`<OUTPUT_DIR>/logs/eval_*.log`（`eval_bf16.sh` / `eval_quant.sh` 均传 `--output_dir`）。loguru 为追加写，int 与 mxfp 各自写在自己的 `OUTPUT_DIR` 下，不会混进同一个文件。
+评估日志：`eval_quant.sh` 写 `<OUTPUT_DIR>/logs/eval_*.log`，int 与 mxfp 各自在自己的 `OUTPUT_DIR` 下，不会混进同一个文件；`eval_bf16.sh` 写与 `QUANT_DTYPE` 无关的 `<BF16_OUTPUT_DIR>/logs/`（默认 `./outputs/qwen3_6_35b_a3b_bf16/logs/`），两种格式共用同一份 BF16 基线日志。loguru 为追加写。
 
 ## 结果表
 

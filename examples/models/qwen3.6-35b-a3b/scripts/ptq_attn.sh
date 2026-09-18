@@ -20,6 +20,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/common.sh"
 print_runtime_args "ptq_attn"
 
+echo "[qwen3.6-35b-a3b.w4a8.autoround.ptq_attn] start: $(date '+%F %T')"
 # shellcheck disable=SC2086
 "${AMCT_CLI[@]}" amct_pytorch.ptq \
   --trust_remote_code \
@@ -39,3 +40,4 @@ print_runtime_args "ptq_attn"
   --epochs "${EPOCHS}" \
   --base_lr "${BASE_LR}" \
   --output_dir "${OUTPUT_DIR}"
+echo "[qwen3.6-35b-a3b.w4a8.autoround.ptq_attn] end: $(date '+%F %T')"

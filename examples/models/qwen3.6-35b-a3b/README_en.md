@@ -16,7 +16,7 @@ The `w4a8.yaml` MoE policy: routed experts w4/a8, shared expert w8/a8.
 
 ## How to run
 
-Environment: start from a single `npu:0` card (MoE PTQ takes days there; shorten it with the per-block split shown in [`examples/ptq_multi_npu.sh`](../../../examples/ptq_multi_npu.sh)). Configure the environment with the local CANN installation path first, then install `amct_pytorch` (or point `PYTHONPATH` at the repository root).
+Environment: start from a single `npu:0` card. Under the default protocol (`MOE_NSAMPLES=128` / `MOE_EPOCHS=10`) MoE PTQ takes days per format; the result table in this sample uses `MOE_NSAMPLES=32` / `MOE_EPOCHS=1`, measured on one card at 264.4 min (int) and 303.2 min (mxfp) for the full attn+moe run (see Results). To run the default protocol or go faster, use the per-block split shown in [`examples/ptq_multi_npu.sh`](../../../examples/ptq_multi_npu.sh). Configure the environment with the local CANN installation path first, then install `amct_pytorch` (or point `PYTHONPATH` at the repository root).
 One-stop platform example: `source /home/developer/Ascend/cann/set_env.sh`. Set `HF_ENDPOINT` yourself if the calibration/eval datasets must be fetched through a mirror.
 
 - Model: local Qwen3.6-35B-A3B weights; `--model_name qwen3_6_moe`; `--trust_remote_code`
@@ -91,9 +91,9 @@ Main parameters:
 | `--algos autoround` | Quantization algorithm |
 | `--bit_config` | `amct_pytorch/configs/w4a8.yaml` |
 | `--quant_target` | One target per extract/PTQ run: `attn-linear` or `moe`; the quantized eval loads both |
-| `--nsamples` | Pileval calibration samples, default 128 |
-| `--epochs` / `--base_lr` | autoround defaults `10` / `1e-3` (tunable) |
-| `MOE_NSAMPLES` / `MOE_EPOCHS` / `MOE_BASE_LR` | MoE-side overrides for calibration samples / epochs / learning rate (default same as Attention); expert-wise autoround walks ~`40x256` units, so lower them to bound card time under a tight budget and record the actual values in the result table |
+| `--nsamples` / `--cali_bsz` | Pileval calibration samples (CLI default 128) / calibration batch size (CLI default 4) |
+| `--epochs` / `--base_lr` | This sample uses `10` / `1e-3` (CLI defaults are `15` / `1e-5`); tunable |
+| `MOE_NSAMPLES` / `MOE_EPOCHS` / `MOE_BASE_LR` / `MOE_CALI_BSZ` | MoE-side overrides for calibration samples / epochs / learning rate / calibration batch size (default same as Attention); expert-wise autoround walks ~`40x256` units, so lower them to bound card time under a tight budget and record the actual values in the result table |
 | `--end_block_idx` | Default 40 (exclusive; PTQ truncates beyond the layer count) |
 | `RUN_MOE_PTQ` | Default `1` (run MoE PTQ); set `0` only for smoke tests, the result table does not apply |
 
@@ -109,10 +109,11 @@ Relative placeholder directories (under this sample directory by default):
 | int PTQ params, MoE | `./outputs/qwen3_6_35b_a3b_w4a8_int/ptq_params/qwen3_6_moe/moe` | ~120 |
 | mxfp PTQ params, Attention | `./outputs/qwen3_6_35b_a3b_w4a8_mxfp/ptq_params/qwen3_6_moe/attn-linear` | ~5 |
 | mxfp PTQ params, MoE | `./outputs/qwen3_6_35b_a3b_w4a8_mxfp/ptq_params/qwen3_6_moe/moe` | ~128 |
+| BF16 baseline log (shared by both formats) | `./outputs/qwen3_6_35b_a3b_bf16/logs/eval_qwen3_6_moe_bf16.log` | — |
 
-Quantization wall time: measured from the first `ptq` of a format until all attn+moe params are written (model download and environment setup excluded); scripts print start/end timestamps. Offline data size is the combined extract output in GiB.
+Quantization wall time: measured from the first `ptq` of a format (`ptq_attn.sh`) until all attn+moe params are written (model download and environment setup excluded); both `ptq_attn.sh` and `ptq_mlp.sh` print `start:` / `end:` timestamps. Offline data size is the combined extract output in GiB.
 
-Eval logs: `<OUTPUT_DIR>/logs/eval_*.log` (`eval_bf16.sh` and `eval_quant.sh` both pass `--output_dir`). loguru appends, and int / mxfp write under their own `OUTPUT_DIR`, so the two formats no longer share one log file.
+Eval logs: `eval_quant.sh` writes `<OUTPUT_DIR>/logs/eval_*.log`, with int and mxfp under their own `OUTPUT_DIR` so the two formats no longer share one file; `eval_bf16.sh` writes `<BF16_OUTPUT_DIR>/logs/` (default `./outputs/qwen3_6_35b_a3b_bf16/logs/`), independent of `QUANT_DTYPE`, so both formats share the same BF16 baseline log. loguru appends.
 
 ## Results
 

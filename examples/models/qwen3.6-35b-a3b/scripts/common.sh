@@ -50,6 +50,9 @@ if [ "${QUANT_DTYPE}" = "mxfp" ]; then
 else
   OUT_ROOT="${OUT_ROOT:-${Qwen36_SAMPLE_DIR}/outputs/qwen3_6_35b_a3b_w4a8_int}"
 fi
+# The BF16 baseline runs once and is shared by both formats, so its logs must not
+# follow QUANT_DTYPE (otherwise the mxfp reader would look for it in the int dir).
+BF16_OUTPUT_DIR="${BF16_OUTPUT_DIR:-${Qwen36_SAMPLE_DIR}/outputs/qwen3_6_35b_a3b_bf16}"
 
 # PTQ offline data is shared by both formats; extract once, reuse twice.
 DATA_DIR="${DATA_DIR:-${Qwen36_SAMPLE_DIR}/outputs/qwen3_6_35b_a3b/ptq_data}"
@@ -81,6 +84,7 @@ print_runtime_args() {
   ATTN_DATA_DIR=${ATTN_DATA_DIR}
   MOE_DATA_DIR=${MOE_DATA_DIR}
   OUTPUT_DIR=${OUTPUT_DIR}
+  BF16_OUTPUT_DIR=${BF16_OUTPUT_DIR}
   ATTN_PARAM_DIR=${ATTN_PARAM_DIR}
   MOE_PARAM_DIR=${MOE_PARAM_DIR}
   START_BLOCK_IDX=${START_BLOCK_IDX}

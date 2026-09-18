@@ -29,4 +29,4 @@ print_runtime_args "eval_bf16"
   --device "${DEVICE}" \
   --eval_mode bf16 \
   --bit_config "${BF16_BIT_CONFIG}" \
-  --output_dir "${OUTPUT_DIR}"
+  --output_dir "${BF16_OUTPUT_DIR}"
