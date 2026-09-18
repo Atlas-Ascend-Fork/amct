@@ -27,6 +27,7 @@ DEVICE="${DEVICE:-npu:0}"
 SEQ_LEN="${SEQ_LEN:-4096}"
 GRANULARITY="${GRANULARITY:-block}"
 NSAMPLES="${NSAMPLES:-128}"
+QUANT_TYPE="${QUANT_TYPE:-w4a8}"
 QUANT_DTYPE="${QUANT_DTYPE:-int}"
 ALGOS="${ALGOS:-lwc lac}"
 START_BLOCK_IDX="${START_BLOCK_IDX:-0}"
@@ -34,14 +35,24 @@ END_BLOCK_IDX="${END_BLOCK_IDX:-28}"
 EPOCHS="${EPOCHS:-15}"
 BASE_LR="${BASE_LR:-1e-5}"
 
+case "${QUANT_TYPE}" in
+  w4a4)
+    DEFAULT_BIT_CONFIG="${AMCT_ROOT}/amct_pytorch/configs/w4a4.yaml"
+    ;;
+  w4a8)
+    DEFAULT_BIT_CONFIG="${AMCT_ROOT}/amct_pytorch/configs/w4a8.yaml"
+    ;;
+  *)
+    echo "QUANT_TYPE must be w4a4 or w4a8, got: ${QUANT_TYPE}" >&2
+    exit 1
+    ;;
+esac
+
 # Same in-repo W4A8 policy for int and mxfp; format is selected by --quant_dtype.
-BIT_CONFIG="${BIT_CONFIG:-${AMCT_ROOT}/amct_pytorch/configs/w4a8.yaml}"
+BIT_CONFIG="${BIT_CONFIG:-DEFAULT_BIT_CONFIG}"
 BF16_BIT_CONFIG="${BF16_BIT_CONFIG:-${AMCT_ROOT}/amct_pytorch/configs/bf16.yaml}"
-if [ "${QUANT_DTYPE}" = "mxfp" ]; then
-  OUT_ROOT="${OUT_ROOT:-${Qwen3_SAMPLE_DIR}/outputs/qwen3_0_6b_w4a8_mxfp}"
-else
-  OUT_ROOT="${OUT_ROOT:-${Qwen3_SAMPLE_DIR}/outputs/qwen3_0_6b_w4a8_int}"
-fi
+DEFAULT_OUT_ROOT="${Qwen3_SAMPLE_DIR}/outputs/${ALGOS}/qwen3_0_6b_${QUANT_TYPE}_${QUANT_DTYPE}"
+OUT_ROOT="${OUT_ROOT:-${DEFAULT_OUT_ROOT}}"
 
 DATA_DIR="${DATA_DIR:-${Qwen3_SAMPLE_DIR}/outputs/qwen3_0_6b/ptq_data}"
 ATTN_DATA_DIR="${ATTN_DATA_DIR:-${DATA_DIR}/attn-linear}"
