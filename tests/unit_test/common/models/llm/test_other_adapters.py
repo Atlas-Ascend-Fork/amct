@@ -418,6 +418,9 @@ def test_kimi_k3_tensor_deploy_builds_moe_quant_layers_from_index(tmp_path):
 
 
 def test_kimi_k3_tensor_deploy_respects_non_moe_quant_target(tmp_path):
+    (tmp_path / "config.json").write_text(json.dumps({"text_config": {
+        "linear_attn_config": {"full_attn_layers": [1], "kda_layers": []},
+    }}))
     (tmp_path / "model.safetensors.index.json").write_text(json.dumps({"weight_map": {
         "language_model.model.layers.0.block_sparse_moe.experts.0.w1.weight_packed": "shard.safetensors",
     }}))

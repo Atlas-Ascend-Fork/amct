@@ -77,8 +77,8 @@ class KimiK3(BaseModel):
         r"^language_model\.model\.layers\.\d+\.block_sparse_moe\.experts\.\d+\.w[123]\.weight_packed$"
     )
     _MLA_WEIGHT_RE = re.compile(
-        r"^language_model\.model\.layers\.\d+\.self_attn\."
-        r"(q_a_proj|q_b_proj|kv_a_proj_with_mqa|o_proj)\.weight$"
+        r"^language_model\.model\.layers\.(?P<layer_idx>\d+)\.self_attn\."
+        r"(?P<projection>q_a_proj|q_b_proj|kv_a_proj_with_mqa|o_proj)\.weight$"
     )
     _SHARED_EXPERT_WEIGHT_RE = re.compile(
         r"^language_model\.model\.layers\.\d+\.block_sparse_moe\.shared_experts\."
@@ -96,6 +96,10 @@ class KimiK3(BaseModel):
             self.quant_target = getattr(args, "quant_target", [])
             self.quant_dtype = getattr(args, "quant_dtype", "")
             self._weight_map = None
+            self._tensorwise_mla_layer_indices = (
+                self._load_tensorwise_mla_layer_indices()
+                if "attn-linear" in self.quant_target else set()
+            )
             return
 
         self._register_kimi_config()
@@ -763,6 +767,20 @@ class KimiK3(BaseModel):
             and self._is_kimi_moe_weight_packed(weight_name)
         )
 
+    def _load_tensorwise_mla_layer_indices(self):
+        config_path = Path(self.model_path) / "config.json"
+        with open(config_path, "r", encoding="utf-8") as file:
+            config = json.load(file)
+        text_config = config.get("text_config", config)
+        linear_attn_config = text_config.get("linear_attn_config") or {}
+        full_attn_layers = linear_attn_config.get("full_attn_layers")
+        if not isinstance(full_attn_layers, list):
+            raise ValueError(
+                f"{config_path} must define "
+                "text_config.linear_attn_config.full_attn_layers for Kimi-K3 tensorwise attn-linear quantization"
+            )
+        return {int(layer_idx) - 1 for layer_idx in full_attn_layers}
+
     def generate_tensorwise_quant_layers(self):
         quant_layers = {}
         quantize_moe = not self.quant_target or "moe" in self.quant_target
@@ -797,8 +815,12 @@ class KimiK3(BaseModel):
                 continue
 
             mla_match = self._MLA_WEIGHT_RE.match(weight_name)
-            if quantize_mla and mla_match is not None:
-                projection_name = mla_match.group(1)
+            if (
+                quantize_mla
+                and mla_match is not None
+                and int(mla_match.group("layer_idx")) in self._tensorwise_mla_layer_indices
+            ):
+                projection_name = mla_match.group("projection")
                 quant_layers[weight_name.rsplit(".", 1)[0]] = (
                     attn_bits[projection_name].w
                 )

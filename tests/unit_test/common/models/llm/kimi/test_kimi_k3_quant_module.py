@@ -16,6 +16,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -189,6 +190,7 @@ def _tensorwise_pipeline(target):
     pipeline.args = _args(target, quant_dtype="mxfp")
     pipeline.quant_target = pipeline.args.quant_target
     pipeline.quant_dtype = pipeline.args.quant_dtype
+    pipeline._tensorwise_mla_layer_indices = {0}
     pipeline._weight_map = {
         "language_model.model.layers.0.self_attn.q_a_proj.weight": "model-0.safetensors",
         "language_model.model.layers.0.self_attn.q_b_proj.weight": "model-0.safetensors",
@@ -231,6 +233,46 @@ def test_kimi_tensorwise_attn_linear_selects_only_mla_projections():
         "language_model.model.layers.0.self_attn.q_b_proj": 8,
         "language_model.model.layers.0.self_attn.kv_a_proj_with_mqa": 8,
         "language_model.model.layers.0.self_attn.o_proj": 8,
+    }
+
+
+def test_kimi_tensorwise_attn_linear_excludes_kda_o_proj_from_config(tmp_path):
+    from amct_pytorch.common.models.llm.kimi.kimi_k3.kimi_k3 import KimiK3
+
+    config = {
+        "text_config": {
+            "num_hidden_layers": 4,
+            "linear_attn_config": {
+                "full_attn_layers": [4],
+                "kda_layers": [1, 2, 3],
+            },
+        },
+    }
+    weight_map = {
+        "language_model.model.layers.0.self_attn.q_proj.weight": "model.safetensors",
+        "language_model.model.layers.0.self_attn.k_proj.weight": "model.safetensors",
+        "language_model.model.layers.0.self_attn.v_proj.weight": "model.safetensors",
+        "language_model.model.layers.0.self_attn.o_proj.weight": "model.safetensors",
+        "language_model.model.layers.3.self_attn.q_a_proj.weight": "model.safetensors",
+        "language_model.model.layers.3.self_attn.q_b_proj.weight": "model.safetensors",
+        "language_model.model.layers.3.self_attn.kv_a_proj_with_mqa.weight": "model.safetensors",
+        "language_model.model.layers.3.self_attn.o_proj.weight": "model.safetensors",
+    }
+    (tmp_path / "config.json").write_text(json.dumps(config), encoding="utf-8")
+    (tmp_path / "model.safetensors.index.json").write_text(
+        json.dumps({"weight_map": weight_map}), encoding="utf-8",
+    )
+    args = _args(["attn-linear"], quant_dtype="mxfp")
+    args.granularity = "tensor"
+    args.model = str(tmp_path)
+
+    pipeline = KimiK3(args)
+
+    assert pipeline.generate_tensorwise_quant_layers() == {
+        "language_model.model.layers.3.self_attn.q_a_proj": 8,
+        "language_model.model.layers.3.self_attn.q_b_proj": 8,
+        "language_model.model.layers.3.self_attn.kv_a_proj_with_mqa": 8,
+        "language_model.model.layers.3.self_attn.o_proj": 8,
     }
 
 
