@@ -93,7 +93,7 @@ MoE 目标把 `--quant_target` 换成 `moe`、`--data_dir` 换成 `.../ptq_data/
 | `--nsamples` / `--cali_bsz` | Pileval 校准条数（CLI 默认 128）/ 校准 batch size（CLI 默认 4） |
 | `--epochs` / `--base_lr` | 本样例取值 `10` / `1e-3`（CLI 默认 `15` / `1e-5`）；可调 |
 | `MOE_NSAMPLES` / `MOE_EPOCHS` / `MOE_BASE_LR` / `MOE_CALI_BSZ` | MoE 侧单独覆盖校准条数 / 迭代轮数 / 学习率 / 校准 batch size（默认与 Attention 相同）；专家级 autoround 单元数约为 `40×256`，预算紧张时可下调以控制卡时，结果表按实际取值填写 |
-| `--end_block_idx` | 默认 40（exclusive；超出层数会被 PTQ 截断） |
+| `--end_block_idx` | 本样例取值 40（exclusive；Qwen3.6-35B-A3B 共 40 层，覆盖全部层）；CLI 默认 61，大于层数时会被 PTQ 截断 |
 | `RUN_MOE_PTQ` | 默认 `1`（执行 MoE PTQ）；置 `0` 仅用于冒烟测试，结果表不适用 |
 
 ## 产物说明

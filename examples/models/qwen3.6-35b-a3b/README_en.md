@@ -94,7 +94,7 @@ Main parameters:
 | `--nsamples` / `--cali_bsz` | Pileval calibration samples (CLI default 128) / calibration batch size (CLI default 4) |
 | `--epochs` / `--base_lr` | This sample uses `10` / `1e-3` (CLI defaults are `15` / `1e-5`); tunable |
 | `MOE_NSAMPLES` / `MOE_EPOCHS` / `MOE_BASE_LR` / `MOE_CALI_BSZ` | MoE-side overrides for calibration samples / epochs / learning rate / calibration batch size (default same as Attention); expert-wise autoround walks ~`40x256` units, so lower them to bound card time under a tight budget and record the actual values in the result table |
-| `--end_block_idx` | Default 40 (exclusive; PTQ truncates beyond the layer count) |
+| `--end_block_idx` | This sample uses 40 (exclusive; Qwen3.6-35B-A3B has 40 layers, so every layer is covered); CLI default is 61 and is truncated when it exceeds the layer count |
 | `RUN_MOE_PTQ` | Default `1` (run MoE PTQ); set `0` only for smoke tests, the result table does not apply |
 
 ## Artifacts

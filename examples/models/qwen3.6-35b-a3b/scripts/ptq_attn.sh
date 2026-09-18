@@ -28,6 +28,7 @@ echo "[qwen3.6-35b-a3b.w4a8.autoround.ptq_attn] start: $(date '+%F %T')"
   --model_name "${MODEL_NAME}" \
   --seq_len "${SEQ_LEN}" \
   --granularity "${GRANULARITY}" \
+  --nsamples "${NSAMPLES}" \
   --cali_bsz ${CALI_BSZ} \
   --device "${DEVICE}" \
   --data_dir "${ATTN_DATA_DIR}" \

@@ -42,6 +42,7 @@ echo "[qwen3.6-35b-a3b.w4a8.autoround.ptq_mlp] start: $(date '+%F %T')"
   --model_name "${MODEL_NAME}" \
   --seq_len "${SEQ_LEN}" \
   --granularity "${GRANULARITY}" \
+  --nsamples "${MOE_NSAMPLES}" \
   --cali_bsz ${MOE_CALI_BSZ} \
   --device "${DEVICE}" \
   --data_dir "${MOE_DATA_DIR}" \
