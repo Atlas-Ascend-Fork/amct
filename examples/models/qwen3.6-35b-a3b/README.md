@@ -76,7 +76,7 @@ python3 -m amct_pytorch.ptq \
   --output_dir examples/models/qwen3.6-35b-a3b/outputs/qwen3_6_35b_a3b_w4a8_int
 ```
 
-MoE 目标在 Attention 命令基础上改 `--quant_target moe`、`--data_dir .../ptq_data/moe`，并把 `--nsamples` / `--cali_bsz` / `--epochs` 换成 MoE 取值（本样例 `32` / `8` / `1`，`--base_lr` 不变仍为 `1e-3`，即脚本里的 `MOE_NSAMPLES` / `MOE_CALI_BSZ` / `MOE_EPOCHS`）；量化评估同时传 `--attn_linear_param_dir` 与 `--moe_mlp_param_dir`（`--quant_target attn-linear moe`）。直接照 Attention 命令只换 `--quant_target` / `--data_dir` 的话，会落在 CLI 默认 `128 / 4 / 10`，与结果表口径不一致。
+MoE 目标在 Attention 命令基础上改 `--quant_target moe`、`--data_dir .../ptq_data/moe`，并把 `--nsamples` / `--cali_bsz` / `--epochs` 换成 MoE 取值（本样例 `32` / `8` / `1`，`--base_lr` 不变仍为 `1e-3`，即脚本里的 `MOE_NSAMPLES` / `MOE_CALI_BSZ` / `MOE_EPOCHS`）；量化评估同时传 `--attn_linear_param_dir` 与 `--moe_mlp_param_dir`（`--quant_target attn-linear moe`）。直接照 Attention 命令只换 `--quant_target` / `--data_dir` 的话，`--nsamples` / `--cali_bsz` 会落到 CLI 默认 `128 / 4`，`--epochs` 仍为命令中的 `10`，与结果表口径不一致。
 
 主要参数：
 
@@ -130,4 +130,4 @@ MoE 覆盖为 `MOE_NSAMPLES=32` / `MOE_EPOCHS=1` / `MOE_CALI_BSZ=8`（Atlas A3 �
 
 > 差值列由**全精度**（未四舍五入）的量化 PPL 与 BF16 PPL 相减得出，与表中 4 位小数直接相减可能相差 1 个末位（如 6.7924 − 6.3085 = 0.4839）。
 >
-> 表中数值测于 `--nsamples` 修复（e8bb5de）之前的调度口径：当时 MoE 侧余弦调度按 CLI 默认 `nsamples=128` 计算，`T_max=16`、每个专家单元实际 4 步、末步学习率约 `0.85 × base_lr`（退火未走完）。当前脚本按 `--nsamples 32` 计算 `T_max=4`、4 步完成完整退火，复现出的量化 PPL 可能与表略有差异（Attention 侧不受影响，前后 `T_max` 均为 320）。
+> 表中数值测于 `--nsamples` 修复之前的调度口径：当时 MoE 侧余弦调度按 CLI 默认 `nsamples=128` 计算，`T_max=16`、每个专家单元实际 4 步、末步学习率约 `0.85 × base_lr`（退火未走完）。当前脚本按 `--nsamples 32` 计算 `T_max=4`、4 步完成完整退火，复现出的量化 PPL 可能与表略有差异（Attention 侧不受影响，前后 `T_max` 均为 320）。

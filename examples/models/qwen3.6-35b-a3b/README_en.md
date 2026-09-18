@@ -77,7 +77,7 @@ python3 -m amct_pytorch.ptq \
   --output_dir examples/models/qwen3.6-35b-a3b/outputs/qwen3_6_35b_a3b_w4a8_int
 ```
 
-For the MoE target, start from the Attention command and change `--quant_target` to `moe`, `--data_dir` to `.../ptq_data/moe`, and also set `--nsamples` / `--cali_bsz` / `--epochs` to the MoE values (this sample: `32` / `8` / `1`; `--base_lr` stays `1e-3` — these are the script's `MOE_NSAMPLES` / `MOE_CALI_BSZ` / `MOE_EPOCHS`); the quantized eval passes both `--attn_linear_param_dir` and `--moe_mlp_param_dir` (`--quant_target attn-linear moe`). Copying the Attention command and only switching `--quant_target` / `--data_dir` lands on the CLI defaults `128 / 4 / 10`, which does not match the result-table protocol.
+For the MoE target, start from the Attention command and change `--quant_target` to `moe`, `--data_dir` to `.../ptq_data/moe`, and also set `--nsamples` / `--cali_bsz` / `--epochs` to the MoE values (this sample: `32` / `8` / `1`; `--base_lr` stays `1e-3` — these are the script's `MOE_NSAMPLES` / `MOE_CALI_BSZ` / `MOE_EPOCHS`); the quantized eval passes both `--attn_linear_param_dir` and `--moe_mlp_param_dir` (`--quant_target attn-linear moe`). Copying the Attention command and only switching `--quant_target` / `--data_dir` leaves `--nsamples` / `--cali_bsz` at the CLI defaults `128 / 4` while `--epochs` remains the `10` in the command, which does not match the result-table protocol.
 
 Main parameters:
 
@@ -132,4 +132,4 @@ Use the same settings to reproduce the table; quantization time is wall-clock in
 
 > The delta column is computed from the **full-precision** (unrounded) quantized and BF16 PPL values, so it can differ in the last digit from subtracting the 4-decimal columns shown here (e.g. 6.7924 − 6.3085 = 0.4839).
 >
-> The numbers in this table were measured under the pre-fix schedule (before the `--nsamples` fix, commit e8bb5de): back then the MoE cosine schedule used the CLI-default `nsamples=128`, giving `T_max=16` with only 4 actual steps per expert unit and a final learning rate of about `0.85 × base_lr` (annealing incomplete). The current script computes `T_max=4` from `--nsamples 32`, so 4 steps complete the full annealing cycle and the reproduced quantized PPL may differ slightly (the Attention side is unaffected — `T_max` was 320 before and after).
+> The numbers in this table were measured under the pre-fix schedule (before the `--nsamples` fix): back then the MoE cosine schedule used the CLI-default `nsamples=128`, giving `T_max=16` with only 4 actual steps per expert unit and a final learning rate of about `0.85 × base_lr` (annealing incomplete). The current script computes `T_max=4` from `--nsamples 32`, so 4 steps complete the full annealing cycle and the reproduced quantized PPL may differ slightly (the Attention side is unaffected — `T_max` was 320 before and after).
