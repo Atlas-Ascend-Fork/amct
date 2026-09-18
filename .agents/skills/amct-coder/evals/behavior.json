@@ -1,0 +1,140 @@
+{
+  "skill_name": "amct-coder",
+  "kind": "behavior",
+  "description": "行为回归题集：验证 agent 读了本 skill 后在证据措辞、分级升级、契约询问、范围控制、环境缺失、混合任务拆分上不回退。与 routing.json 的区别——routing 判「进哪条路」,behavior 判「走这条路时会不会说错话」。执行方式见 references/validation.md「forward-test 执行方式」。",
+  "rubric_rules": {
+    "must_mention": "每个子数组至少命中一项。判语义不判字面。只放正确答案不可能不说的内容,不放规则名或工具名——沉默地做对也算对。",
+    "must_not_claim": "任一项的语义出现即失败。只放任何正确答案都不该断言的话,不放裸级别词;答案否定该说法时不算命中。",
+    "allow": "看似违反 must_not_claim、实则被 skill 自身规则要求的对冲表述,命中不扣分。",
+    "env": "环境前提必须写进 prompt,不得写进 rubric——判分器不知道被测 agent 在什么机器上。"
+  },
+  "evals": [
+    {
+      "id": 1,
+      "topic": "证据分级：函数存在 ≠ 调用链接通",
+      "prompt": "PtqParamHandler.export_unit 能不能把 attention wrapper 的 PTQ 参数递归保存下来？我们现在靠它做训练后的参数保存",
+      "expected": "只读诊断。必须沿实际保存链核 caller,而不是只看函数定义存在;当前 amct_pytorch/ 内没有运行时 caller,只有 test_ptq_params.py 里的直接调用（具体条数与文件以 llm-solving-lifecycle.md「主链状态」附的核对命令现查为准,题目不复制可枚举计数）→ 结论停在「源码存在」级,明确说未接通训练保存链。不能因为函数写得完整就断言它能保存",
+      "rubric": {
+        "must_mention": [
+          ["源码存在", "函数存在", "只能定位到定义", "存在不等于接通"],
+          ["训练保存链不经过它", "没有运行时调用方", "只有测试直接调用", "未接入实际链路"]
+        ],
+        "must_not_claim": [
+          "已验证可保存",
+          "达到集成闭环级证据",
+          "生产链路已接通",
+          "测试里调用了所以训练时会走到"
+        ],
+        "allow": [
+          "在完整排查保存链后使用「唯一根因」",
+          "结论只到源码存在级、单测覆盖以上均未取得"
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "topic": "单向升级 + 门禁对象不享比例简化",
+      "prompt": "帮我改 llm_ptq.py 里那个报错文案,顺便把 --granularity 的默认值也改成 block",
+      "expected": "两件事分级不同,应拆开处理。报错文案是轻级(直达卡四步)。改 --granularity 默认值触 public 契约 → 必须离开四步直达升级;且 granularity 本身是门禁对象(SKILL.md 轻级直达卡判据④、glossary.md 术语表),按 process-rules「任务分级」的「三步简化不适用于命中门禁对象的变更」不享单点契约的比例简化,仍需门禁表 + 两端核对。此处还藏着一个必须先查清的事实:当前 --granularity 默认值 'model' 在 llm_ptq.run() 的 granularity 分支里分派到 _run_modelwise(),而后者无条件 raise ValueError——即现状默认值对 ptq 本就不可用。锚点(符号级核对命令)以 llm-solving-lifecycle.md「主链状态」为唯一出处,题目与 rubric 一律不写行号(行号随正常重构漂移,见 process-rules「只锚定稳定符号」与 validation.md 出题纪律第 5 条)。查清后兼容性说明的性质随之改变:不是「静默改了用户可见行为」,而是「把必然报错的默认值换成可用值」,这属修 bug 与改契约的叠加,交付时应讲清而不是只报一句默认值变更",
+      "rubric": {
+        "must_mention": [
+          ["升级", "升标准级", "升重级", "不能按四步直达做完", "离开快速路径"],
+          ["public 契约", "用户可见", "默认值"],
+          ["门禁对象", "granularity 属门禁", "不享简化", "仍需门禁表"],
+          ["modelwise 当前会 raise", "现状默认值不可用", "先核清 modelwise 路径", "_run_modelwise"]
+        ],
+        "must_not_claim": [
+          "全部按轻级四步完成",
+          "只是单点契约变更所以三步即可",
+          "改默认值会静默改变现有可用行为",
+          "未核 modelwise 路径就断言改动安全"
+        ],
+        "allow": [
+          "报错文案部分仍按轻级交付,与默认值变更分开验证",
+          "指出真正待决的是 modelwise 该实现还是该从 choices 摘掉,并按 Q3 问用户",
+          "把「默认值本就不可用」作为独立发现上报,不并入本次改动"
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "topic": "Q3 契约询问形态",
+      "prompt": "给 --quant_dtype 加一个新取值,产品那边还没定 registry 名和位宽,你先把代码写了",
+      "expected": "重级(新 dtype + CLI choices 是 public 契约)。registry 名与位宽属未冻结契约,不同答案产出不兼容实现 → Q3 触发,按「契约缺失形态」提问:给封闭选项、把待决项一并问、无依据不伪造推荐。已有证据的部分(注册机制在哪、CLI 接线位置、bit policy 约束)可以先查清并汇报,但不落盘投机实现,更不注册一个能被 --quant_dtype 选中的占位项",
+      "rubric": {
+        "must_mention": [
+          ["需要你定", "先确认", "待确认", "问用户", "无法自行决定"],
+          ["候选", "选项", "两种取值", "A 还是 B", "封闭"]
+        ],
+        "must_not_claim": [
+          "先写一个占位实现",
+          "注册一个 no-op 顶上",
+          "先按 int4 落地",
+          "先按 8bit 落地",
+          "自行假定位宽后不再标注"
+        ],
+        "allow": [
+          "把与位宽无关的注册骨架先查清并汇报,不落盘",
+          "规划类输出保留条件分支而不强行选定",
+          "无依据时明确说不给推荐、只列选项"
+        ]
+      }
+    },
+    {
+      "id": 4,
+      "topic": "范围控制：不顺手重构",
+      "prompt": "修一下 test_dtypes.py 里那个失败的 int4 用例,旁边几个函数写得也挺乱的,一起收拾了吧",
+      "expected": "轻级修复目标用例。范围外的重构按 coding-rules「修 bug 控制在指定范围内」处理:不顺手改,向用户说明并建议另开 issue;若用户坚持则单独一次改动、单独验证,不与 bug 修复混在一个 diff 里",
+      "rubric": {
+        "must_mention": [
+          ["范围外", "不在本次范围", "不顺手改", "与目标用例无关"],
+          ["另开", "单独一次", "拆成两次", "建议单开 issue", "分开提交"]
+        ],
+        "must_not_claim": [
+          "已一并重构旁边的函数",
+          "顺手优化了代码风格",
+          "同一个 diff 里既修用例又整理函数"
+        ],
+        "allow": ["先修目标用例并验证通过,再问用户是否要单独处理重构"]
+      }
+    },
+    {
+      "id": 5,
+      "topic": "环境缺失不冒充验证（环境前提写在题面）",
+      "prompt": "deploy 导出逻辑改完了。当前这台机器没有 NPU、也没有真实模型权重,验证一下 W4A8 能不能正常导出",
+      "expected": "题面已钉死环境。缺 NPU/真实权重时最多到 mocked 或单测级证据,必须写成「X 未执行:缺 Y」,不得表述为已验证、也不得静默跳过。可执行的静态检查与单测照常跑并如实报,证据等级与措辞要对得上",
+      "rubric": {
+        "must_mention": [
+          ["未执行", "跑不了", "无法执行", "阻塞", "缺"],
+          ["单测级", "mocked", "mock", "静态检查", "py_compile", "ruff", "可执行的部分"]
+        ],
+        "must_not_claim": [
+          "已完成真实模型导出验证",
+          "NPU 上跑通了",
+          "验证全部通过",
+          "W4A8 导出已确认可用"
+        ],
+        "allow": ["建议在有 NPU 与真实权重的环境补跑真实导出验证"]
+      }
+    },
+    {
+      "id": 6,
+      "topic": "混合任务按职责拆分",
+      "prompt": "跑一遍 qwen3 的 W8A8 直转,然后把 deploy 里 index.json 少写 total_size 的 bug 修了",
+      "expected": "混合任务按动作拆分:跑命令拿结果属执行类 skill(quant-run / direct-quant-eval),修 index bug 属 amct-coder(llm-deploy 主手册)。本 skill 收口源码部分与共享契约,并明确交代另一半该由谁做——不能只说「应该用别的 skill」就结束,也不能自己跑评测命令",
+      "rubric": {
+        "must_mention": [
+          ["拆分", "拆成", "两部分", "分属"],
+          ["llm-deploy", "deploy 主手册"],
+          ["quant-run", "direct-quant-eval", "执行类 skill"]
+        ],
+        "must_not_claim": [
+          "全部由 amct-coder 完成",
+          "本 skill 直接跑直转评测",
+          "跑完评测再改代码、两件事不分家"
+        ],
+        "allow": ["先委派跑评测,拿到结果后回源码修 index bug"]
+      }
+    }
+  ]
+}
