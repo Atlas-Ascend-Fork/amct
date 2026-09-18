@@ -76,7 +76,7 @@ python3 -m amct_pytorch.ptq \
   --output_dir examples/models/qwen3.6-35b-a3b/outputs/qwen3_6_35b_a3b_w4a8_int
 ```
 
-MoE 目标把 `--quant_target` 换成 `moe`、`--data_dir` 换成 `.../ptq_data/moe`，其余不变；量化评估同时传 `--attn_linear_param_dir` 与 `--moe_mlp_param_dir`（`--quant_target attn-linear moe`）。
+MoE 目标在 Attention 命令基础上改 `--quant_target moe`、`--data_dir .../ptq_data/moe`，并把 `--nsamples` / `--cali_bsz` / `--epochs` 换成 MoE 取值（本样例 `32` / `8` / `1`，`--base_lr` 不变仍为 `1e-3`，即脚本里的 `MOE_NSAMPLES` / `MOE_CALI_BSZ` / `MOE_EPOCHS`）；量化评估同时传 `--attn_linear_param_dir` 与 `--moe_mlp_param_dir`（`--quant_target attn-linear moe`）。直接照 Attention 命令只换 `--quant_target` / `--data_dir` 的话，会落在 CLI 默认 `128 / 4 / 10`，与结果表口径不一致。
 
 主要参数：
 
@@ -92,7 +92,7 @@ MoE 目标把 `--quant_target` 换成 `moe`、`--data_dir` 换成 `.../ptq_data/
 | `--quant_target` | extract/PTQ 每次一个目标：`attn-linear` 或 `moe`；量化评估同时加载两者 |
 | `--nsamples` / `--cali_bsz` | Pileval 校准条数（CLI 默认 128）/ 校准 batch size（CLI 默认 4） |
 | `--epochs` / `--base_lr` | 本样例取值 `10` / `1e-3`（CLI 默认 `15` / `1e-5`）；可调 |
-| `MOE_NSAMPLES` / `MOE_EPOCHS` / `MOE_BASE_LR` / `MOE_CALI_BSZ` | MoE 侧单独覆盖校准条数 / 迭代轮数 / 学习率 / 校准 batch size（默认与 Attention 相同）；专家级 autoround 单元数约为 `40×256`，预算紧张时可下调以控制卡时，结果表按实际取值填写 |
+| `MOE_NSAMPLES` / `MOE_EPOCHS` / `MOE_BASE_LR` / `MOE_CALI_BSZ` | MoE 侧单独覆盖校准条数 / 迭代轮数 / 学习率 / 校准 batch size（默认与 Attention 相同）；专家级 autoround 单元数约为 `40×256`，预算紧张时可下调以控制卡时，结果表按实际取值填写。注意 `MOE_NSAMPLES` 需不小于 `MOE_CALI_BSZ`（余弦调度的 `T_max = epochs × (nsamples // cali_bsz)` 不能为 0，脚本会校验并报错） |
 | `--end_block_idx` | 本样例取值 40（exclusive；Qwen3.6-35B-A3B 共 40 层，覆盖全部层）；CLI 默认 61，大于层数时会被 PTQ 截断 |
 | `RUN_MOE_PTQ` | 默认 `1`（执行 MoE PTQ）；置 `0` 仅用于冒烟测试，结果表不适用 |
 
@@ -129,3 +129,5 @@ MoE 覆盖为 `MOE_NSAMPLES=32` / `MOE_EPOCHS=1` / `MOE_CALI_BSZ=8`（Atlas A3 �
 | Qwen3.6-35B-A3B | `w4a8` | `autoround` | `mxfp4/mxfp8` | 6.3085 | 6.5046 | +0.1960 | 303.2 | 102 |
 
 > 差值列由**全精度**（未四舍五入）的量化 PPL 与 BF16 PPL 相减得出，与表中 4 位小数直接相减可能相差 1 个末位（如 6.7924 − 6.3085 = 0.4839）。
+>
+> 表中数值测于 `--nsamples` 修复（e8bb5de）之前的调度口径：当时 MoE 侧余弦调度按 CLI 默认 `nsamples=128` 计算，`T_max=16`、每个专家单元实际 4 步、末步学习率约 `0.85 × base_lr`（退火未走完）。当前脚本按 `--nsamples 32` 计算 `T_max=4`、4 步完成完整退火，复现出的量化 PPL 可能与表略有差异（Attention 侧不受影响，前后 `T_max` 均为 320）。

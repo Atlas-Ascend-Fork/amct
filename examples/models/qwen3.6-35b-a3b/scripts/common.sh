@@ -41,6 +41,13 @@ MOE_NSAMPLES="${MOE_NSAMPLES:-${NSAMPLES}}"
 MOE_EPOCHS="${MOE_EPOCHS:-${EPOCHS}}"
 MOE_BASE_LR="${MOE_BASE_LR:-${BASE_LR}}"
 MOE_CALI_BSZ="${MOE_CALI_BSZ:-${CALI_BSZ}}"
+# cosine T_max = epochs * (nsamples // cali_bsz); nsamples < cali_bsz makes T_max 0
+# and CosineAnnealingLR raises ZeroDivisionError inside the PTQ loop.
+if [ "${MOE_NSAMPLES}" -lt "${MOE_CALI_BSZ}" ]; then
+  echo "[qwen3.6-35b-a3b.w4a8.autoround] ERROR: MOE_NSAMPLES=${MOE_NSAMPLES} < MOE_CALI_BSZ=${MOE_CALI_BSZ}." >&2
+  echo "  The cosine scheduler needs MOE_NSAMPLES >= MOE_CALI_BSZ (T_max = epochs * (nsamples // cali_bsz))." >&2
+  exit 1
+fi
 
 # Same in-repo W4A8 policy for int and mxfp; format is selected by --quant_dtype.
 BIT_CONFIG="${BIT_CONFIG:-${AMCT_ROOT}/amct_pytorch/configs/w4a8.yaml}"

@@ -77,7 +77,7 @@ python3 -m amct_pytorch.ptq \
   --output_dir examples/models/qwen3.6-35b-a3b/outputs/qwen3_6_35b_a3b_w4a8_int
 ```
 
-For the MoE target switch `--quant_target` to `moe` and `--data_dir` to `.../ptq_data/moe`, keeping the rest unchanged; the quantized eval passes both `--attn_linear_param_dir` and `--moe_mlp_param_dir` (`--quant_target attn-linear moe`).
+For the MoE target, start from the Attention command and change `--quant_target` to `moe`, `--data_dir` to `.../ptq_data/moe`, and also set `--nsamples` / `--cali_bsz` / `--epochs` to the MoE values (this sample: `32` / `8` / `1`; `--base_lr` stays `1e-3` — these are the script's `MOE_NSAMPLES` / `MOE_CALI_BSZ` / `MOE_EPOCHS`); the quantized eval passes both `--attn_linear_param_dir` and `--moe_mlp_param_dir` (`--quant_target attn-linear moe`). Copying the Attention command and only switching `--quant_target` / `--data_dir` lands on the CLI defaults `128 / 4 / 10`, which does not match the result-table protocol.
 
 Main parameters:
 
@@ -93,7 +93,7 @@ Main parameters:
 | `--quant_target` | One target per extract/PTQ run: `attn-linear` or `moe`; the quantized eval loads both |
 | `--nsamples` / `--cali_bsz` | Pileval calibration samples (CLI default 128) / calibration batch size (CLI default 4) |
 | `--epochs` / `--base_lr` | This sample uses `10` / `1e-3` (CLI defaults are `15` / `1e-5`); tunable |
-| `MOE_NSAMPLES` / `MOE_EPOCHS` / `MOE_BASE_LR` / `MOE_CALI_BSZ` | MoE-side overrides for calibration samples / epochs / learning rate / calibration batch size (default same as Attention); expert-wise autoround walks ~`40x256` units, so lower them to bound card time under a tight budget and record the actual values in the result table |
+| `MOE_NSAMPLES` / `MOE_EPOCHS` / `MOE_BASE_LR` / `MOE_CALI_BSZ` | MoE-side overrides for calibration samples / epochs / learning rate / calibration batch size (default same as Attention); expert-wise autoround walks ~`40x256` units, so lower them to bound card time under a tight budget and record the actual values in the result table. Note `MOE_NSAMPLES` must be >= `MOE_CALI_BSZ` (the cosine scheduler's `T_max = epochs × (nsamples // cali_bsz)` must not be 0; the script validates this and errors out) |
 | `--end_block_idx` | This sample uses 40 (exclusive; Qwen3.6-35B-A3B has 40 layers, so every layer is covered); CLI default is 61 and is truncated when it exceeds the layer count |
 | `RUN_MOE_PTQ` | Default `1` (run MoE PTQ); set `0` only for smoke tests, the result table does not apply |
 
@@ -131,3 +131,5 @@ Use the same settings to reproduce the table; quantization time is wall-clock in
 | Qwen3.6-35B-A3B | `w4a8` | `autoround` | `mxfp4/mxfp8` | 6.3085 | 6.5046 | +0.1960 | 303.2 | 102 |
 
 > The delta column is computed from the **full-precision** (unrounded) quantized and BF16 PPL values, so it can differ in the last digit from subtracting the 4-decimal columns shown here (e.g. 6.7924 − 6.3085 = 0.4839).
+>
+> The numbers in this table were measured under the pre-fix schedule (before the `--nsamples` fix, commit e8bb5de): back then the MoE cosine schedule used the CLI-default `nsamples=128`, giving `T_max=16` with only 4 actual steps per expert unit and a final learning rate of about `0.85 × base_lr` (annealing incomplete). The current script computes `T_max=4` from `--nsamples 32`, so 4 steps complete the full annealing cycle and the reproduced quantized PPL may differ slightly (the Attention side is unaffected — `T_max` was 320 before and after).
