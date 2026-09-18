@@ -119,5 +119,5 @@ MoE 覆盖为 `MOE_NSAMPLES=32` / `MOE_EPOCHS=1` / `MOE_CALI_BSZ=8`（Atlas A3 �
 
 | 模型 | 数据类型 | 算法 | 量化格式 | BF16 PPL | 量化 PPL | PPL 差值 | 量化时长（min） | 离线数据大小（GiB） |
 | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| Qwen3.6-35B-A3B | `w4a8` | `autoround` | `int4/int8` | 6.3085 | 6.7924 | +0.4839 | 264.4 | 102 |
-| Qwen3.6-35B-A3B | `w4a8` | `autoround` | `mxfp4/mxfp8` | 6.3085 | 6.5046 | +0.1961 | 303.2 | 102 |
+| Qwen3.6-35B-A3B | `w4a8` | `autoround` | `int4/int8` | 6.3085 | 6.7924 | +0.4838 | 264.4 | 102 |
+| Qwen3.6-35B-A3B | `w4a8` | `autoround` | `mxfp4/mxfp8` | 6.3085 | 6.5046 | +0.1960 | 303.2 | 102 |
