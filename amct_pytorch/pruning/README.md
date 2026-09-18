@@ -56,8 +56,14 @@ amct.prune(model, cfg, data=calib, tolerance=0.05, evaluator=test_acc,
            finetune_fn=lambda m: prune_finetune(m, train_data, steps=300))
 ```
 
-- 默认保真度指标无需标签：质量 = 在校准数据上与原始模型 top-1 预测的一致率。也可改为传入
+- 默认评估指标由 `evaluator=None` 隐式选择 JS 分布相似度（此前为 `"fidelity"` top-1 一致率）；同一个 `tolerance` 值在两种度量下的接受边界不同，未显式传入 `evaluator` 的存量 `tolerance`/`size_budget` 搜索调用剪枝结果会随之变化。需要保留旧行为时显式传入 `evaluator="fidelity"`。也可改为传入
   `evaluator`（`callable(model)->float`，或任何暴露 `.evaluate(model) -> float` 的对象）。
+- `evaluator` 也接受 `"js"`（默认，归一化分布相似度）、`"fidelity"`（top-1 预测一致率）或 `"ppl"`（因果 LM 的原始/候选 PPL 比）。
+  JS 缓存 fp16 参考分布，大词表模型需限制评估集大小；fp16 舍入会给 JS 结果带来约 1e-3 量级的数值底噪，容差判定接近该量级时请留意。JS 仅在 `attention_mask` 标记为有效的位置累计（未提供 mask 时回退到全部位置）。PPL 使用 token IDs 或未移位的 `labels`，排除 `-100` 和 `attention_mask` 屏蔽的位置。
+  PPL 的容差判定为 `PPL_candidate / PPL_original <= 1 / (1 - tolerance)`（`0 <= tolerance < 1`）。
+  任务预设：`"preservation"` → fidelity，`"causal_lm"` → PPL，`"classification"` → 有标签的 top-1 准确率（非原模型预测一致率）。
+  分类 `eval_data` 接受 `(inputs, labels)` 或含 `labels` 的字典（每个样本一个 int64 类别）；输入可通过 `batch_adapter` 适配。分类容差是相对原模型实测准确率的绝对下降量，如 `0.02` 为 2 个百分点。
+  `evaluator="auto"` 根据评估批和模型选择：分类标签及二维输出 → 准确率；`config.architectures` 中的 `*ForCausalLM`、非 encoder-decoder、int64 token IDs 及三维 token 输出 → PPL；否则 → JS。优先使用 `eval_data`，缺省使用 `data`，并记录选择原因。`auto`/JS 将位置元组保留为模型参数；标签须用字典 `labels` 或 `batch_adapter` 明确提供，`(inputs, labels)` 简写仅用于显式 `classification`。
 
 ### 参数
 
@@ -66,8 +72,8 @@ amct.prune(model, cfg, data=calib, tolerance=0.05, evaluator=test_acc,
 | `model` | 是 | - | 待剪枝的 `torch.nn.Module`（原地） |
 | `data` | 视情况 | `None` | 校准数据；基于方差的方法、默认评估集需要 |
 | `tolerance` | 否 | `None` | 可接受精度损失的上界（与 `evaluator` 同量纲）；传入即进入容差搜索 |
-| `evaluator` | 否 | top-1 保真度 | `callable(model)->float`，或暴露 `.evaluate(model) -> float` 的对象 |
-| `eval_data` | 否 | 回退到 `data` | 默认保真度指标使用的评估批 |
+| `evaluator` | 否 | JS 分布相似度 | `callable(model)->float`，或暴露 `.evaluate(model) -> float` 的对象 |
+| `eval_data` | 否 | 回退到 `data` | 内置指标使用的评估批 |
 | `ratio_grid` | 否 | `0.1..0.8` | 候选剪枝率（升序） |
 | `report` | 否 | `None` | 传入 `PruneReport()` 作为出口以取回统计信息 |
 

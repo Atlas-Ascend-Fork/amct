@@ -69,8 +69,15 @@ amct.prune(model, cfg, data=calib, tolerance=0.05, evaluator=test_acc,
            finetune_fn=lambda m: prune_finetune(m, train_data, steps=300))
 ```
 
-- Default fidelity metric needs no labels: quality = top-1 prediction agreement with the original model on
+- `evaluator=None` now implicitly selects JS distribution similarity (previously `"fidelity"` top-1 agreement); the same `tolerance` value has a different acceptance boundary under each metric, so existing `tolerance`/`size_budget` searches that do not pass `evaluator` explicitly will see their prune decisions change. Pass `evaluator="fidelity"` explicitly to keep the old behavior.
+  Quality measures output distribution similarity with the original model on
   the calibration data. An `evaluator` (`callable(model)->float`, or any object exposing `.evaluate(model) -> float`) can be passed instead.
+- `evaluator` also accepts `"js"` (default, normalized distribution similarity), `"fidelity"` (top-1 prediction agreement), or `"ppl"` (original/candidate causal-LM PPL).
+  JS caches fp16 reference distributions; limit the evaluation set for large vocabularies. This fp16 rounding introduces ~1e-3-scale numerical noise into the JS result, worth noting when the tolerance boundary is close to that scale. JS accumulates only over positions where `attention_mask` is valid (falls back to all positions when no mask is given). PPL uses token IDs or unshifted `labels`, excluding `-100` and positions masked by `attention_mask`.
+  PPL accepts `PPL_candidate / PPL_original <= 1 / (1 - tolerance)` for `0 <= tolerance < 1`.
+  Task presets: `"preservation"` → fidelity, `"causal_lm"` → PPL, `"classification"` → labeled top-1 accuracy.
+  Classification `eval_data` accepts `(inputs, labels)` or a dictionary containing `labels` (one int64 class per sample); `batch_adapter` can adapt model inputs. Its tolerance is the absolute drop from measured original accuracy: `0.02` means 2 percentage points.
+  `evaluator="auto"` selects accuracy for class labels and 2D logits, PPL for non-encoder-decoder `config.architectures` ending in `ForCausalLM` with int64 IDs and matching 3D token logits, otherwise JS. It uses `eval_data` or falls back to `data`, and logs its choice and reason. `auto`/JS preserve positional tuples as model arguments; provide labels through a dictionary `labels` field or `batch_adapter`. The `(inputs, labels)` shorthand is reserved for explicit `classification`.
 
 ### Parameters
 
@@ -79,8 +86,8 @@ amct.prune(model, cfg, data=calib, tolerance=0.05, evaluator=test_acc,
 | `model` | yes | - | `torch.nn.Module` to prune (in-place) |
 | `data` | depends | `None` | Calibration data; required by variance-based methods, default eval set |
 | `tolerance` | no | `None` | Upper bound on acceptable accuracy loss (same scale as `evaluator`); passing it selects the tolerance search |
-| `evaluator` | no | top-1 fidelity | `callable(model)->float`, or an object exposing `.evaluate(model) -> float` |
-| `eval_data` | no | falls back to `data` | Evaluation batch for the default fidelity metric |
+| `evaluator` | no | JS distribution similarity | `callable(model)->float`, or an object exposing `.evaluate(model) -> float` |
+| `eval_data` | no | falls back to `data` | Evaluation batch for the built-in metric |
 | `ratio_grid` | no | `0.1..0.8` | Candidate prune ratios (ascending) |
 | `report` | no | `None` | Pass a `PruneReport()` as the sink to get the statistics back |
 
