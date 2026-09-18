@@ -22,9 +22,21 @@ MoE 模型量化目标为 `attn-linear` + `moe`（适配器不支持 `mlp`）。
 - 评估集：WikiText2 `wikitext-2-raw-v1` test；`--seq_len 4096`；`--granularity block`
 - BF16 与量化评估使用同一权重目录、同一评估配置
 - 量化覆盖 Attention（`attn-linear`）与 MoE（评估时 `--quant_target attn-linear moe`）
-- **autoround PTQ 默认只跑 Attention**（与官方 [Qwen3.6-Moe.md](../qwen3.6/Qwen3.6-Moe.md) 一致）。全量 MoE 为约 `40×256` 个专家 unit，单卡 autoround 可达数天，不作为本样例默认路径；`ptq_mlp.sh` 默认 SKIP，仅当 `RUN_MOE_PTQ=1` 时强制跑
-- 每种格式：extract → PTQ(attn) → 量化评估（加载 attn PTQ 参数；MoE 按 bit_config 假量化）
+- **autoround PTQ 只跑 Attention**；**MoE 采用直转假量化**（评估时 `--quant_target attn-linear moe`，不加载 per-expert autoround 参数）。与官方 [Qwen3.6-Moe.md](../qwen3.6/Qwen3.6-Moe.md) 一致，也符合「耗时过长则对 MoE 做直转」的交付口径
+- `ptq_mlp.sh` 默认 SKIP；仅当显式 `RUN_MOE_PTQ=1` 时才跑全量专家 autoround（不推荐作为社区样例默认路径）
+- 每种格式：extract → PTQ(attn) → 量化评估（加载 attn PTQ 参数；MoE 按 bit_config 直转）
 - 产物目录为相对占位路径，不提交数据/权重
+
+### 时间消耗评估
+
+| 步骤 | 单卡 `npu:0` 粗估 | 说明 |
+| --- | --- | --- |
+| extract（attn + moe） | 约 1.5–2.5 h | 离线数据约 162 GiB |
+| Attention autoround PTQ（每种 dtype） | 约 2 h（~120 min） | `epochs=10`，结果表「量化时长」按此口径 |
+| 全量 MoE autoround PTQ | **可达数天** | 约 `40×256≈10240` 个专家 unit；实测仅第 0 层部分专家就需数小时，故**默认不做**，改为 MoE 直转 |
+| 量化评估 | 约 0.5 h | 加载 attn PTQ 参数 + MoE 直转假量化 |
+
+结果表中的「量化时长」= 该格式 **Attention autoround PTQ** 墙钟时间（不含 extract / eval / 模型下载 / 环境构建）。
 
 在仓库根目录执行：
 
@@ -104,12 +116,12 @@ python3 -m amct_pytorch.ptq \
 | mxfp PTQ 参数 Attention | `./outputs/qwen3_6_35b_a3b_w4a4_mxfp/ptq_params/qwen3_6_moe/attn-linear` | 见云端 `du -sh` |
 | mxfp PTQ 参数 MoE | （默认不生成） | — |
 
-量化时长口径：该格式 **Attention autoround PTQ** 的墙钟时间（默认不跑全量 MoE 专家 PTQ；不含模型下载和环境构建）。离线数据大小为 extract 输出目录合计，GiB。
+离线数据大小为 extract 输出目录合计（GiB）。
 
 ## 结果表
 
 BF16 与量化评估使用同一 `MODEL` 与同一 `seq_len=4096` / `granularity=block` 配置。  
-评估覆盖 `attn-linear` + `moe`；autoround 参数仅加载 Attention（与官方 Qwen3.6 样例一致）。
+评估覆盖 `attn-linear` + `moe`：Attention 加载 autoround PTQ 参数，**MoE 为 w4a4 直转假量化**（因全量专家 autoround 耗时过长）。
 
 | 模型 | 数据类型 | 算法 | 量化格式 | BF16 PPL | 量化 PPL | PPL 差值 | 量化时长（min） | 离线数据大小（GiB） |
 | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
