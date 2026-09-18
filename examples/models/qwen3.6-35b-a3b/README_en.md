@@ -120,5 +120,5 @@ Use the same settings to reproduce the table; quantization time is wall-clock in
 
 | Model | Dtype | Algorithm | Format | BF16 PPL | Quant PPL | PPL delta | Quant time (min) | Offline data (GiB) |
 | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| Qwen3.6-35B-A3B | `w4a8` | `autoround` | `int4/int8` | 6.3085 | 6.7924 | +0.4839 | 264.4 | 102 |
-| Qwen3.6-35B-A3B | `w4a8` | `autoround` | `mxfp4/mxfp8` | 6.3085 | 6.5046 | +0.1961 | 303.2 | 102 |
+| Qwen3.6-35B-A3B | `w4a8` | `autoround` | `int4/int8` | 6.3085 | 6.7924 | +0.4838 | 264.4 | 102 |
+| Qwen3.6-35B-A3B | `w4a8` | `autoround` | `mxfp4/mxfp8` | 6.3085 | 6.5046 | +0.1960 | 303.2 | 102 |
