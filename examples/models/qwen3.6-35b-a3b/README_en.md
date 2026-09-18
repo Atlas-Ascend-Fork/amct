@@ -16,7 +16,7 @@ The `w4a8.yaml` MoE policy: routed experts w4/a8, shared expert w8/a8.
 
 ## How to run
 
-Environment: start from a single `npu:0` card. Under the default protocol (`MOE_NSAMPLES=128` / `MOE_EPOCHS=10`) MoE PTQ takes days per format; the result table in this sample uses `MOE_NSAMPLES=32` / `MOE_EPOCHS=1`, measured on one card at 264.4 min (int) and 303.2 min (mxfp) for the full attn+moe run (see Results). To run the default protocol or go faster, use the per-block split shown in [`examples/ptq_multi_npu.sh`](../../../examples/ptq_multi_npu.sh). Configure the environment with the local CANN installation path first, then install `amct_pytorch` (or point `PYTHONPATH` at the repository root).
+Environment: start from a single `npu:0` card. Under the default protocol (`MOE_NSAMPLES=128` / `MOE_EPOCHS=10`) MoE PTQ takes days per format; the result table in this sample uses `MOE_NSAMPLES=32` / `MOE_EPOCHS=1`, measured on one card at 243.5 min for the full int run and 86.7 min for the mxfp moe segment (see Results). To run the default protocol or go faster, use the per-block split shown in [`examples/ptq_multi_npu.sh`](../../../examples/ptq_multi_npu.sh). Configure the environment with the local CANN installation path first, then install `amct_pytorch` (or point `PYTHONPATH` at the repository root).
 One-stop platform example: `source /home/developer/Ascend/cann/set_env.sh`. Set `HF_ENDPOINT` yourself if the calibration/eval datasets must be fetched through a mirror.
 
 - Model: local Qwen3.6-35B-A3B weights; `--model_name qwen3_6_moe`; `--trust_remote_code`
@@ -111,7 +111,7 @@ Relative placeholder directories (under this sample directory by default):
 | mxfp PTQ params, MoE | `./outputs/qwen3_6_35b_a3b_w4a8_mxfp/ptq_params/qwen3_6_moe/moe` | ~128 |
 | BF16 baseline log (shared by both formats) | `./outputs/qwen3_6_35b_a3b_bf16/logs/eval_qwen3_6_moe_bf16.log` | — |
 
-Quantization wall time: measured from the first `ptq` of a format (`ptq_attn.sh`) until all attn+moe params are written (model download and environment setup excluded); both `ptq_attn.sh` and `ptq_mlp.sh` print `start:` / `end:` timestamps. Offline data size is the combined extract output in GiB.
+Quantization wall time: measured from the first `ptq` of a format (`ptq_attn.sh`) until all attn+moe params are written (model download and environment setup excluded); both `ptq_attn.sh` and `ptq_mlp.sh` print `start:` / `end:` timestamps. The int row is a full end-to-end measurement; the mxfp row only re-ran the moe segment this time (86.7 min — the attn params from the same script were reused since the schedule is unchanged), so only the moe segment is counted. Offline data size is the combined extract output in GiB.
 
 Eval logs: `eval_quant.sh` writes `<OUTPUT_DIR>/logs/eval_*.log`, with int and mxfp under their own `OUTPUT_DIR` so the two formats no longer share one file; `eval_bf16.sh` writes `<BF16_OUTPUT_DIR>/logs/` (default `./outputs/qwen3_6_35b_a3b_bf16/logs/`), independent of `QUANT_DTYPE`, so both formats share the same BF16 baseline log. loguru appends.
 
@@ -127,9 +127,7 @@ Use the same settings to reproduce the table; quantization time is wall-clock in
 
 | Model | Dtype | Algorithm | Format | BF16 PPL | Quant PPL | PPL delta | Quant time (min) | Offline data (GiB) |
 | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| Qwen3.6-35B-A3B | `w4a8` | `autoround` | `int4/int8` | 6.3085 | 6.7924 | +0.4838 | 264.4 | 102 |
-| Qwen3.6-35B-A3B | `w4a8` | `autoround` | `mxfp4/mxfp8` | 6.3085 | 6.5046 | +0.1960 | 303.2 | 102 |
+| Qwen3.6-35B-A3B | `w4a8` | `autoround` | `int4/int8` | 6.3085 | 6.8263 | +0.5178 | 243.5 | 102 |
+| Qwen3.6-35B-A3B | `w4a8` | `autoround` | `mxfp4/mxfp8` | 6.3085 | 6.4729 | +0.1644 | 86.7 (moe segment only) | 102 |
 
-> The delta column is computed from the **full-precision** (unrounded) quantized and BF16 PPL values, so it can differ in the last digit from subtracting the 4-decimal columns shown here (e.g. 6.7924 − 6.3085 = 0.4839).
->
-> The numbers in this table were measured under the pre-fix schedule (before the `--nsamples` fix): back then the MoE cosine schedule used the CLI-default `nsamples=128`, giving `T_max=16` with only 4 actual steps per expert unit and a final learning rate of about `0.85 × base_lr` (annealing incomplete). The current script computes `T_max=4` from `--nsamples 32`, so 4 steps complete the full annealing cycle and the reproduced quantized PPL may differ slightly (the Attention side is unaffected — `T_max` was 320 before and after).
+> The delta column is computed from the **full-precision** (unrounded) quantized and BF16 PPL values, so it can differ slightly in the last digit from subtracting the 4-decimal columns shown here.

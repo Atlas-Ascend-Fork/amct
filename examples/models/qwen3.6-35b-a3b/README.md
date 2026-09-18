@@ -16,7 +16,7 @@ CLI 入口与 [Qwen3.6-Moe.md](../qwen3.6/Qwen3.6-Moe.md) 一致：`python3 -m a
 
 ## 运行说明
 
-环境：单卡 `npu:0` 起步。默认协议（`MOE_NSAMPLES=128` / `MOE_EPOCHS=10`）下 MoE PTQ 每格式约需数天；本样例结果表改用 `MOE_NSAMPLES=32` / `MOE_EPOCHS=1`，单卡实测 attn+moe 全程 int 264.4 min、mxfp 303.2 min（见结果表）。需按默认协议跑或进一步提速时，可用 [`examples/ptq_multi_npu.sh`](../../../examples/ptq_multi_npu.sh) 的按层切分方式并行。先按本机 CANN 安装路径配置环境，并安装 `amct_pytorch`（或设置 `PYTHONPATH` 指向仓库根目录）。
+环境：单卡 `npu:0` 起步。默认协议（`MOE_NSAMPLES=128` / `MOE_EPOCHS=10`）下 MoE PTQ 每格式约需数天；本样例结果表改用 `MOE_NSAMPLES=32` / `MOE_EPOCHS=1`，单卡实测 int 全流程 243.5 min、mxfp moe 段 86.7 min（见结果表）。需按默认协议跑或进一步提速时，可用 [`examples/ptq_multi_npu.sh`](../../../examples/ptq_multi_npu.sh) 的按层切分方式并行。先按本机 CANN 安装路径配置环境，并安装 `amct_pytorch`（或设置 `PYTHONPATH` 指向仓库根目录）。
 一站式平台示例：`source /home/developer/Ascend/cann/set_env.sh`。若需镜像下载校准/评估数据，可自行设置 `HF_ENDPOINT`。
 
 - 模型：本地 Qwen3.6-35B-A3B 权重；`--model_name qwen3_6_moe`；`--trust_remote_code`
@@ -110,7 +110,7 @@ MoE 目标在 Attention 命令基础上改 `--quant_target moe`、`--data_dir ..
 | mxfp PTQ 参数 MoE | `./outputs/qwen3_6_35b_a3b_w4a8_mxfp/ptq_params/qwen3_6_moe/moe` | ~128 |
 | BF16 基线日志（两种格式共用） | `./outputs/qwen3_6_35b_a3b_bf16/logs/eval_qwen3_6_moe_bf16.log` | — |
 
-量化时长口径：从该格式第一次 `ptq`（`ptq_attn.sh`）开始到 attn+moe 参数全部写完（不含模型下载和环境构建），`ptq_attn.sh` 与 `ptq_mlp.sh` 均打印 `start:` / `end:` 时间戳。离线数据大小为 extract 输出目录合计，GiB。
+量化时长口径：从该格式第一次 `ptq`（`ptq_attn.sh`）开始到 attn+moe 参数全部写完（不含模型下载和环境构建），`ptq_attn.sh` 与 `ptq_mlp.sh` 均打印 `start:` / `end:` 时间戳。int 行为全流程实测；mxfp 行本轮仅重跑 moe 段（86.7 min，attn 段沿用同脚本先前生成的参数、调度未变），故只计 moe 段时长。离线数据大小为 extract 输出目录合计，GiB。
 
 评估日志：`eval_quant.sh` 写 `<OUTPUT_DIR>/logs/eval_*.log`，int 与 mxfp 各自在自己的 `OUTPUT_DIR` 下，不会混进同一个文件；`eval_bf16.sh` 写与 `QUANT_DTYPE` 无关的 `<BF16_OUTPUT_DIR>/logs/`（默认 `./outputs/qwen3_6_35b_a3b_bf16/logs/`），两种格式共用同一份 BF16 基线日志。loguru 为追加写。
 
@@ -125,9 +125,7 @@ MoE 覆盖为 `MOE_NSAMPLES=32` / `MOE_EPOCHS=1` / `MOE_CALI_BSZ=8`（Atlas A3 �
 
 | 模型 | 数据类型 | 算法 | 量化格式 | BF16 PPL | 量化 PPL | PPL 差值 | 量化时长（min） | 离线数据大小（GiB） |
 | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| Qwen3.6-35B-A3B | `w4a8` | `autoround` | `int4/int8` | 6.3085 | 6.7924 | +0.4838 | 264.4 | 102 |
-| Qwen3.6-35B-A3B | `w4a8` | `autoround` | `mxfp4/mxfp8` | 6.3085 | 6.5046 | +0.1960 | 303.2 | 102 |
+| Qwen3.6-35B-A3B | `w4a8` | `autoround` | `int4/int8` | 6.3085 | 6.8263 | +0.5178 | 243.5 | 102 |
+| Qwen3.6-35B-A3B | `w4a8` | `autoround` | `mxfp4/mxfp8` | 6.3085 | 6.4729 | +0.1644 | 86.7（仅 moe 段） | 102 |
 
-> 差值列由**全精度**（未四舍五入）的量化 PPL 与 BF16 PPL 相减得出，与表中 4 位小数直接相减可能相差 1 个末位（如 6.7924 − 6.3085 = 0.4839）。
->
-> 表中数值测于 `--nsamples` 修复之前的调度口径：当时 MoE 侧余弦调度按 CLI 默认 `nsamples=128` 计算，`T_max=16`、每个专家单元实际 4 步、末步学习率约 `0.85 × base_lr`（退火未走完）。当前脚本按 `--nsamples 32` 计算 `T_max=4`、4 步完成完整退火，复现出的量化 PPL 可能与表略有差异（Attention 侧不受影响，前后 `T_max` 均为 320）。
+> 差值列由**全精度**（未四舍五入）的量化 PPL 与 BF16 PPL 相减得出，与表中 4 位小数直接相减的结果在末位可能略有差异。
