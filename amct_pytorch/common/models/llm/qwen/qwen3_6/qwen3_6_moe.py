@@ -17,8 +17,6 @@
 
 import re
 
-import torch
-
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm.qwen.qwen3_5.qwen3_5_moe import Qwen3_5Moe
 
@@ -42,77 +40,6 @@ class Qwen3_6Moe(Qwen3_5Moe):
 
     def get_ascend_deploy_mtp_modules(self, module_names: set[str]) -> set[str]:
         return {name for name in module_names if name.startswith("mtp.layers.")}
-
-    @staticmethod
-    def _expanded_expert_name(name: str, expert_idx: int, projection: str) -> str:
-        return (
-            re.sub(
-                r"mlp\.experts\.(?:gate_up_proj|down_proj)$",
-                f"mlp.experts.{expert_idx}.{projection}",
-                name,
-            )
-            + ".weight"
-        )
-
-    def expand_ascend_deploy_weight_map(
-        self, weight_map: dict[str, str]
-    ) -> dict[str, str]:
-        expanded = {}
-        num_experts = int(getattr(self.config, "num_experts", 0))
-        for name, filename in weight_map.items():
-            match = re.search(r"mlp\.experts\.(gate_up_proj|down_proj)$", name)
-            if match is None:
-                expanded[name] = filename
-                continue
-            projections = (
-                ("gate_proj", "up_proj")
-                if match[1] == "gate_up_proj"
-                else ("down_proj",)
-            )
-            for expert_idx in range(num_experts):
-                for projection in projections:
-                    expanded[
-                        self._expanded_expert_name(name, expert_idx, projection)
-                    ] = filename
-        return expanded
-
-    def expand_ascend_deploy_tensors(
-        self, state_dict: dict[str, torch.Tensor]
-    ) -> dict[str, torch.Tensor]:
-        expanded = {}
-        num_experts = int(getattr(self.config, "num_experts", 0))
-        for name, tensor in state_dict.items():
-            match = re.search(r"mlp\.experts\.(gate_up_proj|down_proj)$", name)
-            if match is None:
-                expanded[name] = tensor
-                continue
-            if tensor.ndim != 3 or tensor.shape[0] != num_experts:
-                raise ValueError(
-                    f"Invalid packed Qwen3.6 expert tensor: {name} {tuple(tensor.shape)}"
-                )
-            clone_slices = name.startswith("mtp.")
-            if match[1] == "gate_up_proj":
-                if tensor.shape[1] % 2:
-                    raise ValueError(
-                        f"Packed gate_up_proj has odd intermediate dimension: {name}"
-                    )
-                midpoint = tensor.shape[1] // 2
-                for expert_idx in range(num_experts):
-                    gate = tensor[expert_idx, :midpoint]
-                    up = tensor[expert_idx, midpoint:]
-                    expanded[
-                        self._expanded_expert_name(name, expert_idx, "gate_proj")
-                    ] = gate.clone() if clone_slices else gate
-                    expanded[
-                        self._expanded_expert_name(name, expert_idx, "up_proj")
-                    ] = up.clone() if clone_slices else up
-            else:
-                for expert_idx in range(num_experts):
-                    down = tensor[expert_idx]
-                    expanded[
-                        self._expanded_expert_name(name, expert_idx, "down_proj")
-                    ] = down.clone() if clone_slices else down
-        return expanded
 
     def _ascend_deploy_role(self, name: str) -> str | None:
         match = self._LAYER_RE.fullmatch(name)

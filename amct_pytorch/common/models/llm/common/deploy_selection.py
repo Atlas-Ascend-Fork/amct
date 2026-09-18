@@ -49,8 +49,6 @@ def build_ascend_deploy_plan(
     excluded_mtp records matches removed by the mandatory MTP exclusion, after
     the user's ignore rules have been applied.
     """
-    if hasattr(adapter, "expand_ascend_deploy_weight_map"):
-        weight_map = adapter.expand_ascend_deploy_weight_map(weight_map)
     names = {key.rsplit(".", 1)[0] for key in weight_map}
     selected, counts = match_deploy_modules(names, selection)
     excluded_mtp = adapter.get_ascend_deploy_mtp_modules(selected)
