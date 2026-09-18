@@ -36,6 +36,9 @@ export MODEL=/path/to/Qwen3.6-35B-A3B   # 占位，改为本地权重
 bash examples/models/qwen3.6-35b-a3b/scripts/eval_bf16.sh
 
 # 2) 提取 PTQ 离线数据（attn + moe，两种格式共用，跑一次即可）
+# 结果表口径：MoE 侧覆盖为 32/1/8（Attention 保持默认 128/10/4）。
+# 不设下面三项时 MoE 会按默认 128 条提取，数据量约为表中口径的 4 倍，也复现不出表中 PPL。
+export MOE_NSAMPLES=32 MOE_EPOCHS=1 MOE_CALI_BSZ=8
 bash examples/models/qwen3.6-35b-a3b/scripts/extract_ptq_data.sh
 
 # 3) int4/int8：PTQ(attn) → PTQ(moe) → 量化评估
@@ -108,6 +111,8 @@ MoE 目标把 `--quant_target` 换成 `moe`、`--data_dir` 换成 `.../ptq_data/
 
 量化时长口径：从该格式第一次 `ptq` 开始到 attn+moe 参数全部写完（不含模型下载和环境构建），脚本会打印起止时间。离线数据大小为 extract 输出目录合计，GiB。
 
+评估日志：`<OUTPUT_DIR>/logs/eval_*.log`（`eval_bf16.sh` / `eval_quant.sh` 均传 `--output_dir`）。loguru 为追加写，int 与 mxfp 各自写在自己的 `OUTPUT_DIR` 下，不会混进同一个文件。
+
 ## 结果表
 
 BF16 与量化评估使用同一 `MODEL` 与同一 `seq_len=4096` / `granularity=block` 配置。
@@ -121,3 +126,5 @@ MoE 覆盖为 `MOE_NSAMPLES=32` / `MOE_EPOCHS=1` / `MOE_CALI_BSZ=8`（Atlas A3 �
 | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
 | Qwen3.6-35B-A3B | `w4a8` | `autoround` | `int4/int8` | 6.3085 | 6.7924 | +0.4838 | 264.4 | 102 |
 | Qwen3.6-35B-A3B | `w4a8` | `autoround` | `mxfp4/mxfp8` | 6.3085 | 6.5046 | +0.1960 | 303.2 | 102 |
+
+> 差值列由**全精度**（未四舍五入）的量化 PPL 与 BF16 PPL 相减得出，与表中 4 位小数直接相减可能相差 1 个末位（如 6.7924 − 6.3085 = 0.4839）。

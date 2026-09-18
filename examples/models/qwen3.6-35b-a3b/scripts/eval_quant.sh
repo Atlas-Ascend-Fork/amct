@@ -34,4 +34,5 @@ print_runtime_args "eval_quant"
   --algos ${ALGOS} \
   --bit_config "${BIT_CONFIG}" \
   --attn_linear_param_dir "${ATTN_PARAM_DIR}" \
-  --moe_mlp_param_dir "${MOE_PARAM_DIR}"
+  --moe_mlp_param_dir "${MOE_PARAM_DIR}" \
+  --output_dir "${OUTPUT_DIR}"

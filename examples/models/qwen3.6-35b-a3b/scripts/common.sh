@@ -91,5 +91,6 @@ print_runtime_args() {
   MOE_EPOCHS=${MOE_EPOCHS}
   MOE_BASE_LR=${MOE_BASE_LR}
   MOE_CALI_BSZ=${MOE_CALI_BSZ}
+  RUN_MOE_PTQ=${RUN_MOE_PTQ:-1}
 EOF
 }

@@ -27,11 +27,13 @@ print_runtime_args "ptq_mlp"
 # split blocks across NPUs as in examples/ptq_multi_npu.sh to shorten it.
 if [ "${RUN_MOE_PTQ:-1}" != "1" ]; then
   echo "[qwen3.6-35b-a3b.w4a8.autoround.ptq_mlp] SKIPPED (RUN_MOE_PTQ=0)."
+  echo "[qwen3.6-35b-a3b.w4a8.autoround.ptq_mlp] NOTE: smoke test only. eval_quant.sh still passes"
+  echo "  --quant_target attn-linear moe and --moe_mlp_param_dir; with the MoE params missing the"
+  echo "  evaluation falls back to direct quantization with a debug-level notice only, so drop the"
+  echo "  moe target for smoke-test evaluation. The README result table assumes full MoE PTQ."
   exit 0
 fi
 
-MOE_EPOCHS="${MOE_EPOCHS:-${EPOCHS}}"
-MOE_BASE_LR="${MOE_BASE_LR:-${BASE_LR}}"
 echo "[qwen3.6-35b-a3b.w4a8.autoround.ptq_mlp] start: $(date '+%F %T')"
 # shellcheck disable=SC2086
 "${AMCT_CLI[@]}" amct_pytorch.ptq \

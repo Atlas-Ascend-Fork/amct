@@ -36,6 +36,10 @@ export MODEL=/path/to/Qwen3.6-35B-A3B   # placeholder, point to local weights
 bash examples/models/qwen3.6-35b-a3b/scripts/eval_bf16.sh
 
 # 2) Extract PTQ offline data (attn + moe, shared by both formats; run once)
+# Result-table protocol: MoE is overridden with 32/1/8 (Attention keeps the default 128/10/4).
+# Without these three variables MoE extracts 128 samples by default (about 4x the data in the
+# table) and the PPL values in the table are not reproducible.
+export MOE_NSAMPLES=32 MOE_EPOCHS=1 MOE_CALI_BSZ=8
 bash examples/models/qwen3.6-35b-a3b/scripts/extract_ptq_data.sh
 
 # 3) int4/int8: PTQ(attn) → PTQ(moe) → quantized eval
@@ -108,6 +112,8 @@ Relative placeholder directories (under this sample directory by default):
 
 Quantization wall time: measured from the first `ptq` of a format until all attn+moe params are written (model download and environment setup excluded); scripts print start/end timestamps. Offline data size is the combined extract output in GiB.
 
+Eval logs: `<OUTPUT_DIR>/logs/eval_*.log` (`eval_bf16.sh` and `eval_quant.sh` both pass `--output_dir`). loguru appends, and int / mxfp write under their own `OUTPUT_DIR`, so the two formats no longer share one log file.
+
 ## Results
 
 BF16 and quantized evaluations share the same `MODEL` and the same `seq_len=4096` / `granularity=block` configuration.
@@ -122,3 +128,5 @@ Use the same settings to reproduce the table; quantization time is wall-clock in
 | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
 | Qwen3.6-35B-A3B | `w4a8` | `autoround` | `int4/int8` | 6.3085 | 6.7924 | +0.4838 | 264.4 | 102 |
 | Qwen3.6-35B-A3B | `w4a8` | `autoround` | `mxfp4/mxfp8` | 6.3085 | 6.5046 | +0.1960 | 303.2 | 102 |
+
+> The delta column is computed from the **full-precision** (unrounded) quantized and BF16 PPL values, so it can differ in the last digit from subtracting the 4-decimal columns shown here (e.g. 6.7924 − 6.3085 = 0.4839).

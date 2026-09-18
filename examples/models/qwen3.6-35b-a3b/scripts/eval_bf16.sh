@@ -28,4 +28,5 @@ print_runtime_args "eval_bf16"
   --granularity "${GRANULARITY}" \
   --device "${DEVICE}" \
   --eval_mode bf16 \
-  --bit_config "${BF16_BIT_CONFIG}"
+  --bit_config "${BF16_BIT_CONFIG}" \
+  --output_dir "${OUTPUT_DIR}"
