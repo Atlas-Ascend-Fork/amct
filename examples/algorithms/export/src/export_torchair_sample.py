@@ -380,6 +380,9 @@ def main():
 
     export_name = args.export_name or os.path.basename(
         args.model_path.rstrip("/"))
+    # 将 output_dir 归一化为绝对路径，避免 air 中 FileConstant 外置权重
+    # 使用相对路径，导致 ATC 转 om 时因基准目录不一致而找不到权重
+    args.output_dir = os.path.abspath(args.output_dir)
 
     if args.model_type == "llm":
         model, enc = load_llm(args.model_path)
