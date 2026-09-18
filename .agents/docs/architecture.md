@@ -6,17 +6,18 @@
 
 面向「输入模型 → 完成量化适配 → 产出可部署权重」的端到端研发，采用业界主流的 **单编排入口 + 专职子代理 + 叶子技能** 分层：
 
-```text
-AGENTS.md / .agents/README.md          入口说明与路由
-        │
-quant-workflow（唯一编排入口）          判阶段 → 串联/分流 → 复用 casebook → 汇总
-        │  调度
-   ┌────┴───────────────┐
-quant-analyzer  quant-implementer  quant-reviewer    三类专职子代理（分析 / 实施 / 审查）
-        │  各自 skills: 挂载
-quant-tools/*（含 model-adapter 等叶子技能，真正干活的最小单元）
-        │  消费
-docs/casebook/  +  docs/repo-map.md     知识层（适配经验 / 仓内导航）
+```mermaid
+flowchart TD
+    A["AGENTS.md / .agents/README.md<br/>入口说明与路由"]
+    B["quant-workflow（唯一编排入口）<br/>判阶段 → 串联/分流 → 复用 casebook → 汇总"]
+    C["quant-analyzer / quant-implementer / quant-reviewer<br/>三类专职子代理（分析 / 实施 / 审查）"]
+    D["quant-tools/*（含 model-adapter 等叶子技能）<br/>真正干活的最小单元"]
+    E["docs/casebook/ + docs/repo-map.md<br/>知识层（适配经验 / 仓内导航）"]
+
+    A --> B
+    B -->|调度| C
+    C -->|各自 skills: 挂载| D
+    D -->|消费| E
 ```
 
 ## 2. 分层职责
