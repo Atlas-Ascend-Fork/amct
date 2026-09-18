@@ -6,13 +6,16 @@ This example quantizes DeepSeek-V4-Flash to `w4a4` (4-bit weights + 4-bit activa
 
 The quantization workflow has four steps: BF16 baseline eval → PTQ offline data extraction → PTQ training → quantized eval with PTQ params. All scripts live in `scripts/`; the bit-width config is the repo-level `amct_pytorch/configs/w4a4.yaml`.
 
+Run the commands below from the sample directory `examples/models/deepseekv4/` (the scripts anchor the bit-width config and the artifact directory to absolute paths, so invoking them from the repo root or any other cwd works as well). All four steps must reuse the same `OUTPUT_DIR` (default `<sample dir>/outputs/dsv4_flash_w4a4`): the step-2 calibration data and the step-3 PTQ params are both derived from it, so switching cwd mid-workflow leaves step 3 unable to find the step-2 data.
+
 ### Prerequisites
 
-- Model weights: download from [deepseek-ai/DeepSeek-V4-Flash](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash) (an FP8+FP4 mixed-format checkpoint, ~149 GB). The `deepseek_v4` adapter dequantizes 1-byte weights on load, so no bf16 conversion copy is needed:
-  - Attention weights (FP8 e4m3) are dequantized with 128x128 block scales;
-  - MoE expert weights (packed-int8 MXFP4) are unpacked and dequantized with per-row 32-element-group E8M0 scales;
-  - the checkpoint's `.scale` keys are consumed and dropped on load, so `load_state_dict(strict=True)` is not blocked by the extra keys.
-  This example also fixes two adapter loading defects: `_block_sharded` previously cast FP8 weights with a bare dtype conversion (numerically wrong) and built meta modules under an fp32 default dtype that silently upcast weights to fp32 (per-layer HBM 24.1G -> 12.1G); `_block_staged` previously applied a blanket `.bfloat16()` that broke fp32-declared HC/RMSNorm params.
+- Model weights: download from [deepseek-ai/DeepSeek-V4-Flash](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash) (~149 GB). The official checkpoint mixes two 1-byte formats: Attention weights are FP8 e4m3 (with 128x128 block scales) and MoE expert weights are packed-int8 MXFP4 (with per-row 32-element-group E8M0 scales). Both must be multiplied back by their paired `.scale` keys to recover the real values.
+- **The `deepseek_v4` adapter on master does not dequantize at load time**: `_block_sharded` only applies a bare dtype cast to floating-point tensors (no block scale, so FP8 values come out wrong) and does not even cast packed-int8 MXFP4; the PTQ path collects every key under the `layers.{i}.` prefix and then calls `load_state_dict(strict=True)`, so the extra `.scale` keys raise. Running the four steps of this sample directly on the official checkpoint therefore yields wrong numbers or a load failure.
+- The result table in this sample was produced with an extra **load-time dequantization glue layer**: a `_dequant_tensor` helper plus a `load_layer_weight` override in the adapter, which fetches each `*.weight` together with its paired `.scale` and calls AMCT's existing `amct_pytorch/quantization/dtypes/fp_impl.weight_dequant` to restore bf16 (`block_size=128` for FP8; `block_size=32, is_mx=True, is_packed=True` for MXFP4, matching the adapter's `block_size` convention of 32 for int8 weights and 128 otherwise), dropping the consumed `.scale` keys. That glue is sample-side work and is **not part of this PR — `amct_pytorch/` is unchanged**. The equivalent FP8 / MXFP4 / MXFP8 / NVFP4 / HiF4 dispatch already exists in the export path `amct_pytorch/common/models/llm/common/deploy_export.py` and can be mirrored into the load path.
+- Pick one before reproducing the results:
+  - **(a) Convert the weights to bf16 first (recommended, no code change)**: follow section 2 of [DeepSeekV4-Flash-Walkthrough_en.md](DeepSeekV4-Flash-Walkthrough_en.md) and export a bf16 copy with the `deploy` entry point using `--granularity tensor`, then point `MODEL_PATH` at that copy;
+  - **(b) Add the load-time dequantization glue described above to the adapter yourself**, after which `MODEL_PATH` can point directly at the official checkpoint.
 - Calibration set: Pileval (`mit-han-lab/pile-val-backup`). Eval set: WikiText2 (`wikitext-2-raw-v1` test split), `seq_len=4096`. Both download automatically on first run.
 - Hardware: a single card is sufficient; with two cards, PTQ can be parallelized by block via `--start_block_idx/--end_block_idx`. On a 64GB card, PTQ requires `--cali_bsz 1`.
 
@@ -22,7 +25,7 @@ The quantization workflow has four steps: BF16 baseline eval → PTQ offline dat
 bash scripts/eval_bf16.sh
 ```
 
-Defaults: `MODEL_PATH` (model directory), `BIT_CONFIG=amct_pytorch/configs/bf16.yaml`, `SEQ_LEN=4096`, `DEVICE=npu:0`. The baseline PPL is the reference for quantization loss.
+Defaults: `MODEL_PATH` (model directory), `BIT_CONFIG=<repo root>/amct_pytorch/configs/bf16.yaml`, `SEQ_LEN=4096`, `DEVICE=npu:0`. The baseline PPL is the reference for quantization loss.
 
 ### Step 2: PTQ offline data extraction
 
@@ -86,7 +89,7 @@ Note: `lwc` clip factors for the mxfp format are stored per 32-element group (in
 
 ## Results
 
-Evaluated on 2×Atlas A3 (64GB HBM), `seq_len=4096`, WikiText2 test split, Pileval calibration (`nsamples=16`), `base_lr=1e-3`.
+Evaluated on 2×Atlas A3 (64GB HBM), `seq_len=4096`, WikiText2 test split, Pileval calibration (`nsamples=16`), `base_lr=1e-3`. Weights were dequantized to bf16 at load time per prerequisite (b), which is equivalent to the pre-converted bf16 copy of route (a).
 
 | Model | Data type | Algorithm | Format | BF16 PPL | Quantized PPL | PPL delta | PTQ time (min) | Offline data (GiB) |
 | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |

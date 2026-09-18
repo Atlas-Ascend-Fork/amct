@@ -22,8 +22,13 @@
 
 set -euo pipefail
 
+# Anchor paths to the sample dir so the script runs from any cwd and the four
+# workflow steps keep sharing one OUTPUT_DIR.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SAMPLE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
 MODEL_PATH=${MODEL_PATH:-/path/to/deepseek-v4-flash}
-OUTPUT_DIR=${OUTPUT_DIR:-./outputs/dsv4_flash_w4a4}
+OUTPUT_DIR=${OUTPUT_DIR:-${SAMPLE_DIR}/outputs/dsv4_flash_w4a4}
 QUANT_TARGET=${QUANT_TARGET:-attn-linear}   # attn-linear | moe
 DATA_DIR=${DATA_DIR:-${OUTPUT_DIR}/ptq_data/${QUANT_TARGET}}
 NSAMPLES=${NSAMPLES:-16}
@@ -39,6 +44,7 @@ echo "SEQ_LEN=${SEQ_LEN}"
 echo "DEVICE=${DEVICE}"
 
 python -m amct_pytorch.extract_ptq_data \
+    --trust_remote_code \
     --model "${MODEL_PATH}" \
     --model_name deepseek_v4 \
     --seq_len "${SEQ_LEN}" \

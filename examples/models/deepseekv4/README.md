@@ -6,13 +6,16 @@
 
 量化工作流共四步：BF16 精度基线评测 → PTQ 离线数据提取 → PTQ 训练 → 带 PTQ 参数的量化精度评估。所有脚本位于 `scripts/`，位宽配置使用仓库自带的 `amct_pytorch/configs/w4a4.yaml`。
 
+以下命令均在样例目录 `examples/models/deepseekv4/` 下执行（脚本已把位宽配置与产物目录锚定为绝对路径，从仓库根等其他目录调用同样可用）。四步必须复用同一个 `OUTPUT_DIR`（默认 `<样例目录>/outputs/dsv4_flash_w4a4`）：第二步的校准数据与第三步的量化参数都由它派生，中途换目录会导致第三步找不到第二步的数据。
+
 ### 前置条件
 
-- 模型权重：从 [deepseek-ai/DeepSeek-V4-Flash](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash) 下载（FP8+FP4 混合格式 checkpoint，约 149 GB）。`deepseek_v4` 适配器会在加载时自动将 1 字节权重反量化为高精度，无需预先转换 bf16 副本，具体包括：
-  - Attention 权重（FP8 e4m3）：按 128x128 块 scale 反量化；
-  - MoE expert 权重（打包 int8 的 MXFP4）：按每行 32 元素组的 E8M0 scale 解包反量化；
-  - checkpoint 中的 `.scale` 键在加载时消费并丢弃，`load_state_dict(strict=True)` 不会被多余键阻塞。
-  本样例同步修复了该适配器的两处加载缺陷：`_block_sharded` 之前对 FP8 权重做裸 dtype cast（数值错误）并以 fp32 默认 dtype 构建 meta 模块导致权重被静默升为 fp32（单层显存 24.1G -> 12.1G）；`_block_staged` 之前全量 `.bfloat16()` 会破坏 fp32 声明的 HC/RMSNorm 参数。
+- 模型权重：从 [deepseek-ai/DeepSeek-V4-Flash](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash) 下载（约 149 GB）。官方 checkpoint 是 1 字节混合格式：Attention 权重为 FP8 e4m3（配 128x128 块 scale），MoE expert 权重为打包 int8 的 MXFP4（配每行 32 元素组的 E8M0 scale），两者都要乘回配对的 `.scale` 键才能还原数值。
+- **主干 `deepseek_v4` 适配器在加载期不做反量化**：`_block_sharded` 只对浮点张量做裸 dtype cast（不乘 block scale，FP8 数值错），打包 int8 的 MXFP4 连 cast 都不做；PTQ 路径按 `layers.{i}.` 前缀收全部键后走 `load_state_dict(strict=True)`，多出的 `.scale` 键会直接报错。因此直接拿官方 checkpoint 跑本样例的四步流程，会得到错误结果或加载失败。
+- 本样例结果表是在额外一层**加载期反量化胶水**上跑出来的：在适配器中新增 `_dequant_tensor` 并 override `load_layer_weight`，把 `*.weight` 与其配对 `.scale` 一并取出后，调用 AMCT 已有的 `amct_pytorch/quantization/dtypes/fp_impl.weight_dequant` 还原为 bf16（FP8 走 `block_size=128`；MXFP4 走 `block_size=32, is_mx=True, is_packed=True`，与适配器的 `block_size` 约定一致：int8 权重取 32、其余取 128），并丢弃已消费的 `.scale` 键。该胶水属样例配套改动、**未随本 PR 提交，`amct_pytorch/` 零改动**；同类的 FP8 / MXFP4 / MXFP8 / NVFP4 / HiF4 分派逻辑在导出路径 `amct_pytorch/common/models/llm/common/deploy_export.py` 中已有现成实现，可据此在加载期补齐。
+- 复现结果前二选一：
+  - **(a) 先把权重转成 bf16（推荐，无需改代码）**：按 [DeepSeekV4-Flash-Walkthrough.md](DeepSeekV4-Flash-Walkthrough.md) 第 2 节，用 `deploy` 接口配 `--granularity tensor` 导出 bf16 副本，再把 `MODEL_PATH` 指向该副本；
+  - **(b) 自行在适配器加载期补上上述反量化胶水**，之后 `MODEL_PATH` 可直接指向官方 checkpoint。
 - 校准集：Pileval（`mit-han-lab/pile-val-backup`），评估集：WikiText2（`wikitext-2-raw-v1` test split），`seq_len=4096`。首次运行时自动下载。
 - 硬件：单卡即可运行；双卡可通过 `--start_block_idx/--end_block_idx` 按 block 分片并行 PTQ。注意单卡 64GB HBM 下 PTQ 需 `--cali_bsz 1`。
 
@@ -22,7 +25,7 @@
 bash scripts/eval_bf16.sh
 ```
 
-默认参数：`MODEL_PATH`（模型目录）、`BIT_CONFIG=amct_pytorch/configs/bf16.yaml`、`SEQ_LEN=4096`、`DEVICE=npu:0`。基线 PPL 用于计算量化精度损失。
+默认参数：`MODEL_PATH`（模型目录）、`BIT_CONFIG=<仓库根>/amct_pytorch/configs/bf16.yaml`、`SEQ_LEN=4096`、`DEVICE=npu:0`。基线 PPL 用于计算量化精度损失。
 
 ### 第二步：PTQ 离线数据提取
 
@@ -86,7 +89,7 @@ QUANT_DTYPE=mxfp bash scripts/eval_quant.sh
 
 ## 结果表
 
-评测环境：2×Atlas A3（64GB HBM）、`seq_len=4096`、WikiText2 test split、Pileval 校准（`nsamples=16`）、`base_lr=1e-3`。
+评测环境：2×Atlas A3（64GB HBM）、`seq_len=4096`、WikiText2 test split、Pileval 校准（`nsamples=16`）、`base_lr=1e-3`。权重按前置条件 (b) 在加载期反量化为 bf16 后参与评测（等价于 (a) 预先转换出的 bf16 副本）。
 
 | 模型 | 数据类型 | 算法 | 量化格式 | BF16 PPL | 量化 PPL | PPL 差值 | 量化时长（min） | 离线数据大小（GiB） |
 | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |

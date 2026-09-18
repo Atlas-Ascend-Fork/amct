@@ -23,10 +23,15 @@
 
 set -euo pipefail
 
+# Anchor paths to the repo root / sample dir so the script runs from any cwd.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+AMCT_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
+SAMPLE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
 MODEL_PATH=${MODEL_PATH:-/path/to/deepseek-v4-flash}
-OUTPUT_DIR=${OUTPUT_DIR:-./outputs/dsv4_flash_w4a4}
+OUTPUT_DIR=${OUTPUT_DIR:-${SAMPLE_DIR}/outputs/dsv4_flash_w4a4}
 QUANT_DTYPE=${QUANT_DTYPE:-int}             # int | mxfp
-BIT_CONFIG=${BIT_CONFIG:-amct_pytorch/configs/w4a4.yaml}
+BIT_CONFIG=${BIT_CONFIG:-${AMCT_ROOT}/amct_pytorch/configs/w4a4.yaml}
 DATA_DIR=${DATA_DIR:-${OUTPUT_DIR}/ptq_data/attn-linear}
 PARAM_DIR=${PARAM_DIR:-${OUTPUT_DIR}/ptq_params/${QUANT_DTYPE}/attn-linear}
 EPOCHS=${EPOCHS:-15}
@@ -46,6 +51,7 @@ echo "BASE_LR=${BASE_LR}"
 echo "CALI_BSZ=${CALI_BSZ}"
 
 python -m amct_pytorch.ptq \
+    --trust_remote_code \
     --model "${MODEL_PATH}" \
     --model_name deepseek_v4 \
     --seq_len "${SEQ_LEN}" \
