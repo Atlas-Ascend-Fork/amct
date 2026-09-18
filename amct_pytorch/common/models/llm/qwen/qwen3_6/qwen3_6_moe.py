@@ -93,12 +93,3 @@ class Qwen3_6Moe(Qwen3_5Moe):
                 raise ValueError(
                     f"Qwen3.6 requires all experts and projections at layer {layer_idx}"
                 )
-
-    def get_ascend_deploy_bits(self, name: str) -> int:
-        if self._ascend_deploy_role(name) is None:
-            raise ValueError(f"Unsupported Ascend deployment module: {name}")
-        return 8
-
-    def get_ascend_deploy_quant_type(self, name: str) -> str:
-        self.get_ascend_deploy_bits(name)
-        return "W8A8_DYNAMIC"
