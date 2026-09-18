@@ -1,15 +1,30 @@
 {
   "skill_name": "amct-coder",
   "kind": "routing",
-  "description": "路由回归题集：验证分级与委派判断不回退。执行方式见 references/validation.md「forward-test 执行方式」——需 agent 实际作答,不能由脚本自动判定。rubric 判定规则：must_mention 每个子数组至少命中一项（同义表述算命中）;must_not_claim 任一项出现即失败。",
+  "description": "路由回归题集：验证分级与委派判断不回退。执行方式见 references/validation.md「forward-test 执行方式」——需 agent 实际作答，不能由脚本自动判定。",
+  "rubric_rules": {
+    "must_mention": "每个子数组至少命中一项。判语义不判字面，同义表述算命中。只放「正确答案不可能不说到」的内容，不放规则名或工具名——agent 沉默地做对也算对。",
+    "must_not_claim": "任一项的语义出现即失败。只放「任何正确答案都不该断言」的话；不得放裸级别词（「轻级」「标准级」），因为「这不是轻级」也会字面命中。答案否定该说法时不算命中。",
+    "allow": "看似违反 must_not_claim、实则被 skill 自身规则要求的对冲表述，命中不扣分。缺这一栏会把合规答案判成失败。"
+  },
   "evals": [
     {
       "id": 1,
       "prompt": "帮我新增一个 fp8e4m3 的 quant_dtype 并接进 CLI",
       "expected": "重级：命中门禁对象（新 dtype）+ public 契约;走 quant-dtype-module 主手册,先过既有语义复用门",
       "rubric": {
-        "must_mention": [["重级"], ["quant-dtype-module"], ["门禁对象", "新 dtype", "注册成功不等于可用"]],
-        "must_not_claim": [["轻级", "quick-path", "标准级即可"]]
+        "must_mention": [
+          ["重级"],
+          ["quant-dtype-module"],
+          ["门禁对象", "注册成功不等于可用", "新 dtype 要逐消费面收口"]
+        ],
+        "must_not_claim": [
+          "按轻级处理即可",
+          "走 quick-path 五步",
+          "不需门禁表",
+          "注册进 choices 就算接通"
+        ],
+        "allow": []
       }
     },
     {
@@ -17,8 +32,12 @@
       "prompt": "跑一下 qwen3 的直转 eval,看看 PPL",
       "expected": "委派:运行命令拿结果属执行类 skill（如 quant-run）,不留在 amct-coder",
       "rubric": {
-        "must_mention": [["委派", "转", "不留在", "属执行类"]],
-        "must_not_claim": [["我来跑", "由 amct-coder 执行", "直接运行 eval 命令"]]
+        "must_mention": [["转执行类", "委派", "quant-run", "不留在 amct-coder"]],
+        "must_not_claim": [
+          "由 amct-coder 直接运行评测命令",
+          "本 skill 跑完 eval 后给精度结论"
+        ],
+        "allow": ["若命令失败暴露实现 bug 再回源码诊断"]
       }
     },
     {
@@ -27,7 +46,11 @@
       "expected": "委派:新增模型适配转 model-adapter skill,amct-coder 不做结构性模型实现",
       "rubric": {
         "must_mention": [["model-adapter"]],
-        "must_not_claim": [["由 amct-coder 新增 adapter", "在本 skill 内完成结构实现"]]
+        "must_not_claim": [
+          "在 amct-coder 内完成结构性模型实现",
+          "由本 skill 新增 adapter 与 wrapper 类"
+        ],
+        "allow": ["amct-coder 保留 review 分层、PtqUnit 与下游契约"]
       }
     },
     {
@@ -35,17 +58,38 @@
       "prompt": "这个报错信息没说传了什么参数,帮我改一下报错文案",
       "expected": "quick-path/轻级:普通局部修复,五步路径,不读 process-rules/repo-map/主手册（SKILL.md 分级表下注的主手册豁免）;豁免只免读取,轻级判据①~④与 BLOCKER 仍适用",
       "rubric": {
-        "must_mention": [["轻级", "quick-path"]],
-        "must_not_claim": [["标准级", "重级", "先读 repo-map", "必须先读主手册"]]
+        "must_mention": [["轻级", "quick-path", "快速路径"]],
+        "must_not_claim": [
+          "起手就要读 repo-map",
+          "起手就要声明边界",
+          "必须先读主手册",
+          "判重级"
+        ],
+        "allow": [
+          "执行中发现要改更多文件或动接口即升标准级",
+          "升级后回 SKILL.md 核心流程补边界声明",
+          "分级写进最终说明"
+        ]
       }
     },
     {
       "id": 5,
       "prompt": "eval 的 PPL 和直转一样,帮我查为什么",
-      "expected": "标准级诊断:留在 amct-coder,走行为诊断流程（walkthrough 收束形态）,不转判读类 skill",
+      "expected": "标准级诊断:留在 amct-coder,走行为诊断流程（walkthrough 收束形态）。「PPL 一样」既可能是口径/判读问题也可能是量化没真生效的实现问题,正确答案要先分辨再分流——但只要判定为实现侧就留在本 skill,不整体转判读类 skill",
       "rubric": {
-        "must_mention": [["留在", "amct-coder"], ["诊断", "查", "核验", "源码链路"]],
-        "must_not_claim": [["转 direct-quant-eval", "转 quant-reviewer", "属判读类 skill"]]
+        "must_mention": [
+          ["沿源码链路查", "核验", "诊断", "查量化是否真生效", "口径还是实现"]
+        ],
+        "must_not_claim": [
+          "无需查源码即可回答",
+          "直接给精度达标结论",
+          "整体转判读类 skill 后本 skill 不保留任何职责"
+        ],
+        "allow": [
+          "若确认属达标判读则转 direct-quant-eval",
+          "算法收益判读转 algorithm-validation",
+          "只在口径或日志字段来自代码问题时诊断"
+        ]
       }
     }
   ]
