@@ -90,6 +90,18 @@ def _make_workflow(
     return workflow
 
 
+def _tensor_json_args(workflow, quant=("model.layers.0.self_attn.o_proj",), ignore=()):
+    from amct_pytorch.common.models.llm.common.deploy_selection import DeploySelection
+    from amct_pytorch.quantization.bit_policy import BitPolicy
+
+    workflow.granularity = workflow.args.granularity = "tensor"
+    workflow.args.model_name = "glm5_2"
+    workflow.args.deploy_selection = DeploySelection(quant, ignore)
+    workflow.args.bit_policy = BitPolicy(
+        {group: {"w_bits": 8, "a_bits": 8} for group in ("attn-linear", "mlp", "moe")}
+    )
+
+
 def test_workflow_initializes_plural_safetensors_files_cache():
     args = SimpleNamespace(
         granularity=GRANULARITY_BLOCK,
@@ -716,7 +728,11 @@ def test_run_tensorwise_copies_and_rewrites_weight_index(monkeypatch, tmp_path):
         MagicMock(),
     )
 
-    wf = _make_workflow(model_path=str(src), output_dir=str(dst), quant_dtype="bf16")
+    from amct_pytorch.quantization.dtypes import register_dtype
+
+    register_dtype()
+    wf = _make_workflow(model_path=str(src), output_dir=str(dst), quant_dtype="int")
+    _tensor_json_args(wf, ("model.layers.0.mlp.up_proj",))
     wf._copy_support_files = MagicMock()
     original_index = {
         METADATA_KEY: {"foo": "bar"},
@@ -726,8 +742,7 @@ def test_run_tensorwise_copies_and_rewrites_weight_index(monkeypatch, tmp_path):
     }
     wf._load_weight_index = MagicMock(return_value=original_index)
     wf.pipeline = MagicMock()
-    wf.pipeline.generate_tensorwise_quant_layers.return_value = {}
-    wf.pipeline.generate_tensorwise_ignore_layers.return_value = ["lm_head"]
+    wf.pipeline.config = SimpleNamespace()
     wf.pipeline.get_scale_name.return_value = (".weight_scale", "unused_scale_inv")
     wf.pipeline.block_size.return_value = 128
     wf.pipeline.cache_scheme.return_value = {}
@@ -742,8 +757,9 @@ def test_run_tensorwise_copies_and_rewrites_weight_index(monkeypatch, tmp_path):
     assert saved_index[METADATA_KEY]["foo"] == "bar"
     assert saved_index["weight_map"] == {
         MODEL_LAYERS_0_MLP_UP_PROJ_WEIGHT: KEY_SHARD1_SAFETENSORS,
+        "model.layers.0.mlp.up_proj.weight_scale": KEY_SHARD1_SAFETENSORS,
     }
-    assert refreshed[QUANTIZATION_CONFIG]["ignore"] == ["lm_head"]
+    assert refreshed[QUANTIZATION_CONFIG]["ignore"] == []
 
 
 # ---- Task 14: _convert_tensor / _refresh_config_tensor --------------------
@@ -804,14 +820,20 @@ def test_run_tensorwise_int_quant_path(monkeypatch, tmp_path):
 
     (src / CONFIG_JSON).write_text(json.dumps({"torch_dtype": "float32"}))
     save_file(
-        {"layer.weight": torch.randn(4, 4, dtype=torch.float32)},
+        {
+            "model.layers.0.self_attn.o_proj.weight": torch.randn(
+                4, 4, dtype=torch.float32
+            )
+        },
         str(src / KEY_SHARD1_SAFETENSORS),
     )
     (src / SAFETENSORS_INDEX_JSON).write_text(
         json.dumps(
             {
                 "metadata": {},
-                "weight_map": {"layer.weight": KEY_SHARD1_SAFETENSORS},
+                "weight_map": {
+                    "model.layers.0.self_attn.o_proj.weight": KEY_SHARD1_SAFETENSORS
+                },
             }
         )
     )
@@ -824,13 +846,12 @@ def test_run_tensorwise_int_quant_path(monkeypatch, tmp_path):
     )
 
     wf = _make_workflow(model_path=str(src), output_dir=str(dst), quant_dtype="int")
-    wf.granularity = "tensor"
+    _tensor_json_args(wf)
     wf.pipeline = MagicMock()
     wf.pipeline.get_scale_name = MagicMock(
         return_value=("_scale_inv", "missing_scale_inv")
     )
-    wf.pipeline.generate_tensorwise_quant_layers = MagicMock(return_value={"layer": 8})
-    wf.pipeline.generate_tensorwise_ignore_layers = MagicMock(return_value=[])
+    wf.pipeline.config = SimpleNamespace()
     wf.pipeline.cache_scheme = MagicMock(return_value={})
     wf.pipeline.bits_scheme = MagicMock(return_value=None)
     wf.pipeline.block_size = MagicMock(return_value=32)
@@ -842,7 +863,7 @@ def test_run_tensorwise_int_quant_path(monkeypatch, tmp_path):
     refreshed_index = json.loads((dst / SAFETENSORS_INDEX_JSON).read_text())
     assert result["num_output_files"] == 1
     # quant_payload produces qweight + weight_scale + weight_bias
-    assert "layer.weight" in refreshed_index["weight_map"]
+    assert "model.layers.0.self_attn.o_proj.weight" in refreshed_index["weight_map"]
 
 
 def test_load_weight_index_single_shard_synthesizes(tmp_path):
@@ -889,6 +910,7 @@ def test_ascend_rejects_quantized_source_before_output(tmp_path, marker):
         (source / marker).write_text("{}")
     workflow = _make_workflow(str(source), str(output), "int")
     workflow.args.deploy_format = "ascend"
+    _tensor_json_args(workflow)
     with pytest.raises(ValueError, match="source"):
         workflow.run()
     assert not output.exists()
@@ -1042,6 +1064,7 @@ def test_ascend_rejects_unsafe_output_before_setup(tmp_path, relation, monkeypat
         output.symlink_to(source, target_is_directory=True)
     wf = _make_workflow(str(source), str(output), "int")
     wf.args.deploy_format = "ascend"
+    _tensor_json_args(wf)
     monkeypatch.setattr(
         wf, "setup", lambda: pytest.fail("Unsafe output must fail before setup")
     )
@@ -1096,3 +1119,149 @@ def test_ascend_plan_rejects_nonlocal_shard_names(filename):
     wf = _make_workflow(quant_dtype="int")
     with pytest.raises(ValueError, match="shard"):
         wf._prepare_ascend_deploy_plan({"weight_map": {"x.weight": filename}})
+
+
+def test_json_tensor_export_two_shards_preserves_float_bias_and_metadata(
+    tmp_path, monkeypatch
+):
+    from safetensors.torch import load_file
+    from amct_pytorch.quantization.bit_policy import BitPolicy
+    from amct_pytorch.common.models.llm.common.deploy_selection import DeploySelection
+    from amct_pytorch.quantization.dtypes import register_dtype
+
+    register_dtype()
+    src, dst = tmp_path / "src", tmp_path / "dst"
+    src.mkdir()
+    selected = "model.layers.0.self_attn.o_proj"
+    ignored = "model.layers.1.self_attn.o_proj"
+    unselected = "model.layers.0.mlp.up_proj"
+    tensors = {
+        selected + ".weight": torch.arange(12, dtype=torch.float32).reshape(3, 4),
+        selected + ".bias": torch.tensor([0.5, -1.0, 2.0]),
+        ignored + ".weight": torch.full((3, 4), 0.5),
+        unselected + ".weight": torch.full((3, 4), 1.5),
+        "model.norm.weight": torch.ones(4),
+    }
+    weight_map = {k: f"shard-{i % 2}.safetensors" for i, k in enumerate(tensors)}
+    for filename in set(weight_map.values()):
+        save_file(
+            {k: v for k, v in tensors.items() if weight_map[k] == filename},
+            str(src / filename),
+        )
+    (src / CONFIG_JSON).write_text(
+        '{"num_hidden_layers":1,"num_nextn_predict_layers":1}'
+    )
+    (src / SAFETENSORS_INDEX_JSON).write_text(json.dumps({"weight_map": weight_map}))
+    args = SimpleNamespace(
+        model=str(src),
+        model_name="unused",
+        granularity="tensor",
+        quant_dtype="int",
+        output_dir=str(dst),
+        deploy_format="legacy",
+        quant_target=["moe"],
+        deploy_selection=DeploySelection(
+            ("model.layers.*.self_attn.o_proj",), (ignored,)
+        ),
+        bit_policy=BitPolicy({"attn-linear": {"w_bits": 8, "a_bits": 8}}),
+    )
+    wf = LlmDeployWorkflow(args)
+
+    def forbidden(*args):
+        pytest.fail("Tensor JSON path must not call model generators or bits_scheme")
+
+    pipeline = SimpleNamespace(
+        config=SimpleNamespace(num_hidden_layers=1, num_nextn_predict_layers=1),
+        get_scale_name=lambda k: ("_scale_inv", k + "_scale_inv"),
+        block_size=lambda w: 32,
+        generate_tensorwise_quant_layers=forbidden,
+        generate_tensorwise_ignore_layers=forbidden,
+        bits_scheme=forbidden,
+    )
+    monkeypatch.setattr(wf, "_build_pipeline", lambda: pipeline)
+    refresh = MagicMock(wraps=wf._refresh_config)
+    monkeypatch.setattr(wf, "_refresh_config", refresh)
+    result = wf.run()
+    refresh.assert_called_once()
+    actual = {}
+    for file in dst.glob("*.safetensors"):
+        actual.update(load_file(str(file)))
+    assert set(actual) == set(tensors) | {selected + ".weight_scale"}
+    assert actual[selected + ".weight"].dtype == torch.int8
+    ref_scale = tensors[selected + ".weight"].abs().amax(dim=1, keepdim=True) / 127
+    assert torch.equal(
+        actual[selected + ".weight"],
+        torch.round(tensors[selected + ".weight"] / ref_scale).to(torch.int8),
+    )
+    for key in set(tensors) - {selected + ".weight"}:
+        assert torch.equal(actual[key], tensors[key])
+    cfg = json.loads((dst / CONFIG_JSON).read_text())["quantization_config"]
+    assert set(cfg["ignore"]) == {ignored, unselected, "model.norm"}
+    assert all(
+        g["weights"]["num_bits"] == 8 and g["input_activations"]["num_bits"] == 8
+        for g in cfg["config_groups"].values()
+    )
+    assert set(json.loads(Path(result["index_path"]).read_text())["weight_map"]) == set(
+        actual
+    )
+    assert wf.deploy_plan.mtp.status == "fully_ignored"
+
+
+def test_tensor_invalid_bits_fails_before_setup(tmp_path, monkeypatch):
+    from amct_pytorch.quantization.bit_policy import BitPolicy
+
+    args = SimpleNamespace(
+        model="missing",
+        model_name="unused",
+        granularity="tensor",
+        quant_dtype="int",
+        output_dir=str(tmp_path / "out"),
+        bit_policy=BitPolicy({"moe": {"w_bits": 4, "a_bits": 8}}),
+    )
+    wf = LlmDeployWorkflow(args)
+    monkeypatch.setattr(wf, "setup", lambda: pytest.fail("Must validate before setup"))
+    with pytest.raises(ValueError, match="W8A8"):
+        wf.run()
+    assert not Path(args.output_dir).exists()
+
+
+def test_ascend_tensor_run_preserves_source_config(tmp_path, monkeypatch):
+    from amct_pytorch.common.models.llm.common.deploy_selection import (
+        DeploySelection,
+        build_tensor_deploy_plan,
+    )
+    from amct_pytorch.quantization.bit_policy import BitPolicy
+    from amct_pytorch.quantization.dtypes import register_dtype
+
+    register_dtype()
+    src, dst = tmp_path / "src", tmp_path / "dst"
+    src.mkdir()
+    dst.mkdir()
+    source_config = '{\n  "model_type": "glm5", "custom_field": [1, 2]\n}\n'
+    (src / CONFIG_JSON).write_text(source_config)
+    name = "model.layers.0.self_attn.o_proj"
+    save_file(
+        {name + ".weight": torch.ones(2, 3, dtype=torch.bfloat16)},
+        str(src / MODEL_SAFETENSORS),
+    )
+    index = {"weight_map": {name + ".weight": MODEL_SAFETENSORS}}
+    wf = _make_workflow(str(src), str(dst), "int")
+    wf.args.deploy_format = "ascend"
+    wf.pipeline = SimpleNamespace(
+        get_scale_name=lambda key: ("_scale_inv", "missing_scale_inv")
+    )
+    wf.deploy_plan = build_tensor_deploy_plan(
+        index["weight_map"],
+        DeploySelection((name,), ()),
+        BitPolicy({"attn-linear": {"w_bits": 8, "a_bits": 8}}),
+    )
+    monkeypatch.setattr(wf, "_load_weight_index", lambda: index)
+    refresh = MagicMock(side_effect=AssertionError("Ascend must not refresh config"))
+    monkeypatch.setattr(wf, "_refresh_config", refresh)
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.validate_ascend_artifacts",
+        lambda *args: {"status": "passed"},
+    )
+    wf._run_tensorwise()
+    refresh.assert_not_called()
+    assert (dst / CONFIG_JSON).read_bytes() == (src / CONFIG_JSON).read_bytes()

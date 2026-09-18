@@ -23,7 +23,14 @@ from amct_pytorch.workflows.llm_deploy import LlmDeployWorkflow
 
 def _adapter():
     adapter = object.__new__(Qwen3_6Moe)
-    adapter.args = SimpleNamespace(bit_policy=BitPolicy({"w_bits": 8, "a_bits": 8}))
+    adapter.args = SimpleNamespace(
+        bit_policy=BitPolicy(
+            {
+                group: {"w_bits": 8, "a_bits": 8}
+                for group in ("attn-linear", "mlp", "moe")
+            }
+        )
+    )
     adapter.config = SimpleNamespace(
         num_hidden_layers=4,
         num_experts=2,
@@ -61,7 +68,9 @@ def test_virtual_inventory_expands_packed_experts_for_json_selection():
     )
 
     layout = PackedGatedExpertLayout(num_experts=2, moe_intermediate_size=3)
-    plan = build_ascend_deploy_plan(layout.expand_weight_map(weight_map), selection, adapter)
+    plan = build_ascend_deploy_plan(
+        layout.expand_weight_map(weight_map), selection, adapter
+    )
 
     assert len(plan.selected_modules) == 9
     assert (
@@ -88,9 +97,11 @@ def test_workflow_detects_packed_experts_without_qwen_specific_expand_hooks():
             )
         ),
         quant_target=None,
+        bit_policy=adapter.args.bit_policy,
+        deploy_format="ascend",
     )
 
-    plan = workflow._prepare_ascend_deploy_plan({"weight_map": weight_map})
+    plan = workflow._prepare_tensor_deploy_plan({"weight_map": weight_map})
 
     assert not hasattr(adapter, "expand_ascend_deploy_weight_map")
     assert not hasattr(adapter, "expand_ascend_deploy_tensors")

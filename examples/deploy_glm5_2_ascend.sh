@@ -15,7 +15,7 @@ exec "${PYTHON_BIN:-python3}" "${repo_dir}/amct_pytorch/cli/llm/deploy.py" \
   --device cpu \
   --granularity tensor \
   --quant_dtype int \
-  --bit_config "${repo_dir}/amct_pytorch/configs/w8a8.yaml" \
+  --bit_config "${repo_dir}/amct_pytorch/configs/deploy/tensor_w8a8.yaml" \
   --deploy_format ascend \
   --quant_layers_config "${repo_dir}/amct_pytorch/configs/deploy/glm5_2_ascend_w8a8.json" \
   --output_dir "${GLM52_ASCEND_DIR}"

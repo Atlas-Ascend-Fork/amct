@@ -22,7 +22,7 @@ from pathlib import Path
 import torch
 from safetensors import SafetensorError, safe_open
 
-from amct_pytorch.common.models.llm.common.deploy_selection import AscendDeployPlan
+from amct_pytorch.common.models.llm.common.deploy_selection import ResolvedDeployPlan
 
 
 _FLOAT_BYTES = {"BF16": 2, "F16": 2, "F32": 4, "F64": 8}
@@ -44,7 +44,7 @@ _GLOBALS = {
 }
 
 
-def validate_ascend_artifacts(output_dir: Path, plan: AscendDeployPlan) -> dict:
+def validate_ascend_artifacts(output_dir: Path, plan: ResolvedDeployPlan) -> dict:
     """Return a passed/failed report; callers must reject a failed report."""
     root = Path(output_dir)
     counts = dict.fromkeys(

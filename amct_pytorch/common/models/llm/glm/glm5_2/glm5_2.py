@@ -79,8 +79,8 @@ class GLM5_2(BaseModel):
 
     def parse_quant_mode(self):
         if (
-            getattr(self.args, "deploy_format", "legacy") == "ascend"
-            and getattr(self.args, "granularity", None) == "tensor"
+            getattr(self.args, "granularity", None) == "tensor"
+            and getattr(self.args, "deploy_selection", None) is not None
         ):
             return
         if "mlp" in self.quant_target:
