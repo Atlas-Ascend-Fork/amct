@@ -19,6 +19,12 @@ import json
 from dataclasses import dataclass
 from fnmatch import fnmatchcase
 from pathlib import Path
+import re
+
+from loguru import logger
+import yaml
+
+from amct_pytorch.quantization.bit_policy import BitPolicy
 
 
 @dataclass(frozen=True)
@@ -30,46 +36,250 @@ class DeploySelection:
 
 
 @dataclass(frozen=True)
-class AscendDeployPlan:
-    """Resolved checkpoint selection shared by payload and metadata export."""
+class MtpSelectionReport:
+    """Observed MTP selection; reporting never changes the selected set."""
+
+    modules: frozenset[str]
+    ignored: frozenset[str]
+    selected: frozenset[str]
+
+    @property
+    def status(self):
+        if not self.modules:
+            return "not_present"
+        if self.ignored == self.modules:
+            return "fully_ignored"
+        if self.ignored:
+            return "partially_ignored"
+        return "selected" if self.selected else "not_selected"
+
+
+@dataclass(frozen=True)
+class ResolvedDeployPlan:
+    """Resolved checkpoint selection shared by conversion and export metadata.
+
+    Module names are full checkpoint paths without the final parameter suffix
+    (for example, ``model.layers.0.self_attn.o_proj``).
+
+    Attributes:
+        selected_modules: Modules matched by quant_layers after ignore_layers
+            takes precedence. Every selected module has a .weight tensor.
+        selected_weight_keys: Exact checkpoint keys to quantize, formed by
+            appending .weight to each selected module name. Biases are excluded.
+        module_bits: Selected module name to (w_bits, a_bits), resolved from
+            BitPolicy. The current tensor export contract requires (8, 8).
+        ignored_modules: Existing parameter-bearing modules matched explicitly
+            by JSON ignore_layers, including matches outside quant_layers.
+            This is not the set of all modules left unquantized.
+        unselected_weight_modules: All checkpoint modules with .weight tensors
+            minus selected_modules. Legacy metadata combines this set with
+            ignored_modules so unselected weights are not advertised as quantized.
+        match_counts: Raw checkpoint module hit count for each unique JSON
+            pattern, before ignore precedence. Zero-hit ignore rules remain here.
+        mtp: Observed MTP modules and their ignored/selected subsets, used for
+            validation and logging without changing selection.
+        unmatched_ignore_patterns: JSON ignore patterns with zero checkpoint
+            module matches; retained for warning logs and configuration auditing.
+    """
 
     selected_modules: frozenset[str]
     selected_weight_keys: frozenset[str]
+    module_bits: dict[str, tuple[int, int]]
+    ignored_modules: frozenset[str]
+    unselected_weight_modules: frozenset[str]
     match_counts: dict[str, int]
-    excluded_mtp: frozenset[str]
+    mtp: MtpSelectionReport
+    unmatched_ignore_patterns: frozenset[str] = frozenset()
+
+    @property
+    def quant_layers(self):
+        """Return selected module names mapped to weight bits for conversion."""
+        return {name: bits[0] for name, bits in self.module_bits.items()}
 
 
-def build_ascend_deploy_plan(
-    weight_map: dict[str, str], selection: DeploySelection, adapter
-) -> AscendDeployPlan:
-    """Resolve against actual tensor names, then validate model constraints.
+def validate_tensor_bit_config(cfg):
+    """Strict tensor-only contract; do not change shared BitPolicy defaults."""
+    if not isinstance(cfg, dict) or not cfg:
+        raise ValueError("Tensor W8A8 deployment requires a nonempty --bit_config")
+    allowed = {"attn-linear", "mlp", "moe", "w_bits", "a_bits"}
+    unknown = cfg.keys() - allowed
+    if unknown:
+        raise ValueError(f"Unknown tensor bit_config fields: {sorted(unknown)}")
 
-    Inventory includes modules with non-weight parameters so unsupported
-    explicit selections are diagnosed rather than silently discarded.
-    excluded_mtp records matches removed by the mandatory MTP exclusion, after
-    the user's ignore rules have been applied.
+    def check(node, path):
+        if not isinstance(node, dict):
+            raise ValueError(f"{path}: expected a bit_config mapping")
+        for key, value in node.items():
+            full = f"{path}.{key}" if path else key
+            if key in {"w_bits", "a_bits"}:
+                if type(value) is not int or value != 8:
+                    raise ValueError(
+                        f"{full}={value}: tensor deployment currently supports only W8A8; "
+                        "W4 export is not implemented in this path"
+                    )
+            elif key in {"w_bit", "a_bit"} or not isinstance(value, dict):
+                raise ValueError(f"Unknown bit_config field {full}; use w_bits/a_bits")
+            else:
+                check(value, full)
+        if ("w_bits" in node) != ("a_bits" in node):
+            raise ValueError(f"{path}: set both w_bits and a_bits")
+
+    check(cfg, "")
+
+
+def validate_tensor_deploy_args(args):
+    """Preflight for both CLI and programmatic tensor workflows."""
+    if getattr(args, "quant_dtype", None) != "int":
+        raise ValueError(
+            "Tensor deployment currently requires --quant_dtype int (W8A8)"
+        )
+    path = getattr(args, "bit_config", None)
+    if path:
+        try:
+            cfg = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+        except (OSError, ValueError, yaml.YAMLError) as exc:
+            raise ValueError(f"Cannot read bit_config {path}: {exc}") from exc
+    else:
+        policy = getattr(args, "bit_policy", None)
+        cfg = policy.cfg if isinstance(policy, BitPolicy) else None
+    validate_tensor_bit_config(cfg)
+    args.bit_policy = BitPolicy(cfg)
+    selection_path = getattr(args, "quant_layers_config", None)
+    if selection_path:
+        args.deploy_selection = load_deploy_selection(selection_path)
+    elif not isinstance(getattr(args, "deploy_selection", None), DeploySelection):
+        raise ValueError("Tensor deployment requires --quant_layers_config")
+    if getattr(args, "quant_target", None):
+        logger.warning(
+            "Tensor JSON selection replaces quant_target; quant_target is not used"
+        )
+
+
+def tensor_module_role(name):
+    """Map common checkpoint paths to existing coarse BitPolicy roles.
+
+    This describes names, not quantization selection. Unsupported naming fails
+    explicitly instead of silently falling back to the global/default 16 bits.
     """
+    if ".self_attn." in name:
+        return "attn-linear", name.rsplit(".", 1)[-1]
+    if re.search(r"\.mlp\.experts\.\d+\.", name):
+        return "moe.routed", name.rsplit(".", 1)[-1]
+    if ".mlp.shared_experts." in name or ".mlp.shared_mlp." in name:
+        return "moe.shared", name.rsplit(".", 1)[-1]
+    if ".mlp." in name:
+        return "mlp", name.rsplit(".", 1)[-1]
+    raise ValueError(f"No tensor bit-policy role for selected module: {name}")
+
+
+def _resolve_bits(name, policy):
+    group, projection = tensor_module_role(name)
+    node = policy.cfg
+    explicit = False
+    for part in (*group.split("."), projection):
+        node = node.get(part)
+        if not isinstance(node, dict):
+            break
+        explicit |= "w_bits" in node and "a_bits" in node
+    if not explicit:
+        raise ValueError(f"Missing explicit {group} bit configuration for {name}")
+    return policy.linear_bits(name=projection, group=group)
+
+
+def _mtp_report(names, ignored, selected, config):
+    start = getattr(config, "num_hidden_layers", 0)
+    count = getattr(config, "num_nextn_predict_layers", 0)
+    prefixes = tuple(f"model.layers.{i}." for i in range(start, start + count))
+    modules = frozenset(name for name in names if name.startswith(prefixes))
+    return MtpSelectionReport(modules, modules & ignored, modules & selected)
+
+
+def log_mtp_selection(
+    report, *, phase="planned", quantized_modules=(), module_bits=None
+):
+    log = (
+        logger.warning
+        if report.modules and report.ignored != report.modules
+        else logger.info
+    )
+    log(
+        "MTP {}: status={}, modules={}, ignored={}, selected={}, quantized={}, selected_sample={}",
+        phase,
+        report.status,
+        len(report.modules),
+        len(report.ignored),
+        len(report.selected),
+        len(report.modules & set(quantized_modules)),
+        [
+            (name, (module_bits or {}).get(name))
+            for name in sorted(report.selected)[:20]
+        ],
+    )
+
+
+def build_tensor_deploy_plan(weight_map, selection, policy, *, config=None):
+    validate_tensor_bit_config(policy.cfg)
     names = {key.rsplit(".", 1)[0] for key in weight_map}
     selected, counts = match_deploy_modules(names, selection)
-    excluded_mtp = adapter.get_ascend_deploy_mtp_modules(selected)
-    selected -= excluded_mtp
-    if not selected:
-        raise ValueError("No modules selected after mandatory MTP exclusion")
+    ignored = frozenset(
+        name
+        for name in names
+        if any(fnmatchcase(name, p) for p in selection.ignore_layers)
+    )
+    weights = {
+        key.removesuffix(".weight") for key in weight_map if key.endswith(".weight")
+    }
+    report = _mtp_report(names, ignored, selected, config)
+    log_mtp_selection(report)
+    if missing := selected - weights:
+        raise ValueError(f"Selected modules have no .weight tensor: {sorted(missing)}")
+    bits = {}
+    for name in sorted(selected):
+        try:
+            bits[name] = _resolve_bits(name, policy)
+        except ValueError as exc:
+            prefix = "MTP " if name in report.selected else ""
+            raise ValueError(f"{prefix}{exc}") from exc
+    return ResolvedDeployPlan(
+        frozenset(selected),
+        frozenset(name + ".weight" for name in selected),
+        bits,
+        ignored,
+        frozenset(weights - selected),
+        counts,
+        report,
+        frozenset(p for p in selection.ignore_layers if counts[p] == 0),
+    )
+
+
+def validate_ascend_deploy_plan(plan, weight_map, adapter):
+    """Validate Ascend capability without altering JSON selection."""
+    required = ("get_ascend_deploy_candidates", "validate_ascend_deploy_selection")
+    missing = [name for name in required if not callable(getattr(adapter, name, None))]
+    if missing:
+        raise ValueError(
+            f"Ascend deployment adapter {type(adapter).__name__} lacks required capabilities: {missing}"
+        )
+    if plan.mtp.selected:
+        raise ValueError(
+            f"Ascend MTP quantization is not supported: {sorted(plan.mtp.selected)}; use ignore_layers"
+        )
     candidates = adapter.get_ascend_deploy_candidates(
         {key.removesuffix(".weight") for key in weight_map if key.endswith(".weight")}
     )
-    unsupported = selected - candidates
-    if unsupported:
+    if unsupported := plan.selected_modules - candidates:
         raise ValueError(
             f"Unsupported Ascend deployment modules: {sorted(unsupported)}"
         )
-    adapter.validate_ascend_deploy_selection(selected)
-    return AscendDeployPlan(
-        selected_modules=frozenset(selected),
-        selected_weight_keys=frozenset(f"{name}.weight" for name in selected),
-        match_counts=counts,
-        excluded_mtp=frozenset(excluded_mtp),
+    adapter.validate_ascend_deploy_selection(plan.selected_modules)
+    return plan
+
+
+def build_ascend_deploy_plan(weight_map, selection, adapter):
+    plan = build_tensor_deploy_plan(
+        weight_map, selection, adapter.args.bit_policy, config=adapter.config
     )
+    return validate_ascend_deploy_plan(plan, weight_map, adapter)
 
 
 def load_deploy_selection(path: Path) -> DeploySelection:
@@ -109,8 +319,9 @@ def match_deploy_modules(
     """Resolve full-name globs with ignore precedence and raw hit counts.
 
     Counts include ignored matches and are keyed by unique pattern. Ignore
-    patterns may match non-quantizable modules (e.g. norm/head). Candidate and
-    fusion validation belongs to the model adapter, not this matcher.
+    patterns may match non-quantizable modules (e.g. norm/head). Unmatched quant
+    rules fail; unmatched ignore rules warn, with their zero counts retained.
+    Candidate and fusion validation belongs to the format adapter.
     """
     counts = {}
     selected = set()
@@ -123,9 +334,14 @@ def match_deploy_modules(
             found = {name for name in names if fnmatchcase(name, pattern)}
             counts[pattern] = len(found)
             matches.update(found)
-    unmatched = sorted(pattern for pattern, count in counts.items() if count == 0)
+    unmatched = sorted({p for p in selection.quant_layers if counts[p] == 0})
     if unmatched:
-        raise ValueError(f"Selection patterns matched no modules: {unmatched}")
+        raise ValueError(f"quant_layers patterns matched no modules: {unmatched}")
+    unmatched_ignore = sorted({p for p in selection.ignore_layers if counts[p] == 0})
+    if unmatched_ignore:
+        logger.warning(
+            "ignore_layers patterns matched no modules: {}", unmatched_ignore
+        )
     selected -= ignored
     if not selected:
         raise ValueError(
@@ -137,33 +353,30 @@ def match_deploy_modules(
 def validate_ascend_deploy_args(args) -> None:
     """Validate deploy mode without loading weights or altering legacy options.
 
-    This checks the W8A8 default; the model adapter must additionally validate
-    effective per-module bit-policy overrides when resolving selected modules.
-    Source tensors/config and output-directory checks belong to export preflight.
+    W8A8 configuration is checked by the shared tensor argument validator.
+    Model fusion constraints and source/output checks remain format-specific.
     """
     deploy_format = getattr(args, "deploy_format", "legacy")
     selection_path = getattr(args, "quant_layers_config", None)
     if deploy_format not in {"legacy", "ascend"}:
         raise ValueError(f"Unsupported deploy_format: {deploy_format}")
     if deploy_format == "legacy":
-        if selection_path is not None:
-            raise ValueError("quant_layers_config requires --deploy_format ascend")
+        if (
+            selection_path is not None
+            and getattr(args, "granularity", None) != "tensor"
+        ):
+            raise ValueError("quant_layers_config requires --granularity tensor")
         return
-    if not selection_path:
+    if not selection_path and not isinstance(
+        getattr(args, "deploy_selection", None), DeploySelection
+    ):
         raise ValueError("Ascend deployment requires --quant_layers_config")
-    if getattr(args, "model_name", None) not in {"glm5_2", "qwen3_6_moe"}:
-        raise ValueError(
-            "Ascend deployment requires --model_name one of ['glm5_2', 'qwen3_6_moe']"
-        )
     for key, expected in (
         ("granularity", "tensor"),
         ("quant_dtype", "int"),
     ):
         if getattr(args, key, None) != expected:
             raise ValueError(f"Ascend deployment requires --{key} {expected}")
-    policy = getattr(args, "bit_policy", None)
-    if policy is None or (policy.w_bits, policy.a_bits) != (8, 8):
-        raise ValueError("Ascend deployment requires W8A8 defaults in --bit_config")
     for key in (
         "algos",
         "attn_linear_param_dir",

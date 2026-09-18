@@ -1271,6 +1271,12 @@ class TestGLM5_2NewFunctions:
         assert "model.layers.1.eh_proj" not in ignore
 
 
+def _make_deploy_w8a8_policy():
+    return BitPolicy(
+        {group: {"w_bits": 8, "a_bits": 8} for group in ("attn-linear", "mlp", "moe")}
+    )
+
+
 @pytest.fixture
 def ascend_glm_adapter():
     # Selection uses only checkpoint names and config; no HF model or forward.
@@ -1284,7 +1290,7 @@ def ascend_glm_adapter():
         indexer_types=["full", "shared"],
     )
     adapter.args = SimpleNamespace(
-        bit_policy=BitPolicy({"w_bits": 8, "a_bits": 8}),
+        bit_policy=_make_deploy_w8a8_policy(),
         deploy_format="ascend",
         granularity="tensor",
         quant_target=["mlp"],
@@ -1404,14 +1410,21 @@ def test_ascend_ignores_bits_for_unselected_modules(ascend_glm_adapter):
     )
 
 
-def test_ascend_json_bypasses_legacy_quant_target_rejection(ascend_glm_adapter):
+@pytest.mark.parametrize("deploy_format", ["ascend", "legacy"])
+def test_tensor_json_bypasses_legacy_quant_target_rejection(
+    ascend_glm_adapter, deploy_format
+):
+    from amct_pytorch.common.models.llm.common.deploy_selection import DeploySelection
+
+    ascend_glm_adapter.args.deploy_format = deploy_format
+    ascend_glm_adapter.args.deploy_selection = DeploySelection(("model.layers.*",))
     ascend_glm_adapter.parse_quant_mode()
-    ascend_glm_adapter.args.deploy_format = "legacy"
+    ascend_glm_adapter.args.deploy_selection = None
     with pytest.raises(ValueError, match="mlp"):
         ascend_glm_adapter.parse_quant_mode()
 
 
-def test_ascend_plan_forces_mtp_exclusion_before_candidate_checks(ascend_glm_adapter):
+def test_ascend_plan_respects_explicit_mtp_ignore(ascend_glm_adapter):
     from amct_pytorch.common.models.llm.common.deploy_selection import (
         DeploySelection,
         build_ascend_deploy_plan,
@@ -1422,14 +1435,22 @@ def test_ascend_plan_forces_mtp_exclusion_before_candidate_checks(ascend_glm_ada
         "model.layers.2.eh_proj.weight": "two.safetensors",
     }
     plan = build_ascend_deploy_plan(
-        keys, DeploySelection(("model.layers.*",)), ascend_glm_adapter
+        keys,
+        DeploySelection(("model.layers.*",), ("model.layers.2.*",)),
+        ascend_glm_adapter,
     )
     assert plan.selected_modules == frozenset({"model.layers.0.self_attn.q_b_proj"})
     assert plan.selected_weight_keys == frozenset(
         {"model.layers.0.self_attn.q_b_proj.weight"}
     )
-    assert plan.excluded_mtp == frozenset({"model.layers.2.eh_proj"})
-    assert plan.match_counts == {"model.layers.*": 2}
+    assert plan.ignored_modules == frozenset({"model.layers.2.eh_proj"})
+    assert plan.mtp.status == "fully_ignored"
+    assert not plan.mtp.selected
+    assert plan.match_counts == {"model.layers.*": 2, "model.layers.2.*": 1}
+    with pytest.raises(ValueError, match="MTP"):
+        build_ascend_deploy_plan(
+            keys, DeploySelection(("model.layers.*",)), ascend_glm_adapter
+        )
 
 
 def test_ascend_mtp_only_selection_is_rejected(ascend_glm_adapter):
@@ -1492,7 +1513,8 @@ def test_ascend_workflow_plan_reads_index_without_writing(ascend_glm_adapter, tm
         granularity="tensor",
         quant_dtype="int",
         deploy_format="ascend",
-        deploy_selection=DeploySelection(("model.layers.*",)),
+        deploy_selection=DeploySelection(("model.layers.*",), ("model.layers.2.*",)),
+        bit_policy=_make_deploy_w8a8_policy(),
         quant_target=["mlp"],
     )
     workflow = LlmDeployWorkflow(args)
@@ -1532,7 +1554,7 @@ def test_ascend_official_reference_selection():
     adapter.config = SimpleNamespace(
         **json.loads((root / "GLM-5.2/config.json").read_text())
     )
-    adapter.args = SimpleNamespace(bit_policy=BitPolicy({"w_bits": 8, "a_bits": 8}))
+    adapter.args = SimpleNamespace(bit_policy=_make_deploy_w8a8_policy())
     config_path = (
         Path(__file__).resolve().parents[5]
         / "amct_pytorch/configs/deploy/glm5_2_ascend_w8a8.json"
@@ -1636,6 +1658,7 @@ def test_ascend_export_config_and_description(
         quant_dtype="int",
         deploy_format="ascend",
         deploy_selection=DeploySelection(tuple(sorted(selected))),
+        bit_policy=_make_deploy_w8a8_policy(),
         quant_target=[],
     )
     workflow = LlmDeployWorkflow(args)

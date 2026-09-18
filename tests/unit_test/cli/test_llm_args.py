@@ -222,3 +222,64 @@ def test_legacy_rejects_selection_instead_of_ignoring_it(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["amct", "--quant_layers_config", "layers.json"])
     with pytest.raises(ValueError, match="quant_layers_config"):
         parser_gen(command="deploy")
+
+
+@pytest.mark.parametrize("deploy_format", ["legacy", "ascend"])
+def test_tensor_cli_module_bits_and_json(monkeypatch, tmp_path, deploy_format):
+    config = tmp_path / "layers.json"
+    config.write_text('{"quant_layers": ["model.layers.*.self_attn.o_proj"]}')
+    bits = tmp_path / "bits.yaml"
+    bits.write_text("attn-linear:\n  w_bits: 8\n  a_bits: 8\n")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "amct",
+            "--granularity",
+            "tensor",
+            "--quant_dtype",
+            "int",
+            "--model_name",
+            "glm5_2",
+            "--deploy_format",
+            deploy_format,
+            "--quant_layers_config",
+            str(config),
+            "--bit_config",
+            str(bits),
+        ],
+    )
+    args = parser_gen(command="deploy")
+    assert args.deploy_selection.quant_layers == ("model.layers.*.self_attn.o_proj",)
+
+
+@pytest.mark.parametrize(
+    "bits_text, message",
+    [
+        ("moe:\n  w_bits: 4\n  a_bits: 8\n", "W8A8"),
+        ("moe:\n  w_bit: 8\n  a_bits: 8\n", "w_bit"),
+        ("moe:\n  w_bits: 16\n  a_bits: 16\n", "W8A8"),
+    ],
+)
+def test_tensor_cli_rejects_invalid_bits_before_json_read(
+    monkeypatch, tmp_path, bits_text, message
+):
+    bits = tmp_path / "bits.yaml"
+    bits.write_text(bits_text)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "amct",
+            "--granularity",
+            "tensor",
+            "--quant_dtype",
+            "int",
+            "--quant_layers_config",
+            "does-not-exist.json",
+            "--bit_config",
+            str(bits),
+        ],
+    )
+    with pytest.raises(ValueError, match=message):
+        parser_gen(command="deploy")

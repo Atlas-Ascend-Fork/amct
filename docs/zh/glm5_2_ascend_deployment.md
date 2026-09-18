@@ -1,6 +1,6 @@
 # GLM-5.2 Ascend 动态 INT8 权重导出
 
-本功能从原始 BF16 checkpoint 导出 W8A8_DYNAMIC 权重，目标部署框架为 vllm-ascend v0.23.0。仅覆盖 deployment，不执行测评、校准、PTQ 或旋转。当前已完成 CPU 小分片、静态产物验证和验收客户端测试；**完整 GLM-5.2 导出、NPU 加载及 MTP 开/关推理尚未验收**。
+本功能从原始 BF16 checkpoint 导出 W8A8_DYNAMIC 权重，目标部署框架为 vllm-ascend v0.23.0。仅覆盖 deployment，不执行测评、校准、PTQ 或旋转。当前已完成 CPU 小分片、静态产物验证和验收客户端测试。用户已报告使用现有 Ascend JSON 完成 NPU 环境导出并成功拉起服务，吐字和精度正常；该记录不等同于本次代码已重新完成 NPU 验收，也未单独提供 MTP off/on 日志。
 
 ## 输入与环境
 
@@ -21,7 +21,7 @@ export PYTHON_BIN=/path/to/venv/bin/python
 bash examples/deploy_glm5_2_ascend.sh
 ```
 
-脚本固定使用 `--device cpu --granularity tensor --quant_dtype int --deploy_format ascend` 和 W8A8 位宽配置。`--deploy_format` 默认为 `legacy`；仅新模式使用精细选层配置。
+脚本固定使用 `--device cpu --granularity tensor --quant_dtype int --deploy_format ascend` 和模块级位宽配置 `amct_pytorch/configs/deploy/tensor_w8a8.yaml`。`--deploy_format` 默认为 `legacy`；两种格式的 tensor 导出均要求 JSON 选层，且本次仅支持 INT W8A8。显式 W4/16 配置在加载模型前报错。
 
 样例规则位于 `amct_pytorch/configs/deploy/glm5_2_ascend_w8a8.json`。如需自定义，直接使用 deploy CLI，将 `--quant_layers_config` 指向自己的文件。规则格式：
 
@@ -32,9 +32,9 @@ bash examples/deploy_glm5_2_ascend.sh
 }
 ```
 
-规则匹配不带 `.weight` 的完整模块名，大小写敏感，支持 `*`、`?` 等 fnmatch 通配符；ignore 优先，未选中模块保持浮点。任一规则没有匹配对象或最终无选中模块会报错。JSON 选层不与 `quant_target` 求交集。
+规则匹配不带 `.weight` 的完整模块名，大小写敏感，支持 `*`、`?` 等 fnmatch 通配符；ignore 优先，未选中模块保持浮点。quant 规则没有匹配对象或最终无选中模块会报错；ignore 规则零命中仅告警并记录。JSON 选层不与 `quant_target` 求交集。
 
-GLM 限制包括 q_a/kv_a 配对、gate/up 配对、同一 routed MoE 的所有专家及投影统一量化，以及有效 W8A8 位宽。MTP 从模型配置计算并强制排除；样例中的 78 仅针对当前 GLM-5.2。MTP 权重仍保留，不生成 rot 参数。
+GLM 限制包括 q_a/kv_a 配对、gate/up 配对、同一 routed MoE 的所有专家及投影统一量化，以及有效 W8A8 位宽。MTP 从模型配置识别，检查 ignore 覆盖和最终量化状态并打印日志，不再自动排除。Ascend 当前适配要求 MTP 保持 FLOAT，选中时明确报错；通过 JSON 显式排除。样例中的 78 仅针对当前 GLM-5.2。MTP 权重仍保留，不生成 rot 参数。
 
 ## 输出与静态验收
 
@@ -55,7 +55,7 @@ GLM 限制包括 q_a/kv_a 配对、gate/up 配对、同一 routed MoE 的所有�
 
 验证器只检查权重 header，并逐个读取 scale/offset，不重新加载全部权重。报告中 `status=passed` 表示静态检查通过；失败时保存 `status=failed` 并使导出命令非零退出。提前中断可能没有报告；目录存在或存在权重文件不代表成功。静态报告不代表 NPU 部署通过。
 
-## NPU 服务验收步骤（待执行）
+## NPU 服务验收步骤（可选独立验证）
 
 根据 [v0.23.0 官方 GLM-5.2 指南](https://docs.vllm.ai/projects/ascend/en/v0.23.0/tutorials/models/GLM5.2.html) 选择匹配的硬件、CANN、PyTorch、vLLM 和 vllm-ascend 环境。以下仅展示关键参数，TP/EP、多机、网络和其他环境设置必须按实际机器补齐；不能假设单卡可容纳。
 
@@ -104,5 +104,6 @@ python3 examples/validate_glm5_2_ascend.py \
 | CPU 小分片导出、静态验证及故障测试 | 已通过 |
 | 官方量化位置与动态描述名称级对账 | 已通过 |
 | 导出样例参数与 HTTP 客户端逻辑测试 | 已通过（模拟 HTTP 响应） |
-| 完整原始 BF16 权重导出及 MTP 源权重一致性 | 待执行 |
-| vllm-ascend v0.23.0，MTP off/on 加载和推理 | 待 NPU 环境执行 |
+| 完整原始 BF16 权重导出及服务运行 | 用户报告成功；本次代码未重新进行 NPU 验证 |
+| MTP 源权重逐值一致性 | 未提供独立记录 |
+| vllm-ascend v0.23.0，MTP off/on 分别验收 | 未提供两种模式的独立记录 |

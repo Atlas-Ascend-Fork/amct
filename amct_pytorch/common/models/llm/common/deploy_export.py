@@ -102,6 +102,19 @@ def generate_quant_config(cache_scheme, ignores, is_mx=False, bits_scheme=None):
     return quant_config
 
 
+def generate_tensor_quant_config(plan, cache_scheme=None):
+    """Describe the actual tensor plan without model-specific selection methods.
+
+    User ignore rules and all other unselected weight modules must be FLOAT
+    under the legacy broad Linear/MoEGMM targets. Keep the user-only resolved
+    ignore set on the plan for selection-equivalence auditing.
+    """
+    ignores = sorted(plan.ignored_modules | plan.unselected_weight_modules)
+    return generate_quant_config(
+        cache_scheme, ignores, bits_scheme=_default_bits_scheme()
+    )
+
+
 def get_quant_ignore_linear_names(block, weight_prefix):
     """Return weight names of non-quantized Linear modules in a block.
 

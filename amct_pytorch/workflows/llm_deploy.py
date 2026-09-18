@@ -41,10 +41,15 @@ from amct_pytorch.common.models.llm.common.deploy_export import (
     convert_state_dict,
     export_block_deploy,
     generate_quant_config,
+    generate_tensor_quant_config,
     quant_payload,
 )
 from amct_pytorch.common.models.llm.common.deploy_selection import (
-    build_ascend_deploy_plan,
+    build_tensor_deploy_plan,
+    log_mtp_selection,
+    validate_ascend_deploy_args,
+    validate_ascend_deploy_plan,
+    validate_tensor_deploy_args,
 )
 from amct_pytorch.common.models.llm.common.deploy_validation import (
     validate_ascend_artifacts,
@@ -121,6 +126,9 @@ class LlmDeployWorkflow:
         return replaced
 
     def run(self):
+        if self.granularity == "tensor":
+            validate_tensor_deploy_args(self.args)
+        validate_ascend_deploy_args(self.args)
         if getattr(self.args, "deploy_format", "legacy") == "ascend":
             self._validate_ascend_output()
             self._validate_ascend_source()
@@ -137,10 +145,15 @@ class LlmDeployWorkflow:
             logger.remove(sink_id)
 
     def setup(self):
-        os.makedirs(self.output_dir, exist_ok=True)
-        ensure_log_dir(self.args)
+        if self.granularity != "tensor":
+            os.makedirs(self.output_dir, exist_ok=True)
+            ensure_log_dir(self.args)
         self._register_components()
         self.pipeline = self._build_pipeline()
+        if self.granularity == "tensor":
+            self._prepare_tensor_deploy_plan()
+            os.makedirs(self.output_dir, exist_ok=True)
+            ensure_log_dir(self.args)
         sink_id, _ = setup_run_logging(self.args, "deploy")
         return sink_id
 
@@ -246,21 +259,26 @@ class LlmDeployWorkflow:
             "weight_map": weight_map,
         }
 
-    def _refresh_config(self, quant_ignore_layers):
+    def _refresh_config(self, quant_ignore_layers, *, tensor_plan=None):
         config_file = os.path.join(self.output_dir, 'config.json')
         with open(config_file, "r") as f:
             config = json.load(f)
         if self.quant_dtype is not None:
             cache_scheme_fn = getattr(self.pipeline, "cache_scheme", None)
             cache_scheme = cache_scheme_fn() if callable(cache_scheme_fn) else None
-            bits_scheme_fn = getattr(self.pipeline, "bits_scheme", None)
-            bits_scheme = bits_scheme_fn() if callable(bits_scheme_fn) else None
-            quantization_config = generate_quant_config(
-                cache_scheme,
-                quant_ignore_layers,
-                is_mx=self.is_mx,
-                bits_scheme=bits_scheme,
-            )
+            if tensor_plan is not None:
+                quantization_config = generate_tensor_quant_config(
+                    tensor_plan, cache_scheme
+                )
+            else:
+                bits_scheme_fn = getattr(self.pipeline, "bits_scheme", None)
+                bits_scheme = bits_scheme_fn() if callable(bits_scheme_fn) else None
+                quantization_config = generate_quant_config(
+                    cache_scheme,
+                    quant_ignore_layers,
+                    is_mx=self.is_mx,
+                    bits_scheme=bits_scheme,
+                )
             config['quantization_config'] = quantization_config
         else:
             config.pop('quantization_config', None)
@@ -341,16 +359,20 @@ class LlmDeployWorkflow:
 
     def _run_tensorwise(self):
         is_ascend = getattr(self.args, "deploy_format", "legacy") == "ascend"
-        if is_ascend:
-            self._validate_ascend_source()
-            original_index = self._load_weight_index()
-            plan = self._prepare_ascend_deploy_plan(original_index)
-            quant_layers = {name: 8 for name in plan.selected_modules}
-            self._output_tensor_bytes = 0
-        else:
-            original_index = self._load_weight_index()
-            quant_layers = self.pipeline.generate_tensorwise_quant_layers()
-            quant_ignore_layers = self.pipeline.generate_tensorwise_ignore_layers()
+        original_index = self._load_weight_index()
+        if not hasattr(self, "deploy_plan"):
+            validate_tensor_deploy_args(self.args)
+            self._prepare_tensor_deploy_plan(original_index)
+        plan = self.deploy_plan
+        quant_layers = plan.quant_layers
+        self._output_tensor_bytes = 0
+        self._quantized_modules = set()
+        log_mtp_selection(plan.mtp, module_bits=plan.module_bits)
+        if plan.unmatched_ignore_patterns:
+            logger.warning(
+                "ignore_layers patterns matched no modules: {}",
+                sorted(plan.unmatched_ignore_patterns),
+            )
         self._copy_support_files()
         original_weight_map = dict(original_index.get("weight_map", {}))
         weights_by_file = defaultdict(list)
@@ -391,7 +413,17 @@ class LlmDeployWorkflow:
             extra_results["validation_path"] = str(validation_path)
         else:
             index_path = self._refresh_weight_index(original_index, updated_weight_map)
-            self._refresh_config(quant_ignore_layers)
+            self._refresh_config(sorted(plan.ignored_modules), tensor_plan=plan)
+        if self._quantized_modules != plan.selected_modules:
+            raise ValueError(
+                "Actual quantized modules differ from JSON deployment plan"
+            )
+        log_mtp_selection(
+            plan.mtp,
+            phase="exported",
+            quantized_modules=self._quantized_modules,
+            module_bits=plan.module_bits,
+        )
         logger.info("Exported tensor-converted model to {}", self.output_dir)
         logger.info("Refreshed weight index at {}", index_path)
         return {
@@ -399,6 +431,25 @@ class LlmDeployWorkflow:
             "num_output_files": len(set(updated_weight_map.values())),
             **extra_results,
         }
+
+    def _prepare_tensor_deploy_plan(self, original_index=None):
+        if original_index is None:
+            original_index = self._load_weight_index()
+        if getattr(self.args, "deploy_format", "legacy") == "ascend":
+            self._prepare_ascend_deploy_plan(original_index)
+        else:
+            self.deploy_plan = build_tensor_deploy_plan(
+                original_index["weight_map"],
+                self.args.deploy_selection,
+                self.args.bit_policy,
+                config=self.pipeline.config,
+            )
+        logger.info(
+            "Tensor selection: {} modules, pattern counts: {}",
+            len(self.deploy_plan.selected_modules),
+            self.deploy_plan.match_counts,
+        )
+        return self.deploy_plan
 
     def _prepare_ascend_deploy_plan(self, original_index=None):
         if original_index is None:
@@ -421,16 +472,26 @@ class LlmDeployWorkflow:
             plan_weight_map = self.ascend_checkpoint_layout.expand_weight_map(
                 plan_weight_map
             )
-        self.ascend_deploy_plan = build_ascend_deploy_plan(
-            plan_weight_map, self.args.deploy_selection, self.pipeline
+        self.deploy_plan = build_tensor_deploy_plan(
+            plan_weight_map,
+            self.args.deploy_selection,
+            self.args.bit_policy,
+            config=self.pipeline.config,
         )
-        if getattr(self.args, "quant_target", None):
-            logger.warning("Ascend JSON selection overrides quant_target")
         logger.info(
-            "Ascend selection: {} modules, {} MTP matches excluded, pattern counts: {}",
-            len(self.ascend_deploy_plan.selected_modules),
-            len(self.ascend_deploy_plan.excluded_mtp),
-            self.ascend_deploy_plan.match_counts,
+            "Ascend selection: {} quantized modules planned, {} ignored modules, "
+            "MTP modules={} (ignored={}, selected={}), pattern counts={}, "
+            "selected sample (up to 20)={}",
+            len(self.deploy_plan.selected_modules),
+            len(self.deploy_plan.ignored_modules),
+            len(self.deploy_plan.mtp.modules),
+            len(self.deploy_plan.mtp.ignored),
+            len(self.deploy_plan.mtp.selected),
+            self.deploy_plan.match_counts,
+            sorted(self.deploy_plan.selected_modules)[:20],
+        )
+        self.ascend_deploy_plan = validate_ascend_deploy_plan(
+            self.deploy_plan, plan_weight_map, self.pipeline
         )
         return self.ascend_deploy_plan
 
@@ -480,7 +541,7 @@ class LlmDeployWorkflow:
             if self.quant_dtype in ["int", "mxfp"]:
                 quant_cls = DTYPE_REGISTRY.get(self.quant_dtype)
                 new_weight_name = weight_name.rsplit(".", 1)[0]
-                is_weight = not is_ascend or weight_name.endswith(".weight")
+                is_weight = weight_name.endswith(".weight")
                 if is_weight and new_weight_name in quant_layers:
                     bit = quant_layers[new_weight_name]
                     state_dict = quant_payload(
@@ -492,6 +553,8 @@ class LlmDeployWorkflow:
                         scale_dtype=getattr(self.args, "scale_dtype", "fp32"),
                     )
                     new_state_dict.update(state_dict)
+                    if hasattr(self, "_quantized_modules"):
+                        self._quantized_modules.add(new_weight_name)
         self._write_safetensor_file(source_file, new_state_dict)
         if is_ascend:
             self._output_tensor_bytes = getattr(self, "_output_tensor_bytes", 0) + sum(
@@ -516,6 +579,10 @@ class LlmDeployWorkflow:
                 )
             if not torch.isfinite(weight).all():
                 raise ValueError(f"Ascend selected weight {weight_name} must be finite")
+        if weight.ndim != 2 or weight.numel() == 0 or not weight.is_floating_point():
+            raise ValueError(
+                f"Selected weight {weight_name} must be a nonempty 2-D floating tensor after source decoding"
+            )
         quant_cls = DTYPE_REGISTRY.get(self.quant_dtype)
         payload = quant_payload(quant_cls, weight_name, weight, bit)
         if is_ascend:
