@@ -20,7 +20,7 @@
         ],
         "must_not_claim": [
           "按轻级处理即可",
-          "走 quick-path 五步",
+          "走直达卡四步即可",
           "不需门禁表",
           "注册进 choices 就算接通"
         ],
@@ -56,9 +56,9 @@
     {
       "id": 4,
       "prompt": "这个报错信息没说传了什么参数,帮我改一下报错文案",
-      "expected": "quick-path/轻级:普通局部修复,五步路径,不读 process-rules/repo-map/主手册,也不读 SKILL.md 分界线之后的内容（判据与豁免的操作性规则均以首段「轻级直达卡」为唯一出处）;豁免只免读取,①~④与 BLOCKER 仍适用",
+      "expected": "轻级:普通局部修复,按首段「轻级直达卡」四步直达（定位→改→验→交付）,不读 process-rules/repo-map/walkthrough/主手册,也不读 SKILL.md 核心流程分界线之后的节（判据与豁免的操作性规则均以直达卡为唯一出处）;豁免只免读取,①~④与 BLOCKER 仍适用",
       "rubric": {
-        "must_mention": [["轻级", "quick-path", "快速路径"]],
+        "must_mention": [["轻级", "快速路径", "直达卡四步"]],
         "must_not_claim": [
           "起手就要读 repo-map",
           "起手就要声明边界",
