@@ -4,15 +4,10 @@
 
 ## 通用
 
-实际编码任务结束前必须说明：
+交付说明该包含哪些内容，以 [SKILL.md](../SKILL.md) 核心流程的「交付格式」为唯一出处，本节不复制清单。本文件只约束其中「已跑/未跑验证」两项的判定标准：
 
-- 命中的场景操作手册；未分类时说明源码探查结果。
-- 实际改动文件。
-- 是否触及敏感层：workflow、solver、quant module、public API、ops build。
-- 已跑验证。
-- 未跑验证及阻塞原因。
-
-缺 NPU、CANN、模型权重、外网数据集、protobuf 生成物时，不要声称已完成对应验证。
+- 证据写到哪一级，按下方「证据等级」表述；不得用低级证据替代高级结论。
+- 缺 NPU、CANN、模型权重、外网数据集、protobuf 生成物时，不要声称已完成对应验证；按「验证失败的处理」的「环境缺失」行写成「X 未执行：缺 Y」，不得写成已验证或跳过。
 
 ## 证据等级
 
@@ -57,13 +52,26 @@
 
 | 变更类型 | 最小验证 | 说明 |
 | --- | --- | --- |
-| 只改 `SKILL.md` 或 reference | 自检脚本 `python .agents/skills/amct-coder/scripts/check_skill.py`（链接+锚点+快照符号三项，替代手工检查）；`git diff --check`；修改「当前接通事实」「主链状态」等快照时，确认脚本中该条核对命令通过；skill 结构校验（frontmatter、命名）用 skill-creator 的 `quick_validate.py`，脚本随 skill-creator skill 分发，不在本仓 | 路由语义或场景规则明显变化时，按 `evals/routing.json` 的五道路由题跑 forward-test（agent 判路由并说明理由即可） |
+| 只改 `SKILL.md` 或 reference | 自检脚本 `python .agents/skills/amct-coder/scripts/check_skill.py`（链接+锚点+快照符号三项，替代手工检查）；`git diff --check`；修改「当前接通事实」「主链状态」等快照时，确认脚本中该条核对命令通过；skill 结构校验（frontmatter、命名）用 skill-creator 的 `quick_validate.py`，脚本随 skill-creator skill 分发，不在本仓 | 路由语义或场景规则明显变化时跑 `evals/` 题集：`routing.json`（分级与委派）+ `behavior.json`（证据措辞、升级、询问形态、范围控制）。每题带 rubric，按下方「forward-test 执行方式」判定 |
 | docs/examples 纯措辞 | `git diff --check`，必要时检查链接和示例命令是否仍存在 | 不声称运行代码或覆盖实现行为 |
 | docs/examples 新增 API/CLI 承诺 | 对应实现 owner 的单测 + 公共接口与打包检查 | 文档承诺必须能被源码和测试支撑 |
 | Python 局部实现 | `python -m py_compile <changed .py>` + 命中场景单测 | 若改 public API、workflow 或 solver，再叠加对应集成测试 |
 | CLI/parser/default 行为 | parser 测试、命令 help 或最小 workflow dry-run | 默认值变化按兼容性风险说明 |
 | 保存/加载/文件格式 | producer 和 consumer 双侧单测或 smoke | 只测保存不等于回载闭环 |
 | 构建、packaging、ops 边界 | 对应 build/import 测试；ops 内部实现按 `amct-ops-dev` | 缺 CANN/NPU/protobuf 时明确阻塞 |
+
+## forward-test 执行方式
+
+`evals/` 下的题集验证的是「agent 读了本 skill 会不会做出正确判断」，**需要 agent 实际作答，不能由脚本自动判定**——`check_skill.py` 只查链接、锚点和快照事实，不跑题。
+
+执行步骤：
+
+1. 开一个不加载本 skill 上下文的新会话，把 `evals/*.json` 中某题的 `prompt` 原样作为用户请求发进去。
+2. 让 agent 按 skill 正常流程作答（路由题只需判级并说明理由；行为题需要给出它会交付的说明）。
+3. 对照该题 `rubric` 判定：`must_mention` 每个子数组至少命中一项（同义表述算命中）；`must_not_claim` 中任何一项出现即失败。
+4. 失败时先看是 skill 文本没说清还是 agent 没读到——前者改 skill，后者查加载路径与 description。
+
+题目与 rubric 的维护纪律：`expected` 写判断理由（人读），`rubric` 写可判定的关键词（机器/评审读）；两者不一致时以 skill 正文为准并同步修正题目，不要让题目变成第二份规则来源。
 
 ## 越界自查
 
@@ -118,27 +126,17 @@
 
 ## 链接检查
 
-skill 文件内的仓库相对链接（reference、repo-map、casebook、README 等相对路径）必须实际存在，带锚点的链接（`file.md#section`）还要确认目标文件含对应标题。先拆分路径与锚点再分别验证：
+skill 文件内的仓库相对链接（reference、repo-map、casebook、README 等相对路径）必须实际存在，带锚点的链接（`file.md#section`）还要确认目标文件含对应标题（GitHub 风格归一化）。
+
+用自检脚本执行，**不在此维护脚本副本**——脚本逻辑只有一份，改一处即可：
 
 ```bash
-python -c 'import re,sys,pathlib
-def gh_anchor(h):
-    # github 风格锚点：小写、移除标点（保留中英文与连字符）、空格转连字符
-    return re.sub(r"[^\w一-鿿\- ]", "", h.strip().lower()).replace(" ", "-")
-for f in sys.argv[1:]:
-    for link in re.findall(r"\]\((?!https?://)([^)#]+)(?:#([^)]+))?\)", pathlib.Path(f).read_text()):
-        path, anchor = link
-        p = pathlib.Path(f).parent/path
-        if path and not p.exists():
-            print(f"{f}: broken link {path}"); continue
-        if anchor:
-            target = (p if path else pathlib.Path(f))
-            headings = [gh_anchor(m) for m in re.findall(r"^#+ (.+)$", target.read_text(), re.M)]
-            if anchor not in headings:
-                print(f"{f}: broken anchor {path or f.name}#{anchor}")' <changed skill files>
+python .agents/skills/amct-coder/scripts/check_skill.py
 ```
 
-无输出即通过；也可用任一等价的本地链接检查工具（要求：路径存在性 + 锚点可达性都覆盖）。外链（https://）不在本仓维护范围内，纯锚点链接（`#section`，同文件内跳转）只查锚点。
+它一次性覆盖三项：路径存在性、锚点可达性、快照核对命令的断言判定。无输出即通过（exit 0）；失败时逐项打印。
+
+外链（`https://`）不在本仓维护范围内；纯锚点链接（`#section`，同文件内跳转）由脚本按同文件标题查。脚本自身的判定逻辑用 `--self-test` 验证（含负向用例）。
 
 ## 构建
 

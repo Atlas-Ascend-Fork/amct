@@ -1,6 +1,6 @@
 # 流程细则：process-rules
 
-本文件是 [SKILL.md](../SKILL.md) 核心流程的完整展开，**不引入新规则**——与 SKILL.md 冲突时以 SKILL.md 为准（它是唯一规则来源），并在交付说明中报告冲突，不就地改文档；发现 process-rules 自身与 SKILL.md 不一致时按 [validation.md](validation.md#按变更类型选验证) 的 skill 修改流程修。轻级任务无需读取；标准级及以上任务按 SKILL.md 末表的触发情形读取对应节。
+本文件是 [SKILL.md](../SKILL.md) 核心流程的完整展开：把 SKILL.md 的规则细化成可执行步骤（repo-map 分档、边界声明三步、询问形态、读取层级与停止条件、全局 BLOCKER 清单），但**不改变其规则语义**——与 SKILL.md 冲突时以 SKILL.md 为准（它是规则语义的唯一来源，本文件是操作步骤的唯一来源），并在交付说明中报告冲突，不就地改文档；发现 process-rules 自身与 SKILL.md 不一致时按 [validation.md](validation.md#按变更类型选验证) 的 skill 修改流程修。轻级任务无需读取；标准级及以上任务按 SKILL.md 末表的触发情形读取对应节。
 
 ## 仓库边界
 

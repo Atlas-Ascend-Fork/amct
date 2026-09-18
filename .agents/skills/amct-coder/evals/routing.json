@@ -1,31 +1,52 @@
 {
   "skill_name": "amct-coder",
-  "description": "skill 修改后的路由回归测试题集。每题标注期望路由,用 skill-creator 的 forward-test 流程跑（agent 只需判路由并说明理由,不需要完成任务本身）,验证分级与委派行为不回退。",
+  "kind": "routing",
+  "description": "路由回归题集：验证分级与委派判断不回退。执行方式见 references/validation.md「forward-test 执行方式」——需 agent 实际作答,不能由脚本自动判定。rubric 判定规则：must_mention 每个子数组至少命中一项（同义表述算命中）;must_not_claim 任一项出现即失败。",
   "evals": [
     {
       "id": 1,
       "prompt": "帮我新增一个 fp8e4m3 的 quant_dtype 并接进 CLI",
-      "expected": "重级：命中门禁对象（新 dtype）+ public 契约;走 quant-dtype-module 主手册,先过既有语义复用门"
+      "expected": "重级：命中门禁对象（新 dtype）+ public 契约;走 quant-dtype-module 主手册,先过既有语义复用门",
+      "rubric": {
+        "must_mention": [["重级"], ["quant-dtype-module"], ["门禁对象", "新 dtype", "注册成功不等于可用"]],
+        "must_not_claim": [["轻级", "quick-path", "标准级即可"]]
+      }
     },
     {
       "id": 2,
       "prompt": "跑一下 qwen3 的直转 eval,看看 PPL",
-      "expected": "委派:运行命令拿结果属执行类 skill（如 quant-run）,不留在 amct-coder"
+      "expected": "委派:运行命令拿结果属执行类 skill（如 quant-run）,不留在 amct-coder",
+      "rubric": {
+        "must_mention": [["委派", "转", "不留在", "属执行类"]],
+        "must_not_claim": [["我来跑", "由 amct-coder 执行", "直接运行 eval 命令"]]
+      }
     },
     {
       "id": 3,
       "prompt": "给 llama 新增一个模型 adapter",
-      "expected": "委派:新增模型适配转 model-adapter skill,amct-coder 不做结构性模型实现"
+      "expected": "委派:新增模型适配转 model-adapter skill,amct-coder 不做结构性模型实现",
+      "rubric": {
+        "must_mention": [["model-adapter"]],
+        "must_not_claim": [["由 amct-coder 新增 adapter", "在本 skill 内完成结构实现"]]
+      }
     },
     {
       "id": 4,
       "prompt": "这个报错信息没说传了什么参数,帮我改一下报错文案",
-      "expected": "quick-path/轻级:普通局部修复,五步路径,不读 process-rules/repo-map/主手册（SKILL.md 分级表下注的主手册豁免）;豁免只免读取,轻级判据①~④与 BLOCKER 仍适用"
+      "expected": "quick-path/轻级:普通局部修复,五步路径,不读 process-rules/repo-map/主手册（SKILL.md 分级表下注的主手册豁免）;豁免只免读取,轻级判据①~④与 BLOCKER 仍适用",
+      "rubric": {
+        "must_mention": [["轻级", "quick-path"]],
+        "must_not_claim": [["标准级", "重级", "先读 repo-map", "必须先读主手册"]]
+      }
     },
     {
       "id": 5,
       "prompt": "eval 的 PPL 和直转一样,帮我查为什么",
-      "expected": "标准级诊断:留在 amct-coder,走行为诊断流程（walkthrough 收束形态）,不转判读类 skill"
+      "expected": "标准级诊断:留在 amct-coder,走行为诊断流程（walkthrough 收束形态）,不转判读类 skill",
+      "rubric": {
+        "must_mention": [["留在", "amct-coder"], ["诊断", "查", "核验", "源码链路"]],
+        "must_not_claim": [["转 direct-quant-eval", "转 quant-reviewer", "属判读类 skill"]]
+      }
     }
   ]
 }
