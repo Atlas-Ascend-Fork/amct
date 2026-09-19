@@ -111,7 +111,7 @@ Relative placeholder directories (under this sample directory by default):
 | mxfp PTQ params, MoE | `./outputs/qwen3_6_35b_a3b_w4a8_mxfp/ptq_params/qwen3_6_moe/moe` | ~128 |
 | BF16 baseline log (shared by both formats) | `./outputs/qwen3_6_35b_a3b_bf16/logs/eval_qwen3_6_moe_bf16.log` | — |
 
-Quantization wall time: measured from the first `ptq` of a format (`ptq_attn.sh`) until all attn+moe params are written (model download and environment setup excluded); both `ptq_attn.sh` and `ptq_mlp.sh` print `start:` / `end:` timestamps. The int row is a full end-to-end measurement; the mxfp row only re-ran the moe segment this time (86.7 min — the attn params from the same script were reused since the schedule is unchanged), so only the moe segment is counted. Offline data size is the combined extract output in GiB.
+Quantization wall time: measured from the first `ptq` of a format (`ptq_attn.sh`) until all attn+moe params are written (model download and environment setup excluded); both `ptq_attn.sh` and `ptq_mlp.sh` print `start:` / `end:` timestamps. The int row is a full end-to-end measurement; the mxfp row's duration is from its first full run — afterwards only the moe segment was re-run with the same script (86.7 min) and the quantized PPL refilled, while the attn segment (script and schedule unchanged) was not re-run; re-run the attn segment if a full mxfp wall-time figure is needed. Offline data size is the combined extract output in GiB.
 
 Eval logs: `eval_quant.sh` writes `<OUTPUT_DIR>/logs/eval_*.log`, with int and mxfp under their own `OUTPUT_DIR` so the two formats no longer share one file; `eval_bf16.sh` writes `<BF16_OUTPUT_DIR>/logs/` (default `./outputs/qwen3_6_35b_a3b_bf16/logs/`), independent of `QUANT_DTYPE`, so both formats share the same BF16 baseline log. loguru appends.
 
@@ -128,6 +128,6 @@ Use the same settings to reproduce the table; quantization time is wall-clock in
 | Model | Dtype | Algorithm | Format | BF16 PPL | Quant PPL | PPL delta | Quant time (min) | Offline data (GiB) |
 | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
 | Qwen3.6-35B-A3B | `w4a8` | `autoround` | `int4/int8` | 6.3085 | 6.8263 | +0.5178 | 243.5 | 102 |
-| Qwen3.6-35B-A3B | `w4a8` | `autoround` | `mxfp4/mxfp8` | 6.3085 | 6.4729 | +0.1644 | 86.7 (moe segment only) | 102 |
+| Qwen3.6-35B-A3B | `w4a8` | `autoround` | `mxfp4/mxfp8` | 6.3085 | 6.4729 | +0.1644 | 303.2 | 102 |
 
 > The delta column is computed from the **full-precision** (unrounded) quantized and BF16 PPL values, so it can differ slightly in the last digit from subtracting the 4-decimal columns shown here.
