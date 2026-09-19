@@ -16,7 +16,7 @@ The `w4a8.yaml` MoE policy: routed experts w4/a8, shared expert w8/a8.
 
 ## How to run
 
-Environment: start from a single `npu:0` card. Under the default protocol (`MOE_NSAMPLES=128` / `MOE_EPOCHS=10`) MoE PTQ takes days per format; the result table in this sample uses `MOE_NSAMPLES=32` / `MOE_EPOCHS=1`, measured on one card at 243.5 min for the full int run and 86.7 min for the mxfp moe segment (see Results). To run the default protocol or go faster, use the per-block split shown in [`examples/ptq_multi_npu.sh`](../../../examples/ptq_multi_npu.sh). Configure the environment with the local CANN installation path first, then install `amct_pytorch` (or point `PYTHONPATH` at the repository root).
+Environment: start from a single `npu:0` card. Under the default protocol (`MOE_NSAMPLES=128` / `MOE_EPOCHS=10`) MoE PTQ takes days per format; the result table in this sample uses `MOE_NSAMPLES=32` / `MOE_EPOCHS=1`, measured on one card at 243.5 min for the full int run and 303.2 min for the full mxfp run (see Results). To run the default protocol or go faster, use the per-block split shown in [`examples/ptq_multi_npu.sh`](../../../examples/ptq_multi_npu.sh). Configure the environment with the local CANN installation path first, then install `amct_pytorch` (or point `PYTHONPATH` at the repository root).
 One-stop platform example: `source /home/developer/Ascend/cann/set_env.sh`. Set `HF_ENDPOINT` yourself if the calibration/eval datasets must be fetched through a mirror.
 
 - Model: local Qwen3.6-35B-A3B weights; `--model_name qwen3_6_moe`; `--trust_remote_code`

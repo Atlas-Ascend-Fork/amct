@@ -16,7 +16,7 @@ CLI 入口与 [Qwen3.6-Moe.md](../qwen3.6/Qwen3.6-Moe.md) 一致：`python3 -m a
 
 ## 运行说明
 
-环境：单卡 `npu:0` 起步。默认协议（`MOE_NSAMPLES=128` / `MOE_EPOCHS=10`）下 MoE PTQ 每格式约需数天；本样例结果表改用 `MOE_NSAMPLES=32` / `MOE_EPOCHS=1`，单卡实测 int 全流程 243.5 min、mxfp moe 段 86.7 min（见结果表）。需按默认协议跑或进一步提速时，可用 [`examples/ptq_multi_npu.sh`](../../../examples/ptq_multi_npu.sh) 的按层切分方式并行。先按本机 CANN 安装路径配置环境，并安装 `amct_pytorch`（或设置 `PYTHONPATH` 指向仓库根目录）。
+环境：单卡 `npu:0` 起步。默认协议（`MOE_NSAMPLES=128` / `MOE_EPOCHS=10`）下 MoE PTQ 每格式约需数天；本样例结果表改用 `MOE_NSAMPLES=32` / `MOE_EPOCHS=1`，单卡实测 int 全流程 243.5 min、mxfp 全流程 303.2 min（见结果表）。需按默认协议跑或进一步提速时，可用 [`examples/ptq_multi_npu.sh`](../../../examples/ptq_multi_npu.sh) 的按层切分方式并行。先按本机 CANN 安装路径配置环境，并安装 `amct_pytorch`（或设置 `PYTHONPATH` 指向仓库根目录）。
 一站式平台示例：`source /home/developer/Ascend/cann/set_env.sh`。若需镜像下载校准/评估数据，可自行设置 `HF_ENDPOINT`。
 
 - 模型：本地 Qwen3.6-35B-A3B 权重；`--model_name qwen3_6_moe`；`--trust_remote_code`
