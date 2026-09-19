@@ -36,7 +36,7 @@ export MODEL=/path/to/Qwen3.6-35B-A3B   # placeholder, point to local weights
 bash examples/models/qwen3.6-35b-a3b/scripts/eval_bf16.sh
 
 # 2) Extract PTQ offline data (attn + moe, shared by both formats; run once)
-# Result-table protocol: MoE is overridden with 32/1/8 (Attention keeps the default 128/10/4).
+# Result-table protocol: MoE is overridden with 32/1/8 (the Attention-side values are unchanged, see below).
 # Without these three variables MoE extracts 128 samples by default (about 4x the data in the
 # table) and the PPL values in the table are not reproducible.
 export MOE_NSAMPLES=32 MOE_EPOCHS=1 MOE_CALI_BSZ=8
@@ -120,8 +120,8 @@ Eval logs: `eval_quant.sh` writes `<OUTPUT_DIR>/logs/eval_*.log`, with int and m
 BF16 and quantized evaluations share the same `MODEL` and the same `seq_len=4096` / `granularity=block` configuration.
 The eval covers `attn-linear` + `moe`, loading autoround PTQ params for both.
 
-Measured settings behind the result table: Attention uses the default protocol
-(`nsamples=128` / `epochs=10` / `cali_bsz=4`); MoE is overridden with
+Measured settings behind the result table: Attention at `nsamples=128` / `epochs=10` / `cali_bsz=4`
+(nsamples and cali_bsz match the CLI defaults; epochs is this sample's value); MoE is overridden with
 `MOE_NSAMPLES=32` / `MOE_EPOCHS=1` / `MOE_CALI_BSZ=8` (single Atlas A3 card, 10240 expert units).
 Use the same settings to reproduce the table; quantization time is wall-clock including unit I/O.
 

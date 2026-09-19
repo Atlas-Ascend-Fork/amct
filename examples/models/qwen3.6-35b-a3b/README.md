@@ -36,7 +36,7 @@ export MODEL=/path/to/Qwen3.6-35B-A3B   # 占位，改为本地权重
 bash examples/models/qwen3.6-35b-a3b/scripts/eval_bf16.sh
 
 # 2) 提取 PTQ 离线数据（attn + moe，两种格式共用，跑一次即可）
-# 结果表口径：MoE 侧覆盖为 32/1/8（Attention 保持默认 128/10/4）。
+# 结果表口径：MoE 侧覆盖为 32/1/8（Attention 侧取值不变，见下）。
 # 不设下面三项时 MoE 会按默认 128 条提取，数据量约为表中口径的 4 倍，也复现不出表中 PPL。
 export MOE_NSAMPLES=32 MOE_EPOCHS=1 MOE_CALI_BSZ=8
 bash examples/models/qwen3.6-35b-a3b/scripts/extract_ptq_data.sh
@@ -119,7 +119,7 @@ MoE 目标在 Attention 命令基础上改 `--quant_target moe`、`--data_dir ..
 BF16 与量化评估使用同一 `MODEL` 与同一 `seq_len=4096` / `granularity=block` 配置。
 评估覆盖 `attn-linear` + `moe`，两者均加载 autoround PTQ 参数。
 
-结果表实测取值：Attention 用默认协议（`nsamples=128` / `epochs=10` / `cali_bsz=4`）；
+结果表实测取值：Attention 用 `nsamples=128` / `epochs=10` / `cali_bsz=4`（nsamples、cali_bsz 与 CLI 默认一致，epochs 为本样例取值）；
 MoE 覆盖为 `MOE_NSAMPLES=32` / `MOE_EPOCHS=1` / `MOE_CALI_BSZ=8`（Atlas A3 单卡，10240 个专家单元）。
 复现结果表请使用同一组取值；量化时长为墙钟时间，含单元 I/O。
 
