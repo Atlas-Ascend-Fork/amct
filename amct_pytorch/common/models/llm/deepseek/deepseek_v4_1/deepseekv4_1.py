@@ -206,10 +206,15 @@ class DeepseekV41:
             raise ValueError(
                 f"Selected A3 modules are not nonempty 2-D weights: {sorted(missing)}"
             )
-        if missing := candidates - selected:
+        # A3 follows ModelSlim's selective policy: source FP8/FP4 modules that
+        # are not selected are decoded to BF16 and described as FLOAT. The 950
+        # legacy converter, however, only expands scales for explicitly
+        # selected FP8 modules and must retain its all-candidates guard.
+        if platform == "ascend950" and (missing := candidates - selected):
             raise ValueError(
                 f"FP8 32x32 modules not selected by JSON: {sorted(missing)}"
             )
+        planned = selected if platform == "A3" else candidates
         # Fail on invalid config before any checkpoint output is created.
         if platform == "ascend950":
             self._make_legacy_quant_config()
@@ -226,11 +231,11 @@ class DeepseekV41:
             name for name in names if name.startswith("mtp.") or ".mtp." in name
         )
         return ResolvedDeployPlan(
-            selected_modules=frozenset(candidates),
-            selected_weight_keys=frozenset(name + ".weight" for name in candidates),
-            module_bits={name: (8, 8) for name in candidates},
+            selected_modules=frozenset(planned),
+            selected_weight_keys=frozenset(name + ".weight" for name in planned),
+            module_bits={name: (8, 8) for name in planned},
             ignored_modules=ignored,
-            unselected_weight_modules=frozenset(weights - candidates),
+            unselected_weight_modules=frozenset(weights - planned),
             match_counts=counts,
             mtp=MtpSelectionReport(mtp, mtp & ignored, mtp & candidates),
             unmatched_ignore_patterns=frozenset(
@@ -457,6 +462,11 @@ class DeepseekV41:
     def _refresh_config_a3(self, quant_ignore_layers, *, tensor_plan=None):
         config = copy.deepcopy(self.config)
         config.pop("quantization_config", None)
+        # Match the vLLM-Ascend ModelSlim contract consumed by the A3 runtime.
+        config["quantization_config"] = {
+            "quant_method": "ascend",
+            "model_quant_type": "W8A8_DYNAMIC",
+        }
         temporary = self.output_dir / ".config.json.tmp"
         temporary.write_text(json.dumps(config, indent=2), encoding="utf-8")
         os.replace(temporary, self.output_dir / "config.json")

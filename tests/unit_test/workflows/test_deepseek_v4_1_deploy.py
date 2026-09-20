@@ -214,6 +214,68 @@ def test_a3_converts_mxfp8_and_mxfp4_before_int8_export(checkpoint):
     assert "quantization_config" in config
 
 
+def test_a3_allows_unselected_fp8_modules_to_remain_float(checkpoint):
+    args, original, _ = checkpoint
+    args.deploy_format = "ascend"
+    args.deploy_platform, args.quant_dtype = "A3", "int"
+    source = Path(args.model) / "model.safetensors"
+    tensors = load_file(str(source))
+    tensors["layers.0.attn.wo_a.weight"] = torch.ones(
+        (64, 32), dtype=torch.float8_e4m3fn
+    )
+    tensors["layers.0.attn.wo_a.scale"] = torch.full(
+        (2, 1), 127, dtype=torch.uint8
+    ).view(torch.float8_e8m0fnu)
+    save_file(tensors, str(source))
+    selection = Path(args.quant_layers_config)
+    selection.write_text(
+        json.dumps({"quant_layers": ["layers.0.attn.wq"]}), encoding="utf-8"
+    )
+    model = adapter(args)
+    weight_map = {name: "model.safetensors" for name in original}
+    weight_map.update(
+        {
+            "layers.0.attn.wo_a.weight": "model.safetensors",
+            "layers.0.attn.wo_a.scale": "model.safetensors",
+        }
+    )
+
+    plan = model.prepare_tensor_deploy_plan(weight_map)
+
+    assert plan.selected_modules == frozenset({"layers.0.attn.wq"})
+    assert "layers.0.attn.wo_a" in plan.unselected_weight_modules
+
+
+def test_a3_exports_unselected_fp8_module_as_float(checkpoint, monkeypatch):
+    args, original, _ = checkpoint
+    args.deploy_format = "ascend"
+    args.deploy_platform, args.quant_dtype = "A3", "int"
+    source = Path(args.model) / "model.safetensors"
+    tensors = load_file(str(source))
+    tensors["layers.0.attn.wo_a.weight"] = torch.ones(
+        (64, 32), dtype=torch.float8_e4m3fn
+    )
+    tensors["layers.0.attn.wo_a.scale"] = torch.full(
+        (2, 1), 127, dtype=torch.uint8
+    ).view(torch.float8_e8m0fnu)
+    save_file(tensors, str(source))
+    Path(args.quant_layers_config).write_text(
+        json.dumps({"quant_layers": ["layers.0.attn.wq"]}), encoding="utf-8"
+    )
+
+    run_deploy(args, monkeypatch)
+
+    output = Path(args.output_dir)
+    converted = load_file(str(output / "model.safetensors"))
+    description = json.loads(
+        (output / "quant_model_description.json").read_text()
+    )
+    assert converted["layers.0.attn.wo_a.weight"].dtype == torch.bfloat16
+    assert "layers.0.attn.wo_a.scale" not in converted
+    assert description["layers.0.attn.wo_a.weight"] == "FLOAT"
+    assert description["layers.0.attn.wq.weight"] == "W8A8_DYNAMIC"
+
+
 def test_a3_refreshes_config_and_description(checkpoint):
     args, _, _ = checkpoint
     args.deploy_format = "ascend"
@@ -224,7 +286,10 @@ def test_a3_refreshes_config_and_description(checkpoint):
     model = adapter(args)
     model.refresh_config([], tensor_plan=None)
     refreshed = json.loads((output / "config.json").read_text())
-    assert "quantization_config" not in refreshed
+    assert refreshed["quantization_config"] == {
+        "quant_method": "ascend",
+        "model_quant_type": "W8A8_DYNAMIC",
+    }
     assert refreshed["vision_config"] == {"hidden_size": 64}
 
     selected = frozenset(
@@ -259,7 +324,10 @@ def test_a3_workflow_exports_mixed_checkpoint(checkpoint, monkeypatch):
     tensors = load_file(str(output / "model.safetensors"))
 
     assert result["description_path"].endswith("quant_model_description.json")
-    assert "quantization_config" not in config
+    assert config["quantization_config"] == {
+        "quant_method": "ascend",
+        "model_quant_type": "W8A8_DYNAMIC",
+    }
     assert description["layers.0.attn.wq.weight"] == "W8A8_DYNAMIC"
     assert tensors["layers.0.ffn.experts.0.w1.weight"].dtype == torch.int8
 

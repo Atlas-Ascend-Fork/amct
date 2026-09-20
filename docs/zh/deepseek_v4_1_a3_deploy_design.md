@@ -22,7 +22,8 @@ DeepSeek V4.1 官方 checkpoint 中包含 MXFP8 和 MXFP4 格式的源权重。A
 1. 在逐 shard 导出时，将 MXFP8/MXFP4 源权重实时解码为 BF16。
 2. 复用已有 tensorwise INT8 导出逻辑，将 JSON 选中的 BF16 权重量化为 W8A8_DYNAMIC。
 3. 生成与实际输出 tensor 集合一致的 `quant_model_description.json`。
-4. 删除输出 `config.json` 中官方源权重携带的顶层 `quantization_config`。
+4. 将输出 `config.json` 的顶层 `quantization_config` 对齐 ModelSlim：
+   `{"quant_method": "ascend", "model_quant_type": "W8A8_DYNAMIC"}`。
 5. 保持 950 legacy 路径和通用模型 Ascend 路径的现有行为不变。
 
 非目标：
@@ -82,8 +83,10 @@ deploy.py
 
 ## Config 与 description
 
-`_refresh_config_a3()` 深拷贝源 `config.json`，删除顶层 `quantization_config`，其余
-字段保持不变，并以临时文件原子替换输出配置。
+`_refresh_config_a3()` 深拷贝源 `config.json`，移除官方 FP8 配置并写入
+ModelSlim 兼容的顶层 `quantization_config`：
+`{"quant_method": "ascend", "model_quant_type": "W8A8_DYNAMIC"}`，其余字段保持不变，
+并以临时文件原子替换输出配置。
 
 `_make_ascend_description_a3()` 复用通用
 `amct_pytorch.common.models.llm.common.ascend_deploy_export.make_ascend_description`：
@@ -108,7 +111,7 @@ deploy.py
 2. MXFP4 解码后导出 INT8 W8A8_DYNAMIC；
 3. 未选中源量化权重输出为 BF16，源 `.scale` 不残留；
 4. description 的三件套标记与实际输出一致；
-5. `config.json` 删除顶层 `quantization_config` 并保持其他字段；
+5. `config.json` 写入 ModelSlim 的 `quantization_config` 并保持其他字段；
 6. 950 legacy 既有测试继续通过。
 
 ## 当前限制
