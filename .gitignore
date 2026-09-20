@@ -43,3 +43,5 @@ log/
 
 # Local community-sample artifacts (PTQ data / reports)
 examples/models/qwen3/outputs/
+examples/models/qwen3.6-35b-a3b/outputs/
+examples/models/deepseek-v4-flash/outputs/
