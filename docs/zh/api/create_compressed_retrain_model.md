@@ -9,7 +9,7 @@
 </th>
 </tr>
 </thead>
-<tbody><tr id="row574891710101"><td class="cellrowborder" valign="top" width="47.92%" headers="mcps1.1.3.1.1 "><p id="p177491117171015"><a name="p177491117171015"></a><a name="p177491117171015"></a><span id="ph2272194216543"><a name="ph2272194216543"></a><a name="ph2272194216543"></a>Ascend 950PR/Ascend 950DT</span></p>
+<tbody><tr id="row574891710101"><td class="cellrowborder" valign="top" width="47.92%" headers="mcps1.1.3.1.1 "><p id="p177491117171015"><a name="p177491117171015"></a><a name="p177491117171015"></a><span id="ph2272194216543"><a name="ph2272194216543"></a><a name="ph2272194216543"></a>Ascend 950PR&950DT系列产品</span></p>
 </td>
 <td class="cellrowborder" align="left" valign="top" width="52.080000000000005%" headers="mcps1.1.3.1.2 "><a name="ul1367712433612"></a><a name="ul1367712433612"></a><ul id="ul1367712433612"><li>量化感知训练：<a name="ul5366163611332"></a><a name="ul5366163611332"></a><ul id="ul5366163611332"><li>INT8量化：√</li><li>INT4量化：x</li></ul>
 </li><li>通道稀疏：√</li><li>4选2结构化稀疏：x</li></ul>

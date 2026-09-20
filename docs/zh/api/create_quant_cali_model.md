@@ -9,7 +9,7 @@
 </th>
 </tr>
 </thead>
-<tbody><tr id="zh-cn_topic_0000002517188700_row574891710101"><td class="cellrowborder" valign="top" width="57.99999999999999%" headers="mcps1.1.3.1.1 "><p id="zh-cn_topic_0000002517188700_p177491117171015"><a name="zh-cn_topic_0000002517188700_p177491117171015"></a><a name="zh-cn_topic_0000002517188700_p177491117171015"></a><span id="zh-cn_topic_0000002517188700_ph2272194216543"><a name="zh-cn_topic_0000002517188700_ph2272194216543"></a><a name="zh-cn_topic_0000002517188700_ph2272194216543"></a>Ascend 950PR/Ascend 950DT</span></p>
+<tbody><tr id="zh-cn_topic_0000002517188700_row574891710101"><td class="cellrowborder" valign="top" width="57.99999999999999%" headers="mcps1.1.3.1.1 "><p id="zh-cn_topic_0000002517188700_p177491117171015"><a name="zh-cn_topic_0000002517188700_p177491117171015"></a><a name="zh-cn_topic_0000002517188700_p177491117171015"></a><span id="zh-cn_topic_0000002517188700_ph2272194216543"><a name="zh-cn_topic_0000002517188700_ph2272194216543"></a><a name="zh-cn_topic_0000002517188700_ph2272194216543"></a>Ascend 950PR&950DT系列产品</span></p>
 </td>
 <td class="cellrowborder" align="center" valign="top" width="42%" headers="mcps1.1.3.1.2 "><p id="zh-cn_topic_0000002517188700_p14226338117"><a name="zh-cn_topic_0000002517188700_p14226338117"></a><a name="zh-cn_topic_0000002517188700_p14226338117"></a>√</p>
 </td>
