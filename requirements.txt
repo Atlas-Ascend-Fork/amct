@@ -12,7 +12,6 @@ numpy>=1.26.4,<2.7
 pyyaml
 transformers==5.12.1
 loguru
-datasets
 accelerate
 compressed_tensors==0.15.0.1
 scipy
