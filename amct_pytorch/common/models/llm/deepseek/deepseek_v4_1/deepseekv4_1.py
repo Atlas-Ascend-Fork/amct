@@ -1,4 +1,3 @@
-# coding=utf-8
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,10 +27,19 @@ from safetensors import safe_open
 from safetensors.torch import load_file, save_file
 
 from amct_pytorch.common.models import MODEL_REGISTRY
+from amct_pytorch.common.models.llm.common.ascend_deploy_export import (
+    adapt_ascend_payload,
+    make_ascend_description,
+)
+from amct_pytorch.common.models.llm.common.deploy_export import (
+    convert_state_dict,
+    quant_payload,
+)
 from amct_pytorch.common.models.llm.common.weight_path_validation import (
     collect_safetensors_files,
     resolve_safetensors_path,
 )
+from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY, register_dtype
 
 BLOCK = 32
 
@@ -76,6 +84,31 @@ class DeepseekV41:
         return platform
 
     @classmethod
+    def validate_ascend_source(cls, args):
+        """Allow the official FP8/FP4 source only for the A3 conversion path."""
+        if getattr(args, "deploy_platform", None) != "A3" or getattr(
+            args, "quant_dtype", None
+        ) != "int":
+            return False
+        source = Path(args.model)
+        try:
+            config = json.loads((source / "config.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return False
+        markers = (
+            "quant_model_description.json",
+            "quant_model_weights.safetensors.index.json",
+            "rot.safetensors",
+        )
+        quant = config.get("quantization_config")
+        return (
+            isinstance(quant, dict)
+            and quant.get("quant_method") == "fp8"
+            and not config.get("is_rot_used")
+            and not any((source / name).exists() for name in markers)
+        )
+
+    @classmethod
     def validate_deploy_args(cls, args):
         from amct_pytorch.common.models.llm.common.deploy_selection import (
             DeploySelection,
@@ -89,17 +122,11 @@ class DeepseekV41:
                 "DeepSeek V4.1 supports tensor deployment only; PTQ is not implemented"
             )
         deploy_format = getattr(args, "deploy_format", "legacy")
-        if deploy_format == "ascend":
-            raise NotImplementedError(
-                "DeepSeek V4.1 ascend deployment is not implemented"
-            )
-        if deploy_format != "legacy":
-            raise ValueError(f"Unsupported deploy_format: {deploy_format}")
-        if platform == "A3":
-            raise NotImplementedError(
-                "DeepSeek V4.1 A3 INT conversion is not implemented"
-            )
-        if getattr(args, "bit_config", None):
+        if platform == "A3" and deploy_format != "ascend":
+            raise ValueError("DeepSeek V4.1 A3 requires --deploy_format ascend")
+        if platform == "ascend950" and deploy_format != "legacy":
+            raise ValueError("DeepSeek V4.1 ascend950 requires --deploy_format legacy")
+        if platform == "ascend950" and getattr(args, "bit_config", None):
             raise ValueError(
                 "DeepSeek V4.1 950 preserves source bits; --bit_config is not supported"
             )
@@ -141,6 +168,8 @@ class DeepseekV41:
         selection = self.args.deploy_selection
         selected, counts = match_deploy_modules(names, selection)
         candidates = set()
+        selected = set(selected)
+        platform = self._validate_platform(self.args)
         for filename in sorted(set(weight_map.values())):
             path = resolve_safetensors_path(
                 self.model_path, filename, self.safetensors_files
@@ -148,13 +177,24 @@ class DeepseekV41:
             with safe_open(str(path), framework="pt", device="cpu") as shard:
                 keys = set(shard.keys())
                 for key in keys:
-                    if not key.endswith(".scale"):
+                    if not key.endswith(".weight"):
                         continue
-                    base = key.removesuffix(".scale")
-                    if base + ".weight" not in keys:
+                    base = key.removesuffix(".weight")
+                    if platform == "A3" and base in selected:
+                        view = shard.get_slice(key)
+                        if len(view.get_shape()) != 2 or any(
+                            size <= 0 for size in view.get_shape()
+                        ):
+                            raise ValueError(
+                                f"Selected A3 module is not a nonempty 2-D weight: {base}"
+                            )
+                        candidates.add(base)
                         continue
-                    weight = shard.get_slice(base + ".weight")
-                    scale = shard.get_slice(key)
+                    scale_key = base + ".scale"
+                    if scale_key not in keys:
+                        continue
+                    weight = shard.get_slice(key)
+                    scale = shard.get_slice(scale_key)
                     if self._is_block_fp8(
                         weight.get_dtype(),
                         weight.get_shape(),
@@ -162,12 +202,17 @@ class DeepseekV41:
                         scale.get_shape(),
                     ):
                         candidates.add(base)
+        if platform == "A3" and (missing := selected - candidates):
+            raise ValueError(
+                f"Selected A3 modules are not nonempty 2-D weights: {sorted(missing)}"
+            )
         if missing := candidates - selected:
             raise ValueError(
                 f"FP8 32x32 modules not selected by JSON: {sorted(missing)}"
             )
         # Fail on invalid config before any checkpoint output is created.
-        self._make_legacy_quant_config()
+        if platform == "ascend950":
+            self._make_legacy_quant_config()
         self.processed_modules.clear()
         ignored = frozenset(
             name
@@ -210,7 +255,98 @@ class DeepseekV41:
     def _convert_tensorwise_shard_a3(
         self, source_file, model_dir, original_weight_map, quant_layers, loaded_files
     ):
-        raise NotImplementedError("DeepSeek V4.1 A3 INT conversion is not implemented")
+        source_path = resolve_safetensors_path(
+            model_dir, source_file, self.safetensors_files
+        )
+        if source_file not in loaded_files:
+            loaded_files[source_file] = load_file(str(source_path), device="cpu")
+        current_state_dict = loaded_files[source_file]
+        new_state_dict = {}
+        processed = set()
+
+        for weight_name, source_weight in current_state_dict.items():
+            if weight_name.endswith(".scale"):
+                if weight_name.removesuffix(".scale") + ".weight" in original_weight_map:
+                    continue
+                new_state_dict[weight_name] = source_weight
+                continue
+
+            weight = source_weight
+            if weight_name.endswith(".weight") and weight.ndim == 2:
+                scale_name = weight_name.removesuffix(".weight") + ".scale"
+                if scale_name in original_weight_map:
+                    scale_file = original_weight_map[scale_name]
+                    if scale_file not in loaded_files:
+                        scale_path = resolve_safetensors_path(
+                            model_dir, scale_file, self.safetensors_files
+                        )
+                        loaded_files[scale_file] = load_file(
+                            str(scale_path), device="cpu"
+                        )
+                    scale = loaded_files[scale_file].get(scale_name)
+                    if scale is None:
+                        raise ValueError(f"Missing source scale tensor: {scale_name}")
+                    loaded_files[scale_file][scale_name] = self._prepare_a3_scale(
+                        weight, scale
+                    )
+                    weight = convert_state_dict(
+                        weight,
+                        weight_name,
+                        scale_name,
+                        original_weight_map,
+                        model_dir,
+                        loaded_files,
+                        block_size=BLOCK,
+                        safetensors_files=self.safetensors_files,
+                    )
+                    if weight.is_floating_point() and weight.dtype != torch.bfloat16:
+                        weight = weight.to(torch.bfloat16)
+                elif not weight.is_floating_point():
+                    raise ValueError(f"Missing source scale tensor: {scale_name}")
+
+            module_name = (
+                weight_name.removesuffix(".weight")
+                if weight_name.endswith(".weight")
+                else None
+            )
+            if module_name in quant_layers:
+                state_dict = self._export_a3_payload(
+                    weight_name, weight, quant_layers[module_name]
+                )
+                new_state_dict.update(state_dict)
+                processed.add(module_name)
+            else:
+                new_state_dict[weight_name] = weight
+
+        destination = self.output_dir / source_file
+        temporary = destination.with_name(f".{destination.name}.tmp")
+        save_file(new_state_dict, str(temporary), metadata={"format": "pt"})
+        os.replace(temporary, destination)
+        self.processed_modules.update(processed)
+        self.output_tensor_bytes = getattr(self, "output_tensor_bytes", 0) + sum(
+            tensor.numel() * tensor.element_size() for tensor in new_state_dict.values()
+        )
+        return {name: source_file for name in new_state_dict}
+
+    @staticmethod
+    def _export_a3_payload(weight_name, weight, bit):
+        register_dtype()
+        payload = quant_payload(DTYPE_REGISTRY.get("int"), weight_name, weight, bit)
+        return adapt_ascend_payload(weight_name, payload)
+
+    @staticmethod
+    def _prepare_a3_scale(weight, scale):
+        """Adapt official UE8M0 scales to the common MX dequant contract."""
+        if scale.dtype == torch.float8_e8m0fnu:
+            scale = scale.view(torch.uint8)
+        if (
+            weight.dtype == torch.float8_e4m3fn
+            and scale.ndim == 2
+            and scale.shape[0] * BLOCK == weight.shape[0]
+            and scale.shape[1] * BLOCK == weight.shape[1]
+        ):
+            scale = scale.repeat_interleave(BLOCK, dim=0)
+        return scale
 
     def _convert_tensorwise_shard_950(
         self, source_file, model_dir, original_weight_map, quant_layers, loaded_files
@@ -319,7 +455,11 @@ class DeepseekV41:
         return refresh(quant_ignore_layers, tensor_plan=tensor_plan)
 
     def _refresh_config_a3(self, quant_ignore_layers, *, tensor_plan=None):
-        raise NotImplementedError("DeepSeek V4.1 A3 config refresh is not implemented")
+        config = copy.deepcopy(self.config)
+        config.pop("quantization_config", None)
+        temporary = self.output_dir / ".config.json.tmp"
+        temporary.write_text(json.dumps(config, indent=2), encoding="utf-8")
+        os.replace(temporary, self.output_dir / "config.json")
 
     def _refresh_config_950(self, quant_ignore_layers, *, tensor_plan=None):
         # JSON selects transformations, not FP4/FP8 quantization status. In
@@ -342,9 +482,7 @@ class DeepseekV41:
         return describe(output_tensor_names, selected_modules)
 
     def _make_ascend_description_a3(self, output_tensor_names, selected_modules):
-        raise NotImplementedError(
-            "DeepSeek V4.1 A3 ascend description is not implemented"
-        )
+        return make_ascend_description(output_tensor_names, selected_modules)
 
     def _make_ascend_description_950(self, output_tensor_names, selected_modules):
         raise NotImplementedError(
