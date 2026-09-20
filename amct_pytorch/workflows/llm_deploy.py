@@ -382,9 +382,12 @@ class LlmDeployWorkflow:
         updated_weight_map = {}
         model_dir = Path(self.model_path)
         loaded_files = {}
+        convert_shard = getattr(self.pipeline, "convert_tensorwise_shard", None)
+        if not callable(convert_shard):
+            convert_shard = self._convert_tensorwise_shard
         for source_file in tqdm(sorted(weights_by_file), desc="Tensor convert..."):
             updated_weight_map.update(
-                self._convert_tensorwise_shard(
+                convert_shard(
                     source_file,
                     model_dir,
                     original_weight_map,
@@ -392,11 +395,19 @@ class LlmDeployWorkflow:
                     loaded_files,
                 )
             )
+        validate_result = getattr(self.pipeline, "validate_tensorwise_result", None)
+        if callable(validate_result):
+            self._quantized_modules = set(validate_result(plan))
+        if self._quantized_modules != plan.selected_modules:
+            raise ValueError(
+                "Actual quantized modules differ from JSON deployment plan"
+            )
         extra_results = {}
         if is_ascend:
-            description = make_ascend_description(
-                set(updated_weight_map), plan.selected_modules
-            )
+            describe = getattr(self.pipeline, "make_ascend_description", None)
+            if not callable(describe):
+                describe = make_ascend_description
+            description = describe(set(updated_weight_map), plan.selected_modules)
             description_path = Path(self.output_dir) / "quant_model_description.json"
             self._write_json_file(description_path, description)
             index_path = self._refresh_weight_index(
@@ -413,11 +424,10 @@ class LlmDeployWorkflow:
             extra_results["validation_path"] = str(validation_path)
         else:
             index_path = self._refresh_weight_index(original_index, updated_weight_map)
-            self._refresh_config(sorted(plan.ignored_modules), tensor_plan=plan)
-        if self._quantized_modules != plan.selected_modules:
-            raise ValueError(
-                "Actual quantized modules differ from JSON deployment plan"
-            )
+            refresh = getattr(self.pipeline, "refresh_config", None)
+            if not callable(refresh):
+                refresh = self._refresh_config
+            refresh(sorted(plan.ignored_modules), tensor_plan=plan)
         log_mtp_selection(
             plan.mtp,
             phase="exported",
@@ -435,7 +445,10 @@ class LlmDeployWorkflow:
     def _prepare_tensor_deploy_plan(self, original_index=None):
         if original_index is None:
             original_index = self._load_weight_index()
-        if getattr(self.args, "deploy_format", "legacy") == "ascend":
+        prepare = getattr(self.pipeline, "prepare_tensor_deploy_plan", None)
+        if callable(prepare):
+            self.deploy_plan = prepare(original_index["weight_map"])
+        elif getattr(self.args, "deploy_format", "legacy") == "ascend":
             self._prepare_ascend_deploy_plan(original_index)
         else:
             self.deploy_plan = build_tensor_deploy_plan(

@@ -127,8 +127,27 @@ def validate_tensor_bit_config(cfg):
     check(cfg, "")
 
 
+def _validate_model_deploy_args(args):
+    """Let deploy-only adapters validate their own source-format contract."""
+    from amct_pytorch.common.models import MODEL_REGISTRY
+
+    # Argument validation precedes workflow setup: register the lightweight
+    # adapter here without importing all model implementations.
+    from ..deepseek.deepseek_v4_1.deepseekv4_1 import DeepseekV41  # noqa: F401
+
+    name = getattr(args, "model_name", None)
+    if name in MODEL_REGISTRY:
+        validator = getattr(MODEL_REGISTRY.get(name), "validate_deploy_args", None)
+        if callable(validator):
+            validator(args)
+            return True
+    return False
+
+
 def validate_tensor_deploy_args(args):
     """Preflight for both CLI and programmatic tensor workflows."""
+    if _validate_model_deploy_args(args):
+        return
     if getattr(args, "quant_dtype", None) != "int":
         raise ValueError(
             "Tensor deployment currently requires --quant_dtype int (W8A8)"
@@ -356,6 +375,8 @@ def validate_ascend_deploy_args(args) -> None:
     W8A8 configuration is checked by the shared tensor argument validator.
     Model fusion constraints and source/output checks remain format-specific.
     """
+    if _validate_model_deploy_args(args):
+        return
     deploy_format = getattr(args, "deploy_format", "legacy")
     selection_path = getattr(args, "quant_layers_config", None)
     if deploy_format not in {"legacy", "ascend"}:
