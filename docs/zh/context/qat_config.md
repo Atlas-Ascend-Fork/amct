@@ -579,27 +579,27 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
             dst_type: INT8
         }
     }
-    
+
     retrain_weight_quant_config: {
         arq_retrain: {
            channel_wise: true
            dst_type: INT8
            }
       }
-    
+
     skip_layers: "Opname"
     skip_layer_types: "Optype"
-    
+
     override_layer_types : {
         layer_type: "Optype"
         retrain_weight_quant_config: {
             arq_retrain: {
                channel_wise: false
-               dst_type: INT8     
+               dst_type: INT8
             }
         }
     }
-    
+
     override_layer_configs : {
        layer_name: "Opname"
        retrain_data_quant_config: {
@@ -626,11 +626,11 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
             }
         }
     }
-    
+
     # skip layers
     regular_prune_skip_layers: "Opname"
     regular_prune_skip_layers: "Opname"
-    
+
     # override specific layers
     override_layer_configs: {
         layer_name: "Opname"
@@ -657,11 +657,11 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
             }
         }
     }
-    
+
     # skip layers
     regular_prune_skip_layers: "Opname"
     regular_prune_skip_layers: "Opname"
-    
+
     # override specific layers
     override_layer_configs: {
         layer_name: "Opname"
@@ -687,20 +687,20 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
             }
         }
     }
-    
+
     # skip_layers: "skip_layers_name_0"
     skip_layer_types: "Optype"
-    
+
     quant_skip_layers: "Opname"
     quant_skip_types: "Optype"
-    
+
     retrain_weight_quant_config: {
         arq_retrain: {
         channel_wise: true
         dst_type: INT8
         }
     }
-    
+
     override_layer_types : {
         layer_type: "Optype"
         retrain_weight_quant_config: {
@@ -741,17 +741,17 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
     }
     # skip_layers: "skip_layers_name_0"
     skip_layer_types: "Optype"
-    
+
     quant_skip_layers: "quant_skip_layers_name_0"
     quant_skip_types: "Optype"
-    
+
     retrain_weight_quant_config: {
         arq_retrain: {
         channel_wise: true
         dst_type: INT8
         }
     }
-    
+
     override_layer_types : {
         layer_type: "Optype"
         retrain_weight_quant_config: {
