@@ -298,9 +298,6 @@ def test_kimi_tensorwise_combines_moe_and_attn_linear_targets():
         "language_model.model.layers.0.self_attn.o_proj": 8,
         "language_model.model.layers.1.block_sparse_moe.routed_expert_down_proj": 8,
         "language_model.model.layers.1.block_sparse_moe.routed_expert_up_proj": 8,
-        "language_model.model.layers.1.block_sparse_moe.shared_experts.gate_proj": 8,
-        "language_model.model.layers.1.block_sparse_moe.shared_experts.up_proj": 8,
-        "language_model.model.layers.1.block_sparse_moe.shared_experts.down_proj": 8,
         "language_model.model.layers.1.block_sparse_moe.experts.0.w1": 4,
     }
 
@@ -316,6 +313,9 @@ def test_kimi_tensorwise_ignore_lists_each_unquantized_linear_explicitly():
         "model.layers.0.mlp.gate_proj",
         "model.layers.0.self_attention_res_proj",
         "model.layers.0.self_attn.kv_b_proj",
+        "model.layers.1.block_sparse_moe.shared_experts.down_proj",
+        "model.layers.1.block_sparse_moe.shared_experts.gate_proj",
+        "model.layers.1.block_sparse_moe.shared_experts.up_proj",
         "model.layers.1.self_attn.f_a_proj",
         "model.layers.1.self_attn.k_proj",
         "model.layers.1.self_attn.o_proj",
@@ -335,14 +335,11 @@ def test_kimi_tensorwise_moe_target_does_not_select_mla_projections():
     assert quant_layers == {
         "language_model.model.layers.1.block_sparse_moe.routed_expert_down_proj": 8,
         "language_model.model.layers.1.block_sparse_moe.routed_expert_up_proj": 8,
-        "language_model.model.layers.1.block_sparse_moe.shared_experts.gate_proj": 8,
-        "language_model.model.layers.1.block_sparse_moe.shared_experts.up_proj": 8,
-        "language_model.model.layers.1.block_sparse_moe.shared_experts.down_proj": 8,
         "language_model.model.layers.1.block_sparse_moe.experts.0.w1": 4,
     }
 
 
-def test_kimi_tensorwise_reads_mla_shared_and_latent_bit_overrides():
+def test_kimi_tensorwise_reads_mla_and_latent_bit_overrides_but_ignores_shared():
     pipeline = _tensorwise_pipeline(["moe", "attn-linear"])
     pipeline.args.bit_policy = BitPolicy({
         "w_bits": 8,
@@ -373,12 +370,7 @@ def test_kimi_tensorwise_reads_mla_shared_and_latent_bit_overrides():
     assert quant_layers[
         "language_model.model.layers.1.block_sparse_moe.experts.0.w1"
     ] == 4
-    assert quant_layers[
-        "language_model.model.layers.1.block_sparse_moe.shared_experts.gate_proj"
-    ] == 4
-    assert quant_layers[
-        "language_model.model.layers.1.block_sparse_moe.shared_experts.up_proj"
-    ] == 8
+    assert not any(".shared_experts." in name for name in quant_layers)
     assert quant_layers[
         "language_model.model.layers.1.block_sparse_moe.routed_expert_down_proj"
     ] == 8

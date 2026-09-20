@@ -80,10 +80,6 @@ class KimiK3(BaseModel):
         r"^language_model\.model\.layers\.(?P<layer_idx>\d+)\.self_attn\."
         r"(?P<projection>q_a_proj|q_b_proj|kv_a_proj_with_mqa|o_proj)\.weight$"
     )
-    _SHARED_EXPERT_WEIGHT_RE = re.compile(
-        r"^language_model\.model\.layers\.\d+\.block_sparse_moe\.shared_experts\."
-        r"(gate_proj|up_proj|down_proj)\.weight$"
-    )
     _LATENT_MOE_WEIGHT_RE = re.compile(
         r"^language_model\.model\.layers\.\d+\.block_sparse_moe\."
         r"(routed_expert_down_proj|routed_expert_up_proj)\.weight$"
@@ -826,14 +822,6 @@ class KimiK3(BaseModel):
         for weight_name in self._load_weight_map():
             if quantize_moe and self._is_kimi_moe_weight_packed(weight_name):
                 quant_layers[weight_name.rsplit(".", 1)[0]] = 4
-                continue
-
-            shared_match = self._SHARED_EXPERT_WEIGHT_RE.match(weight_name)
-            if quantize_moe and shared_match is not None:
-                projection_name = shared_match.group(1)
-                quant_layers[weight_name.rsplit(".", 1)[0]] = (
-                    bit_policy["moe.shared"][projection_name].w
-                )
                 continue
 
             latent_match = self._LATENT_MOE_WEIGHT_RE.match(weight_name)
