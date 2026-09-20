@@ -556,3 +556,5 @@ model.save_pretrained(
 6. `grad_clip`：本次为 `1.0`；若梯度或 loss 不稳定可以调小，最终仍以固定评测集 PPL 为准。
 
 多组恢复参数应使用独立报告和输出目录，避免覆盖剪枝模型。BF16 的 `size_budget=0.5` 权重约占 28.4 GiB；磁盘不足时，记录 PPL 和报告后再清理不再需要的恢复模型。
+
+> 剪枝完成后，如需将模型导出为 torchair 离线模型（.air）用于 ATC 转 om 板端推理，请参考 [AMCT大模型torchair离线模型导出](../export/README.md)。
