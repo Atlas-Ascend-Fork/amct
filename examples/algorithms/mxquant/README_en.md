@@ -42,7 +42,7 @@ If you need to modify the detailed configuration, please refer to the documentat
 The MXQUANT algorithm supports weight-only quantization and full quantization. The supported quantization types and quantization configurations are:
 
 | Field | Type | Description | Value Range | Notes |
-|:--| :-: | :-- | :-: | :-: | :-- |
+|:--| :-: | :-- | :-: | :-- |
 |batch_num|uint32|Number of batches used for quantization |1|/|
 |skip_layers|str|Layers to skip quantization |/|Skip quantization layers support fuzzy matching. When the configured string is a layer name substring or matches the layer name, skip quantization for that layer and do not generate quantization configuration. The string must contain numbers or letters|
 |weights.type|str|Quantized weight type|'mxfp8_e4m3fn'/'mxfp4_e2m1'|/|

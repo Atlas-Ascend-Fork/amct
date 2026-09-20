@@ -30,7 +30,7 @@ The FlatQuant algorithm supports the following partial quantization:
 Supported quantization types and quantization configurations:
 
 | Field | Type | Description | Value Range | Notes |
-|:--| :-: | :-- | :-: | :-: | :-- |
+|:--| :-: | :-- | :-: | :-- |
 |skip_layers|str|Layers to skip quantization |/|Skip quantization layers support fuzzy matching. When the configured string is a layer name substring or matches the layer name, skip quantization for that layer and do not generate quantization configuration. The string must contain numbers or letters|
 |algorithm|dict|Quantization algorithm configuration used|{'flatquant'}|Refer to `INT4_FLAT_QUANT_CFG` example
 
