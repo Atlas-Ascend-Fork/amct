@@ -63,3 +63,5 @@ Where Score is the quantized model PPL. For specific values, refer to the follow
 |QWEN2-7B|pileval|wikitext2|7.137|7.268|7.411|
 
 After inference succeeds, a quantization log file ./amct_log/amct_pytorch.log is generated in the current directory
+
+> After quantization, to export the quantized model as a torchair offline model (.air) for ATC-to-om conversion and on-board inference, refer to [AMCT large-model offline torchair model export](../export/README_en.md).
