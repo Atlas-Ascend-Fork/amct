@@ -414,7 +414,9 @@ def test_kimi_k3_tensor_deploy_builds_moe_quant_layers_from_index(tmp_path):
     assert model.generate_tensorwise_quant_layers() == {
         "language_model.model.layers.19.block_sparse_moe.experts.895.w3": 4,
     }
-    assert model.generate_tensorwise_ignore_layers() == []
+    assert model.generate_tensorwise_ignore_layers() == [
+        "model.layers.19.self_attn.q_proj",
+    ]
 
 
 def test_kimi_k3_tensor_deploy_respects_non_moe_quant_target(tmp_path):

@@ -166,7 +166,13 @@ class LlmDeployWorkflow:
             quantization_config = generate_quant_config(
                 cache_scheme, quant_ignore_layers, is_mx=self.is_mx, bits_scheme=bits_scheme,
                 **({"is_fp": True} if self.quant_dtype == "fp" else {}))
-            config['quantization_config'] = quantization_config
+            update_config_fn = self._pipeline_hook(
+                "update_deploy_quantization_config"
+            )
+            if callable(update_config_fn):
+                update_config_fn(config, quantization_config)
+            else:
+                config['quantization_config'] = quantization_config
         else:
             config.pop('quantization_config', None)
 

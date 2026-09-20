@@ -200,7 +200,17 @@ def _tensorwise_pipeline(target):
         "language_model.model.layers.1.self_attn.q_proj.weight": "model-0.safetensors",
         "language_model.model.layers.1.self_attn.k_proj.weight": "model-0.safetensors",
         "language_model.model.layers.1.self_attn.v_proj.weight": "model-0.safetensors",
+        "language_model.model.layers.1.self_attn.o_proj.weight": "model-0.safetensors",
+        "language_model.model.layers.1.self_attn.f_a_proj.weight": "model-0.safetensors",
         "language_model.model.layers.1.self_attn.q_conv1d.weight": "model-0.safetensors",
+        "language_model.model.layers.0.mlp.gate_proj.weight": "model-0.safetensors",
+        "language_model.model.layers.0.self_attention_res_proj.weight": "model-0.safetensors",
+        "language_model.model.output_attn_res_proj.weight": "model-0.safetensors",
+        "language_model.lm_head.weight": "model-0.safetensors",
+        "vision_tower.encoder.blocks.0.wqkv.weight": "model-0.safetensors",
+        "vision_tower.encoder.blocks.0.norm0.weight": "model-0.safetensors",
+        "mm_projector.proj.0.weight": "model-0.safetensors",
+        "mm_projector.post_norm.weight": "model-0.safetensors",
         "language_model.model.layers.1.block_sparse_moe.routed_expert_down_proj.weight": (
             "model-0.safetensors"
         ),
@@ -293,6 +303,28 @@ def test_kimi_tensorwise_combines_moe_and_attn_linear_targets():
         "language_model.model.layers.1.block_sparse_moe.shared_experts.down_proj": 8,
         "language_model.model.layers.1.block_sparse_moe.experts.0.w1": 4,
     }
+
+
+def test_kimi_tensorwise_ignore_lists_each_unquantized_linear_explicitly():
+    pipeline = _tensorwise_pipeline(["moe", "attn-linear"])
+
+    ignore = pipeline.generate_tensorwise_ignore_layers()
+
+    assert ignore == [
+        "lm_head",
+        "mm_projector.proj.0",
+        "model.layers.0.mlp.gate_proj",
+        "model.layers.0.self_attention_res_proj",
+        "model.layers.0.self_attn.kv_b_proj",
+        "model.layers.1.self_attn.f_a_proj",
+        "model.layers.1.self_attn.k_proj",
+        "model.layers.1.self_attn.o_proj",
+        "model.layers.1.self_attn.q_proj",
+        "model.layers.1.self_attn.v_proj",
+        "model.output_attn_res_proj",
+        "vision_tower.encoder.blocks.0.wqkv",
+    ]
+    assert all(not name.startswith("re:") for name in ignore)
 
 
 def test_kimi_tensorwise_moe_target_does_not_select_mla_projections():

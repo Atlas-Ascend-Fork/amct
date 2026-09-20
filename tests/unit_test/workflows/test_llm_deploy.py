@@ -269,6 +269,26 @@ def test_refresh_config_uses_float_format_for_mx_dtype(tmp_path):
     refreshed = json.loads((tmp_path / CONFIG_JSON).read_text())
     assert refreshed[QUANTIZATION_CONFIG]["format"] == "float-quantized"
 
+
+def test_refresh_config_uses_kimi_nested_quantization_config(tmp_path):
+    from amct_pytorch.common.models.llm.kimi.kimi_k3.kimi_k3 import KimiK3
+
+    wf = _make_workflow(output_dir=str(tmp_path), quant_dtype="mxfp")
+    wf.pipeline = KimiK3.__new__(KimiK3)
+    (tmp_path / CONFIG_JSON).write_text(json.dumps({"text_config": {}}))
+
+    wf._refresh_config(quant_ignore_layers=["model.layers.0.self_attn.q_proj"])
+
+    refreshed = json.loads((tmp_path / CONFIG_JSON).read_text())
+    quant_config = refreshed[QUANTIZATION_CONFIG]
+    assert refreshed["text_config"][QUANTIZATION_CONFIG] == quant_config
+    assert quant_config["ignore"] == ["model.layers.0.self_attn.q_proj"]
+    assert quant_config["kv_cache_scheme"] is None
+    assert quant_config["config_groups"]["group_0"]["targets"] == ["Linear"]
+    assert quant_config["config_groups"]["group_0"]["weights"]["num_bits"] == 8
+    assert quant_config["config_groups"]["group_1"]["targets"] == ["MoEGMM"]
+    assert quant_config["config_groups"]["group_1"]["weights"]["num_bits"] == 4
+
 # ---- _write_remaining_original_weights ----------------------------------
 
 

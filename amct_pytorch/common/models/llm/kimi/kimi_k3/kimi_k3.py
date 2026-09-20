@@ -88,6 +88,36 @@ class KimiK3(BaseModel):
         r"^language_model\.model\.layers\.\d+\.block_sparse_moe\."
         r"(routed_expert_down_proj|routed_expert_up_proj)\.weight$"
     )
+    _TENSORWISE_LINEAR_WEIGHT_RES = (
+        re.compile(
+            r"^language_model\.model\.layers\.\d+\.self_attn\."
+            r"(?:q_proj|k_proj|v_proj|f_a_proj|f_b_proj|b_proj|g_proj|g_a_proj|g_b_proj|o_proj|"
+            r"q_a_proj|q_b_proj|kv_a_proj_with_mqa|kv_b_proj)\.weight$"
+        ),
+        re.compile(
+            r"^language_model\.model\.layers\.\d+\.mlp\."
+            r"(?:gate_proj|up_proj|down_proj)\.weight$"
+        ),
+        re.compile(
+            r"^language_model\.model\.layers\.\d+\.block_sparse_moe\.shared_experts\."
+            r"(?:gate_proj|up_proj|down_proj)\.weight$"
+        ),
+        re.compile(
+            r"^language_model\.model\.layers\.\d+\.block_sparse_moe\."
+            r"(?:routed_expert_down_proj|routed_expert_up_proj)\.weight$"
+        ),
+        re.compile(
+            r"^language_model\.model\.layers\.\d+\."
+            r"(?:self_attention_res_proj|mlp_res_proj)\.weight$"
+        ),
+        re.compile(r"^language_model\.model\.output_attn_res_proj\.weight$"),
+        re.compile(r"^language_model\.lm_head\.weight$"),
+        re.compile(
+            r"^vision_tower\.encoder\.blocks\.\d+\."
+            r"(?:wqkv|wo|mlp\.fc0|mlp\.fc1)\.weight$"
+        ),
+        re.compile(r"^mm_projector\.proj\.\d+\.weight$"),
+    )
 
     def __init__(self, args):
         if getattr(args, "granularity", None) == "tensor":
@@ -827,7 +857,40 @@ class KimiK3(BaseModel):
         return quant_layers
 
     def generate_tensorwise_ignore_layers(self):
-        return []
+        quant_layers = {
+            self._tensorwise_runtime_module_name(name)
+            for name in self.generate_tensorwise_quant_layers()
+        }
+        ignore = set()
+        for weight_name in self._load_weight_map():
+            if not any(
+                pattern.match(weight_name)
+                for pattern in self._TENSORWISE_LINEAR_WEIGHT_RES
+            ):
+                continue
+            module_name = self._tensorwise_runtime_module_name(
+                weight_name.removesuffix(".weight")
+            )
+            if module_name not in quant_layers:
+                ignore.add(module_name)
+        return sorted(ignore)
+
+    @staticmethod
+    def _tensorwise_runtime_module_name(name):
+        if name.startswith("language_model."):
+            return name.removeprefix("language_model.")
+        return name
+
+    @staticmethod
+    def update_deploy_quantization_config(config, quantization_config):
+        config["quantization_config"] = quantization_config
+        text_config = config.get("text_config")
+        if isinstance(text_config, dict):
+            text_config["quantization_config"] = quantization_config
+
+    @staticmethod
+    def cache_scheme():
+        return {"kv_cache_scheme": None}
 
     def bits_scheme(self):
         return [
