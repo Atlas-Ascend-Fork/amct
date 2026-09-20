@@ -16,6 +16,7 @@
 | 使用mxquant算法量化模型 | [MXQuant](algorithms/mxquant/README.md) | 微缩浮点量化（MXFP8/MXFP4） |
 | 使用FlatQuant算法量化模型（试验特性） | [FlatQuant](algorithms/flatquant/README.md) | 通过仿射变换平整化分布的量化 |
 | 使用结构化剪枝压缩模型 | [Pruning](algorithms/pruning/README.md) | dense FFN / CNN 通道 / MoE 专家 结构化剪枝 |
+| 使用torchair导出离线模型 | [Torchair离线导出](algorithms/export/README.md) | 将量化后deploy模型导出为torchair AIR离线计算图 |
 
 > **注意**：标注"试验特性"的样例依赖 `amct_pytorch/experimental/` 目录下的内容，需使用
 > `bash build.sh --torch --experimental`（或 `--pkg --experimental`）构建安装包后方可使用。

@@ -98,3 +98,5 @@ content:  ======================================================================
 <>
 The Ascend Model Compression Toolkit (AMCT) is a powerful tool designed to ...
 ```
+
+> After quantization, to export the quantized model as a torchair offline model (.air) for ATC-to-om conversion and on-board inference, refer to [AMCT large-model offline torchair model export](../export/README_en.md).
