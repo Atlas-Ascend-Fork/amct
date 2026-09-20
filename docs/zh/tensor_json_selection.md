@@ -4,6 +4,9 @@
 
 `deploy --granularity tensor` 在 legacy 和 ascend 格式下均使用 JSON 作为唯一选层来源。
 本次支持 INT W8A8；显式 W4、16 bit 配置直接失败。block、PTQ、eval 不使用这套新规则。
+DeepSeek V4.1 的 `legacy + ascend950 + mxfp` 使用模型专属格式转换：JSON 选择需要
+扩展 scale 的 FP8 层，保留源权重位宽，不使用本页的 INT 位宽配置。详见
+[DeepSeek V4.1 部署说明](deepseek_v4_1_deployment.md)。
 模型旧 `generate_tensorwise_quant_layers()` / `generate_tensorwise_ignore_layers()`
 保留作为独立对照基准，正式 tensor 导出不会调用。
 

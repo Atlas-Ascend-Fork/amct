@@ -42,6 +42,12 @@ def parser_gen(command=None):
 
     if command == "deploy":
         parser.add_argument(
+            "--deploy_platform",
+            choices=["A3", "ascend950"],
+            default=None,
+            help="Target deployment hardware; required for DeepSeek V4.1.",
+        )
+        parser.add_argument(
             "--deploy_format",
             choices=["legacy", "ascend"],
             default="legacy",

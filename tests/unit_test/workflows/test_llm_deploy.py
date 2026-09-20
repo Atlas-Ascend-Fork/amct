@@ -741,7 +741,9 @@ def test_run_tensorwise_copies_and_rewrites_weight_index(monkeypatch, tmp_path):
         },
     }
     wf._load_weight_index = MagicMock(return_value=original_index)
-    wf.pipeline = MagicMock()
+    wf.pipeline = MagicMock(
+        spec=["config", "get_scale_name", "block_size", "cache_scheme", "bits_scheme"]
+    )
     wf.pipeline.config = SimpleNamespace()
     wf.pipeline.get_scale_name.return_value = (".weight_scale", "unused_scale_inv")
     wf.pipeline.block_size.return_value = 128
@@ -847,7 +849,9 @@ def test_run_tensorwise_int_quant_path(monkeypatch, tmp_path):
 
     wf = _make_workflow(model_path=str(src), output_dir=str(dst), quant_dtype="int")
     _tensor_json_args(wf)
-    wf.pipeline = MagicMock()
+    wf.pipeline = MagicMock(
+        spec=["config", "get_scale_name", "block_size", "cache_scheme", "bits_scheme"]
+    )
     wf.pipeline.get_scale_name = MagicMock(
         return_value=("_scale_inv", "missing_scale_inv")
     )
@@ -1225,7 +1229,10 @@ def test_tensor_invalid_bits_fails_before_setup(tmp_path, monkeypatch):
     assert not Path(args.output_dir).exists()
 
 
-def test_ascend_tensor_run_preserves_source_config(tmp_path, monkeypatch):
+@pytest.mark.parametrize("custom_description", [False, True])
+def test_ascend_tensor_run_preserves_source_config(
+    tmp_path, monkeypatch, custom_description
+):
     from amct_pytorch.common.models.llm.common.deploy_selection import (
         DeploySelection,
         build_tensor_deploy_plan,
@@ -1250,6 +1257,11 @@ def test_ascend_tensor_run_preserves_source_config(tmp_path, monkeypatch):
     wf.pipeline = SimpleNamespace(
         get_scale_name=lambda key: ("_scale_inv", "missing_scale_inv")
     )
+    if custom_description:
+        wf.pipeline.make_ascend_description = lambda names, selected: {
+            "custom_tensors": sorted(names),
+            "custom_selected": sorted(selected),
+        }
     wf.deploy_plan = build_tensor_deploy_plan(
         index["weight_map"],
         DeploySelection((name,), ()),
@@ -1265,3 +1277,9 @@ def test_ascend_tensor_run_preserves_source_config(tmp_path, monkeypatch):
     wf._run_tensorwise()
     refresh.assert_not_called()
     assert (dst / CONFIG_JSON).read_bytes() == (src / CONFIG_JSON).read_bytes()
+    if custom_description:
+        description = json.loads((dst / "quant_model_description.json").read_text())
+        assert description["custom_selected"] == [name]
+        assert set(description["custom_tensors"]) == {
+            name + suffix for suffix in (".weight", ".weight_scale", ".weight_offset")
+        }
