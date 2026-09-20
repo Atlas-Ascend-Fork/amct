@@ -12,7 +12,8 @@
 source /usr/local/Ascend/ascend-toolkit/set_env.sh
 ```
 
-- Python依赖（`torch`/`torch_npu`/`torchair`/`transformers`/`amct_pytorch`）已安装且版本匹配；若tokenizer需在线下载而网络不通，设置镜像`export HF_ENDPOINT=https://hf-mirror.com`。
+- Python依赖（`torch`/`torch_npu`/`torchair`/`transformers`/`amct_pytorch`/`Pillow`）已安装且版本匹配，也可参考[requirements.txt](requirements.txt)；若tokenizer需在线下载而网络不通，设置镜像`export HF_ENDPOINT=https://hf-mirror.com`。
+- 安全提示：脚本默认关闭`--trust_remote_code`；加载的模型目录须为可信的本地目录，开启`--trust_remote_code`或`torch.load`反序列化可能执行模型目录中的自定义代码，请勿加载来源不明的模型。
 
 **量化deploy模型的保存方式**：`amct.convert`后的模型包含AMCT自定义量化模块（如`NpuQuantizationLinear`），无法通过`save_pretrained`/`AutoModel.from_pretrained`还原，需在`amct.convert`后立即使用`torch.save`保存整模型，并保留原模型的tokenizer等文件：
 
@@ -60,9 +61,10 @@ python3 src/export_torchair_sample.py --model_type=vlm --model_path=/path/to/qua
 |--export_name|否|模型目录名|AIR文件名（不含.air后缀）|
 |--seqlen|否|2048|LLM导出输入序列长度（仅llm场景生效）|
 |--input_file|否|内置样例文本|指定LLM导出输入所用的文本文件（其内容将被token化作为导出输入）|
-|--image_path|否|/|VLM导出用图片文件或图片目录（可选，不提供时需自行构建导出输入；支持jpg/jpeg/png/bmp/tiff/webp）|
+|--image_path|否|/|VLM导出用图片文件或图片目录（vlm场景可选，未提供时用processor默认尺寸的占位输入；支持jpg/jpeg/png/bmp/tiff/webp）|
 |--batch_size|否|1|VLM导出输入batch大小（须不大于图片数量）|
 |--dtype|否|float16|VLM图像输入精度（float16/bfloat16）；仅vlm场景适用，LLM导出输入为int64 token id，无浮点精度可调|
+|--trust_remote_code|否|False|允许执行模型目录内自定义Python代码；默认关闭，仅对信任的本地模型开启|
 
 ## 3 导出产物
 
@@ -72,15 +74,16 @@ python3 src/export_torchair_sample.py --model_type=vlm --model_path=/path/to/qua
 output_dir/
 ├── <export_name>.air      # AIR离线计算图（权重内嵌）
 ├── input.bin              # 导出输入二进制
+├── dynamo.pbtxt           # TorchDynamo中间表示（权重内嵌的小模型时生成于顶层）
 └── weights/               # 大模型（权重总量超过约1.8G）时自动生成
-    ├── dynamo.pbtxt       # TorchDynamo中间表示（文本格式）
+    ├── dynamo.pbtxt       # TorchDynamo中间表示（大模型时生成于weights/下）
     └── xxx_weight ...     # 外置权重文件（.air通过FileConstant引用）
 ```
 
 | 文件 | 说明 |
 |:--|:--|
 |`<export_name>.air`|torchair导出的AIR离线计算图，供离线推理使用；权重总量较小时内嵌全部权重，较大时通过FileConstant引用`weights/`下的外置文件|
-|`weights/dynamo.pbtxt`|TorchDynamo中间表示（文本格式）|
+|`dynamo.pbtxt`|TorchDynamo中间表示（文本格式）；权重内嵌的小模型生成于顶层，权重外置的大模型生成于`weights/`下|
 |`weights/xxx_weight`|外置权重二进制文件，与`.air`需一起交付，不可单独移动或改名|
 |`input.bin`|导出输入的二进制文件，供下游离线推理对帧使用|
 

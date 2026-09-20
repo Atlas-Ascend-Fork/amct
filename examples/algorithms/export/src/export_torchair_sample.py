@@ -64,7 +64,7 @@ from transformers import AutoProcessor, AutoTokenizer  # noqa: E402
 DEFAULT_INPUT_TEXT = "The quick brown fox jumps over the lazy dog. " * 64
 
 
-def load_llm(model_path):
+def load_llm(model_path, trust_remote_code=False):
     """Load an AMCT-quantized causal LM saved by torch.save (model.pth).
 
     The deploy model contains AMCT custom modules (NpuQuantizationLinear),
@@ -73,6 +73,9 @@ def load_llm(model_path):
     pth_path = model_path
     if os.path.isdir(model_path):
         pth_path = os.path.join(model_path, "model.pth")
+        tokenizer_path = model_path
+    else:
+        tokenizer_path = os.path.dirname(model_path)
     print(f"Loading quantized LLM from {pth_path}")
     model = torch.load(pth_path, map_location="cpu", weights_only=False)
     # eager attention avoids sdpa, which torch_npu redispatches to
@@ -83,12 +86,12 @@ def load_llm(model_path):
     # traced as a 0-dim ConcatV2 that the GE InferShape cannot handle
     model.config.use_cache = False
     enc = AutoTokenizer.from_pretrained(
-        model_path, use_fast=False, trust_remote_code=True
+        tokenizer_path, use_fast=False, trust_remote_code=trust_remote_code
     )
     return model, enc
 
 
-def load_vlm(model_path):
+def load_vlm(model_path, trust_remote_code=False):
     """Load an AMCT-quantized image-only VLM saved by torch.save (model.pth).
 
     The pickled whole model preserves its original class (CLIPModel, ...), so
@@ -97,6 +100,9 @@ def load_vlm(model_path):
     pth_path = model_path
     if os.path.isdir(model_path):
         pth_path = os.path.join(model_path, "model.pth")
+        processor_path = model_path
+    else:
+        processor_path = os.path.dirname(model_path)
     print(f"Loading quantized VLM from {pth_path}")
     model = torch.load(pth_path, map_location="cpu", weights_only=False)
     # eager attention avoids sdpa, which torch_npu redispatches to
@@ -106,7 +112,9 @@ def load_vlm(model_path):
         cfg = getattr(model, cfg_name, None)
         if cfg is not None:
             cfg._attn_implementation = "eager"
-    processor = AutoProcessor.from_pretrained(model_path)
+    processor = AutoProcessor.from_pretrained(
+        processor_path, trust_remote_code=trust_remote_code
+    )
     return model, processor
 
 
@@ -133,11 +141,11 @@ class CLIPImageFeaturesModule(torch.nn.Module):
 
 def to_npu(model):
     """Move the model to NPU, fixing tensors that AMCT deploy modules keep as
-    plain attributes (e.g. NpuQuantizationLinear.bias/offset_bias) and are
+    plain attributes (e.g. NpuQuantizationLinear.bias/offset_bias/y_scale) and are
     therefore not moved by Module.npu()."""
     model = model.npu()
     for mod in model.modules():
-        for attr in ("bias", "offset_bias"):
+        for attr in ("bias", "offset_bias", "y_scale"):
             value = getattr(mod, attr, None)
             if torch.is_tensor(value) and value.device.type == "cpu":
                 setattr(mod, attr, value.npu())
@@ -146,12 +154,21 @@ def to_npu(model):
 
 def build_llm_input(enc, input_file, seqlen):
     """Tokenize real text into the export input [1, seqlen] int64."""
+    if seqlen <= 0:
+        raise ValueError(
+            f"--seqlen 必须为正整数，当前值为 {seqlen}，请检查 --seqlen 参数"
+        )
     if input_file is not None:
         with open(input_file, encoding="utf-8") as f:
             text = f.read()
     else:
         text = DEFAULT_INPUT_TEXT
     token_ids = enc(text, return_tensors="pt").input_ids
+    if token_ids.shape[1] == 0:
+        raise ValueError(
+            "--input_file 指向的文件 token 数为 0（可能为空文件），"
+            "请检查 --input_file 指向的文件内容"
+        )
     if token_ids.shape[1] < seqlen:
         # repeat the text until it covers seqlen tokens
         repeats = seqlen // token_ids.shape[1] + 1
@@ -174,7 +191,7 @@ def _detect_vlm_kind(model):
     if "clip" in cls_name and "vision" not in cls_name:
         return "clip"
     model_type = getattr(getattr(model, "config", None), "model_type", "") or ""
-    if "clip" in model_type:
+    if "clip" in model_type and "vision" not in model_type:
         return "clip"
     raise NotImplementedError(
         "当前脚本仅支持纯图输入的VLM模型（如CLIP/CLIPModel）。"
@@ -207,35 +224,54 @@ def _load_images(image_path):
         raise ValueError(f"image_path 必须是文件或目录: {image_path}")
 
 
+def _default_vlm_input_size(processor):
+    """从 processor 推断默认输入尺寸，供未提供图片时的占位输入使用。"""
+    size = getattr(processor, "crop_size", None) or getattr(processor, "size", None)
+    if isinstance(size, dict):
+        size = size.get("height") or size.get("shortest_edge") or size.get("width")
+    if size is None:
+        size = 224
+    if isinstance(size, (tuple, list)):
+        size = size[0]
+    return int(size)
+
+
 def build_vlm_input(model, processor, image_path, batch_size, dtype, device):
     """Build the VLM export inputs by preprocessing images.
 
     Only image-only VLMs (CLIP-like) are supported. ``image_path`` may be a
-    single image file or a directory containing one/multiple images; the
-    images are turned into a batched ``pixel_values`` tensor. The model is
+    single image file, a directory containing one/multiple images, or None.
+    When it is None, a placeholder ``pixel_values`` with the processor default
+    size is used so the export can still trace the vision tower. The model is
     wrapped in ``CLIPImageFeaturesModule`` so only the vision tower is
     traced.
 
     Returns (model, tuple_of_tensors); the model is replaced by the wrapper.
     """
-    images = _load_images(image_path)
     _detect_vlm_kind(model)
     model = CLIPImageFeaturesModule(model)
 
-    if batch_size > len(images):
-        raise ValueError(
-            f"batch_size ({batch_size}) 大于图片数量 ({len(images)})，"
-            "请提供足够多的图片或减小 batch_size"
+    if image_path is None:
+        size = _default_vlm_input_size(processor)
+        pixel_values = torch.randn(
+            batch_size, 3, size, size, dtype=dtype, device=device
         )
-    pixel_values_list = []
-    for img in images[:batch_size]:
-        inputs = processor(images=img, return_tensors="pt")
-        pixel_values_list.append(inputs["pixel_values"])
-
-    if len(pixel_values_list) == 1:
-        pixel_values = pixel_values_list[0]
     else:
-        pixel_values = torch.cat(pixel_values_list, dim=0)
+        images = _load_images(image_path)
+        if batch_size > len(images):
+            raise ValueError(
+                f"batch_size ({batch_size}) 大于图片数量 ({len(images)})，"
+                "请提供足够多的图片或减小 batch_size"
+            )
+        pixel_values_list = []
+        for img in images[:batch_size]:
+            inputs = processor(images=img, return_tensors="pt")
+            pixel_values_list.append(inputs["pixel_values"])
+
+        if len(pixel_values_list) == 1:
+            pixel_values = pixel_values_list[0]
+        else:
+            pixel_values = torch.cat(pixel_values_list, dim=0)
 
     export_input = (pixel_values.to(dtype).to(device),)
     print(
@@ -307,7 +343,12 @@ def export_torchair_air(model, export_inputs, output_dir, export_name):
     for i, tensor in enumerate(export_inputs):
         suffix = f"_{i}" if len(export_inputs) > 1 else ""
         input_bin = os.path.join(output_dir, f"input{suffix}.bin")
-        tensor.cpu().numpy().tofile(input_bin)
+        if tensor.dtype == torch.bfloat16:
+            # bfloat16 无法直接转 numpy（numpy 无对应类型），按 uint16
+            # 保持原始位模式落盘，避免出现不支持 ScalarType 的报错
+            tensor.cpu().contiguous().view(torch.uint16).numpy().tofile(input_bin)
+        else:
+            tensor.cpu().numpy().tofile(input_bin)
         print(f"input{suffix}.bin written ({os.path.getsize(input_bin)} B)")
 
     print(f"=== Exporting {export_name} to {output_dir} ===")
@@ -381,8 +422,8 @@ def main():
         default=None,
         help="Image file or a directory of images used to "
         "trace the VLM forward (vlm only, optional; "
-        "if not provided, please build and pass the "
-        "export input yourself)",
+        "if not provided, a placeholder input with the "
+        "processor default size is used)",
     )
     parser.add_argument(
         "--batch_size",
@@ -401,7 +442,21 @@ def main():
         "is int64 token ids and has no float precision "
         "to tune",
     )
+    parser.add_argument(
+        "--trust_remote_code",
+        action="store_true",
+        help="Execute custom Python code in the model directory "
+        "(disabled by default; only enable for trusted local models)",
+    )
     args = parser.parse_args()
+
+    if args.trust_remote_code:
+        print(
+            "WARNING: --trust_remote_code is enabled. Custom Python from the "
+            "model directory may execute under the current user. Use only "
+            "with checkpoints you trust.",
+            flush=True,
+        )
 
     if args.model_type == "llm" and args.image_path is not None:
         print(
@@ -436,20 +491,17 @@ def main():
     args.output_dir = os.path.abspath(args.output_dir)
 
     if args.model_type == "llm":
-        model, enc = load_llm(args.model_path)
+        model, enc = load_llm(args.model_path, args.trust_remote_code)
         model = to_npu(model.eval())
         export_inputs = build_llm_input(enc, args.input_file, args.seqlen)
     else:
-        model, processor = load_vlm(args.model_path)
+        model, processor = load_vlm(args.model_path, args.trust_remote_code)
         model = to_npu(model.eval())
-        if args.image_path is None:
-            export_inputs = ()
-        else:
-            dtype = getattr(torch, args.dtype)
-            device = next(model.parameters()).device
-            model, export_inputs = build_vlm_input(
-                model, processor, args.image_path, args.batch_size, dtype, device
-            )
+        dtype = getattr(torch, args.dtype)
+        device = next(model.parameters()).device
+        model, export_inputs = build_vlm_input(
+            model, processor, args.image_path, args.batch_size, dtype, device
+        )
 
     export_torchair_air(model, export_inputs, args.output_dir, export_name)
 

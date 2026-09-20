@@ -12,7 +12,8 @@
 source /usr/local/Ascend/ascend-toolkit/set_env.sh
 ```
 
-- Python dependencies (`torch`/`torch_npu`/`torchair`/`transformers`/`amct_pytorch`) are installed with matching versions; if the tokenizer needs to be downloaded online but the network is blocked, set the mirror via `export HF_ENDPOINT=https://hf-mirror.com`.
+- Python dependencies (`torch`/`torch_npu`/`torchair`/`transformers`/`amct_pytorch`/`Pillow`) are installed with matching versions (see [requirements.txt](requirements.txt)); if the tokenizer needs to be downloaded online but the network is blocked, set the mirror via `export HF_ENDPOINT=https://hf-mirror.com`.
+- Security note: the script disables `--trust_remote_code` by default. Only load trusted local model directories; enabling `--trust_remote_code` or `torch.load` deserialization may execute custom code from the model directory. Do not load models from untrusted sources.
 
 **How to save the quantized deploy model**: the model after `amct.convert` contains AMCT custom quantization modules (e.g. `NpuQuantizationLinear`) and cannot be restored via `save_pretrained`/`AutoModel.from_pretrained`. Save the whole model with `torch.save` right after `amct.convert`, and keep the tokenizer files of the original model:
 
@@ -60,9 +61,10 @@ Common parameters:
 |--export_name|No|Model directory name|AIR file name (without the .air suffix)|
 |--seqlen|No|2048|Sequence length of the LLM export input (only applies to the llm scenario)|
 |--input_file|No|Built-in sample text|Text file used to build the LLM export input (its content is tokenized into the export input)|
-|--image_path|No|/|Image file or directory of images (jpg/jpeg/png/bmp/tiff/webp) used to trace the VLM forward (optional; if not provided, please build the export input yourself)|
+|--image_path|No|/|Image file or directory of images (jpg/jpeg/png/bmp/tiff/webp) used to trace the VLM forward (optional; a placeholder input with the processor default size is used if not provided)|
 |--batch_size|No|1|Batch size of the VLM export input (must be <= number of images)|
 |--dtype|No|float16|Dtype of the VLM image input (float16/bfloat16); only applies to the vlm scenario, as the LLM export input is int64 token ids with no float precision to tune|
+|--trust_remote_code|No|False|Execute custom Python code in the model directory; disabled by default, enable only for trusted local models|
 
 ## 3 Exported artifacts
 
@@ -72,15 +74,16 @@ After a successful export, the layout under `--output_dir` is:
 output_dir/
 ├── <export_name>.air      # AIR offline graph (weights embedded)
 ├── input.bin              # export input binary
+├── dynamo.pbtxt           # TorchDynamo intermediate representation (generated at the top level for small models with embedded weights)
 └── weights/               # generated automatically for large models (total weights over ~1.8G)
-    ├── dynamo.pbtxt       # TorchDynamo intermediate representation (text)
+    ├── dynamo.pbtxt       # TorchDynamo intermediate representation (generated under weights/ for large models)
     └── xxx_weight ...     # externalized weight files (referenced by .air via FileConstant)
 ```
 
 | File | Description |
 |:--|:--|
 |`<export_name>.air`|AIR offline graph exported by torchair, for offline inference; weights are embedded when small, or referenced from `weights/` via FileConstant when large|
-|`weights/dynamo.pbtxt`|TorchDynamo intermediate representation (text format)|
+|`dynamo.pbtxt`|TorchDynamo intermediate representation (text format); generated at the top level for small models with embedded weights, or under `weights/` for large models|
 |`weights/xxx_weight`|Externalized weight binary files; must be delivered together with the `.air` and must not be moved or renamed independently|
 |`input.bin`|Binary file of the export input, for downstream offline inference framing|
 
