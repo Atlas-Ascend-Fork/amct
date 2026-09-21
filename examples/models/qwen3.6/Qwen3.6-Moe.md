@@ -81,7 +81,7 @@ python -m amct_pytorch.eval \
 基准测试精度结果：
 `Wikitext2-ppl=6.2825`
 
-更多参数说明请参见[参数说明](../../../docs/zh/AMCT_Pytorch_LLM.md#31-通用参数)
+更多参数说明请参见[参数说明](../../../docs/zh/AMCT_Pytorch_LLM.md#通用参数)
 
 ### 直转量化精度评估
 
@@ -109,7 +109,7 @@ python -m amct_pytorch.eval \
 直转量化精度结果：
 `Wikitext2-ppl=7.0407`
 
-更多参数说明请参见[参数说明](../../../docs/zh/AMCT_Pytorch_LLM.md#32-ppl-评估参数)
+更多参数说明请参见[参数说明](../../../docs/zh/AMCT_Pytorch_LLM.md#ppl-评估参数)
 
 ### PTQ数据提取
 
@@ -131,7 +131,7 @@ python -m amct_pytorch.extract_ptq_data \
 
 - data_dir：提取数据目录
 
-更多参数说明请参见[参数说明](../../../docs/zh/AMCT_Pytorch_LLM.md#33-数据提取参数)
+更多参数说明请参见[参数说明](../../../docs/zh/AMCT_Pytorch_LLM.md#数据提取参数)
 
 ### Post-Training Quantization
 
@@ -169,7 +169,7 @@ python -m amct_pytorch.ptq \
 为提升训练效率，我们提供多卡下的训练脚本
 多卡环境请参照脚本[ptq_multi_npu](../../ptq_multi_npu.sh)
 
-更多参数说明请参见[参数说明](../../../docs/zh/AMCT_Pytorch_LLM.md#35-ptq-参数)
+更多参数说明请参见[参数说明](../../../docs/zh/AMCT_Pytorch_LLM.md#ptq-参数)
 
 ### 基于Post-Training Quantization的直转量化精度评估
 

@@ -2,30 +2,11 @@
 
 ## 产品支持情况<a name="section1610172518544"></a>
 
-<a name="zh-cn_topic_0000002517188700_table38301303189"></a>
-<table><thead align="left"><tr id="zh-cn_topic_0000002517188700_row20831180131817"><th class="cellrowborder" valign="top" width="57.99999999999999%" id="mcps1.1.3.1.1"><p id="zh-cn_topic_0000002517188700_p1883113061818"><a name="zh-cn_topic_0000002517188700_p1883113061818"></a><a name="zh-cn_topic_0000002517188700_p1883113061818"></a><span id="zh-cn_topic_0000002517188700_ph20833205312295"><a name="zh-cn_topic_0000002517188700_ph20833205312295"></a><a name="zh-cn_topic_0000002517188700_ph20833205312295"></a>产品</span></p>
-</th>
-<th class="cellrowborder" align="center" valign="top" width="42%" id="mcps1.1.3.1.2"><p id="zh-cn_topic_0000002517188700_p783113012187"><a name="zh-cn_topic_0000002517188700_p783113012187"></a><a name="zh-cn_topic_0000002517188700_p783113012187"></a>是否支持</p>
-</th>
-</tr>
-</thead>
-<tbody><tr id="zh-cn_topic_0000002517188700_row574891710101"><td class="cellrowborder" valign="top" width="57.99999999999999%" headers="mcps1.1.3.1.1 "><p id="zh-cn_topic_0000002517188700_p177491117171015"><a name="zh-cn_topic_0000002517188700_p177491117171015"></a><a name="zh-cn_topic_0000002517188700_p177491117171015"></a><span id="zh-cn_topic_0000002517188700_ph2272194216543"><a name="zh-cn_topic_0000002517188700_ph2272194216543"></a><a name="zh-cn_topic_0000002517188700_ph2272194216543"></a>Ascend 950PR/Ascend 950DT</span></p>
-</td>
-<td class="cellrowborder" align="center" valign="top" width="42%" headers="mcps1.1.3.1.2 "><p id="zh-cn_topic_0000002517188700_p14226338117"><a name="zh-cn_topic_0000002517188700_p14226338117"></a><a name="zh-cn_topic_0000002517188700_p14226338117"></a>√</p>
-</td>
-</tr>
-<tr id="zh-cn_topic_0000002517188700_row220181016240"><td class="cellrowborder" valign="top" width="57.99999999999999%" headers="mcps1.1.3.1.1 "><p id="zh-cn_topic_0000002517188700_p48327011813"><a name="zh-cn_topic_0000002517188700_p48327011813"></a><a name="zh-cn_topic_0000002517188700_p48327011813"></a><span id="zh-cn_topic_0000002517188700_ph583230201815"><a name="zh-cn_topic_0000002517188700_ph583230201815"></a><a name="zh-cn_topic_0000002517188700_ph583230201815"></a><term id="zh-cn_topic_0000002517188700_zh-cn_topic_0000001312391781_term1253731311225"><a name="zh-cn_topic_0000002517188700_zh-cn_topic_0000001312391781_term1253731311225"></a><a name="zh-cn_topic_0000002517188700_zh-cn_topic_0000001312391781_term1253731311225"></a>Atlas A3 训练系列产品</term>/<term id="zh-cn_topic_0000002517188700_zh-cn_topic_0000001312391781_term131434243115"><a name="zh-cn_topic_0000002517188700_zh-cn_topic_0000001312391781_term131434243115"></a><a name="zh-cn_topic_0000002517188700_zh-cn_topic_0000001312391781_term131434243115"></a>Atlas A3 推理系列产品</term></span></p>
-</td>
-<td class="cellrowborder" align="center" valign="top" width="42%" headers="mcps1.1.3.1.2 "><p id="zh-cn_topic_0000002517188700_p108715341013"><a name="zh-cn_topic_0000002517188700_p108715341013"></a><a name="zh-cn_topic_0000002517188700_p108715341013"></a>√</p>
-</td>
-</tr>
-<tr id="zh-cn_topic_0000002517188700_row173226882415"><td class="cellrowborder" valign="top" width="57.99999999999999%" headers="mcps1.1.3.1.1 "><p id="zh-cn_topic_0000002517188700_p14832120181815"><a name="zh-cn_topic_0000002517188700_p14832120181815"></a><a name="zh-cn_topic_0000002517188700_p14832120181815"></a><span id="zh-cn_topic_0000002517188700_ph1483216010188"><a name="zh-cn_topic_0000002517188700_ph1483216010188"></a><a name="zh-cn_topic_0000002517188700_ph1483216010188"></a><term id="zh-cn_topic_0000002517188700_zh-cn_topic_0000001312391781_term11962195213215"><a name="zh-cn_topic_0000002517188700_zh-cn_topic_0000001312391781_term11962195213215"></a><a name="zh-cn_topic_0000002517188700_zh-cn_topic_0000001312391781_term11962195213215"></a>Atlas A2 训练系列产品</term>/<term id="zh-cn_topic_0000002517188700_zh-cn_topic_0000001312391781_term184716139811"><a name="zh-cn_topic_0000002517188700_zh-cn_topic_0000001312391781_term184716139811"></a><a name="zh-cn_topic_0000002517188700_zh-cn_topic_0000001312391781_term184716139811"></a>Atlas A2 推理系列产品</term></span></p>
-</td>
-<td class="cellrowborder" align="center" valign="top" width="42%" headers="mcps1.1.3.1.2 "><p id="zh-cn_topic_0000002517188700_p19948143911820"><a name="zh-cn_topic_0000002517188700_p19948143911820"></a><a name="zh-cn_topic_0000002517188700_p19948143911820"></a>√</p>
-</td>
-</tr>
-</tbody>
-</table>
+| 产品 | 是否支持 |
+| ------------------------------------------- | -------- |
+| Ascend 950PR&950DT系列产品 | √ |
+| Atlas A3系列产品 | √ |
+| Atlas A2系列产品 | √ |
 
 **注：标记“x”的产品，调用接口不会报错，但是获取不到性能收益。**
 
@@ -35,8 +16,8 @@ KV Cache量化接口，用于用户构图，在前向传播时，根据用户的
 
 在进行前向传播时，算子对原始输出会做透传，不修改activation输入信息：
 
--   若当前传入数据个数小于batch\_num时，使用IFMR/HFMG算子中的积攒数据方法，将数据集进行保存。
--   若当前传入数据个数等于batch\_num时，会调用IFMR/HFMG算法计算量化因子，根据quant\_method参数进行区分写出来的量化因子格式，按照格式写入对应record文件；quant\_method目前仅支持“kv\_cache\_quant”方式。
+- 若当前传入数据个数小于batch\_num时，使用IFMR/HFMG算子中的积攒数据方法，将数据集进行保存。
+- 若当前传入数据个数等于batch\_num时，会调用IFMR/HFMG算法计算量化因子，根据quant\_method参数进行区分写出来的量化因子格式，按照格式写入对应record文件；quant\_method目前仅支持“kv\_cache\_quant”方式。
 
 写入时，对record文件进行增量写入，如果进行了覆盖写入，则会提示哪个层哪些参数被覆盖。
 
@@ -259,4 +240,3 @@ model.eval()
 
 ans_2 = model("qat_1", input_data)
 ```
-

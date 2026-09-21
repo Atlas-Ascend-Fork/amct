@@ -2,30 +2,11 @@
 
 ## 产品支持情况<a name="section185612964420"></a>
 
-<a name="zh-cn_topic_0000002517028880_table38301303189"></a>
-<table><thead align="left"><tr id="zh-cn_topic_0000002517028880_row20831180131817"><th class="cellrowborder" valign="top" width="57.95%" id="mcps1.1.3.1.1"><p id="zh-cn_topic_0000002517028880_p1883113061818"><a name="zh-cn_topic_0000002517028880_p1883113061818"></a><a name="zh-cn_topic_0000002517028880_p1883113061818"></a><span id="zh-cn_topic_0000002517028880_ph20833205312295"><a name="zh-cn_topic_0000002517028880_ph20833205312295"></a><a name="zh-cn_topic_0000002517028880_ph20833205312295"></a>产品</span></p>
-</th>
-<th class="cellrowborder" align="center" valign="top" width="42.05%" id="mcps1.1.3.1.2"><p id="zh-cn_topic_0000002517028880_p783113012187"><a name="zh-cn_topic_0000002517028880_p783113012187"></a><a name="zh-cn_topic_0000002517028880_p783113012187"></a>是否支持</p>
-</th>
-</tr>
-</thead>
-<tbody><tr id="zh-cn_topic_0000002517028880_row574891710101"><td class="cellrowborder" valign="top" width="57.95%" headers="mcps1.1.3.1.1 "><p id="zh-cn_topic_0000002517028880_p177491117171015"><a name="zh-cn_topic_0000002517028880_p177491117171015"></a><a name="zh-cn_topic_0000002517028880_p177491117171015"></a><span id="zh-cn_topic_0000002517028880_ph2272194216543"><a name="zh-cn_topic_0000002517028880_ph2272194216543"></a><a name="zh-cn_topic_0000002517028880_ph2272194216543"></a>Ascend 950PR/Ascend 950DT</span></p>
-</td>
-<td class="cellrowborder" align="center" valign="top" width="42.05%" headers="mcps1.1.3.1.2 "><p id="zh-cn_topic_0000002517028880_zh-cn_topic_0000002517188794_p14226338117"><a name="zh-cn_topic_0000002517028880_zh-cn_topic_0000002517188794_p14226338117"></a><a name="zh-cn_topic_0000002517028880_zh-cn_topic_0000002517188794_p14226338117"></a>√</p>
-</td>
-</tr>
-<tr id="zh-cn_topic_0000002517028880_row220181016240"><td class="cellrowborder" valign="top" width="57.95%" headers="mcps1.1.3.1.1 "><p id="zh-cn_topic_0000002517028880_p48327011813"><a name="zh-cn_topic_0000002517028880_p48327011813"></a><a name="zh-cn_topic_0000002517028880_p48327011813"></a><span id="zh-cn_topic_0000002517028880_ph583230201815"><a name="zh-cn_topic_0000002517028880_ph583230201815"></a><a name="zh-cn_topic_0000002517028880_ph583230201815"></a><term id="zh-cn_topic_0000002517028880_zh-cn_topic_0000001312391781_term1253731311225"><a name="zh-cn_topic_0000002517028880_zh-cn_topic_0000001312391781_term1253731311225"></a><a name="zh-cn_topic_0000002517028880_zh-cn_topic_0000001312391781_term1253731311225"></a>Atlas A3 训练系列产品</term>/<term id="zh-cn_topic_0000002517028880_zh-cn_topic_0000001312391781_term131434243115"><a name="zh-cn_topic_0000002517028880_zh-cn_topic_0000001312391781_term131434243115"></a><a name="zh-cn_topic_0000002517028880_zh-cn_topic_0000001312391781_term131434243115"></a>Atlas A3 推理系列产品</term></span></p>
-</td>
-<td class="cellrowborder" align="center" valign="top" width="42.05%" headers="mcps1.1.3.1.2 "><p id="zh-cn_topic_0000002517028880_zh-cn_topic_0000002517188794_p108715341013"><a name="zh-cn_topic_0000002517028880_zh-cn_topic_0000002517188794_p108715341013"></a><a name="zh-cn_topic_0000002517028880_zh-cn_topic_0000002517188794_p108715341013"></a>√</p>
-</td>
-</tr>
-<tr id="zh-cn_topic_0000002517028880_row173226882415"><td class="cellrowborder" valign="top" width="57.95%" headers="mcps1.1.3.1.1 "><p id="zh-cn_topic_0000002517028880_p14832120181815"><a name="zh-cn_topic_0000002517028880_p14832120181815"></a><a name="zh-cn_topic_0000002517028880_p14832120181815"></a><span id="zh-cn_topic_0000002517028880_ph1483216010188"><a name="zh-cn_topic_0000002517028880_ph1483216010188"></a><a name="zh-cn_topic_0000002517028880_ph1483216010188"></a><term id="zh-cn_topic_0000002517028880_zh-cn_topic_0000001312391781_term11962195213215"><a name="zh-cn_topic_0000002517028880_zh-cn_topic_0000001312391781_term11962195213215"></a><a name="zh-cn_topic_0000002517028880_zh-cn_topic_0000001312391781_term11962195213215"></a>Atlas A2 训练系列产品</term>/<term id="zh-cn_topic_0000002517028880_zh-cn_topic_0000001312391781_term184716139811"><a name="zh-cn_topic_0000002517028880_zh-cn_topic_0000001312391781_term184716139811"></a><a name="zh-cn_topic_0000002517028880_zh-cn_topic_0000001312391781_term184716139811"></a>Atlas A2 推理系列产品</term></span></p>
-</td>
-<td class="cellrowborder" align="center" valign="top" width="42.05%" headers="mcps1.1.3.1.2 "><p id="zh-cn_topic_0000002517028880_zh-cn_topic_0000002517188794_p19948143911820"><a name="zh-cn_topic_0000002517028880_zh-cn_topic_0000002517188794_p19948143911820"></a><a name="zh-cn_topic_0000002517028880_zh-cn_topic_0000002517188794_p19948143911820"></a>√</p>
-</td>
-</tr>
-</tbody>
-</table>
+| 产品 | 是否支持 |
+| ------------------------------------------- | -------- |
+| Ascend 950PR&950DT系列产品 | √ |
+| Atlas A3系列产品 | √ |
+| Atlas A2系列产品 | √ |
 
 ## 功能说明<a name="zh-cn_topic_0240187365_section15406195619561"></a>
 
@@ -104,4 +85,3 @@ quant_retrain_model = amct.create_quant_retrain_model(
                scale_offset_record_file,
                input_data)
 ```
-

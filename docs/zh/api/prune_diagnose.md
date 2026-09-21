@@ -4,13 +4,11 @@
 
 <a name="zh-cn_topic_0000002600000501_table105000010002"></a>
 
-| 产品                                        | 是否支持 |
+| 产品 | 是否支持 |
 | ------------------------------------------- | -------- |
-| Ascend 950PR/Ascend 950DT                   | √        |
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 | √        |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 | √        |
-
-
+| Ascend 950PR&950DT系列产品 | √ |
+| Atlas A3系列产品 | √ |
+| Atlas A2系列产品 | √ |
 
 ## 功能说明<a name="zh-cn_topic_0000002600000501_section105000010003"></a>
 
@@ -83,6 +81,7 @@ prune_diagnose(model, data=None, config=None, prune_ratio=0.5, tolerance=0.05)
 ## 返回值说明<a name="zh-cn_topic_0000002600000501_section105000010007"></a>
 
 返回 DiagnosisReport（dataclass），主要字段：
+
 - targets：各域可剪目标数量（dict，键为 cnn/dense/moe）。
 - prune_works：固定率剪枝是否实际生效（参数量是否下降，bool）。
 - prune_reduction：实测权重削减比例（float）。

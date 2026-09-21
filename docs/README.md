@@ -183,7 +183,7 @@ amct.accuracy_based_auto_calibration(
 
 训练后量化接口调用流程如下图所示：
 
-![](./zh/figures/PTQ_interface.png "训练后量化接口调用流程")
+![](./zh/figures/ptq_interface.png "训练后量化接口调用流程")
 
 蓝色部分为用户实现，灰色部分为用户调用AMCT提供的API实现，工具使用分为如下场景：
 
@@ -333,7 +333,7 @@ amct.accuracy_based_auto_calibration(
 
 量化感知训练接口调用流程如下图所示，如下流程中的训练环境借助PyTorch框架的CPU环境或者NPU环境，在该开源框架的推理脚本基础上，调用AMCT  API完成模型压缩，压缩后的部署模型需要使用ATC工具转换成适配AI处理器的离线模型后，然后才能在AI处理器上实现推理。量化感知训练使用的量化算法请参见[算法介绍](./zh/algorithm_brief.md)。
 
-![](./zh/figures/QAT_interface.png "接口调用流程-0")
+![](./zh/figures/qat_interface.png "接口调用流程-0")
 
 蓝色部分为用户实现，灰色部分为用户调用AMCT提供的API实现：
 
@@ -764,7 +764,7 @@ validate_onnx('./outputs/resnet101_fake_quant_model.onnx', val_data)
 
 #### 调用示例
 
-> [!NOTE]说明 
+> [!NOTE]说明
 >
 >- 如下示例标有“由用户补充处理”的步骤，需要用户根据自己的模型和数据集进行补充处理，示例中仅为示例代码。
 >- 如下示例调用AMCT的部分，函数入参请根据实际情况进行调整。
@@ -994,7 +994,7 @@ AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模
 
 4. 通道稀疏率配置搜索：默认采用[自动通道稀疏搜索算法](./zh/algorithm_brief.md)，搜索满足用户指定压缩率的最优通道稀疏率配置；支持用户自定义求解器。
 
-   > [!NOTE]说明 
+   > [!NOTE]说明
    > 自动通道稀疏搜索特性只是生成通道稀疏的简易配置文件，若想得到最终稀疏后模型，还需要进行[手工稀疏](#手工稀疏)，将上述生成的简易配置文件作为入参传入通道稀疏。
 
 ##### 稀疏流程
@@ -1012,7 +1012,7 @@ AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模
 
 本示例演示了使用AMCT进行自动通道稀疏搜索的流程，该过程需要用户传入PyTorch模型与校准数据，用户可选择自定义实现sensitivity模块与search\_alg模块。
 
-> [!NOTE]说明 
+> [!NOTE]说明
 >
 >- 如下示例标有“由用户补充处理”的步骤，需要用户根据自己的模型和数据集进行补充处理，示例中仅为示例代码。
 >- 如下示例调用AMCT的部分，函数入参请根据实际情况进行调整。
@@ -1109,7 +1109,7 @@ AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模
 
 ##### 调用示例
 
-> [!NOTE]说明 
+> [!NOTE]说明
 >
 >1. 如下示例标有“由用户补充处理”的步骤，需要用户根据自己的模型和数据集进行补充处理，示例中仅为示例代码。
 >2. 调用AMCT的部分，函数入参可以根据实际情况进行调整。稀疏基于用户的训练过程，请确保已经有基于PyTorch环境进行训练的脚本，并且训练后的精度正常。
@@ -1259,7 +1259,7 @@ AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模
 由于输出的pth模型无法直接用于推理，需要用户自行将pth模型转成ONNX网络模型，或者调用[save\_prune\_retrain\_model](./zh/api/save_prune_retrain_model.md)接口保存为最终ONNX仿真模型以及部署模型，然后才能使用ATC工具进行模型转换。调用[save\_prune\_retrain\_model](./zh/api/save_prune_retrain_model.md)接口的调用示例如下：
 
 ```python
-prune_retrain_model = amct.10.6.3-save_prune_retrain_model(
+prune_retrain_model = amct.save_prune_retrain_model(
      model=pruned_retrain_model,
      save_path=save_path,
      input_data=input_data)
@@ -1290,7 +1290,7 @@ prune_retrain_model = amct.10.6.3-save_prune_retrain_model(
 
 #### 调用示例
 
-> [!NOTE]说明 
+> [!NOTE]说明
 >
 >1. 如下示例标有“由用户补充处理”的步骤，需要用户根据自己的模型和数据集进行补充处理，示例中仅为示例代码。
 >2. 调用AMCT的部分，函数入参可以根据实际情况进行调整。稀疏基于用户的训练过程，请确保已经有基于PyTorch环境进行训练的脚本，并且训练后的精度正常。
@@ -1455,15 +1455,15 @@ prune_retrain_model = amct.10.6.3-save_prune_retrain_model(
 
 - 整网量化：量化方式二选一。
 
-    - 整网（全局）量化配置参数：retrain\_data\_quant\_config/retrain\_weight\_quant\_config
-    - 部分层差异化配置参数：override\_layer\_configs或override\_layer\_types
+  - 整网（全局）量化配置参数：retrain\_data\_quant\_config/retrain\_weight\_quant\_config
+  - 部分层差异化配置参数：override\_layer\_configs或override\_layer\_types
 
     参数优先级：override\_layer\_configs\>override\_layer\_types\>retrain\_data\_quant\_config/retrain\_weight\_quant\_config
 
 - 整网稀疏：包括通道稀疏和4选2结构化稀疏，使用时二选一。
 
-    - 整网（全局）稀疏配置参数：prune\_config
-    - 部分层差异化稀疏参数：override\_layer\_configs或override\_layer\_types
+  - 整网（全局）稀疏配置参数：prune\_config
+  - 部分层差异化稀疏参数：override\_layer\_configs或override\_layer\_types
 
     参数优先级：override\_layer\_configs\>override\_layer\_types\>retrain\_data\_quant\_config/retrain\_weight\_quant\_config
 
@@ -1555,7 +1555,7 @@ prune_retrain_model = amct.10.6.3-save_prune_retrain_model(
 
 #### 调用示例
 
-> [!NOTE]说明 
+> [!NOTE]说明
 >
 >1. 基于PyTorch环境进行训练，当前仅支持distributed模式（即DistributedDataParallel模式）的多卡训练，不支持DataParallel模式的多卡训练，使用DP模式训练会报错。
 >2. 调用AMCT的部分，函数入参可以根据实际情况进行调整。组合压缩基于用户的训练过程，请确保已经有基于PyTorch环境进行训练的脚本，并且训练后的精度正常。
@@ -1922,21 +1922,21 @@ AMCT提供了基于图的torch模型量化蒸馏方法，这种方法通过将to
 
 - **分解工具性能参考数据：**
 
-    - CPU: Intel\(R\) Xeon\(R\) CPU E5-2699 v4 @ 2.20GHz
-    - 内存: 512G
+  - CPU: Intel\(R\) Xeon\(R\) CPU E5-2699 v4 @ 2.20GHz
+  - 内存: 512G
 
     分解单层卷积：
 
-    - shape\(512, 512, 5, 5\)，大约耗时7秒。
-    - shape\(1024, 1024, 3, 3\)，大约耗时12秒。
-    - shape\(1024, 1024, 5, 5\)，大约耗时52秒。
-    - shape\(2048, 2048, 3, 3\)，大约耗时89秒。
-    - shape\(2048, 2048, 5, 5\)，大约耗时374秒。
+  - shape\(512, 512, 5, 5\)，大约耗时7秒。
+  - shape\(1024, 1024, 3, 3\)，大约耗时12秒。
+  - shape\(1024, 1024, 5, 5\)，大约耗时52秒。
+  - shape\(2048, 2048, 3, 3\)，大约耗时89秒。
+  - shape\(2048, 2048, 5, 5\)，大约耗时374秒。
 
 - **内存超限风险提醒**：
 
     分解大卷积核存在内存超限风险参考数值：分解shape为\(2048, 2048, 5, 5\)的卷积核约需9G内存。
-    
+
 ### 分解方式
 
 张量分解有两种使用方式，在线张量分解和离线张量分解，用户可以根据实际情况选择其中一个方式进行分解。详细说明如下：
@@ -1968,7 +1968,7 @@ AMCT提供了基于图的torch模型量化蒸馏方法，这种方法通过将to
     1. <a name="li265516506413"></a>在任意脚本中，准备好含有预训练权重的torch.nn.Module模型对象，将模型对象和分解信息文件保存路径传递给[auto\_decomposition](./zh/api/auto_decomposition.md)接口进行张量分解，得到分解后的模型对象和保存的分解信息文件，并对分解后的模型权重进行保存。
     2. <a name="li1228813421049"></a>fine-tune时，在训练脚本中，在将模型参数传递给优化器之前，将模型对象和[2.a](#li265516506413)中得到的分解信息文件路径传递给[decompose\_network](./zh/api/decompose_network.md)接口，该接口会将模型结构修改为分解后的结构，然后加载[2.a](#li265516506413)保存的分解后的模型权重，对模型进行fine-tune。
 
-    > [!NOTE]说明 
+    > [!NOTE]说明
     >离线分解时，[2.a](#li265516506413)步骤在调用[auto\_decomposition](./zh/api/auto_decomposition.md)接口后，用户需要自行保存分解后模型权重；[2.b](#li1228813421049)步骤在调用完成[decompose\_network](./zh/api/decompose_network.md)后，用户需自行加载所保存的分解后的模型权重。
     >此方案设计目的是方便用户自由控制权重文件的存取，例如在权重文件中存储自定义信息。
 

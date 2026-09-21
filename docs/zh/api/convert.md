@@ -4,9 +4,9 @@
 
 | 产品        | 是否支持 |
 | ----------- | -------- |
-| Ascend 950PR/Ascend 950DT | √ |
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 | √        |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 | √        |
+| Ascend 950PR&950DT系列产品 | √ |
+| Atlas A3系列产品 | √        |
+| Atlas A2系列产品 | √        |
 
 ## 功能说明
 
@@ -35,4 +35,3 @@ quantize(model, cfg)
 # 调用接口将量化校准模型转换为量化部署模型
 convert(model)
 ```
-

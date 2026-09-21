@@ -2,15 +2,11 @@
 
 ## 产品支持情况
 
-<a name="zh-cn_topic_0000002517188794_table38301303189"></a>
-
-| 产品                                        | 是否支持 |
+| 产品 | 是否支持 |
 | ------------------------------------------- | -------- |
-| Ascend 950PR/Ascend 950DT                   | √        |
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 | √        |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 | √        |
-
-
+| Ascend 950PR&950DT系列产品 | √ |
+| Atlas A3系列产品 | √ |
+| Atlas A2系列产品 | √ |
 
 ## 功能说明<a name="zh-cn_topic_0240187365_section15406195619561"></a>
 
@@ -144,7 +140,6 @@ create_quant_config(config_file, model, input_data, skip_layers=None, batch_num=
 </tbody>
 </table>
 
-
 ## 量化均衡预处理支持的层及约束
 
 <a name="table32131022111318"></a>
@@ -183,8 +178,6 @@ create_quant_config(config_file, model, input_data, skip_layers=None, batch_num=
 </tbody>
 </table>
 
-
-
 ## 返回值说明<a name="zh-cn_topic_0240187365_zh-cn_topic_0122830089_section293415513458"></a>
 
 无
@@ -210,7 +203,7 @@ amct.create_quant_config(config_file="./configs/config.json",
 
 落盘文件说明：生成JSON格式的量化配置文件，样例如下（重新执行量化时，该接口生成的量化配置文件将会被覆盖），参数解释请参见[训练后量化配置参数](../context/ptq_config_param.md).
 
--   训练后量化配置文件（数据量化使用[IFMR数据量化算法](../algorithm_brief.md)）
+- 训练后量化配置文件（数据量化使用[IFMR数据量化算法](../algorithm_brief.md)）
 
     ```
     {
@@ -264,7 +257,7 @@ amct.create_quant_config(config_file="./configs/config.json",
     }
     ```
 
--   训练后量化配置文件（数据量化使用[HFMG数据量化算法](../algorithm_brief.md)）
+- 训练后量化配置文件（数据量化使用[HFMG数据量化算法](../algorithm_brief.md)）
 
     ```
     {
@@ -291,7 +284,7 @@ amct.create_quant_config(config_file="./configs/config.json",
     }
     ```
 
--   自适应舍入量化简易配置文件（权重量化使用[ADA权重量化算法](../algorithm_brief.md)）
+- 自适应舍入量化简易配置文件（权重量化使用[ADA权重量化算法](../algorithm_brief.md)）
 
     ```
     "layer_name1":{
@@ -301,10 +294,9 @@ amct.create_quant_config(config_file="./configs/config.json",
                 "num_iteration":10000,
                 "reg_param":0.1,
                 "beta_range":[20,2], 
-    		"warm_start":0.2,
-    		"num_bits":8,
-    		"channel_wise":true
+      "warm_start":0.2,
+      "num_bits":8,
+      "channel_wise":true
             }
         }
     ```
-
