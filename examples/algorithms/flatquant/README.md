@@ -98,3 +98,5 @@ content: <think>
 <>
 The Ascend Model Compression Toolkit (AMCT) is a powerful tool designed to ...
 ```
+
+> 量化完成后，如需将量化模型导出为 torchair 离线模型（.air）用于 ATC 转 om 板端推理，请参考 [AMCT大模型torchair离线模型导出](../export/README.md)。

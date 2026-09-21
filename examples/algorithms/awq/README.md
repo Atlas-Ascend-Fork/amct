@@ -62,3 +62,5 @@ Score:  5.477707
 |QWEN2-7B|pileval|wikitext2|7.137|7.268|7.411|
 
 推理成功后，在当前目录会生成量化日志文件./amct_log/amct_pytorch.log
+
+> 量化完成后，如需将量化模型导出为 torchair 离线模型（.air）用于 ATC 转 om 板端推理，请参考 [AMCT大模型torchair离线模型导出](../export/README.md)。
