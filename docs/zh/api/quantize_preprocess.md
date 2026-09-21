@@ -89,4 +89,3 @@ calibration_model = amct.quantize_preprocess(config_json_file,
                                              input_data)
 
 ```
-

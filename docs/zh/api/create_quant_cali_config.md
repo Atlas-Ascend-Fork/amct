@@ -149,4 +149,3 @@ amct.create_quant_cali_config(config_file="./configs/config.json",
     }
 }
 ```
-

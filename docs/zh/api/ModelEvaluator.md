@@ -81,4 +81,3 @@ evaluator = amct.ModelEvaluator(
     input_shape="input:32,3,224,224", 
     data_types="float32")
 ```
-

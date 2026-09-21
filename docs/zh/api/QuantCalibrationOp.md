@@ -259,4 +259,3 @@ model.eval()
 
 ans_2 = model("qat_1", input_data)
 ```
-

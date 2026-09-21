@@ -136,4 +136,3 @@ compressed_retrain_model = amct.restore_compressed_retrain_model(
                                 save_pth_path,
                                 'state_dict')
 ```
-
