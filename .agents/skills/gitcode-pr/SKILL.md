@@ -528,7 +528,7 @@ curl -s -X POST "https://gitcode.com/api/v5/repos/${target_owner}/${target_repo}
     API 会去目标仓库找该分支并报 `404 Can not find the branch`。
   - endpoint 路径里的 owner/repo 始终用**目标仓库**（跨 fork 时为上游仓库）。
 - `base`: 目标分支，**默认为 `develop`**，除非用户明确要求合入其他分支
-- `body`: PR 描述（Markdown 格式，按 10.1 节查找到的仓库 PR 模板填充）
+- `body`: PR 描述（Markdown 格式，按[读取 PR 模板](#读取-pr-模板)查找到的仓库 PR 模板填充）
 
 ### PR URL 格式
 
@@ -579,11 +579,11 @@ https://gitcode.com/${owner}/${repo}/pull/<PR_NUMBER>
 
 ## PR 描述模板
 
-创建 PR 时**必须读取并使用**仓库中的 PR 模板（按 10.1 节的候选路径查找）。
+创建 PR 时**必须读取并使用**仓库中的 PR 模板（按[读取 PR 模板](#读取-pr-模板)的候选路径查找）。
 
 **步骤**：
 
-1. 按 10.1 节的候选路径查找并读取仓库中存在的 PR 模板文件
+1. 按[读取 PR 模板](#读取-pr-模板)的候选路径查找并读取仓库中存在的 PR 模板文件
 2. 根据实际变更填充模板中的各字段（描述、测试项、测试结果等）
 3. 将对应选项的 `[ ]` 改为 `[x]` 勾选
 4. Checklist 默认全部勾选 `[x]`

@@ -1259,7 +1259,7 @@ AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模
 由于输出的pth模型无法直接用于推理，需要用户自行将pth模型转成ONNX网络模型，或者调用[save\_prune\_retrain\_model](./zh/api/save_prune_retrain_model.md)接口保存为最终ONNX仿真模型以及部署模型，然后才能使用ATC工具进行模型转换。调用[save\_prune\_retrain\_model](./zh/api/save_prune_retrain_model.md)接口的调用示例如下：
 
 ```python
-prune_retrain_model = amct.10.6.3-save_prune_retrain_model(
+prune_retrain_model = amct.save_prune_retrain_model(
      model=pruned_retrain_model,
      save_path=save_path,
      input_data=input_data)

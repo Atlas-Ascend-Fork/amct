@@ -3,7 +3,7 @@
 自动通道稀疏搜索的相关配置说明存在于basic\_info.proto文件中，该文件所在目录为：_AMCT_安装目录/amct\_pytorch/proto/basic\_info.proto。
 
 <a name="zh-cn_topic_0240188735_table1225503375617"></a>
-<table><thead align="left"><tr id="zh-cn_topic_0000002517028726_zh-cn_topic_0240188735_row11255153315614"><th class="cellrowborder" valign="top" width="15.818418158184183%" id="mcps1.1.6.1.1"><p id="zh-cn_topic_0000002517028726_zh-cn_topic_0240188735_p6255193315616"><a name="zh-cn_topic_0000002517028726_zh-cn_topic_0240188735_p6255193315616"></a><a name="zh-cn_topic_0000002517028726_zh-cn_topic_0240188735_p6255193315616"></a>消息</p>
+<table><tbody><thead align="left"><tr id="zh-cn_topic_0000002517028726_zh-cn_topic_0240188735_row11255153315614"><th class="cellrowborder" valign="top" width="15.818418158184183%" id="mcps1.1.6.1.1"><p id="zh-cn_topic_0000002517028726_zh-cn_topic_0240188735_p6255193315616"><a name="zh-cn_topic_0000002517028726_zh-cn_topic_0240188735_p6255193315616"></a><a name="zh-cn_topic_0000002517028726_zh-cn_topic_0240188735_p6255193315616"></a>消息</p>
 </th>
 <th class="cellrowborder" valign="top" width="8.729127087291271%" id="mcps1.1.6.1.2"><p id="zh-cn_topic_0000002517028726_p194851125105014"><a name="zh-cn_topic_0000002517028726_p194851125105014"></a><a name="zh-cn_topic_0000002517028726_p194851125105014"></a>是否必填</p>
 </th>
@@ -231,15 +231,12 @@
 </tbody>
 </table>
 
-
-
 基于该文件构造的**自动通道稀疏简易配置文件**_amc_.cfg样例如下所示：
 
-```
+```text
 compress_ratio: 1.5
 ascend_optimized: true
 max_prune_ratio: 0.8
 test_iteration: 1
 override_prune_cfg: 'your/path/to/override_channel_prune.cfg'
 ```
-

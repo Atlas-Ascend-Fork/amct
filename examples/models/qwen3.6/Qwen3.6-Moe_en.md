@@ -81,7 +81,7 @@ Required parameter explanation:
 Baseline test accuracy result:
 `Wikitext2-ppl=6.2825`
 
-For more detailed parameter explanation, please refer to [Parameter Description](../../../docs/zh/AMCT_Pytorch_LLM.md#31-通用参数)
+For more detailed parameter explanation, please refer to [Parameter Description](../../../docs/zh/AMCT_Pytorch_LLM.md#通用参数)
 
 ### Direct Conversion Quantization Accuracy Evaluation
 
@@ -109,7 +109,7 @@ Required parameter explanation:
 Direct conversion quantization accuracy result:
 `Wikitext2-ppl=7.0407`
 
-For more detailed parameter explanation, please refer to [Parameter Description](../../../docs/zh/AMCT_Pytorch_LLM.md#32-ppl-评估参数)
+For more detailed parameter explanation, please refer to [Parameter Description](../../../docs/zh/AMCT_Pytorch_LLM.md#ppl-评估参数)
 
 ### PTQ Data Extraction
 
@@ -131,7 +131,7 @@ Required parameter explanation:
 
 - data_dir: Extracted data directory
 
-For more detailed parameter explanation, please refer to [Parameter Description](../../../docs/zh/AMCT_Pytorch_LLM.md#33-数据提取参数)
+For more detailed parameter explanation, please refer to [Parameter Description](../../../docs/zh/AMCT_Pytorch_LLM.md#数据提取参数)
 
 ### Post-Training Quantization
 
@@ -169,7 +169,7 @@ Required parameter explanation:
 To improve training efficiency, we provide training scripts under multi-card
 For multi-card environment, please refer to script [ptq_multi_npu](../../ptq_multi_npu.sh)
 
-For more detailed parameter explanation, please refer to [Parameter Description](../../../docs/zh/AMCT_Pytorch_LLM.md#35-ptq-参数)
+For more detailed parameter explanation, please refer to [Parameter Description](../../../docs/zh/AMCT_Pytorch_LLM.md#ptq-参数)
 
 ### Direct Conversion Quantization Accuracy Evaluation Based on Post-Training Quantization
 

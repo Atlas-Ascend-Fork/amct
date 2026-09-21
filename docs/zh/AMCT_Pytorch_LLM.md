@@ -76,7 +76,7 @@ python -m amct_pytorch.eval \
   --bit_config amct_pytorch/configs/bf16.yaml
 ```
 
-参数详细解释请参见[参数说明](#3-参数说明)。
+参数详细解释请参见[参数说明](#参数说明)。
 
 #### 量化模型 PPL 测量
 
@@ -95,7 +95,7 @@ python -m amct_pytorch.eval \
   --bit_config amct_pytorch/configs/example_w4a8.yaml
 ```
 
-参数详细解释请参见[参数说明](#3-参数说明)。
+参数详细解释请参见[参数说明](#参数说明)。
 
 #### 带ptq训练结果的量化模型 PPL 测试
 
@@ -116,7 +116,7 @@ python -m amct_pytorch.eval \
   --moe_mlp_param_dir ./outputs/qwen3_ptq_params/mlp
 ```
 
-参数详细解释请参见[参数说明](#3-参数说明)。
+参数详细解释请参见[参数说明](#参数说明)。
 
 `eval`相关启动指令也可参考[eval.sh](../../examples/eval.sh)
 
@@ -155,7 +155,7 @@ python -m amct_pytorch.extract_ptq_data \
   --data_dir ./outputs/qwen3_ptq_data
 ```
 
-参数详细解释请参见[参数说明](#3-参数说明)。
+参数详细解释请参见[参数说明](#参数说明)。
 
 `extract_ptq_data`相关启动指令也可参考[extract_ptq_data.sh](../../examples/extract_ptq_data.sh)
 
@@ -202,7 +202,7 @@ python -m amct_pytorch.ptq \
   --output_dir ./outputs/qwen3_ptq
 ```
 
-参数详细解释请参见[参数说明](#3-参数说明)。
+参数详细解释请参见[参数说明](#参数说明)。
 
 ### `deploy`
 
@@ -243,7 +243,7 @@ python -m amct_pytorch.deploy \
   --output_dir ./outputs/qwen3_deploy
 ```
 
-参数详细解释请参见[参数说明](#3-参数说明)。
+参数详细解释请参见[参数说明](#参数说明)。
 
 ## 参数说明
 
