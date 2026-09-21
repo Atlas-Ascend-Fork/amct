@@ -571,6 +571,9 @@ model.save_pretrained(
 - 微调集：WikiText2 train split，300 个互不重复的连续 512-token 块（不使用 test split 训练）
 - 微调设置：无动量 SGD（lr=1e-2）、warmup=20、300 步、grad_clip=1.0、gradient checkpointing
 - 输出目录为相对路径占位，脚本保存 `PruneReport`、诊断摘要与运行参数（启动时打印完整参数）；如需保存微调后的模型权重，可在运行命令中追加可选参数 `--save-model`
+- 模型加载：默认 `trust_remote_code=False` 并强制 `local_files_only=True`（仅从本地目录离线加载；
+  Qwen3 为 transformers 原生支持的架构，无需执行模型目录中的自定义代码）。确有需要时可显式传入
+  `--trust-remote-code`，脚本会打印安全告警
 
 运行命令：
 

@@ -68,19 +68,34 @@ from amct_pytorch.pruning import PruneReport, prune_diagnose, prune_finetune  # 
 def load_qwen3_dense(
     model_path,
     torch_dtype=torch.bfloat16,
-    trust_remote_code=True,
+    trust_remote_code=False,
     device_map=None,
 ):
-    """Load a dense Qwen3 checkpoint (same loader shape as the MoE sample)."""
+    """Load a dense Qwen3 checkpoint (same loader shape as the MoE sample).
+
+    Qwen3 is natively supported by transformers, so ``trust_remote_code``
+    defaults to False and the loader stays strictly offline via
+    ``local_files_only=True`` (same policy as the sibling Qwen3.6 samples).
+    """
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
+    if trust_remote_code:
+        print(
+            "WARNING: --trust-remote-code is enabled. Custom Python from the "
+            "model directory may execute under the current user. Use only "
+            "with checkpoints you trust.",
+            flush=True,
+        )
     tokenizer = AutoTokenizer.from_pretrained(
-        model_path, trust_remote_code=trust_remote_code
+        model_path,
+        trust_remote_code=trust_remote_code,
+        local_files_only=True,
     )
     model = AutoModelForCausalLM.from_pretrained(
         model_path,
         torch_dtype=torch_dtype,
         trust_remote_code=trust_remote_code,
+        local_files_only=True,
         low_cpu_mem_usage=True,
         device_map=device_map,
     ).eval()
@@ -185,6 +200,16 @@ def parse_args():
         help="Relative or absolute path to the local Qwen3-0.6B weights",
     )
     parser.add_argument(
+        "--trust-remote-code",
+        action="store_true",
+        help=(
+            "Allow transformers to execute custom Python shipped with the "
+            "model. Off by default; Qwen3-0.6B is natively supported by "
+            "transformers and does not need this flag. Only enable for a "
+            "local checkpoint you trust."
+        ),
+    )
+    parser.add_argument(
         "--save-dir",
         default="./outputs/qwen3_0_6b_reconstruct_ratio_finetune/r0_5",
         help="Relative output directory for the pruned model and reports",
@@ -278,7 +303,10 @@ def parse_args():
         default=None,
         help="Optional cap on WikiText2 4096-token batches; omit to use the full test split",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.finetune_steps <= 0:
+        parser.error("--finetune-steps must be a positive integer")
+    return args
 
 
 def main():
@@ -288,7 +316,9 @@ def main():
     save_dir = Path(args.save_dir)
     dump_repro_metadata(save_dir)
 
-    model, tokenizer = load_qwen3_dense(args.model_path)
+    model, tokenizer = load_qwen3_dense(
+        args.model_path, trust_remote_code=args.trust_remote_code
+    )
     model = model.to(args.device)
     runtime_device = args.device
 

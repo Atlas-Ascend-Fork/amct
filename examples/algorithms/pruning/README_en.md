@@ -590,6 +590,10 @@ This section corresponds to issue 183 task 17: dense FFN intermediate-dim `recon
 - The output directory is a placeholder relative path; the script saves `PruneReport`, diagnosis
   summary and runtime arguments (full arguments are printed at startup). To also save the finetuned
   model weights, append the optional `--save-model` flag to the run command
+- Model loading: `trust_remote_code` defaults to `False` and `local_files_only=True` is enforced
+  (strictly offline from the local directory; Qwen3 is natively supported by transformers, so no
+  custom model code is executed). If truly needed, pass `--trust-remote-code` explicitly — the
+  script prints a security warning
 
 Run:
 
