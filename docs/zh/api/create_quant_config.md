@@ -307,4 +307,3 @@ amct.create_quant_config(config_file="./configs/config.json",
             }
         }
     ```
-

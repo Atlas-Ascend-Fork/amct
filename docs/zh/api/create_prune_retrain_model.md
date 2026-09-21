@@ -177,4 +177,3 @@ prune_retrain_model = amct.create_prune_retrain_model(
                cfg_file,
                record_file)
 ```
-

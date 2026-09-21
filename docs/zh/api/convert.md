@@ -35,4 +35,3 @@ quantize(model, cfg)
 # 调用接口将量化校准模型转换为量化部署模型
 convert(model)
 ```
-
