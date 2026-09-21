@@ -383,29 +383,29 @@ POST /repos/:owner/:repo/pulls/:number/discussions/:discussion_id/comments
 
 1. **获取 discussion_id**：
 
-```bash
-curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN" | \
-  jq '.[] | {id: .id, discussion_id: .discussion_id}'
-```
+    ```bash
+   curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN" | \
+    jq '.[] | {id: .id, discussion_id: .discussion_id}'
+    ```
 
-1. **回复评论**：
+2. **回复评论**：
 
-```bash
-curl -s -X POST \
-  -H "Content-Type: application/json" \
-  "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/discussions/<DISCUSSION_ID>/comments?access_token=$GITCODE_API_TOKEN" \
-  -d '{
-    "body": "回复内容"
-  }'
-```
+    ```bash
+    curl -s -X POST \
+      -H "Content-Type: application/json" \
+      "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/discussions/<DISCUSSION_ID>/comments?access_token=$GITCODE_API_TOKEN" \
+    -d '{
+       "body": "回复内容"
+     }'
+   ```
 
-1. **验证回复成功**：
+3. **验证回复成功**：
 
-```bash
-# 使用单条评论接口验证 discussion_id 是否匹配
-curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<REPLY_ID>?access_token=$GITCODE_API_TOKEN" | \
-  jq '{discussion_id: .discussion_id, comment_type: .comment_type}'
-```
+    ```bash
+    # 使用单条评论接口验证 discussion_id 是否匹配
+    curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<REPLY_ID>?access_token=$GITCODE_API_TOKEN" | \
+    jq '{discussion_id: .discussion_id, comment_type: .comment_type}'
+    ```
 
 **参数**：
 
