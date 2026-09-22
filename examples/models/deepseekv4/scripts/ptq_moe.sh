@@ -40,6 +40,12 @@ EPOCHS=${EPOCHS:-3}
 BASE_LR=${BASE_LR:-1e-3}
 SEQ_LEN=${SEQ_LEN:-4096}
 CALI_BSZ=${CALI_BSZ:-1}
+# Must match the NSAMPLES used in step 2 (extract_ptq_data.sh): the cosine LR
+# scheduler sizes its period as T_max = epochs * (nsamples // cali_bsz), while
+# the real step count comes from the extracted samples. A mismatch leaves the
+# learning rate barely annealed (nsamples default 128 vs 16 extracted -> the
+# schedule only covers 1/8 of a period, ending at ~96% of base_lr).
+NSAMPLES=${NSAMPLES:-16}
 DEVICE=${DEVICE:-npu:0}
 # Optional multi-NPU block split; leave empty to run all 43 layers in one go.
 START_BLOCK_IDX=${START_BLOCK_IDX:-0}
@@ -54,6 +60,7 @@ echo "PARAM_DIR=${PARAM_DIR}"
 echo "EPOCHS=${EPOCHS}"
 echo "BASE_LR=${BASE_LR}"
 echo "CALI_BSZ=${CALI_BSZ}"
+echo "NSAMPLES=${NSAMPLES}"
 echo "BLOCKS=[${START_BLOCK_IDX}, ${END_BLOCK_IDX})"
 
 python -m amct_pytorch.ptq \
@@ -70,6 +77,7 @@ python -m amct_pytorch.ptq \
     --base_lr "${BASE_LR}" \
     --data_dir "${DATA_DIR}" \
     --cali_bsz "${CALI_BSZ}" \
+    --nsamples "${NSAMPLES}" \
     --epochs "${EPOCHS}" \
     --start_block_idx "${START_BLOCK_IDX}" \
     --end_block_idx "${END_BLOCK_IDX}" \

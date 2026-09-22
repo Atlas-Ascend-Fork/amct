@@ -38,6 +38,8 @@ QUANT_TARGET=moe bash scripts/extract_ptq_data.sh
 
 `--nsamples` 受磁盘预算约束：本模型 hidden 状态为 4D Hyper-Connection 形状（`hc_mult=4`），每样本每层约 134 MB，`nsamples=128` 时单 target 需约 170 GiB，本样例取 16。
 
+> **第三步必须复用同一个 `NSAMPLES` 取值**（脚本默认已对齐为 16）：PTQ 的 cosine 学习率调度按 `T_max = epochs × (nsamples // cali_bsz)` 计算周期，而实际优化步数由本步提取出的样本数决定。若第三步沿用 CLI 默认的 `nsamples=128`，周期会是真实步数的 8 倍，训练结束时学习率仍停在 `base_lr` 的约 96%，`lwc/lac` 的裁剪系数几乎没有退火。
+
 ### 第三步：PTQ 训练
 
 Attention 与 MoE 分别训练（DeepSeek-V4 为纯 MoE 结构，无独立 MLP 分支，`quant_target=mlp` 会被适配器拒绝）：
@@ -58,6 +60,7 @@ QUANT_DTYPE=mxfp bash scripts/ptq_moe.sh
 - `BASE_LR=1e-3`：学习率。**不要使用框架默认值 1e-5**——实测默认学习率下 `lwc/lac` 的裁剪系数几乎不更新（clip factor 停留在初始值 4.0 附近），量化精度显著劣化。
 - `EPOCHS`：Attention 侧 15、MoE 侧 3。MoE 每层有 256 个 routed expert，逐 expert 训练开销大，3 epoch 已可收敛。
 - `CALI_BSZ=1`：64GB 单卡 HBM 所需的最小 batch size。
+- `NSAMPLES=16`：须与第二步 `extract_ptq_data.sh` 的取值一致（见上文提示），否则 cosine 调度周期与实际步数失配。
 
 MoE 训练支持按 block 分片多卡并行（例如双卡各跑一半层）：
 

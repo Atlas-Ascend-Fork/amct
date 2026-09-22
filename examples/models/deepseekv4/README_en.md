@@ -38,6 +38,8 @@ QUANT_TARGET=moe bash scripts/extract_ptq_data.sh
 
 `--nsamples` is bounded by disk budget: this model's hidden state is a 4D Hyper-Connection shape (`hc_mult=4`), roughly 134 MB per sample per layer; `nsamples=128` would need ~170 GiB per target, so this example uses 16.
 
+> **Step 3 must reuse the very same `NSAMPLES` value** (the scripts default to 16 consistently): the PTQ cosine LR scheduler sizes its period as `T_max = epochs × (nsamples // cali_bsz)`, while the real number of optimization steps is determined by the samples extracted here. If step 3 falls back to the CLI default `nsamples=128`, the period becomes 8× the real step count, so training ends with the learning rate still at ~96% of `base_lr` and the `lwc/lac` clip factors barely anneal.
+
 ### Step 3: PTQ training
 
 Attention and MoE are trained separately (DeepSeek-V4 is a pure MoE model with no dense MLP branch; `quant_target=mlp` is rejected by the adapter):
@@ -58,6 +60,7 @@ Key parameters:
 - `BASE_LR=1e-3`: learning rate. **Do not use the framework default of 1e-5** — with the default, the `lwc/lac` clip factors barely update (they stay near the initial value of 4.0) and quantization accuracy degrades significantly.
 - `EPOCHS`: 15 for Attention, 3 for MoE. Each MoE layer has 256 routed experts trained one by one; 3 epochs already converge.
 - `CALI_BSZ=1`: the minimum batch size for a 64GB card.
+- `NSAMPLES=16`: must match the value used by `extract_ptq_data.sh` in step 2 (see the note above); otherwise the cosine schedule period no longer matches the real step count.
 
 MoE training can be parallelized across cards by block (e.g. two cards, half the layers each):
 

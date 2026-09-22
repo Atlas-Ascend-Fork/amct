@@ -38,6 +38,12 @@ EPOCHS=${EPOCHS:-15}
 BASE_LR=${BASE_LR:-1e-3}
 SEQ_LEN=${SEQ_LEN:-4096}
 CALI_BSZ=${CALI_BSZ:-1}
+# Must match the NSAMPLES used in step 2 (extract_ptq_data.sh): the cosine LR
+# scheduler sizes its period as T_max = epochs * (nsamples // cali_bsz), while
+# the real step count comes from the extracted samples. A mismatch leaves the
+# learning rate barely annealed (nsamples default 128 vs 16 extracted -> the
+# schedule only covers 1/8 of a period, ending at ~96% of base_lr).
+NSAMPLES=${NSAMPLES:-16}
 DEVICE=${DEVICE:-npu:0}
 
 echo "=== ptq_attn.sh ==="
@@ -49,6 +55,7 @@ echo "PARAM_DIR=${PARAM_DIR}"
 echo "EPOCHS=${EPOCHS}"
 echo "BASE_LR=${BASE_LR}"
 echo "CALI_BSZ=${CALI_BSZ}"
+echo "NSAMPLES=${NSAMPLES}"
 
 python -m amct_pytorch.ptq \
     --trust_remote_code \
@@ -64,6 +71,7 @@ python -m amct_pytorch.ptq \
     --base_lr "${BASE_LR}" \
     --data_dir "${DATA_DIR}" \
     --cali_bsz "${CALI_BSZ}" \
+    --nsamples "${NSAMPLES}" \
     --epochs "${EPOCHS}" \
     --attn_linear_param_dir "${PARAM_DIR}" \
     --output_dir "${OUTPUT_DIR}/03_ptq_attn_${QUANT_DTYPE}"
