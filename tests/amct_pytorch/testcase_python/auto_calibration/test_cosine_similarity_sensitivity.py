@@ -33,4 +33,13 @@ class TestCosineSimilaritySensitivity(unittest.TestCase):
         similarity = sensitivity.compare(np.array([1.0, 2.0]), np.array([1.0, 2.0]))
 
         self.assertAlmostEqual(similarity, 1.0)
-        mock_logd.assert_called_once_with('data shape: (1, 2), other shape: (1, 2)')
+        mock_logd.assert_called_once_with('data shape: (2,), other shape: (2,)')
+
+    def test_non_parallel_inputs_give_correct_similarity(self):
+        sensitivity = cosine_similarity_sensitivity.CosineSimilaritySensitivity()
+
+        similarity = sensitivity.compare(
+            np.array([1.0, 2.0, 3.0, 4.0]), np.array([4.0, 3.0, 2.0, 1.0])
+        )
+
+        self.assertAlmostEqual(similarity, 0.8333, places=4)

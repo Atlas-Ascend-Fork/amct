@@ -40,8 +40,6 @@ class CosineSimilaritySensitivity(SensitivityBase):  # pylint: disable=R0903
         """
         data = data.flatten()
         other = other.flatten()
-        data = np.asmatrix(data)
-        other = np.asmatrix(other)
         # if original data is all 0, fake quant is all 0, no quantization error
         if np.all(data == 0):
             return 1
@@ -49,7 +47,7 @@ class CosineSimilaritySensitivity(SensitivityBase):  # pylint: disable=R0903
         if np.all(other == 0):
             return 0
         LOGGER.logd(f"data shape: {data.shape}, other shape: {other.shape}")
-        num = float(data * other.T)
+        num = float(np.dot(data, other))
         denom = np.linalg.norm(data) * np.linalg.norm(other)
         cos = num / denom
         similarity = 0.5 + 0.5 * cos
