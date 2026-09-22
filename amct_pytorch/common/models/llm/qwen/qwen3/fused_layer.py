@@ -30,7 +30,7 @@ class Qwen3FusedDecoderLayer:
 
     def __new__(cls, layer, shared_quantize):
         shared_map = {'_default': shared_quantize}
-        return _Qwen3FusedDecoderLayer.from_shared_map(layer, shared_map, None)
+        return Qwen3FusedDecoderLayer.from_shared_map(layer, shared_map, None)
 
     @classmethod
     def from_shared_map(cls, layer, shared_by_pre_op, layer_ref):
@@ -96,10 +96,10 @@ class _Qwen3FusedDecoderLayer(torch.nn.Module):
                     return self.shared_quantize
                 return shared
         if len(self._shared_by_pre_op) == 1 or '_default' in self._shared_by_pre_op:
-            return (
-                self._shared_by_pre_op.get('_default')
-                or self.shared_quantize
-                or next(iter(self._shared_by_pre_op.values()))
+            if self.shared_quantize is not None:
+                return self.shared_quantize
+            return self._shared_by_pre_op.get(
+                '_default', next(iter(self._shared_by_pre_op.values()))
             )
         return None
 

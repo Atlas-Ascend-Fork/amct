@@ -54,6 +54,7 @@ class MinMaxQuant(BaseQuantizeModule):
         quant_config: calibration algorithm parameters.
         """
         super().__init__(ori_module, layer_name, quant_config)
+        self.algorithm = 'minmax'
         self.ori_module_type = type(ori_module).__name__
         self.weight = ori_module.weight
         self.bias = ori_module.bias

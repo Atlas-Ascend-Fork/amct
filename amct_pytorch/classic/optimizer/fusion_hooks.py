@@ -63,7 +63,7 @@ def install_fusion_hooks(model):
         records.handles.append(module.register_forward_hook(output_hook))
 
     for name, module in named_modules:
-        if hasattr(module, 'quant_config'):
+        if hasattr(module, 'quant_config') or hasattr(module, 'act_type'):
             records.quant_names.add(name)
 
     for name, module in named_modules:
@@ -72,7 +72,7 @@ def install_fusion_hooks(model):
             tensor = _tensor(args)
             if tensor is None:
                 return
-            if hasattr(mod, 'quant_config'):
+            if hasattr(mod, 'quant_config') or hasattr(mod, 'act_type'):
                 records.quant_inputs.append((id(tensor), module_name))
             elif not module_name.startswith(
                 tuple(f'{name}.' for name in records.quant_names)
@@ -95,8 +95,24 @@ def install_fusion_hooks(model):
     return records
 
 
+def _module_config(module):
+    cfg = getattr(module, 'quant_config', None)
+    if cfg is not None:
+        return cfg
+    return {
+        'algorithm': getattr(module, 'algorithm', None),
+        'batch_num': getattr(module, 'batch_num', None),
+        'inputs_cfg': {
+            'quant_type': getattr(module, 'act_type', None),
+            'symmetric': getattr(module, 'act_symmetric', None),
+            'strategy': getattr(module, 'act_granularity', None),
+            'dynamic': getattr(module, 'dynamic', None),
+        },
+    }
+
+
 def _config_signature(module):
-    cfg = module.quant_config
+    cfg = _module_config(module)
     inputs = cfg.get('inputs_cfg', {})
     signature = {
         'algorithm': cfg.get('algorithm'),
@@ -106,7 +122,10 @@ def _config_signature(module):
         'strategy': inputs.get('strategy'),
         'dynamic': inputs.get('dynamic'),
     }
-    if signature['algorithm'] == 'smoothquant':
+    algorithm = signature['algorithm']
+    if isinstance(algorithm, dict):
+        algorithm = next(iter(algorithm))
+    if algorithm == 'smoothquant':
         signature['smooth_strength'] = cfg.get('smooth_strength')
     return signature
 
@@ -164,6 +183,9 @@ def build_fusion_groups(model, records):
         group_type = _group_type(pre_op)
         signatures = [_config_signature(model.get_submodule(name)) for name in members]
         first = signatures[0]
+        algorithm = first['algorithm']
+        if isinstance(algorithm, dict):
+            algorithm = next(iter(algorithm))
 
         valid = group_type is not None
         if valid and any(signature != first for signature in signatures[1:]):
@@ -172,7 +194,7 @@ def build_fusion_groups(model, records):
                 f'Skip fusion candidates {members}: quant configs are inconsistent',
                 'FusionGroup',
             )
-        if valid and first['algorithm'] == 'minmax' and len(members) < 2:
+        if valid and algorithm == 'minmax' and len(members) < 2:
             valid = False
             LOGGER.logw(
                 f'Skip fusion candidate {members}: minmax single-member group has no gain',
@@ -201,7 +223,7 @@ def build_fusion_groups(model, records):
             group_type=group_type,
             pre_op_ref=pre_op_ref,
             scaling_layer_refs=members,
-            algorithm=first['algorithm'],
+            algorithm=algorithm,
             fusion_rule=group_type,
         )
         group.dynamic_per_token = (
@@ -215,6 +237,12 @@ def build_fusion_groups(model, records):
             member = model.get_submodule(member_name)
             member.fusion_group = group
             group.bind_member(member)
+            group.update_activation_stat(tensor)
+            if algorithm == 'smoothquant' and hasattr(member, 'weight'):
+                group.update_weight_stat(member)
+            if group.act_granularity == 'token' and group.batch_input is None:
+                group.batch_input = tensor.cpu()
+        group.finalize_if_ready(model.get_submodule(members[0]))
         LOGGER.logd(
             f'Built fusion group {group.group_id}: pre_op={pre_op_ref}, '
             f'scaling_layers={members}',

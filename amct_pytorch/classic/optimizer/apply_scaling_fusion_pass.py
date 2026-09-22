@@ -164,10 +164,9 @@ class ApplyScalingFusionPass:
             else:
                 raise ValueError(f'unsupported pre_op type: {group.group_type}')
             for member in members:
-                member.linear.weight.data.copy_(
-                    (member.linear.weight.data.float() * smooth.float()).to(
-                        member.linear.weight.dtype
-                    )
+                weight = _member_weight(member)
+                weight.data.copy_(
+                    (weight.data.float() * smooth.float()).to(weight.dtype)
                 )
                 member.smooth_scale_skipped = True
         elif group.algorithm == 'minmax':
@@ -198,6 +197,9 @@ class ApplyScalingFusionPass:
         # post_attention_layernorm. Each takes act_type from its members.
         shared_by_pre_op = {}
         for group in groups:
+            pre_op = model.get_submodule(group.pre_op_ref)
+            members = [model.get_submodule(name) for name in group.scaling_layer_refs]
+            ApplyScalingFusionPass._fuse_scaling(group, pre_op, members)
             first_member = model.get_submodule(group.scaling_layer_refs[0])
             shared_by_pre_op[group.pre_op_ref] = SharedDynamicQuantize(
                 first_member.act_type

@@ -38,7 +38,7 @@ class Linear(nn.Module):
         self.weight = nn.Parameter(torch.randn(out_features, in_features) * 0.1)
         self.bias = nn.Parameter(torch.zeros(out_features))
 
-    def forward(self, x):
+    def forward(self, x, pertoken_scale=None):
         return torch.nn.functional.linear(x, self.weight, self.bias)
 
 

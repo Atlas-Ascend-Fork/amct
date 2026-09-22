@@ -102,6 +102,10 @@ class FusionGroup:
             return False
         if self.batch_num is None or self.batch_count < self.batch_num:
             return False
+        if self.algorithm == 'smoothquant' and len(self.wts_max_by_layer) < len(
+            self._member_refs
+        ):
+            return False
         self._finalized = True
         return self.finalize_quant_params([caller])
 
