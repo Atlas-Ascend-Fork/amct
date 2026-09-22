@@ -118,6 +118,9 @@ class SmoothQuant(BaseQuantizeModule):
         self.data_min = torch.where(batch_min < self.data_min, batch_min, self.data_min)
 
         if self.cur_batch == self.batch_num:
+            group = getattr(self, 'fusion_group', None)
+            if group is not None and group.status not in ('skipped', 'failed'):
+                return output
             act_max = torch.max(self.data_max.abs(), self.data_min.abs())
             smooth_factor = self.calculate_smooth(act_max)
             weight = self.weight * smooth_factor

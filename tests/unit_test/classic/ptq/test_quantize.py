@@ -80,13 +80,16 @@ def test_convert_runs_replace_pass_on_model():
     model = nn.Linear(4, 4)
     with (
         patch.object(QUANTIZE_MODULE, "ModelOptimizer") as mock_opt_cls,
+        patch.object(QUANTIZE_MODULE, "ApplyScalingFusionPass"),
         patch.object(QUANTIZE_MODULE, "ReplaceNpuQuantModulePass") as mock_pass_cls,
     ):
         opt = mock_opt_cls.return_value
         convert(model)
 
     mock_pass_cls.assert_called_once_with()
-    opt.add_pass.assert_called_once_with(mock_pass_cls.return_value)
+    assert mock_pass_cls.return_value in [
+        call.args[0] for call in opt.add_pass.call_args_list
+    ]
     opt.do_optimizer.assert_called_once_with(model)
 
 

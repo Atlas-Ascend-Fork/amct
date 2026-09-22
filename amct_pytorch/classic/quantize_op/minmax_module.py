@@ -137,6 +137,9 @@ class MinMaxQuant(BaseQuantizeModule):
         self.data_min = torch.where(batch_min < self.data_min, batch_min, self.data_min)
 
         if self.cur_batch == self.batch_num:
+            group = getattr(self, 'fusion_group', None)
+            if group is not None and group.status not in ('skipped', 'failed'):
+                return fp_out
             self.scale_d, self.offset_d = calculate_scale_offset(
                 self.data_max, self.data_min, self.act_symmetric, self.act_type
             )

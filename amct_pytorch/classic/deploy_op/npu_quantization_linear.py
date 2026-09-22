@@ -54,6 +54,8 @@ class NpuQuantizationLinear(torch.nn.Module):
         self.y_scale = None
         self.group_sizes = None
         self.dynamic = getattr(quant_module, 'dynamic', None)
+        self.input_quant_disabled = getattr(quant_module, 'input_quant_disabled', False)
+        self.smooth_scale_skipped = getattr(quant_module, 'smooth_scale_skipped', False)
         self._init_weight_quant(quant_module, device)
         self._init_deq_weight_scale(quant_module, device)
         self._init_bias(quant_module)
@@ -69,10 +71,12 @@ class NpuQuantizationLinear(torch.nn.Module):
         """
         import torch_npu
 
-        if hasattr(self, 'scale_factor'):
+        if hasattr(self, 'scale_factor') and not self.input_quant_disabled:
             x = x * self.scale_factor
 
-        if self.act_granularity == 'token':
+        if self.input_quant_disabled:
+            quant_x = x
+        elif self.act_granularity == 'token':
             # per-token activation quant is inherently dynamic: the token dim equals
             # batch * seqlen and changes per input, so the scale must be computed at
             # runtime. HIF8 needs dst_type_max=15; INT8 uses the default range.
@@ -160,7 +164,7 @@ class NpuQuantizationLinear(torch.nn.Module):
         """
         weight = quant_module.weight.data
         self.scale_w_tensor = None
-        if quant_module.scale is not None:
+        if quant_module.scale is not None and not self.smooth_scale_skipped:
             weight = apply_smooth_weight(quant_module.scale, weight)
             self.register_buffer(
                 'scale_factor', (1 / quant_module.scale).to(device=device)
