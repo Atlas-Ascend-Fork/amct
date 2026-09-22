@@ -558,3 +558,47 @@ model.save_pretrained(
 多组恢复参数应使用独立报告和输出目录，避免覆盖剪枝模型。BF16 的 `size_budget=0.5` 权重约占 28.4 GiB；磁盘不足时，记录 PPL 和报告后再清理不再需要的恢复模型。
 
 > 剪枝完成后，如需将模型导出为 torchair 离线模型（.air）用于 ATC 转 om 板端推理，请参考 [AMCT大模型torchair离线模型导出](../export/README.md)。
+
+## 8 社区任务样例：Qwen3-0.6B dense FFN 剪枝（`reconstruct` + `size_budget`，任务 10）
+
+本节对应 issue #183 的任务 10：dense FFN 中间维使用 `reconstruct` 方法，在**参数保留预算**（`size_budget=0.9/0.8/0.5`）下由 AMCT 在候选剪枝率网格中自动选择，而不是像固定比例样例那样直接指定 `prune_ratio`。
+
+### 8.1 运行说明
+
+- 校准集：Pileval，`8` 个样本 × `seq_len=2048`（共 16384 行校准 token）
+- 评估集：WikiText2 test split 全量，固定 `seq_len=4096`（73 个 batch）
+- 预算口径：`size_budget` 与 `ratio_grid` 作为 `amct.prune()` 的参数传入，方法 kwargs 只保留 `recovery`（与已合入的 `activation_count` + `budget` 样例写法一致）
+- 候选网格：`--ratio-grid` 默认 `0.1,0.2,0.3,0.4,0.5,0.6`
+- 数据源：默认走 Hugging Face 官方数据集；`--pileval_source modelscope` 切到同源的 ModelScope 镜像，`--wiki-test-file` 可指定本地 WikiText2 test parquet 副本。后两者仅为离线/受限网络环境准备，分块口径与 `preproc.get_wiki_inputs` 一致（本地下实测同为 73 个 batch，基线 PPL 与官方路径同为 `19.157549`）
+- 产物：`prune_report.json`、`run_metrics.json`、`run_config.json`、`diagnose_summary.txt`、`run_command.txt`、`run_environment.txt`
+
+运行命令（三档预算各跑一次）：
+
+```bash
+python3 src/run_qwen3_0_6b_pruning_reconstruct_budget.py \
+  --model-path ./path/to/Qwen3-0.6B \
+  --save-dir ./outputs/qwen3_0_6b_reconstruct_budget/b0_9 \
+  --size-budget 0.9
+```
+
+### 8.2 诊断与报告
+
+`prune_diagnose()` 在单卡 910B3 上识别出 dense 域 28 个可剪目标（28 层 FFN，cnn/moe 为 0），固定比例 dry-run 与前向检查可用，精度搜索 dry-run 亦可用。
+
+### 8.3 结果表
+
+以下结果在单张 Ascend 910B3（64 GiB）上实测；校准 Pileval 8 × 2048，评估为全量 WikiText2 test split、`seq_len=4096`（73 个 batch）。
+
+| size_budget | 基线 PPL | 剪枝后 PPL | PPL 增量 | 参数量（前 → 后） | 参数削减率 | 实际保留率 | 逐层稀疏率 | 剪枝时长（min） |
+| --- | --- | --- | ---: | --- | ---: | ---: | ---: | ---: |
+| `0.9` | 19.157549 | 35.622875 | +16.465326 | 596049920 → 516743168 | 13.31% | 0.866946 | 0.30013 | 0.54 |
+| `0.8` | 19.157549 | 73.848221 | +54.690672 | 596049920 → 463929344 | 22.17% | 0.778340 | 0.50000 | 0.37 |
+| `0.5` | 19.157549 | 19.157549 | +0.000000 | 596049920（未改动） | 0.00% | 1.000000 | 不适用 | 0.30 |
+
+> 剪枝时长为 `amct.prune()` 调用本身耗时（含 AMCT 在候选网格中的预算搜索），不含数据准备与 PPL 评估。
+
+### 8.4 两点实测说明
+
+1. **`size_budget=0.5` 在本任务的剪枝域内不可达。** 只剪 dense FFN 时 `PruneReport.prunable_fraction = 0.443321`，即使把 FFN 全部剪掉，保留率下限也是 `0.556679`；AMCT 因此报
+   `[budget] size budget unreachable: target 298,024,960 is below the reachable floor 331,808,768`，置 `budget_unreachable=True` 且不改动模型（`per_layer_sparsity` 为空、无剪枝事件）。本样例如实交付该结果，未通过放宽 `skip_layers`（去剪 attention）来凑预算。
+2. **预算搜索会略微超出目标保留率。** 实测 `size_budget=0.9` 选中逐层 `0.30013`（保留率 0.866946，低于 0.9），`size_budget=0.8` 选中 `0.5`（保留率 0.778340，低于 0.8）；网格中其实存在更接近目标的候选（如 0.9 档对应约 0.911 保留率）。此处记录的是 AMCT 的既有行为，非样例脚本的取舍，供维护者判断是否需要收敛搜索口径。
