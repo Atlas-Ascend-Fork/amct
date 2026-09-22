@@ -20,24 +20,88 @@ import torch
 
 
 class Qwen3FusedDecoderLayer:
-    '''Move a Qwen3 decoder layer into a shared-quantization wrapper.'''
+    '''Move a Qwen3 decoder layer into a shared-quantization wrapper.
+
+    The wrapper owns the layer forward, so per-pre-op shared quantizers can
+    receive both (qx, pertoken_scale) values inside our own forward. All
+    original submodules are moved in by reference; other layer attributes are
+    carried over so external references keep working.
+    '''
 
     def __new__(cls, layer, shared_quantize):
-        # Qwen3 layers are expected to expose input_layernorm, self_attn,
-        # post_attention_layernorm, and mlp. Move the original object into a
-        # wrapper without copying parameters.
-        wrapper = _Qwen3FusedDecoderLayer(shared_quantize)
-        wrapper.input_layernorm = layer.input_layernorm
-        wrapper.self_attn = layer.self_attn
-        wrapper.post_attention_layernorm = layer.post_attention_layernorm
-        wrapper.mlp = layer.mlp
-        return wrapper
+        shared_map = {'_default': shared_quantize}
+        return _Qwen3FusedDecoderLayer.from_shared_map(layer, shared_map, None)
+
+    @classmethod
+    def from_shared_map(cls, layer, shared_by_pre_op, layer_ref):
+        '''Build a wrapper with one shared quantizer per pre_op reference.
+
+        shared_by_pre_op maps the absolute pre_op module path (e.g.
+        "model.layers.0.input_layernorm") to its SharedDynamicQuantize. The
+        attention pre_op and the mlp pre_op of the same layer each get their
+        own quantizer; missing entries fall back to no shared quantization
+        for that block (members keep their own input quantization).
+        '''
+        return _Qwen3FusedDecoderLayer(layer, shared_by_pre_op, layer_ref)
 
 
 class _Qwen3FusedDecoderLayer(torch.nn.Module):
-    def __init__(self, shared_quantize):
+    _LAYER_ATTRS = (
+        'input_layernorm',
+        'self_attn',
+        'post_attention_layernorm',
+        'mlp',
+    )
+
+    def __init__(self, layer, shared_by_pre_op, layer_ref):
         super().__init__()
-        self.shared_quantize = shared_quantize
+        self._layer_ref = layer_ref
+        self._shared_by_pre_op = dict(shared_by_pre_op)
+        # Keep the single-quantizer attribute name for layers with one group
+        # (and as the injection point used by tests): the first shared
+        # quantizer of the layer.
+        self.shared_quantize = next(iter(self._shared_by_pre_op.values()), None)
+        # Move the original submodules in by reference (no copies).
+        for attr in self._LAYER_ATTRS:
+            setattr(self, attr, getattr(layer, attr))
+        # Carry over remaining plain attributes so external code that touches
+        # layer metadata keeps working (self_attn/mlp internals are untouched).
+        for key, value in vars(layer).items():
+            if key.startswith('_') or key in self._LAYER_ATTRS:
+                continue
+            if isinstance(value, torch.nn.Module):
+                setattr(self, key, value)
+            elif not callable(value) and not hasattr(self, key):
+                try:
+                    setattr(self, key, value)
+                except (TypeError, AttributeError):
+                    pass
+
+    def _shared_for(self, pre_op):
+        '''Return the shared quantizer attached to a pre_op, if any.
+
+        Falls back to the single shared_quantize attribute when the layer has
+        only one quantizer, so test injection points and single-group layers
+        keep the pre-existing API working.
+        '''
+        if self._layer_ref is not None:
+            shared = self._shared_by_pre_op.get(f'{self._layer_ref}.{pre_op}')
+            if shared is not None:
+                # Allow the single-quantizer attribute to override the map
+                # entry when it has been swapped after construction.
+                if (
+                    len(self._shared_by_pre_op) == 1
+                    and self.shared_quantize is not shared
+                ):
+                    return self.shared_quantize
+                return shared
+        if len(self._shared_by_pre_op) == 1 or '_default' in self._shared_by_pre_op:
+            return (
+                self._shared_by_pre_op.get('_default')
+                or self.shared_quantize
+                or next(iter(self._shared_by_pre_op.values()))
+            )
+        return None
 
     @staticmethod
     def _repeat_kv(hidden_states, num_rep):
@@ -49,11 +113,13 @@ class _Qwen3FusedDecoderLayer(torch.nn.Module):
         )
         return hidden_states.reshape(batch, heads * num_rep, seq_len, head_dim)
 
-    def _project(self, module, hidden, pertoken_scale):
-        try:
+    @staticmethod
+    def _project(module, hidden, pertoken_scale):
+        # Quantized deploy members accept (x, pertoken_scale); the None case
+        # covers non-quantized projections and the o_proj/down_proj tails.
+        if pertoken_scale is not None:
             return module(hidden, pertoken_scale)
-        except TypeError:
-            return module(hidden)
+        return module(hidden)
 
     def _attention_forward(
         self, hidden_states, attention_mask, position_embeddings, past_key_values
@@ -65,10 +131,17 @@ class _Qwen3FusedDecoderLayer(torch.nn.Module):
             head_dim = attn.q_proj.weight.shape[-1] // getattr(attn, 'num_heads', 1)
         hidden_shape = (*input_shape, -1, head_dim)
 
-        q, scale = self.shared_quantize(self.input_layernorm(hidden_states))
-        query = self._project(attn.q_proj, q, scale)
-        key = self._project(attn.k_proj, q, scale)
-        value = self._project(attn.v_proj, q, scale)
+        shared = self._shared_for('input_layernorm')
+        h = self.input_layernorm(hidden_states)
+        if shared is not None:
+            q, scale = shared(h)
+            query = self._project(attn.q_proj, q, scale)
+            key = self._project(attn.k_proj, q, scale)
+            value = self._project(attn.v_proj, q, scale)
+        else:
+            query = self._project(attn.q_proj, h, None)
+            key = self._project(attn.k_proj, h, None)
+            value = self._project(attn.v_proj, h, None)
 
         query = self._norm_and_transpose(attn, 'q_norm', query, hidden_shape)
         key = self._norm_and_transpose(attn, 'k_norm', key, hidden_shape)
@@ -119,9 +192,15 @@ class _Qwen3FusedDecoderLayer(torch.nn.Module):
         mlp = self.mlp
         if not hasattr(mlp, 'up_proj') or not hasattr(mlp, 'gate_proj'):
             raise ValueError('Qwen3 MLP must expose up_proj and gate_proj')
-        q, scale = self.shared_quantize(self.post_attention_layernorm(hidden_states))
-        up = self._project(mlp.up_proj, q, scale)
-        gate = self._project(mlp.gate_proj, q, scale)
+        shared = self._shared_for('post_attention_layernorm')
+        h = self.post_attention_layernorm(hidden_states)
+        if shared is not None:
+            q, scale = shared(h)
+            up = self._project(mlp.up_proj, q, scale)
+            gate = self._project(mlp.gate_proj, q, scale)
+        else:
+            up = self._project(mlp.up_proj, h, None)
+            gate = self._project(mlp.gate_proj, h, None)
         if hasattr(mlp, 'act_fn'):
             gate = mlp.act_fn(gate)
         hidden = gate * up

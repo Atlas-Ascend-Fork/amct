@@ -137,10 +137,20 @@ class MinMaxQuant(BaseQuantizeModule):
         self.data_max = torch.where(batch_max > self.data_max, batch_max, self.data_max)
         self.data_min = torch.where(batch_min < self.data_min, batch_min, self.data_min)
 
-        if self.cur_batch == self.batch_num:
-            group = getattr(self, 'fusion_group', None)
-            if group is not None and group.status not in ('skipped', 'failed'):
+        group = getattr(self, 'fusion_group', None)
+        if group is not None:
+            # Group members report the shared input once per forward; the
+            # group de-duplicates by tensor identity and owns the batch count.
+            group.update_activation_stat(inputs)
+            if group.status == 'calibrated':
+                group.writeback_if_pending(self)
                 return fp_out
+            if group.finalize_if_ready(self):
+                return fp_out
+            if group.status != 'skipped':
+                return fp_out
+
+        if self.cur_batch == self.batch_num:
             self.scale_d, self.offset_d = calculate_scale_offset(
                 self.data_max, self.data_min, self.act_symmetric, self.act_type
             )

@@ -18,6 +18,7 @@
 
 import torch
 
+from amct_pytorch.common.utils.log import LOGGER
 from amct_pytorch.classic.quantize_op.utils import calculate_scale_offset
 
 
@@ -51,6 +52,25 @@ class FusionGroup:
         self.last_input = None
         self.dynamic_per_token = False
         self.layer_ref = None
+        self.batch_num = None
+        self.act_granularity = None
+        self.batch_input = None
+        self._finalized = False
+        self._writeback_done = {}
+        self._member_refs = list(self.scaling_layer_refs)
+
+    def bind_member(self, member):
+        '''Record the shared quant config so calibration can use group state.'''
+        self.batch_num = getattr(member, 'batch_num', None)
+        if self.batch_num is None:
+            cfg = getattr(member, 'quant_config', None) or {}
+            self.batch_num = cfg.get('batch_num')
+        self.act_granularity = getattr(member, 'act_granularity', None) or (
+            (getattr(member, 'quant_config', None) or {})
+            .get('inputs_cfg', {})
+            .get('strategy', 'tensor')
+        )
+        self._member_refs = list(self.scaling_layer_refs)
 
     def update_activation_stat(self, inputs):
         if inputs is self.last_input:
@@ -69,58 +89,144 @@ class FusionGroup:
         self.batch_count += 1
         self.last_input = inputs
 
+    def finalize_if_ready(self, caller):
+        '''Finalize group params once the group batch count reaches batch_num.
+
+        Called from member forwards. Any member may trigger the shared
+        calculation exactly once; group params are stored on the group and
+        written back to each member via writeback_if_pending at its own next
+        forward, so no cross-module resolution is needed.
+        Returns True when this call performed the finalization.
+        '''
+        if self._finalized or self.status == 'skipped':
+            return False
+        if self.batch_num is None or self.batch_count < self.batch_num:
+            return False
+        self._finalized = True
+        return self.finalize_quant_params([caller])
+
+    def writeback_if_pending(self, member):
+        '''Apply stored group params to a member that has not received them.
+
+        Runs at the top of each bound member's forward after finalize, so
+        every member picks up the group results without module references.
+        '''
+        if self.status != 'calibrated' or self._writeback_done.get(id(member)):
+            return
+        self._apply_group_params(member)
+        self._writeback_done[id(member)] = True
+
     def finalize_quant_params(self, members):
+        '''Compute common group params and write them back to the given members.
+
+        Params are stored on the group first; other members receive them via
+        writeback_if_pending at their next forward.
+        '''
         if self.act_max is None or self.act_min is None:
             self.status = 'skipped'
             self.skip_reason = 'activation statistics are incomplete'
             return False
 
         if self.algorithm == 'smoothquant':
-            wts_max = None
-            for member in members:
-                member_max = member.weight.detach().abs().amax(dim=0, keepdim=True)
-                wts_max = (
-                    member_max
-                    if wts_max is None
-                    else torch.maximum(wts_max, member_max)
+            if self.smooth_factor is None:
+                wts_max = None
+                for member in members:
+                    member_max = member.weight.detach().abs().amax(dim=0, keepdim=True)
+                    wts_max = (
+                        member_max
+                        if wts_max is None
+                        else torch.maximum(wts_max, member_max)
+                    )
+                if len(members) < len(self._member_refs):
+                    # The triggering member only sees its own weights; other
+                    # members' weight stats are collected at their writeback.
+                    # Fallback: use per-layer stats already reported by each
+                    # member via update_weight_stat (kept on the group).
+                    wts_max = self._collect_wts_max(members, wts_max)
+                alpha = members[0].quant_config['algorithm']['smoothquant'][
+                    'smooth_strength'
+                ]
+                self.smooth_factor = _safe_smooth_factor(self.act_max, wts_max, alpha)
+            smooth = self.smooth_factor
+            if self.act_granularity == 'token' and self.batch_input is not None:
+                smooth_input = self.batch_input / smooth.cpu()
+                per_token_max = smooth_input.amax(dim=-1, keepdim=True)
+                per_token_min = smooth_input.amin(dim=-1, keepdim=True)
+                scale_d, offset_d = calculate_scale_offset(
+                    per_token_max,
+                    per_token_min,
+                    members[0].act_symmetric,
+                    members[0].act_type,
                 )
-            alpha = members[0].quant_config['algorithm']['smoothquant'][
-                'smooth_strength'
-            ]
-            smooth = _safe_smooth_factor(self.act_max, wts_max, alpha)
-            self.smooth_factor = smooth
-            scaled_max = (self.act_max / smooth).max().reshape(-1)
-            scaled_min = (self.act_min / smooth).min().reshape(-1)
-            scale_d, offset_d = calculate_scale_offset(
-                scaled_max, scaled_min, members[0].act_symmetric, members[0].act_type
-            )
+            else:
+                scaled_max = (self.act_max / smooth).max().reshape(-1)
+                scaled_min = (self.act_min / smooth).min().reshape(-1)
+                scale_d, offset_d = calculate_scale_offset(
+                    scaled_max,
+                    scaled_min,
+                    members[0].act_symmetric,
+                    members[0].act_type,
+                )
             self.activation_scale = scale_d
-            for member in members:
-                weight = member.weight.detach() * smooth.to(member.weight.dtype)
-                member.scale_w, member.offset_w = member.calculate_weights_scale_factor(
-                    weight, member.wts_granularity
-                )
-                member.scale = smooth.to(member.scale_w.dtype)
-                member.scale_d = scale_d.to(member.scale_w.dtype)
-                member.offset_d = (
-                    None if offset_d is None else offset_d.to(member.scale_w.dtype)
-                )
-                member.fake_quant_cache_ready = False
+            self.activation_offset = offset_d
         else:
+            if self.act_granularity == 'tensor':
+                max_val = self.act_max.max().reshape(-1)
+                min_val = self.act_min.min().reshape(-1)
+            else:
+                max_val, min_val = self.act_max, self.act_min
             scale_d, offset_d = calculate_scale_offset(
-                self.act_max,
-                self.act_min,
-                members[0].act_symmetric,
-                members[0].act_type,
+                max_val, min_val, members[0].act_symmetric, members[0].act_type
             )
             self.activation_scale = scale_d
-            for member in members:
-                member.scale_d = scale_d
-                member.offset_d = offset_d
-                member.fake_quant_cache_ready = False
+            self.activation_offset = offset_d
 
-        self.status = 'calibrated'
-        return True
+        for member in members:
+            self._apply_group_params(member)
+            self._writeback_done[id(member)] = True
+        if self.status != 'skipped':
+            self.status = 'calibrated'
+            LOGGER.logd(
+                f'Group {self.group_id} params finalized: '
+                f'batch_count={self.batch_count}',
+                'FusionGroup',
+            )
+        return self.status == 'calibrated'
+
+    def _collect_wts_max(self, members, fallback):
+        '''Combine reported per-layer weight stats with the fallback tensor.'''
+        combined = fallback
+        for layer_max in self.wts_max_by_layer.values():
+            combined = (
+                layer_max if combined is None else torch.maximum(combined, layer_max)
+            )
+        return combined
+
+    def update_weight_stat(self, member):
+        '''Record a member's per-input-channel weight max for the common stat.'''
+        self.wts_max_by_layer[id(member)] = (
+            member.weight.detach().abs().amax(dim=0, keepdim=True)
+        )
+
+    def _apply_group_params(self, member):
+        '''Write common params onto one member (group-calibrated values only).'''
+        if self.algorithm == 'smoothquant':
+            smooth = self.smooth_factor
+            weight = member.weight.detach() * smooth.to(member.weight.dtype)
+            member.scale_w, member.offset_w = member.calculate_weights_scale_factor(
+                weight, member.wts_granularity
+            )
+            member.scale = smooth.to(member.scale_w.dtype)
+            member.scale_d = self.activation_scale.to(member.scale_w.dtype)
+            member.offset_d = (
+                None
+                if self.activation_offset is None
+                else self.activation_offset.to(member.scale_w.dtype)
+            )
+        else:
+            member.scale_d = self.activation_scale
+            member.offset_d = self.activation_offset
+        member.fake_quant_cache_ready = False
 
 
 class FusionRegistry:

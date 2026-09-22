@@ -118,10 +118,23 @@ class SmoothQuant(BaseQuantizeModule):
         self.data_max = torch.where(batch_max > self.data_max, batch_max, self.data_max)
         self.data_min = torch.where(batch_min < self.data_min, batch_min, self.data_min)
 
-        if self.cur_batch == self.batch_num:
-            group = getattr(self, 'fusion_group', None)
-            if group is not None and group.status not in ('skipped', 'failed'):
+        group = getattr(self, 'fusion_group', None)
+        if group is not None:
+            # Group members report the shared input once per forward; the
+            # group de-duplicates by tensor identity and owns the batch count.
+            group.update_activation_stat(inputs)
+            group.update_weight_stat(self)
+            if group.act_granularity == 'token' and group.batch_input is None:
+                group.batch_input = inputs.cpu()
+            if group.status == 'calibrated':
+                group.writeback_if_pending(self)
                 return output
+            if group.finalize_if_ready(self):
+                return output
+            if group.status != 'skipped':
+                return output
+
+        if self.cur_batch == self.batch_num:
             act_max = torch.max(self.data_max.abs(), self.data_min.abs())
             smooth_factor = self.calculate_smooth(act_max)
             weight = self.weight * smooth_factor

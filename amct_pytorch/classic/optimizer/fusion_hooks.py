@@ -212,7 +212,9 @@ def build_fusion_groups(model, records):
         registry.add_group(group)
         seen_members.update(members)
         for member_name in members:
-            model.get_submodule(member_name).fusion_group = group
+            member = model.get_submodule(member_name)
+            member.fusion_group = group
+            group.bind_member(member)
         LOGGER.logd(
             f'Built fusion group {group.group_id}: pre_op={pre_op_ref}, '
             f'scaling_layers={members}',

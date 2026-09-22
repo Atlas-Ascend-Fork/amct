@@ -16,6 +16,8 @@
 # ----------------------------------------------------------------------------
 '''Apply shared-input scaling fusion before deployment replacement.'''
 
+import sys
+
 from amct_pytorch.common.utils.log import LOGGER
 from amct_pytorch.common.utils.model_util import ModuleHelper
 from amct_pytorch.classic.deploy_op.shared_quantize import (
@@ -25,6 +27,41 @@ from amct_pytorch.classic.deploy_op.shared_quantize import (
 )
 
 
+def _load_qwen3_fused_layer():
+    '''Load the Qwen3 fused layer replica by direct file access.
+
+    Going through the package import would execute the model registry
+    __init__ (register_llm_models -> transformers and optional heavy deps);
+    the replica itself only needs torch, so load the file directly and cache
+    the module in sys.modules.
+    '''
+    cache_key = 'amct_qwen3_fused_layer'
+    cached = sys.modules.get(cache_key)
+    if cached is not None:
+        return cached.Qwen3FusedDecoderLayer
+    import importlib.util
+    from pathlib import Path
+
+    module_path = (
+        Path(__file__).resolve().parents[2]
+        / 'common/models/llm/qwen/qwen3/fused_layer.py'
+    )
+    spec = importlib.util.spec_from_file_location(cache_key, module_path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[cache_key] = module
+    spec.loader.exec_module(module)
+    return module.Qwen3FusedDecoderLayer
+
+
+def _member_weight(member):
+    '''Return the member's linear weight (real modules expose it directly,
+    wrapped members keep the original nn.Linear under .linear).'''
+    weight = getattr(member, 'weight', None)
+    if weight is None:
+        weight = member.linear.weight
+    return weight
+
+
 class ApplyScalingFusionPass:
     '''Fuse group parameters and insert shared activation quantization.'''
 
@@ -32,6 +69,11 @@ class ApplyScalingFusionPass:
         registry = getattr(model, '_amct_fusion_registry', None)
         if registry is None:
             return
+
+        # Dynamic per-token groups that share one decoder layer must be fused
+        # into a single layer replacement: replacing the layer once per group
+        # would nest wrappers and replay the layer forward twice (B2).
+        dynamic_by_layer = {}
         for group in registry.groups:
             if group.status == 'fused':
                 LOGGER.logd(
@@ -40,6 +82,16 @@ class ApplyScalingFusionPass:
                 )
                 continue
             if group.status != 'calibrated':
+                continue
+            if getattr(group, 'dynamic_per_token', False):
+                dynamic_by_layer.setdefault(group.layer_ref, []).append(group)
+
+        for group in registry.groups:
+            if group.status == 'fused':
+                continue
+            if group.status != 'calibrated':
+                continue
+            if getattr(group, 'dynamic_per_token', False):
                 continue
             try:
                 self._apply_group(model, group)
@@ -57,17 +109,43 @@ class ApplyScalingFusionPass:
                     'ScalingFusion',
                 )
 
+        for layer_ref, groups in dynamic_by_layer.items():
+            pending = [g for g in groups if g.status == 'calibrated']
+            if not pending:
+                continue
+            try:
+                self._apply_dynamic_layer(model, layer_ref, pending)
+                for group in pending:
+                    group.status = 'fused'
+                    LOGGER.logd(
+                        f'Fused dynamic group {group.group_id}: '
+                        f'layer={layer_ref}, '
+                        f'scaling_layers={group.scaling_layer_refs}',
+                        'ScalingFusion',
+                    )
+            except (ValueError, RuntimeError, OSError) as exc:
+                for group in pending:
+                    group.status = 'skipped'
+                    group.skip_reason = str(exc)
+                LOGGER.logw(
+                    f'Skip dynamic groups {[g.group_id for g in pending]} '
+                    f'on layer {layer_ref}: {exc}',
+                    'ScalingFusion',
+                )
+
     def _apply_group(self, model, group):
         pre_op = model.get_submodule(group.pre_op_ref)
         members = [model.get_submodule(name) for name in group.scaling_layer_refs]
         self._fuse_scaling(group, pre_op, members)
 
-        if getattr(group, 'dynamic_per_token', False):
-            self._apply_dynamic_group(model, group, members)
-            return
-
         if len(members) >= 2:
-            shared = SharedQuantize(group.activation_scale, group.activation_offset)
+            output_dtype = _member_weight(members[0]).dtype
+            shared = SharedQuantize(
+                group.activation_scale,
+                group.activation_offset,
+                act_type=members[0].act_type,
+                output_dtype=output_dtype,
+            )
             fused = FusedPreOp(pre_op, shared)
             ModuleHelper.replace_module_by_name(model, group.pre_op_ref, fused)
             for member in members:
@@ -98,10 +176,8 @@ class ApplyScalingFusionPass:
             raise ValueError(f'unsupported algorithm: {group.algorithm}')
 
     @staticmethod
-    def _apply_dynamic_group(model, group, members):
-        if group.layer_ref is None:
-            raise ValueError('dynamic per-token layer reference is missing')
-        layer = model.get_submodule(group.layer_ref)
+    def _apply_dynamic_layer(model, layer_ref, groups):
+        layer = model.get_submodule(layer_ref)
         if not all(
             hasattr(layer, attr)
             for attr in (
@@ -111,31 +187,29 @@ class ApplyScalingFusionPass:
                 'mlp',
             )
         ):
-            raise ValueError('layer does not match Qwen3 decoder structure')
-        if not members:
-            raise ValueError('dynamic per-token group has no scaling layers')
+            raise ValueError(
+                f'layer {layer_ref} does not match the Qwen3 decoder structure'
+            )
 
-        import importlib.util
-        from pathlib import Path
+        Qwen3FusedDecoderLayer = _load_qwen3_fused_layer()
 
-        module_path = (
-            Path(__file__).resolve().parents[2]
-            / 'common/models/llm/qwen/qwen3/fused_layer.py'
+        # One shared quantizer per pre_op: the attention group shares the
+        # input_layernorm output, the mlp group shares
+        # post_attention_layernorm. Each takes act_type from its members.
+        shared_by_pre_op = {}
+        for group in groups:
+            first_member = model.get_submodule(group.scaling_layer_refs[0])
+            shared_by_pre_op[group.pre_op_ref] = SharedDynamicQuantize(
+                first_member.act_type
+            )
+
+        fused_layer = Qwen3FusedDecoderLayer.from_shared_map(
+            layer, shared_by_pre_op, layer_ref
         )
-        spec = importlib.util.spec_from_file_location(
-            'amct_qwen3_fused_layer', module_path
-        )
-        if spec is None or spec.loader is None:
-            raise ValueError('Qwen3 dynamic layer replica is unavailable')
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        Qwen3FusedDecoderLayer = module.Qwen3FusedDecoderLayer
-
-        shared = SharedDynamicQuantize(members[0].act_type)
-        fused_layer = Qwen3FusedDecoderLayer(layer, shared)
-        ModuleHelper.replace_module_by_name(model, group.layer_ref, fused_layer)
-        for member in members:
-            member.input_quant_disabled = True
+        ModuleHelper.replace_module_by_name(model, layer_ref, fused_layer)
+        for group in groups:
+            for member_name in group.scaling_layer_refs:
+                model.get_submodule(member_name).input_quant_disabled = True
 
     @staticmethod
     def _fuse_norm(pre_op, smooth):
