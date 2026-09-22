@@ -36,7 +36,7 @@ QUANT_TARGET=attn-linear bash scripts/extract_ptq_data.sh
 QUANT_TARGET=moe bash scripts/extract_ptq_data.sh
 ```
 
-`--nsamples` 受磁盘预算约束：本模型 hidden 状态为 4D Hyper-Connection 形状（`hc_mult=4`），每样本每层约 134 MB，`nsamples=128` 时单 target 需约 170 GiB，本样例取 16。
+`--nsamples` 受磁盘预算约束：提取钩子落盘的是 `attn_norm` / `ffn_norm` 的输出，而 `Block.forward` 会先经 `hc_pre` 把 Hyper-Connection 的 hc 维（`hc_mult=4`）加权求和收敛成 `[b, s, d]`，RMSNorm 再 `.to(dtype)` 转回 bf16，因此落盘张量是 3D bf16，每样本每层约 32 MiB（`seq_len 4096 × hidden 4096 × 2 B`）；`nsamples=128` 时单 target 需约 172 GiB，本样例取 16（16 样本 × 43 层 ≈ 21.5 GiB）。
 
 > **第三步必须复用同一个 `NSAMPLES` 取值**（脚本默认已对齐为 16）：PTQ 的 cosine 学习率调度按 `T_max = epochs × (nsamples // cali_bsz)` 计算周期，而实际优化步数由本步提取出的样本数决定。若第三步沿用 CLI 默认的 `nsamples=128`，周期会是真实步数的 8 倍，训练结束时学习率仍停在 `base_lr` 的约 96%，`lwc/lac` 的裁剪系数几乎没有退火。
 
@@ -62,13 +62,19 @@ QUANT_DTYPE=mxfp bash scripts/ptq_moe.sh
 - `CALI_BSZ=1`：64GB 单卡 HBM 所需的最小 batch size。
 - `NSAMPLES=16`：须与第二步 `extract_ptq_data.sh` 的取值一致（见上文提示），否则 cosine 调度周期与实际步数失配。
 
-MoE 训练支持按 block 分片多卡并行（例如双卡各跑一半层）：
+Attention 与 MoE 训练都支持按 block 分片多卡并行（例如双卡各跑一半层）：
 
 ```shell
+ASCEND_RT_VISIBLE_DEVICES=0 START_BLOCK_IDX=0 END_BLOCK_IDX=22 QUANT_DTYPE=int bash scripts/ptq_attn.sh &
+ASCEND_RT_VISIBLE_DEVICES=1 START_BLOCK_IDX=22 END_BLOCK_IDX=43 QUANT_DTYPE=int bash scripts/ptq_attn.sh &
+wait
+
 ASCEND_RT_VISIBLE_DEVICES=0 START_BLOCK_IDX=0 END_BLOCK_IDX=22 QUANT_DTYPE=int bash scripts/ptq_moe.sh &
 ASCEND_RT_VISIBLE_DEVICES=1 START_BLOCK_IDX=22 END_BLOCK_IDX=43 QUANT_DTYPE=int bash scripts/ptq_moe.sh &
 wait
 ```
+
+分片并行时各卡必须复用同一个 `PARAM_DIR` / `OUTPUT_DIR`（脚本默认值已一致）：不同分片只写各自层号对应的 `layer_{i}_*.pt`，不会互相覆盖。若某个 target 不做分片，请勿只给其中一张卡设置 `START_BLOCK_IDX` / `END_BLOCK_IDX`——两卡会各跑完整 43 层并并发写同一目录。
 
 ### 第四步：量化精度评估
 

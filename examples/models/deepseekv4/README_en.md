@@ -36,7 +36,7 @@ QUANT_TARGET=attn-linear bash scripts/extract_ptq_data.sh
 QUANT_TARGET=moe bash scripts/extract_ptq_data.sh
 ```
 
-`--nsamples` is bounded by disk budget: this model's hidden state is a 4D Hyper-Connection shape (`hc_mult=4`), roughly 134 MB per sample per layer; `nsamples=128` would need ~170 GiB per target, so this example uses 16.
+`--nsamples` is bounded by disk budget: the capture hooks persist the outputs of `attn_norm` / `ffn_norm`, and `Block.forward` first collapses the Hyper-Connection `hc` dimension (`hc_mult=4`) into `[b, s, d]` through `hc_pre`, after which RMSNorm casts back to bf16 via `.to(dtype)`. The saved tensors are therefore 3D bf16 — roughly 32 MiB per sample per layer (`seq_len 4096 × hidden 4096 × 2 B`); `nsamples=128` would need ~172 GiB per target, so this example uses 16 (16 samples × 43 layers ≈ 21.5 GiB).
 
 > **Step 3 must reuse the very same `NSAMPLES` value** (the scripts default to 16 consistently): the PTQ cosine LR scheduler sizes its period as `T_max = epochs × (nsamples // cali_bsz)`, while the real number of optimization steps is determined by the samples extracted here. If step 3 falls back to the CLI default `nsamples=128`, the period becomes 8× the real step count, so training ends with the learning rate still at ~96% of `base_lr` and the `lwc/lac` clip factors barely anneal.
 
@@ -62,14 +62,19 @@ Key parameters:
 - `CALI_BSZ=1`: the minimum batch size for a 64GB card.
 - `NSAMPLES=16`: must match the value used by `extract_ptq_data.sh` in step 2 (see the note above); otherwise the cosine schedule period no longer matches the real step count.
 
-MoE training can be parallelized across cards by block (e.g. two cards, half the layers each):
+Both Attention and MoE training can be parallelized across cards by block (e.g. two cards, half the layers each):
 
 ```shell
+ASCEND_RT_VISIBLE_DEVICES=0 START_BLOCK_IDX=0 END_BLOCK_IDX=22 QUANT_DTYPE=int bash scripts/ptq_attn.sh &
+ASCEND_RT_VISIBLE_DEVICES=1 START_BLOCK_IDX=22 END_BLOCK_IDX=43 QUANT_DTYPE=int bash scripts/ptq_attn.sh &
+wait
+
 ASCEND_RT_VISIBLE_DEVICES=0 START_BLOCK_IDX=0 END_BLOCK_IDX=22 QUANT_DTYPE=int bash scripts/ptq_moe.sh &
 ASCEND_RT_VISIBLE_DEVICES=1 START_BLOCK_IDX=22 END_BLOCK_IDX=43 QUANT_DTYPE=int bash scripts/ptq_moe.sh &
 wait
 ```
 
+When sharding, every card must reuse the same `PARAM_DIR` / `OUTPUT_DIR` (the script defaults already agree): each shard only writes the `layer_{i}_*.pt` files of its own layers, so they never overwrite each other. Conversely, if a target is *not* sharded, do not set `START_BLOCK_IDX` / `END_BLOCK_IDX` for one card only — both cards would run all 43 layers and write into the same directory concurrently.
 ### Step 4: Quantized eval
 
 Load both the Attention and MoE PTQ params and evaluate the quantized model:

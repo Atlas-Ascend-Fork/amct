@@ -45,6 +45,9 @@ CALI_BSZ=${CALI_BSZ:-1}
 # schedule only covers 1/8 of a period, ending at ~96% of base_lr).
 NSAMPLES=${NSAMPLES:-16}
 DEVICE=${DEVICE:-npu:0}
+# Optional multi-NPU block split; leave empty to run all 43 layers in one go.
+START_BLOCK_IDX=${START_BLOCK_IDX:-0}
+END_BLOCK_IDX=${END_BLOCK_IDX:-43}
 
 echo "=== ptq_attn.sh ==="
 echo "MODEL_PATH=${MODEL_PATH}"
@@ -56,6 +59,7 @@ echo "EPOCHS=${EPOCHS}"
 echo "BASE_LR=${BASE_LR}"
 echo "CALI_BSZ=${CALI_BSZ}"
 echo "NSAMPLES=${NSAMPLES}"
+echo "BLOCKS=[${START_BLOCK_IDX}, ${END_BLOCK_IDX})"
 
 python -m amct_pytorch.ptq \
     --trust_remote_code \
@@ -73,5 +77,7 @@ python -m amct_pytorch.ptq \
     --cali_bsz "${CALI_BSZ}" \
     --nsamples "${NSAMPLES}" \
     --epochs "${EPOCHS}" \
+    --start_block_idx "${START_BLOCK_IDX}" \
+    --end_block_idx "${END_BLOCK_IDX}" \
     --attn_linear_param_dir "${PARAM_DIR}" \
     --output_dir "${OUTPUT_DIR}/03_ptq_attn_${QUANT_DTYPE}"
