@@ -67,6 +67,7 @@ def checkpoint(tmp_path):
     selection.write_text(json.dumps({"quant_layers": ["layers.*"]}))
     args = SimpleNamespace(
         model_name="deepseek_v4_1",
+        seed=42,
         model=str(source),
         output_dir=str(tmp_path / "output"),
         granularity="tensor",
