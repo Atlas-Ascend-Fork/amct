@@ -124,6 +124,7 @@ def build_wikitext2_train_batches(tokenizer, n_batches=300, seq_len=512):
 def _runtime_args(args):
     return {
         "model_path": args.model_path,
+        "trust_remote_code": args.trust_remote_code,
         "save_dir": args.save_dir,
         "save_model": args.save_model,
         "device": args.device,
@@ -306,6 +307,8 @@ def parse_args():
     args = parser.parse_args()
     if args.finetune_steps <= 0:
         parser.error("--finetune-steps must be a positive integer")
+    if args.finetune_batches <= 0:
+        parser.error("--finetune-batches must be a positive integer")
     return args
 
 
