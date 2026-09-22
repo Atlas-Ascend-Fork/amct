@@ -552,19 +552,11 @@ class LlmDeployWorkflow:
                 )
             new_state_dict[weight_name] = weight
             if self.quant_dtype in ["int", "mxfp"]:
-                quant_cls = DTYPE_REGISTRY.get(self.quant_dtype)
                 new_weight_name = weight_name.rsplit(".", 1)[0]
                 is_weight = weight_name.endswith(".weight")
                 if is_weight and new_weight_name in quant_layers:
                     bit = quant_layers[new_weight_name]
-                    state_dict = quant_payload(
-                        quant_cls,
-                        weight_name,
-                        weight,
-                        bit,
-                        block_size_col=getattr(self.args, "block_size_col", 128),
-                        scale_dtype=getattr(self.args, "scale_dtype", "fp32"),
-                    )
+                    state_dict = self._export_tensor_payload(weight_name, weight, bit)
                     new_state_dict.update(state_dict)
                     if hasattr(self, "_quantized_modules"):
                         self._quantized_modules.add(new_weight_name)
@@ -597,7 +589,14 @@ class LlmDeployWorkflow:
                 f"Selected weight {weight_name} must be a nonempty 2-D floating tensor after source decoding"
             )
         quant_cls = DTYPE_REGISTRY.get(self.quant_dtype)
-        payload = quant_payload(quant_cls, weight_name, weight, bit)
+        payload = quant_payload(
+            quant_cls,
+            weight_name,
+            weight,
+            bit,
+            block_size_col=getattr(self.args, "block_size_col", 128),
+            scale_dtype=getattr(self.args, "scale_dtype", "fp32"),
+        )
         if is_ascend:
             payload = adapt_ascend_payload(weight_name, payload)
         return payload

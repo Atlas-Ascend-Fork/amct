@@ -1018,9 +1018,9 @@ def test_shared_shard_export_serializes_payload_once(
     original_quant = module.quant_payload
     calls = []
 
-    def counted_quant(quant_cls, name, weight, bit):
+    def counted_quant(quant_cls, name, weight, bit, **kwargs):
         calls.append(name)
-        return original_quant(quant_cls, name, weight, bit)
+        return original_quant(quant_cls, name, weight, bit, **kwargs)
 
     monkeypatch.setattr(module, "quant_payload", counted_quant)
     src, dst = tmp_path / "src", tmp_path / "dst"
@@ -1244,6 +1244,7 @@ def test_json_tensor_export_two_shards_preserves_float_bias_and_metadata(
     args = SimpleNamespace(
         model=str(src),
         model_name="unused",
+        seed=42,
         granularity="tensor",
         quant_dtype="int",
         output_dir=str(dst),
@@ -1302,6 +1303,7 @@ def test_tensor_invalid_bits_fails_before_setup(tmp_path, monkeypatch):
     args = SimpleNamespace(
         model="missing",
         model_name="unused",
+        seed=42,
         granularity="tensor",
         quant_dtype="int",
         output_dir=str(tmp_path / "out"),
