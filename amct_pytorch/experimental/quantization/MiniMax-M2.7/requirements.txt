@@ -1,6 +1,6 @@
 # 推荐优先使用容器环境：quay.io/ascend/vllm-ascend:v0.18.0rc1-a3
 # 下列为 stage1 校准搜索 + stage2 融合导出 + stage3 MXFP4 转换所需的 Python 依赖。
-# torch / torch_npu 建议直接使用容器内自带版本，无需通过本文件安装。
+# torch / TorchNPU 建议直接使用容器内自带版本，无需通过本文件安装。
 transformers==4.57.6
 safetensors==0.7.0
 accelerate==1.13.0

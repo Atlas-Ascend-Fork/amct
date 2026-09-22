@@ -1,0 +1,7 @@
+torch==2.7.1
+torch_npu
+transformers
+Pillow
+# 以下依赖不在公共 PyPI，需按对应渠道单独安装：
+#   torchair：随 torch_npu 提供，或从 Ascend 渠道/源码安装
+#   amct_pytorch：从仓库 build_out/ 产物包安装（bash build.sh --torch 后 pip install build_out/amct_pytorch-*.tar.gz）

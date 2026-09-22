@@ -1,12 +1,15 @@
 # model quantization sample
 
 ## 🚀Latest News
+
 - [2025/12] DeepSeek-V3.2 now supports block-by-block quantization inference
 
 ## 🎉Overview
+
 The experimental directory contains typical model samples for LLM quantization and inference. It is framework-independent and achieves quantization model accuracy close to bf16 through advanced PTQ quantization algorithms.
 
 ## 📖Directory Structure Description
+
 ```
 ├── docs                                        # Documentation directory
 |  ├── models                                   # Model documentation directory
@@ -30,6 +33,7 @@ The experimental directory contains typical model samples for LLM quantization a
 ```
 
 ## 📝Usage Instructions
+
 We provide corresponding scripts in `./scripts/`. Examples are as follows:
 
 During the training phase, modify `w_bits`, `a_bits`, `q_bits`, `k_bits`, and `v_bits` according to actual needs. For C8 training, ensure that cls passes c8; otherwise, the MLA part training parameters will have no gradients. When training MoE, please adjust cls to bf16.
@@ -37,11 +41,15 @@ During the training phase, modify `w_bits`, `a_bits`, `q_bits`, `k_bits`, and `v
 During the testing phase, modify `w_bits`, `a_bits`, `q_bits`, `k_bits`, and `v_bits` according to actual needs. Also modify train_mode, which is divided into `mla`, `moe`, `block`, and `origin` according to quantizing only MLA, quantizing only MoE, quantizing both MLA+MoE, and not quantizing, respectively.
 
 ### Data Extraction
+
 ```
 python3 extract_calib_data.py --model $model_path --output_dir $output_dir
 ```
+
 ### Training
+
 Block-by-block C8 training
+
 ```
 python ./main.py \
  --model $model_path \
@@ -53,7 +61,9 @@ python ./main.py \
  --output_dir $output_path --data_dir $data_path \
  --start_block_idx $start --end_block_idx $end --train_mode mla --dev 0
 ```
+
 Expert-by-expert training
+
 ```
 # Switch between A8W8 or A8W4 according to w_bits
 python ./main.py \
@@ -66,7 +76,9 @@ python ./main.py \
  --output_dir $output_path --data_dir $data_path \
  --start_block_idx $start --end_block_idx $end --train_mode moe --dev 0
 ```
+
 ### Testing
+
 ```
 python3 ./eval.py \
     --a_bits 8 \
@@ -82,28 +94,37 @@ python3 ./eval.py \
     --mla_param_dir $mla_param_dir \
     --moe_param_dir $moe_param_dir
 ```
+
 ### Accuracy
+
 **Quantization Model Accuracy Performance**
 
-| Model | PPL    |
-| ---- |--------|
+| Model | PPL |
+| ---- | -------- |
 | DeepSeek-V3.2-BF16 | 2.9987 |
 | DeepSeek-V3.2-Exp-W8A8C8 | 3.0304 |
 | DeepSeek-V3.2-Exp-W4A8C8 | 3.2320 |
+
 ### Main Function Parameter Description
+
 #### eval.py
+
 - **group**: Divide all blocks into group groups and execute in parallel in groups
 - **begin**: Block sequence number start, usually 0
 - **end**: Block sequence number end, such as 60 in DeepSeek-V3.2
 - **args.seq_len**: Length of each text segment
 - **args.output_dir**: Output save path
 - **num_npus**: Number of NPU cards used, defaults to all NPU cards visible in the current window. Single card memory requirement is 64G
+
 #### main.py
+
 - **args.data_dir**: Save path for dumped data
 - **train_mode**: Select mla/moe training
 - **model_path**: Model file save path
 - **cls**: Can be c8 or bf16. Please select bf16 when training moe and c8 when training mla
+
 #### deploy.py
+
 - **input_weight_path**: Weight path to be converted (FP8/BF16)
 - **output_weight_path**: Converted weight save path
 - **quant_type**: Quantized weight type (currently supports bfloat16, w8a8c16, w8a8c8, w4a8c16, w4a8c8)

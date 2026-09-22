@@ -9,7 +9,7 @@
 
 本sample依赖包可参考[requirements.txt](requirements.txt)
 
-需要注意的是torch_npu包版本需要与Python、torch包版本相匹配，需要安装CANN包
+需要注意的是TorchNPU包版本需要与Python、torch包版本相匹配，需要安装CANN包
 
 ### 1.2 模型和数据集准备
 
@@ -29,7 +29,7 @@ flatquant算法支持如下部分的量化：
 
 支持的量化类型以及量化配置：
 
-| 字段 |类型| 说明 | 取值范围 | 注意事项 |
+| 字段 | 类型 | 说明 | 取值范围 | 注意事项 |
 |:--| :-: | :-- | :-: | :-- |
 |skip_layers|str|跳过量化的层 |/|跳过量化层支持模糊匹配，当配置字符串为层名字串，或与层名一致时，跳过该层量化，不生成量化配置。字符串必须包含数字或字母|
 |algorithm|dict|量化使用的算法配置|{'flatquant'}|参考`INT4_FLAT_QUANT_CFG`示例
@@ -98,3 +98,5 @@ content: <think>
 <>
 The Ascend Model Compression Toolkit (AMCT) is a powerful tool designed to ...
 ```
+
+> 量化完成后，如需将量化模型导出为 torchair 离线模型（.air）用于 ATC 转 om 板端推理，请参考 [AMCT大模型torchair离线模型导出](../export/README.md)。

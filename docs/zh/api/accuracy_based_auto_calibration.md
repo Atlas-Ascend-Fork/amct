@@ -6,9 +6,9 @@
 
 | 产品                                        | 是否支持 |
 | ------------------------------------------- | -------- |
-| Ascend 950PR/Ascend 950DT                   | √        |
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 | √        |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 | √        |
+| Ascend 950PR&950DT系列产品                   | √        |
+| Atlas A3系列产品 | √        |
+| Atlas A2系列产品 | √        |
 
 
 
@@ -222,4 +222,3 @@ class AutoCalibrationEvaluator(AutoCalibrationEvaluatorBase):
 -   量化因子记录文件：在接口中的record\_file中写入量化因子。
 -   敏感度信息文件：该文件记录了待量化层对于量化的敏感度信息，根据该信息进行量化回退层的选择。
 -   自动量化回退历史记录文件：记录的回退层的信息。
-

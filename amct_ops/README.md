@@ -6,7 +6,7 @@
 
 **定位**：
 
-- `amct_ops` 是 AMCT 的 NPU 自定义算子层，负责承载 PyTorch / torch_npu 尚未覆盖的低比特量化、数据类型转换等硬件级算子。
+- `amct_ops` 是 AMCT 的 NPU 自定义算子层，负责承载 PyTorch / TorchNPU 尚未覆盖的低比特量化、数据类型转换等硬件级算子。
 - 与 `amct_pytorch/` 聚焦的量化算法、压缩流程编排不同，`amct_ops` 更贴近底层硬件实现。
 
 **独立优势**：
@@ -59,7 +59,7 @@ amct_ops/
 | 依赖 | 版本 |
 | ------ | ------ |
 | Python | >=3.9 |
-| PyTorch | 2.7.1 或 2.1.0（需配套 `torch_npu`） |
+| PyTorch | 2.7.1 或 2.1.0（需配套 `TorchNPU`） |
 | GCC / CMake | ≥ 7.3 / ≥ 3.16（推荐 3.20） |
 | CANN（Toolkit & Ops） | ≥ 9.0.0（需提前安装 NPU 驱动 / 固件） |
 
@@ -151,7 +151,7 @@ static library kineto_LIBRARY-NOTFOUND not found.
 
 ### 命名空间约束
 
-**所有算子必须注册到 `amct` 命名空间**——与 `amct_ops` 包名一致，便于调用方区分 AMCT 自定义算子与 `torch_npu` 上游算子。
+**所有算子必须注册到 `amct` 命名空间**——与 `amct_ops` 包名一致，便于调用方区分 AMCT 自定义算子与 `TorchNPU` 上游算子。
 
 - C++ 侧：`TORCH_LIBRARY_FRAGMENT(amct, m)` + `TORCH_LIBRARY_IMPL(amct, PrivateUse1, m)`
 - Python 侧：`torch.ops.amct.<算子名>` 或模块导入 `from amct_ops.xxx import ...`

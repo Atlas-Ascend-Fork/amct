@@ -309,6 +309,8 @@ def parse_args():
         parser.error("--finetune-steps must be a positive integer")
     if args.finetune_batches <= 0:
         parser.error("--finetune-batches must be a positive integer")
+    if args.calib_samples <= 0:
+        parser.error("--calib-samples must be a positive integer")
     return args
 
 

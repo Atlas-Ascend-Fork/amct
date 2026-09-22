@@ -1,10 +1,11 @@
-# Qwen3-0.6B w4a8 `lwc` + `lac` 量化样例
+# Qwen3-0.6B w4a8 `lwc` + `lac` 以及 Qwen3-0.6B w4a4 `autoround` 量化样例
 
-对应 Issue [#182](https://gitcode.com/cann/amct/issues/182) 任务 1：对 Qwen3-0.6B 做 `w4a8` + `lwc`/`lac` 量化，**int4/int8 与 mxfp4/mxfp8 各跑一遍**。
+对应 Issue [#182](https://gitcode.com/cann/amct/issues/182) 任务 1 和 任务8：对 Qwen3-0.6B 做 `w4a8` + `lwc`/`lac` 量化，以及`w4a4` + `autoround` 量化，**int4/int8 与 mxfp4/mxfp8 各跑一遍** 以及 **int4/int4 与 mxfp4/mxfp4 各跑一遍**
 本目录与 `qwen3.6`、`deepseekv4` 并列，不修改 Qwen3.6 文档。
 
 CLI 入口与 [Qwen3.6-Moe.md](../qwen3.6/Qwen3.6-Moe.md) 一致：`python3 -m amct_pytorch.eval` / `extract_ptq_data` / `ptq`。
-量化配置直接使用仓内 [`amct_pytorch/configs/w4a8.yaml`](../../../amct_pytorch/configs/w4a8.yaml)，int / mxfp 由 `--quant_dtype` 区分，不再另拷一份。
+`w4a8`量化配置直接使用仓内 [`amct_pytorch/configs/w4a8.yaml`](../../../amct_pytorch/configs/w4a8.yaml)，int / mxfp 由 `--quant_dtype` 区分，不再另拷一份。
+`w4a4`量化配置直接使用仓内 [`amct_pytorch/configs/w4a4.yaml`](../../../amct_pytorch/configs/w4a4.yaml)，int / mxfp 由 `--quant_dtype` 区分，不再另拷一份。
 
 ## 运行说明
 
@@ -25,7 +26,7 @@ CLI 入口与 [Qwen3.6-Moe.md](../qwen3.6/Qwen3.6-Moe.md) 一致：`python3 -m a
 source /path/to/cann/set_env.sh
 export MODEL=/path/to/Qwen3-0.6B   # 占位，改为本地权重
 
-# 1) BF16 基线（两种格式共用）
+# 1) BF16 基线
 python3 -m amct_pytorch.eval \
   --trust_remote_code \
   --model "${MODEL}" \
@@ -36,7 +37,7 @@ python3 -m amct_pytorch.eval \
   --eval_mode bf16 \
   --bit_config amct_pytorch/configs/bf16.yaml
 
-# 2) 提取 PTQ 离线数据（attn + mlp）
+# 2) 提取 PTQ 离线数据（attn + mlp，两种格式共用）
 python3 -m amct_pytorch.extract_ptq_data \
   --trust_remote_code \
   --model "${MODEL}" \
@@ -59,7 +60,7 @@ python3 -m amct_pytorch.extract_ptq_data \
   --nsamples 128 \
   --data_dir examples/models/qwen3/outputs/qwen3_0_6b/ptq_data/mlp
 
-# 3) int4/int8
+# 3) int4/int8 `lwc`/`lac` 量化
 python3 -m amct_pytorch.ptq \
   --trust_remote_code \
   --model "${MODEL}" \
@@ -76,7 +77,7 @@ python3 -m amct_pytorch.ptq \
   --end_block_idx 28 \
   --epochs 15 \
   --base_lr 1e-5 \
-  --output_dir examples/models/qwen3/outputs/qwen3_0_6b_w4a8_int
+  --output_dir examples/models/qwen3/outputs/lwc_lac/qwen3_0_6b_w4a8_int
 
 python3 -m amct_pytorch.ptq \
   --trust_remote_code \
@@ -94,8 +95,46 @@ python3 -m amct_pytorch.ptq \
   --end_block_idx 28 \
   --epochs 15 \
   --base_lr 1e-5 \
-  --output_dir examples/models/qwen3/outputs/qwen3_0_6b_w4a8_int
+  --output_dir examples/models/qwen3/outputs/lwc_lac/qwen3_0_6b_w4a8_int
 
+# 4) int4/int4 `autoround` 量化
+python3 -m amct_pytorch.ptq \
+  --trust_remote_code \
+  --model "${MODEL}" \
+  --model_name qwen3 \
+  --seq_len 4096 \
+  --granularity block \
+  --device npu:0 \
+  --data_dir examples/models/qwen3/outputs/qwen3_0_6b/ptq_data/attn-linear \
+  --quant_dtype int \
+  --algos autoround \
+  --bit_config amct_pytorch/configs/w4a4.yaml \
+  --quant_target attn-linear \
+  --start_block_idx 0 \
+  --end_block_idx 28 \
+  --epochs 15 \
+  --base_lr 1e-5 \
+  --output_dir examples/models/qwen3/outputs/autoround/qwen3_0_6b_w4a4_int
+
+python3 -m amct_pytorch.ptq \
+  --trust_remote_code \
+  --model "${MODEL}" \
+  --model_name qwen3 \
+  --seq_len 4096 \
+  --granularity block \
+  --device npu:0 \
+  --data_dir examples/models/qwen3/outputs/qwen3_0_6b/ptq_data/mlp \
+  --quant_dtype int \
+  --algos autoround \
+  --bit_config amct_pytorch/configs/w4a4.yaml \
+  --quant_target mlp \
+  --start_block_idx 0 \
+  --end_block_idx 28 \
+  --epochs 15 \
+  --base_lr 1e-5 \
+  --output_dir examples/models/qwen3/outputs/autoround/qwen3_0_6b_w4a4_int
+
+# 5) 评估 int4/int8 `lwc`/`lac` 量化
 python3 -m amct_pytorch.eval \
   --trust_remote_code \
   --model "${MODEL}" \
@@ -108,14 +147,32 @@ python3 -m amct_pytorch.eval \
   --quant_dtype int \
   --algos lwc lac \
   --bit_config amct_pytorch/configs/w4a8.yaml \
-  --attn_linear_param_dir examples/models/qwen3/outputs/qwen3_0_6b_w4a8_int/ptq_params/qwen3/attn-linear \
-  --moe_mlp_param_dir examples/models/qwen3/outputs/qwen3_0_6b_w4a8_int/ptq_params/qwen3/mlp
+  --attn_linear_param_dir examples/models/qwen3/outputs/lwc_lac/qwen3_0_6b_w4a8_int/ptq_params/qwen3/attn-linear \
+  --moe_mlp_param_dir examples/models/qwen3/outputs/lwc_lac/qwen3_0_6b_w4a8_int/ptq_params/qwen3/mlp
 
-# 4) mxfp4/mxfp8：将上一步 --quant_dtype int 改为 mxfp，
-#    --output_dir / 参数目录改为 outputs/qwen3_0_6b_w4a8_mxfp 后各跑一遍。
+# 6) 评估 int4/int4 `autoround` 量化
+python3 -m amct_pytorch.eval \
+  --trust_remote_code \
+  --model "${MODEL}" \
+  --model_name qwen3 \
+  --seq_len 4096 \
+  --granularity block \
+  --device npu:0 \
+  --eval_mode quant \
+  --quant_target attn-linear mlp \
+  --quant_dtype int \
+  --algos autoround \
+  --bit_config amct_pytorch/configs/w4a4.yaml \
+  --attn_linear_param_dir examples/models/qwen3/outputs/autoround/qwen3_0_6b_w4a4_int/ptq_params/qwen3/attn-linear \
+  --moe_mlp_param_dir examples/models/qwen3/outputs/autoround/qwen3_0_6b_w4a4_int/ptq_params/qwen3/mlp
+
+# 7) mxfp4/mxfp8：将步骤 3、5 的命令 --quant_dtype int 改为 mxfp，
+#    --output_dir / 参数目录改为 outputs/lwc_lac/qwen3_0_6b_w4a8_mxfp 后各跑一遍。
+# 8) mxfp4/mxfp4：将步骤 4、6 的命令 --quant_dtype int 改为 mxfp，
+#    --output_dir / 参数目录改为 outputs/autoround/qwen3_0_6b_w4a4_mxfp 后各跑一遍。
 ```
 
-也可在设置 `MODEL` 后调用 `scripts/*.sh`；脚本启动时打印完整运行参数，`--bit_config` 同样指向仓内 `w4a8.yaml`。
+## Qwen3-0.6B w4a8 `lwc` + `lac`
 
 主要参数：
 
@@ -132,7 +189,38 @@ python3 -m amct_pytorch.eval \
 | `--nsamples` | Pileval 校准条数，默认 128 |
 | `--end_block_idx` | Qwen3-0.6B 默认 28 层 |
 
+## Qwen3-0.6B w4a4 `autoround`
+
+主要参数：
+
+| 参数 / 环境变量 | 含义 |
+|:--|:--|
+| `MODEL` | 本地权重目录（占位路径） |
+| `--model_name qwen3` | Dense Qwen3 通路 |
+| `--seq_len 4096` | 校准与评估序列长度 |
+| `--granularity block` | Block 粒度 |
+| `--quant_dtype int\|mxfp` | int4/int4 或 mxfp4/mxfp4 |
+| `--algos autoround` | 量化算法 |
+| `--bit_config` | 仓内 `amct_pytorch/configs/w4a4.yaml` |
+| `--quant_target` | extract/PTQ 每次一个目标：`attn-linear` 或 `mlp`；量化评估同时加载两者 |
+| `--nsamples` | Pileval 校准条数，默认 128 |
+| `--end_block_idx` | Qwen3-0.6B 默认 28 层 |
+
+**注** `common.sh` 默认走 `w4a8 + lwc/lac`，要跑 `w4a4` `autoround` 需要显式覆盖 `QUANT_TYPE` 和 `ALGOS`
+
+例如：
+```bash
+export MODEL=/path/to/Qwen3-0.6B
+cd examples/models/qwen3
+QUANT_DTYPE=int QUANT_TYPE=w4a4 ALGOS=autoround bash scripts/ptq_attn.sh
+QUANT_DTYPE=int QUANT_TYPE=w4a4 ALGOS=autoround bash scripts/ptq_mlp.sh
+QUANT_DTYPE=int QUANT_TYPE=w4a4 ALGOS=autoround bash scripts/eval_quant.sh
+# 要测试mxfp数据类型，可以将QUANT_DTYPE切换为mxfp
+```
+
 ## 产物说明
+
+Qwen3-0.6B w4a8 `lwc` + `lac`
 
 相对占位目录（默认在本样例目录下）：
 
@@ -141,10 +229,24 @@ python3 -m amct_pytorch.eval \
 | PTQ 离线数据 Attention | `./outputs/qwen3_0_6b/ptq_data/attn-linear` | 28.002 GiB |
 | PTQ 离线数据 MLP | `./outputs/qwen3_0_6b/ptq_data/mlp` | 28.002 GiB |
 | 离线数据合计（attn+mlp） | 上述两目录之和 | 56.004 GiB |
-| int PTQ 参数 Attention | `./outputs/qwen3_0_6b_w4a8_int/ptq_params/qwen3/attn-linear` | 1.30 MiB |
-| int PTQ 参数 MLP | `./outputs/qwen3_0_6b_w4a8_int/ptq_params/qwen3/mlp` | 1.67 MiB |
-| mxfp PTQ 参数 Attention | `./outputs/qwen3_0_6b_w4a8_mxfp/ptq_params/qwen3/attn-linear` | 42.20 MiB |
-| mxfp PTQ 参数 MLP | `./outputs/qwen3_0_6b_w4a8_mxfp/ptq_params/qwen3/mlp` | 63.14 MiB |
+| int PTQ 参数 Attention | `./outputs/lwc_lac/qwen3_0_6b_w4a8_int/ptq_params/qwen3/attn-linear` | 1.30 MiB |
+| int PTQ 参数 MLP | `./outputs/lwc_lac/qwen3_0_6b_w4a8_int/ptq_params/qwen3/mlp` | 1.67 MiB |
+| mxfp PTQ 参数 Attention | `./outputs/lwc_lac/qwen3_0_6b_w4a8_mxfp/ptq_params/qwen3/attn-linear` | 42.20 MiB |
+| mxfp PTQ 参数 MLP | `./outputs/lwc_lac/qwen3_0_6b_w4a8_mxfp/ptq_params/qwen3/mlp` | 63.14 MiB |
+
+Qwen3-0.6B w4a4 `autoround`
+
+相对占位目录（默认在本样例目录下）：
+
+| 产物 | 路径 | 大小 |
+|:--|:--|:--|
+| PTQ 离线数据 Attention | `./outputs/qwen3_0_6b/ptq_data/attn-linear` | 28.002 GiB |
+| PTQ 离线数据 MLP | `./outputs/qwen3_0_6b/ptq_data/mlp` | 28.002 GiB |
+| 离线数据合计（attn+mlp） | 上述两目录之和 | 56.004 GiB |
+| int PTQ 参数 Attention | `./outputs/autoround/qwen3_0_6b_w4a4_int/ptq_params/qwen3/attn-linear` | 674 MiB |
+| int PTQ 参数 MLP | `./outputs/autoround/qwen3_0_6b_w4a4_int/ptq_params/qwen3/mlp` | 1010 MiB |
+| mxfp PTQ 参数 Attention | `./outputs/autoround/qwen3_0_6b_w4a4_mxfp/ptq_params/qwen3/attn-linear` | 715 MiB |
+| mxfp PTQ 参数 MLP | `./outputs/autoround/qwen3_0_6b_w4a4_mxfp/ptq_params/qwen3/mlp` | 1072 MiB |
 
 量化时长口径：从该格式第一次 `ptq` 开始到 attn+mlp 参数全部写完（不含模型下载和环境构建）。离线数据大小为 extract 输出目录合计，GiB。
 
@@ -156,3 +258,5 @@ BF16 与量化评估使用同一 `MODEL` 与同一 `seq_len=4096` / `granularity
 | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
 | Qwen3-0.6B | `w4a8` | `lwc` + `lac` | `int4/int8` | 19.157549 | 47.486488 | 28.328939 | 37.35 | 56.004 |
 | Qwen3-0.6B | `w4a8` | `lwc` + `lac` | `mxfp4/mxfp8` | 19.157549 | 23.898159 | 4.740610 | 48.88 | 56.004 |
+| Qwen3-0.6B | `w4a4` | `autoround` | `int4/int4` | 19.157549 | 97.062500 | 77.904951 | 87.68        | 56.004 |
+| Qwen3-0.6B | `w4a4` | `autoround` | `mxfp4/mxfp4` | 19.157549 | 31.795736     | 12.638187    | 88.51         | 56.004    |

@@ -2,9 +2,9 @@
 
 本文档介绍了 `amct_pytorch` 中面向大语言模型（LLM）的量化工具。该工具以**命令行工作流**为核心，串联起 PPL（Perplexity，困惑度） 测量、PTQ（Post-Training Quantization，训练后量化） 数据提取、PTQ 参数训练及量化权重部署导出等关键能力。同时，借助**模型适配器**、**量化算法注册表**和**量化数据类型注册表**，实现了不同模型架构与量化策略的灵活组合。
 
-## 1. 概述
+## 概述
 
-### 1.1 能力概览
+### 能力概览
 
 量化工具主要由以下模块组成：
 
@@ -26,7 +26,7 @@
 - **灵活配置**：通过 `bit_config` 灵活设定全局或分组的权重/激活（W/A）量化比特数。
 - **算法选择**：通过 `algos` 参数自由组合并选择可训练的量化算法策略。
 
-### 1.2 环境准备
+### 环境准备
 
 确保模型目录为 HuggingFace/safetensors 格式，并包含 `config.json`、tokenizer 相关文件以及 `model.safetensors.index.json`。支持的模型适配器名称以及对应的大模型为：
 
@@ -44,9 +44,9 @@
 |[`longcat_next`](https://huggingface.co/meituan-longcat/LongCat-Next/tree/main) | LongCat Next |
 |[`glm5`](https://huggingface.co/zai-org/GLM-5.1/tree/main) | GLM-5.1 |
 
-## 2. CLI入口及对应实例化操作
+## CLI入口及对应实例化操作
 
-### 2.1 `eval`
+### `eval`
 
 **入口**：`amct_pytorch/cli/llm/eval.py`
 
@@ -61,7 +61,7 @@
 - 考虑到用户环境的限制，`granularity`请尽量选择block。
 - `bit_config`、`model`请配置本地路径，`bit_config`对应的yaml文件可以参考仓上amct_pytorch/configs内的文件
 
-#### 2.1.1 BF16 基线 PPL 测量
+#### BF16 基线 PPL 测量
 
 首先计算 BF16 全精度模型的困惑度（PPL），将其作为量化后精度的评估基线：
 
@@ -76,9 +76,9 @@ python -m amct_pytorch.eval \
   --bit_config amct_pytorch/configs/bf16.yaml
 ```
 
-参数详细解释请参见[参数说明](#3-参数说明)。
+参数详细解释请参见[参数说明](#参数说明)。
 
-#### 2.1.2 量化模型 PPL 测量
+#### 量化模型 PPL 测量
 
 量化评估会重建量化 block，并根据 `bit_config` 判断是否启用量化器。
 
@@ -95,9 +95,9 @@ python -m amct_pytorch.eval \
   --bit_config amct_pytorch/configs/example_w4a8.yaml
 ```
 
-参数详细解释请参见[参数说明](#3-参数说明)。
+参数详细解释请参见[参数说明](#参数说明)。
 
-#### 2.1.3 带ptq训练结果的量化模型 PPL 测试
+#### 带ptq训练结果的量化模型 PPL 测试
 
 量化评估会重建量化 block，并根据 `bit_config` 判断是否启用量化器。
 
@@ -116,11 +116,11 @@ python -m amct_pytorch.eval \
   --moe_mlp_param_dir ./outputs/qwen3_ptq_params/mlp
 ```
 
-参数详细解释请参见[参数说明](#3-参数说明)。
+参数详细解释请参见[参数说明](#参数说明)。
 
 `eval`相关启动指令也可参考[eval.sh](../../examples/eval.sh)
 
-### 2.2 `extract_ptq_data`
+### `extract_ptq_data`
 
 **入口**：`amct_pytorch/cli/llm/extract_ptq_data.py`
 
@@ -137,7 +137,7 @@ python -m amct_pytorch.eval \
 - `quant_target` 参数必须且仅能指定一个目标。
 - `granularity` 必须和ptq中保持一致。
 
-#### 2.2.1 提取 PTQ 数据
+#### 提取 PTQ 数据
 
 在基于 Block 的 PTQ 数据提取流程中，系统根据 `quant_target` 配置自动定位目标层并注册 Hook，以捕获激活值或权重数据。不同量化目标对应的数据采集位置如下
 
@@ -155,11 +155,11 @@ python -m amct_pytorch.extract_ptq_data \
   --data_dir ./outputs/qwen3_ptq_data
 ```
 
-参数详细解释请参见[参数说明](#3-参数说明)。
+参数详细解释请参见[参数说明](#参数说明)。
 
 `extract_ptq_data`相关启动指令也可参考[extract_ptq_data.sh](../../examples/extract_ptq_data.sh)
 
-### 2.3 `ptq`
+### `ptq`
 
 **入口**：`amct_pytorch/cli/llm/ptq.py`
 
@@ -178,7 +178,7 @@ python -m amct_pytorch.extract_ptq_data \
 - 当前仅支持 `granularity=block`， `model` 粒度的 PTQ 逻辑目前为预留接口。
 - `granularity` 必须和 extract_ptq_data 中保持一致。
 
-#### 2.3.1 训练 PTQ 参数
+#### 训练 PTQ 参数
 
 `PTQ` 当前要求一次只处理一个 `quant_target`量化目标，并支持 block 粒度的量化训练。训练完成后，PTQ 量化参数会保存到对应的参数目录。
 
@@ -202,9 +202,9 @@ python -m amct_pytorch.ptq \
   --output_dir ./outputs/qwen3_ptq
 ```
 
-参数详细解释请参见[参数说明](#3-参数说明)。
+参数详细解释请参见[参数说明](#参数说明)。
 
-### 2.4 `deploy`
+### `deploy`
 
 **入口**：`amct_pytorch/cli/llm/deploy.py`
 
@@ -226,7 +226,7 @@ python -m amct_pytorch.ptq \
 `ptq`单卡相关启动指令也可参考[ptq_single_npu.sh](../../examples/ptq_single_npu.sh)
 `ptq`多卡相关启动指令也可参考[ptq_multi_npu.sh](../../examples/ptq_multi_npu.sh)
 
-#### 2.4.1 导出部署权重
+#### 导出部署权重
 
 `deploy` 当前支持 block 粒度导出，该过程会复制模型的非权重辅助文件，逐层导出量化权重，重写 `model.safetensors.index.json`，并在 `config.json` 中写入 `quantization_config`。
 
@@ -243,11 +243,11 @@ python -m amct_pytorch.deploy \
   --output_dir ./outputs/qwen3_deploy
 ```
 
-参数详细解释请参见[参数说明](#3-参数说明)。
+参数详细解释请参见[参数说明](#参数说明)。
 
-## 3. 参数说明
+## 参数说明
 
-### 3.1 通用参数
+### 通用参数
 
 | 参数 | 默认值 | 含义 |
 |------|------|------|
@@ -262,7 +262,7 @@ python -m amct_pytorch.deploy \
 | `--data_dir` | 空字符串（`ptq` / `extract_ptq_data` **必填**） | PTQ 中间数据保存/读取目录：`extract_ptq_data` 的输出目录，`ptq` 从中读取。 |
 | `--output_dir` | `./outputs` | 输出目录，存放日志文件、PTQ 参数配置、最终部署模型等所有生成内容。 |
 
-### 3.2 PPL 评估参数
+### PPL 评估参数
 
 | 参数 | 默认值 | 含义 |
 |------|------|------|
@@ -274,13 +274,13 @@ python -m amct_pytorch.deploy \
 - `eval_mode=bf16` 时，`bit_config` 中不应存在低于 16 bit 的 linear/cache 配置。
 - `eval_mode=quant` 时，如果 `bit_config` 没有任何低于 16 bit 的配置，会构建量化模块但关闭量化器。
 
-### 3.3 数据提取参数
+### 数据提取参数
 
 | 参数 | 默认值 | 含义 |
 |------|------|------|
 | `--nsamples` | `128` | 校准样本数量，`extract_ptq_data` 从 Pileval 中加载该数量样本。 |
 
-### 3.4 量化配置参数
+### 量化配置参数
 
 | 参数 | 默认值 | 含义 |
 |------|------|------|
@@ -304,7 +304,7 @@ python -m amct_pytorch.deploy \
 - `quant_dtype`传入`int`时，权重采用`per-channel`量化，激活采用`dynamic-per-token`量化，均采用**对称量化**。
 - `bit_config`需要传入yaml，推荐用户在本地自行配置yaml，可参考[configs路径下的yaml样例](../../amct_pytorch/configs/)或直接点进上方软连接跳转
 
-### 3.5 PTQ 参数
+### PTQ 参数
 
 | 参数 | 默认值 | 含义 |
 |------|------|------|
@@ -336,7 +336,7 @@ python -m amct_pytorch.deploy \
 layer_{layer_idx}_{unit_name}.pt
 ```
 
-## 4. 常见注意事项
+## 常见注意事项
 
 - `extract_ptq_data` 和 `ptq` 的 `quant_target` 必须保持一致。
 - `ptq`、`extract_ptq_data` 当前一次只处理一个 `quant_target`，需要多目标量化时建议分目标依次执行。
@@ -345,6 +345,6 @@ layer_{layer_idx}_{unit_name}.pt
 - `--model_name` 是内部适配器名称，不一定等同于 HuggingFace 模型路径。
 - `bit_config`、`model`请配置本地路径，`bit_config`对应的yaml文件可以参考仓上amct_pytorch/configs内的文件
 
-## 5. 一站式样例
+## 一站式样例
 
 本章节提供一站式样例，帮助开发者更好熟悉本特性的流程，以`qwen3.6moe`模型为例，可参考[Qwen-3.6-MoE一站式样例](../../examples/models/qwen3.6/Qwen3.6-Moe.md)。

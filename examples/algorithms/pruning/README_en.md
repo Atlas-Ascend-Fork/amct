@@ -11,7 +11,7 @@ Qwen3.6-35B-A3B community-task sample.
 ### 1.1 Install Dependencies
 
 Dependencies are in [requirements.txt](requirements.txt): `torch` and `transformers` (pulled in by the
-amct_pytorch import chain). To run on NPU you also need a `torch_npu` matching your Python/torch versions
+amct_pytorch import chain). To run on NPU you also need a `TorchNPU` matching your Python/torch versions
 and an installed CANN package.
 
 ### 1.2 Model and Data Preparation
@@ -630,3 +630,5 @@ Measured on a single Ascend 910B3 (64 GiB); evaluation on the full WikiText2 tes
 > terms (about 77.8% of the pruning-caused PPL increase is recovered); the recovered PPL is still
 > `12.212309` above the original model. Prune time (0.06 min) is the `amct.prune` call itself,
 > excluding data preparation and evaluation.
+
+> After pruning, to export the model as a torchair offline model (.air) for ATC-to-om conversion and on-board inference, refer to [AMCT large-model offline torchair model export](../export/README_en.md).

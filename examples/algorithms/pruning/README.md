@@ -11,7 +11,7 @@ MoE 剪枝样例。
 ### 1.1 安装依赖
 
 依赖见 [requirements.txt](requirements.txt)：`torch` 与 `transformers`（随 amct_pytorch 导入链需要）。
-在 NPU 上运行时另需与 Python/torch 版本匹配的 `torch_npu` 及已安装的 CANN 包。
+在 NPU 上运行时另需与 Python/torch 版本匹配的 `TorchNPU` 及已安装的 CANN 包。
 
 ### 1.2 模型与数据准备
 
@@ -605,3 +605,5 @@ dry-run 可用；`PruneReport` 输出参数量变化；剪枝后模型 `config` 
 > 后处理 PPL 为恢复微调（finetune）后的结果；微调从剪枝模型开始，未重新执行剪枝。相对剪枝模型
 > PPL 绝对下降 `42.874595`，按"剪枝造成的 PPL 增量"计恢复约 `77.8%`；恢复后 PPL 仍高于原始模型
 > `12.212309`。剪枝时长（0.06 min）为 `amct.prune` 调用本身耗时，不含数据准备与评测。
+
+> 剪枝完成后，如需将模型导出为 torchair 离线模型（.air）用于 ATC 转 om 板端推理，请参考 [AMCT大模型torchair离线模型导出](../export/README.md)。

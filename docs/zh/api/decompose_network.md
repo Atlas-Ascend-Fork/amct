@@ -4,12 +4,11 @@
 
 <a name="zh-cn_topic_0000002517188794_table38301303189"></a>
 
-| 产品                                        | 是否支持 |
+| 产品 | 是否支持 |
 | ------------------------------------------- | -------- |
-| Ascend 950PR/Ascend 950DT                   | √        |
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 | √        |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 | √        |
-
+| Ascend 950PR&950DT系列产品 | √ |
+| Atlas A3系列产品 | √ |
+| Atlas A2系列产品 | √ |
 
 ## 功能说明<a name="zh-cn_topic_0240188739_section15406195619561"></a>
 
@@ -53,14 +52,14 @@ model, changes = decompose_network(model, decompose_info_path)
 
 ## 返回值说明<a name="zh-cn_topic_0240188739_zh-cn_topic_0122830089_section293415513458"></a>
 
--   改变为张量分解后结构的模型对象，类型为torch.nn.Module。
--   张量分解前后的对应层名构成的字典，类型为dict，形如\{'conv1': \['conv1.0', 'conv1.1'\], 'conv2': \['conv2.0', 'conv2.1'\], ...\}。
+- 改变为张量分解后结构的模型对象，类型为torch.nn.Module。
+- 张量分解前后的对应层名构成的字典，类型为dict，形如\{'conv1': \['conv1.0', 'conv1.1'\], 'conv2': \['conv2.0', 'conv2.1'\], ...\}。
 
 ## 约束说明<a name="zh-cn_topic_0240188739_section1443392021419"></a>
 
--   用户输入的模型需为torch.nn.Module类型的对象。
--   本接口函数仅支持对通过torch.nn.Conv2d\(\)构建的卷积的结构修改。
--   用户输入的模型结构需与调用[auto\_decomposition](./auto_decomposition.md)获取分解信息文件时的模型结构一致，分解信息文件要与该模型结构配套使用。
+- 用户输入的模型需为torch.nn.Module类型的对象。
+- 本接口函数仅支持对通过torch.nn.Conv2d\(\)构建的卷积的结构修改。
+- 用户输入的模型结构需与调用[auto\_decomposition](./auto_decomposition.md)获取分解信息文件时的模型结构一致，分解信息文件要与该模型结构配套使用。
 
 ## 调用示例<a name="section179052217494"></a>
 
@@ -74,7 +73,7 @@ net, changes = decompose_network(                                # 加载分解�
 ```
 
 > [!NOTE]说明：
->1.  当涉及模型训练时，本接口的调用需在将模型参数传递给优化器之前；如使用了torch.nn.parallel.DistributedDataParallel \(DDP\)，则本接口的调用也需在将模型传递给DDP之前。
->2.  本接口将原地修改传入的模型对象，即分解后会改变用户传入的模型对象本身（例外：传入的模型是一个torch.nn.Conv2d对象，该情况下本接口不会对其进行修改，返回的分解后模型是新构建的torch.nn.Module对象）。
->3.  本接口仅对模型结构进行修改，不会更新分解后的卷积权重，权重的值为torch.nn.Conv2d\(\)构建的默认值。如需fine-tune，请在调用auto\_decomposition后将分解后的模型权重保存下来，在调用本接口之后加载该权重，再进行fine-tune。
-
+>
+>1. 当涉及模型训练时，本接口的调用需在将模型参数传递给优化器之前；如使用了torch.nn.parallel.DistributedDataParallel \(DDP\)，则本接口的调用也需在将模型传递给DDP之前。
+>2. 本接口将原地修改传入的模型对象，即分解后会改变用户传入的模型对象本身（例外：传入的模型是一个torch.nn.Conv2d对象，该情况下本接口不会对其进行修改，返回的分解后模型是新构建的torch.nn.Module对象）。
+>3. 本接口仅对模型结构进行修改，不会更新分解后的卷积权重，权重的值为torch.nn.Conv2d\(\)构建的默认值。如需fine-tune，请在调用auto\_decomposition后将分解后的模型权重保存下来，在调用本接口之后加载该权重，再进行fine-tune。

@@ -4,12 +4,11 @@
 
 <a name="zh-cn_topic_0000002517188794_table38301303189"></a>
 
-| 产品                                        | 是否支持 |
+| 产品 | 是否支持 |
 | ------------------------------------------- | -------- |
-| Ascend 950PR/Ascend 950DT                   | √        |
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 | √        |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 | √        |
-
+| Ascend 950PR&950DT系列产品 | √ |
+| Atlas A3系列产品 | √ |
+| Atlas A2系列产品 | √ |
 
 ## 功能说明<a name="zh-cn_topic_0240188006_section15406195619561"></a>
 
@@ -65,9 +64,9 @@ save_model(modfied_onnx_file, record_file, save_path)
 
 ## 约束说明<a name="zh-cn_topic_0240188006_section1443392021419"></a>
 
--   在网络推理的batch数目达到batch\_num后，再调用该接口，否则量化因子不正确，量化结果不正确。
--   该接口只接收[quantize\_model](./quantize_model.md)接口产生的ONNX类型模型文件。
--   该接口需要输入量化因子记录文件，量化因子记录文件在[quantize\_model](./quantize_model.md)阶段生成，在模型推理阶段填充有效值。
+- 在网络推理的batch数目达到batch\_num后，再调用该接口，否则量化因子不正确，量化结果不正确。
+- 该接口只接收[quantize\_model](./quantize_model.md)接口产生的ONNX类型模型文件。
+- 该接口需要输入量化因子记录文件，量化因子记录文件在[quantize\_model](./quantize_model.md)阶段生成，在模型推理阶段填充有效值。
 
 ## 调用示例<a name="zh-cn_topic_0240188006_section149503402234"></a>
 
@@ -85,13 +84,12 @@ amct.save_model(modfied_onnx_file="./tmp/modfied_model.onnx",
 
 落盘文件说明：
 
--   精度仿真模型文件：ONNX格式的模型文件，模型名中包含fake\_quant，可以在ONNX Runtime环境进行精度仿真。
--   部署模型文件：ONNX格式的模型文件，模型名中包含deploy，经过ATC转换工具转换后可部署到AI处理器。
--   （可选）\*.external文件，包括\*deploy.external和\*fakequant.external：
+- 精度仿真模型文件：ONNX格式的模型文件，模型名中包含fake\_quant，可以在ONNX Runtime环境进行精度仿真。
+- 部署模型文件：ONNX格式的模型文件，模型名中包含deploy，经过ATC转换工具转换后可部署到AI处理器。
+- （可选）\*.external文件，包括\*deploy.external和\*fakequant.external：
 
     只有保存的精度仿真模型以及部署模型文件大小\>=2GB才会生成该类文件，且与压缩后的\*.onnx模型文件生成在同级目录，用于保存Tensor中的数据，每个Tensor数据单独保存一份\*.external文件，文件名与Tensor相同，例如_conv1.weight_\_deploy.external和_conv1.weight_\_fakequant.external。
 
     后续通过ATC工具加载压缩后的\*.onnx部署模型文件进行模型转换时，会自动读取同级目录下\*.external文件中的Tensor数据。
 
 重新执行量化时，该接口输出的上述文件将会被覆盖。
-
