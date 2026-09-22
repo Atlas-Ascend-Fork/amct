@@ -18,7 +18,11 @@
 
 from amct_pytorch.common.utils.log import LOGGER
 from amct_pytorch.common.utils.model_util import ModuleHelper
-from amct_pytorch.classic.deploy_op.shared_quantize import FusedPreOp, SharedQuantize
+from amct_pytorch.classic.deploy_op.shared_quantize import (
+    FusedPreOp,
+    SharedDynamicQuantize,
+    SharedQuantize,
+)
 
 
 class ApplyScalingFusionPass:
@@ -56,15 +60,29 @@ class ApplyScalingFusionPass:
     def _apply_group(self, model, group):
         pre_op = model.get_submodule(group.pre_op_ref)
         members = [model.get_submodule(name) for name in group.scaling_layer_refs]
+        self._fuse_scaling(group, pre_op, members)
 
+        if getattr(group, 'dynamic_per_token', False):
+            self._apply_dynamic_group(model, group, members)
+            return
+
+        if len(members) >= 2:
+            shared = SharedQuantize(group.activation_scale, group.activation_offset)
+            fused = FusedPreOp(pre_op, shared)
+            ModuleHelper.replace_module_by_name(model, group.pre_op_ref, fused)
+            for member in members:
+                member.input_quant_disabled = True
+
+    @staticmethod
+    def _fuse_scaling(group, pre_op, members):
         if group.algorithm == 'smoothquant':
             smooth = group.smooth_factor
             if smooth is None:
                 raise ValueError('smooth_factor is missing')
             if group.group_type == 'norm':
-                self._fuse_norm(pre_op, smooth)
+                ApplyScalingFusionPass._fuse_norm(pre_op, smooth)
             elif group.group_type == 'linear':
-                self._fuse_linear(pre_op, smooth)
+                ApplyScalingFusionPass._fuse_linear(pre_op, smooth)
             else:
                 raise ValueError(f'unsupported pre_op type: {group.group_type}')
             for member in members:
@@ -74,13 +92,50 @@ class ApplyScalingFusionPass:
                     )
                 )
                 member.smooth_scale_skipped = True
+        elif group.algorithm == 'minmax':
+            return
+        else:
+            raise ValueError(f'unsupported algorithm: {group.algorithm}')
 
-        if len(members) >= 2:
-            shared = SharedQuantize(group.activation_scale, group.activation_offset)
-            fused = FusedPreOp(pre_op, shared)
-            ModuleHelper.replace_module_by_name(model, group.pre_op_ref, fused)
-            for member in members:
-                member.input_quant_disabled = True
+    @staticmethod
+    def _apply_dynamic_group(model, group, members):
+        if group.layer_ref is None:
+            raise ValueError('dynamic per-token layer reference is missing')
+        layer = model.get_submodule(group.layer_ref)
+        if not all(
+            hasattr(layer, attr)
+            for attr in (
+                'input_layernorm',
+                'self_attn',
+                'post_attention_layernorm',
+                'mlp',
+            )
+        ):
+            raise ValueError('layer does not match Qwen3 decoder structure')
+        if not members:
+            raise ValueError('dynamic per-token group has no scaling layers')
+
+        import importlib.util
+        from pathlib import Path
+
+        module_path = (
+            Path(__file__).resolve().parents[2]
+            / 'common/models/llm/qwen/qwen3/fused_layer.py'
+        )
+        spec = importlib.util.spec_from_file_location(
+            'amct_qwen3_fused_layer', module_path
+        )
+        if spec is None or spec.loader is None:
+            raise ValueError('Qwen3 dynamic layer replica is unavailable')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        Qwen3FusedDecoderLayer = module.Qwen3FusedDecoderLayer
+
+        shared = SharedDynamicQuantize(members[0].act_type)
+        fused_layer = Qwen3FusedDecoderLayer(layer, shared)
+        ModuleHelper.replace_module_by_name(model, group.layer_ref, fused_layer)
+        for member in members:
+            member.input_quant_disabled = True
 
     @staticmethod
     def _fuse_norm(pre_op, smooth):

@@ -49,6 +49,8 @@ class FusionGroup:
         self.status = 'pending'
         self.skip_reason = None
         self.last_input = None
+        self.dynamic_per_token = False
+        self.layer_ref = None
 
     def update_activation_stat(self, inputs):
         if inputs is self.last_input:

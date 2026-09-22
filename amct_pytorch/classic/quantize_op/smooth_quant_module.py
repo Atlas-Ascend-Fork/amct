@@ -59,6 +59,7 @@ class SmoothQuant(BaseQuantizeModule):
         self.quant_config = quant_config
         self.batch_num = quant_config.get('batch_num')
         self.act_granularity = quant_config.get('inputs_cfg').get('strategy')
+        self.dynamic = quant_config.get('inputs_cfg').get('dynamic')
         self.wts_granularity = quant_config.get('weights_cfg').get('strategy')
         self.act_symmetric = quant_config.get('inputs_cfg').get('symmetric')
         self.wts_symmetric = quant_config.get('weights_cfg').get('symmetric')

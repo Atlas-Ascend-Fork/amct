@@ -104,6 +104,7 @@ def _config_signature(module):
         'quant_type': inputs.get('quant_type'),
         'symmetric': inputs.get('symmetric'),
         'strategy': inputs.get('strategy'),
+        'dynamic': inputs.get('dynamic'),
     }
     if signature['algorithm'] == 'smoothquant':
         signature['smooth_strength'] = cfg.get('smooth_strength')
@@ -117,6 +118,11 @@ def _group_type(pre_op):
     if isinstance(pre_op, torch.nn.Linear):
         return 'linear'
     return None
+
+
+def _layer_ref(pre_op_ref):
+    parent = '.'.join(pre_op_ref.split('.')[:-1])
+    return parent or None
 
 
 def build_fusion_groups(model, records):
@@ -198,6 +204,11 @@ def build_fusion_groups(model, records):
             algorithm=first['algorithm'],
             fusion_rule=group_type,
         )
+        group.dynamic_per_token = (
+            first['strategy'] == 'token' and first['dynamic'] is True
+        )
+        if group.dynamic_per_token:
+            group.layer_ref = _layer_ref(pre_op_ref)
         registry.add_group(group)
         seen_members.update(members)
         for member_name in members:

@@ -236,3 +236,137 @@ def test_deploy_linear_skips_input_quant_and_smooth_scale(monkeypatch):
     deploy = NpuQuantizationLinear(module)
     assert not hasattr(deploy, 'scale_factor')
     assert deploy.input_quant_disabled is True
+
+
+class DynamicModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.layer = nn.Module()
+        self.layer.input_layernorm = nn.LayerNorm(3)
+        self.layer.self_attn = nn.Module()
+        self.layer.self_attn.q_proj = Member()
+        self.layer.self_attn.k_proj = Member()
+        self.layer.self_attn.v_proj = Member()
+        self.layer.post_attention_layernorm = nn.LayerNorm(3)
+        self.layer.mlp = nn.Module()
+        self.layer.mlp.up_proj = Member()
+        self.layer.mlp.gate_proj = Member()
+
+    def forward(self, x):
+        h = self.layer.input_layernorm(x)
+        return self.layer.self_attn.q_proj.linear(
+            h
+        ) + self.layer.self_attn.k_proj.linear(h)
+
+
+def _dynamic_group(model, members):
+    group = FusionGroup(
+        group_id='dynamic',
+        group_type='norm',
+        pre_op_ref='layer.input_layernorm',
+        scaling_layer_refs=[
+            'layer.self_attn.q_proj',
+            'layer.self_attn.k_proj',
+            'layer.self_attn.v_proj',
+        ],
+        algorithm='minmax',
+        fusion_rule='qwen3_dynamic_layer',
+    )
+    group.status = 'calibrated'
+    group.activation_scale = torch.tensor([0.1])
+    group.dynamic_per_token = True
+    group.layer_ref = 'layer'
+    return group
+
+
+def test_dynamic_per_token_replaces_qwen3_layer_and_shares_quantization():
+    model = DynamicModel()
+    group = _dynamic_group(model, [])
+    registry = FusionRegistry()
+    registry.add_group(group)
+    model._amct_fusion_registry = registry
+
+    ApplyScalingFusionPass().run(model)
+
+    assert group.status == 'fused'
+    assert type(model.layer).__name__ == '_Qwen3FusedDecoderLayer'
+    assert model.layer.shared_quantize.act_type == 'int8'
+    for name in ('q_proj', 'k_proj', 'v_proj'):
+        member = getattr(model.layer.self_attn, name)
+        assert member.input_quant_disabled is True
+    # Repeat fusion remains idempotent.
+    ApplyScalingFusionPass().run(model)
+    assert group.status == 'fused'
+
+
+def test_dynamic_per_token_passes_shared_scale_to_all_members(monkeypatch):
+    class SharedMember(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.linear = nn.Linear(3, 3)
+            self.act_type = 'int8'
+            self.input_quant_disabled = False
+
+        def forward(self, x, pertoken_scale=None):
+            self.last_input = x
+            self.last_scale = pertoken_scale
+            return self.linear(x)
+
+    class SharedModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.layer = nn.Module()
+            self.layer.input_layernorm = nn.LayerNorm(3)
+            self.layer.self_attn = nn.Module()
+            self.layer.self_attn.q_proj = SharedMember()
+            self.layer.self_attn.k_proj = SharedMember()
+            self.layer.self_attn.v_proj = SharedMember()
+            self.layer.self_attn.head_dim = 3
+            self.layer.self_attn.num_key_value_groups = 1
+            self.layer.post_attention_layernorm = nn.LayerNorm(3)
+            self.layer.mlp = nn.Module()
+            self.layer.mlp.up_proj = SharedMember()
+            self.layer.mlp.gate_proj = SharedMember()
+            self.layer.mlp.down_proj = SharedMember()
+
+        def forward(self, x):
+            return self.layer(x)
+
+    model = SharedModel()
+    group = _dynamic_group(model, [])
+    registry = FusionRegistry()
+    registry.add_group(group)
+    model._amct_fusion_registry = registry
+
+    ApplyScalingFusionPass().run(model)
+    assert group.status == 'fused'
+
+    calls = []
+
+    class CountingQuant(nn.Module):
+        def forward(self, x):
+            calls.append(x)
+            return x, torch.full((x.numel() // x.shape[-1],), 0.5)
+
+    model.layer.shared_quantize = CountingQuant()
+    output = model(torch.randn(2, 4, 3))
+    assert output.shape == (2, 4, 3)
+    assert len(calls) == 2
+
+    attention_members = [
+        model.layer.self_attn.q_proj,
+        model.layer.self_attn.k_proj,
+        model.layer.self_attn.v_proj,
+    ]
+    assert all(
+        member.last_input is attention_members[0].last_input
+        for member in attention_members[1:]
+    )
+    assert all(
+        torch.equal(member.last_scale, attention_members[0].last_scale)
+        for member in attention_members[1:]
+    )
+
+    mlp_members = [model.layer.mlp.up_proj, model.layer.mlp.gate_proj]
+    assert mlp_members[0].last_input is mlp_members[1].last_input
+    assert torch.equal(mlp_members[0].last_scale, mlp_members[1].last_scale)

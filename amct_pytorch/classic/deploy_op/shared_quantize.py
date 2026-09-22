@@ -72,4 +72,10 @@ class SharedDynamicQuantize(nn.Module):
     def forward(self, x):
         import torch_npu
 
-        return torch_npu.npu_dynamic_quant(x, dst_type=self.act_type)
+        if self.act_type == 'hifloat8':
+            return torch_npu.npu_dynamic_quant(
+                x, dst_type=torch_npu.hifloat8, dst_type_max=15
+            )
+        if self.act_type == 'float8_e4m3fn':
+            return torch_npu.npu_dynamic_quant(x, dst_type=torch.float8_e4m3fn)
+        return torch_npu.npu_dynamic_quant(x, dst_type=torch.int8)

@@ -71,6 +71,7 @@ class MinMaxQuant(BaseQuantizeModule):
             self.act_type = quant_config.get('inputs_cfg').get('quant_type')
             self.act_symmetric = quant_config.get('inputs_cfg').get('symmetric')
             self.act_granularity = quant_config.get('inputs_cfg').get('strategy')
+            self.dynamic = quant_config.get('inputs_cfg').get('dynamic')
             self.data_max = None
             self.data_min = None
 

@@ -63,7 +63,7 @@ class NpuQuantizationLinear(torch.nn.Module):
             self._init_act_quant_params(quant_module, device)
             self._init_deq_act_scale(quant_module, device)
 
-    def forward(self, x):
+    def forward(self, x, pertoken_scale=None):
         """
         do inference process
         Params:
@@ -71,11 +71,18 @@ class NpuQuantizationLinear(torch.nn.Module):
         """
         import torch_npu
 
+        if pertoken_scale is not None and not self.input_quant_disabled:
+            raise ValueError(
+                'pertoken_scale can only be passed to a shared-input deploy linear'
+            )
+
         if hasattr(self, 'scale_factor') and not self.input_quant_disabled:
             x = x * self.scale_factor
 
         if self.input_quant_disabled:
             quant_x = x
+            if pertoken_scale is not None:
+                self.pertoken_scale = pertoken_scale.reshape(-1).to(torch.float32)
         elif self.act_granularity == 'token':
             # per-token activation quant is inherently dynamic: the token dim equals
             # batch * seqlen and changes per input, so the scale must be computed at
