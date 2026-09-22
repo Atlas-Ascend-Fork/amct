@@ -74,7 +74,13 @@ ASCEND_RT_VISIBLE_DEVICES=1 START_BLOCK_IDX=22 END_BLOCK_IDX=43 QUANT_DTYPE=int 
 wait
 ```
 
-When sharding, every card must reuse the same `PARAM_DIR` / `OUTPUT_DIR` (the script defaults already agree): each shard only writes the `layer_{i}_*.pt` files of its own layers, so they never overwrite each other. Conversely, if a target is *not* sharded, do not set `START_BLOCK_IDX` / `END_BLOCK_IDX` for one card only — both cards would run all 43 layers and write into the same directory concurrently.
+When sharding, two constraints are mandatory:
+
+- Every card must reuse the same `PARAM_DIR` / `OUTPUT_DIR` (the script defaults already agree), so that the `layer_{i}_*.pt` files of all shards land in one place for step 4 to load.
+- The per-card `[START_BLOCK_IDX, END_BLOCK_IDX)` ranges must be **complementary and non-overlapping**, together covering `[0, 43)` (as in `[0, 22)` and `[22, 43)` above). Only then does each shard write just the files of its own layers.
+
+Counter-example: setting these variables for one card only. The card that has them set runs its sub-range while the other falls back to the script default `0..43` and runs all 43 layers, so the ranges overlap — the overlapping layers get written concurrently into the same `layer_{i}_*.pt` by two processes (`amct_pytorch/workflows/llm_ptq.py` skips a unit merely when its file already exists, and `torch.save` is not atomic), which can leave a truncated param file that only surfaces when step 4 loads it. So when a target is not sharded, leave both cards unset.
+
 ### Step 4: Quantized eval
 
 Load both the Attention and MoE PTQ params and evaluate the quantized model:

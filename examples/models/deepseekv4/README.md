@@ -74,7 +74,12 @@ ASCEND_RT_VISIBLE_DEVICES=1 START_BLOCK_IDX=22 END_BLOCK_IDX=43 QUANT_DTYPE=int 
 wait
 ```
 
-分片并行时各卡必须复用同一个 `PARAM_DIR` / `OUTPUT_DIR`（脚本默认值已一致）：不同分片只写各自层号对应的 `layer_{i}_*.pt`，不会互相覆盖。若某个 target 不做分片，请勿只给其中一张卡设置 `START_BLOCK_IDX` / `END_BLOCK_IDX`——两卡会各跑完整 43 层并并发写同一目录。
+分片并行时有两条硬约束：
+
+- 各卡必须复用同一个 `PARAM_DIR` / `OUTPUT_DIR`（脚本默认值已一致），这样各分片产出的 `layer_{i}_*.pt` 才能汇到一处供第四步加载；
+- 各卡的 `[START_BLOCK_IDX, END_BLOCK_IDX)` 必须**互补且不重叠**地覆盖 `[0, 43)`（如上例的 `[0, 22)` 与 `[22, 43)`）。区间不重叠，各分片才只写各自层号的文件。
+
+反例：只给其中一张卡设置这两个变量。此时设了的卡按子区间跑，没设的卡按脚本兜底值 `0..43` 跑完整 43 层，两卡层区间重叠——重叠层会被两个进程并发写同一个 `layer_{i}_*.pt`（`amct_pytorch/workflows/llm_ptq.py` 仅按「文件是否已存在」跳过单元，`torch.save` 又不是原子写），可能留下截断的参数文件，且要到第四步 eval 加载时才暴露。因此某个 target 不做分片时，两张卡都不要设置这两个变量。
 
 ### 第四步：量化精度评估
 
