@@ -72,8 +72,8 @@ cd amct_ops/
 bash ops_build.sh [--soc <soc>] [<算子>]
 
 # --soc 指定目标平台（默认 ascend910b）：
-#   ascend910b    A2（Ascend 910B1/B2/B3）
-#   ascend910_93  A3（Ascend 910_93）
+#   ascend910b    A2（Ascend 910B1/B2/B3/B4）
+#   ascend910_93  A3（Ascend 910C，npu-smi 显示 910_93）
 #   ascend950     A5（Ascend 950，需 CANN 编译器支持 dav-3510）
 
 bash ops_build.sh                                # 全部算子，默认平台
@@ -81,6 +81,18 @@ bash ops_build.sh --soc ascend910_93             # 全部算子，指定平台
 bash ops_build.sh hifloat8_cast                  # 指定算子，默认平台
 bash ops_build.sh --soc ascend950 hifloat8_cast  # 指定算子，指定平台
 ```
+
+#### 如何选择 `--soc`（确认本机芯片型号）
+
+执行 `npu-smi info` 查看 **Name** 列；或执行 `npu-smi info -t board -i <NPU_ID> -c <CHIP_ID>` 查看 `Chip Name` 与 `NPU Name`（soc_version 为两者拼接：`Chip Name`+`_`+`NPU Name`），按下表选择 `--soc` 取值：
+
+| npu-smi 输出 | 芯片营销名 | SoC 代号 | `--soc` 取值 |
+| :--- | :--- | :--- | :--- |
+| Name 为 `910B1`/`910B2`/`910B3`/`910B4` | Ascend 910B | A2 | `ascend910b`（默认） |
+| Name 为 `910_93`（board 拼接示例 `Ascend910_9362`；部分 A3 推理卡显示 `Chip Name: Ascend910B4`、`NPU Name: 1234`，拼接为 `Ascend910B4_1234`） | Ascend 910C | A3 | `ascend910_93` |
+| Name 为 `910_95`/`950` | Ascend 950 | A5 | `ascend950` |
+
+> **注意**：Ascend 910C（Atlas A3 系列）机器的 `npu-smi` 输出中**不会**出现“910C”字样；凡 Name 列为 `910_93`，或 board 拼接结果为 `Ascend910_93xx`/`Ascend910B4_1234` 的，均属 A3 平台。对应的 CANN Ops 安装包 SoC 代号为 `A3`（包名 `Ascend-cann-A3-ops_*.run`）。
 
 ### 构建产物
 

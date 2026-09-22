@@ -160,8 +160,18 @@ pip3 install -r requirements.txt
 
       - `${cann_version}`：表示CANN包版本号。
       - `${arch}`：表示CPU架构，如`aarch64`、`x86_64`。
-      - `${soc_name}`表示NPU型号名称。
+      - `${soc_name}`：表示NPU的SoC代号，必须与本机实际硬件匹配，取值为`910b`、`A3`、`950`，确认方法见下方说明。
       - `${install_path}`：表示指定安装路径，ops需要与Toolkit包安装在相同路径，root用户默认安装在`/usr/local/Ascend`目录。
+
+      **如何确认本机SoC代号**：执行`npu-smi info`查看输出的**Name**列；如需精确的soc_version，执行`npu-smi info -t board -i <NPU_ID> -c <CHIP_ID>`查看`Chip Name`与`NPU Name`，soc_version为两者拼接`Chip Name`+`_`+`NPU Name`（例如`Ascend910_93`+`62` → `Ascend910_9362`）。`<NPU_ID>`通过`npu-smi info -l`查询，`<CHIP_ID>`通过`npu-smi info -m`查询。
+
+      | npu-smi输出 | 芯片营销名 | SoC代号 | ops包`${soc_name}` |
+      | :--- | :--- | :--- | :--- |
+      | Name为`910B1`/`910B2`/`910B3`/`910B4` | Ascend 910B | A2 | `910b` |
+      | Name为`910_93`（board拼接示例`Ascend910_9362`；部分A3推理卡显示`Chip Name: Ascend910B4`、`NPU Name: 1234`，拼接为`Ascend910B4_1234`） | Ascend 910C | A3 | `A3` |
+      | Name为`910_95`/`950` | Ascend 950 | A5 | `950` |
+
+      > **注意**：Ascend 910C（Atlas A3系列）机器的`npu-smi`输出中**不会**出现“910C”字样。凡Name列为`910_93`，或board信息拼接结果为`Ascend910_93xx`/`Ascend910B4_1234`的，均属A3平台（Ascend 910C芯片），ops包应选择`Ascend-cann-A3-ops_${cann_version}_linux-${arch}.run`。
 
    **场景2：体验已发布版本能力或基于已发布版本进行开发**
 

@@ -72,8 +72,8 @@ cd amct_ops/
 bash ops_build.sh [--soc <soc>] [<operator>]
 
 # --soc specifies target platform (default ascend910b):
-#   ascend910b    A2 (Ascend 910B1/B2/B3)
-#   ascend910_93  A3 (Ascend 910_93)
+#   ascend910b    A2 (Ascend 910B1/B2/B3/B4)
+#   ascend910_93  A3 (Ascend 910C, reported as 910_93 by npu-smi)
 #   ascend950     A5 (Ascend 950, requires CANN compiler support for dav-3510)
 
 bash ops_build.sh                                # All operators, default platform
@@ -81,6 +81,18 @@ bash ops_build.sh --soc ascend910_93             # All operators, specified plat
 bash ops_build.sh hifloat8_cast                  # Specified operator, default platform
 bash ops_build.sh --soc ascend950 hifloat8_cast  # Specified operator, specified platform
 ```
+
+#### How to choose `--soc` (identify your chip)
+
+Run `npu-smi info` and check the **Name** column; or run `npu-smi info -t board -i <NPU_ID> -c <CHIP_ID>` and check `Chip Name` and `NPU Name` (the soc_version is the concatenation `Chip Name`+`_`+`NPU Name`), then pick the `--soc` value from the table below:
+
+| npu-smi output | Marketing name | SoC code | `--soc` value |
+| :--- | :--- | :--- | :--- |
+| Name is `910B1`/`910B2`/`910B3`/`910B4` | Ascend 910B | A2 | `ascend910b` (default) |
+| Name is `910_93` (board concatenation example `Ascend910_9362`; some A3 inference cards report `Chip Name: Ascend910B4` and `NPU Name: 1234`, concatenated as `Ascend910B4_1234`) | Ascend 910C | A3 | `ascend910_93` |
+| Name is `910_95`/`950` | Ascend 950 | A5 | `ascend950` |
+
+> **Note**: `npu-smi` on Ascend 910C (Atlas A3 series) machines never prints the string "910C". Any output with Name `910_93`, or a board concatenation of `Ascend910_93xx`/`Ascend910B4_1234`, belongs to the A3 platform. The corresponding CANN Ops installation package uses SoC code `A3` (package name `Ascend-cann-A3-ops_*.run`).
 
 ### Build Artifacts
 
