@@ -53,6 +53,25 @@ def _load_qwen3_fused_layer():
     return module.Qwen3FusedDecoderLayer
 
 
+def _load_vit_fused_layer():
+    '''Load the ViT fused layer replica without importing transformers.'''
+    import importlib.util
+    from pathlib import Path
+
+    cache_key = 'amct_vit_fused_layer'
+    cached = sys.modules.get(cache_key)
+    if cached is not None:
+        return cached.ViTFusedLayer
+    module_path = (
+        Path(__file__).resolve().parents[2] / 'common/models/vit/fused_layer.py'
+    )
+    spec = importlib.util.spec_from_file_location(cache_key, module_path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[cache_key] = module
+    spec.loader.exec_module(module)
+    return module.ViTFusedLayer
+
+
 def _member_weight(member):
     '''Return the member's linear weight (real modules expose it directly,
     wrapped members keep the original nn.Linear under .linear).'''
@@ -177,7 +196,7 @@ class ApplyScalingFusionPass:
     @staticmethod
     def _apply_dynamic_layer(model, layer_ref, groups):
         layer = model.get_submodule(layer_ref)
-        if not all(
+        if all(
             hasattr(layer, attr)
             for attr in (
                 'input_layernorm',
@@ -186,11 +205,21 @@ class ApplyScalingFusionPass:
                 'mlp',
             )
         ):
-            raise ValueError(
-                f'layer {layer_ref} does not match the Qwen3 decoder structure'
+            fused_layer_cls = _load_qwen3_fused_layer()
+        elif all(
+            hasattr(layer, attr)
+            for attr in ('attention', 'layernorm_before', 'layernorm_after', 'mlp')
+        ):
+            fused_layer_cls = _load_vit_fused_layer()
+        else:
+            supported = (
+                'Qwen3 decoder structure (input_layernorm/self_attn/'
+                'post_attention_layernorm/mlp) or ViT encoder structure '
+                '(attention/layernorm_before/layernorm_after/mlp)'
             )
-
-        Qwen3FusedDecoderLayer = _load_qwen3_fused_layer()
+            raise ValueError(
+                f'layer {layer_ref} does not match a supported structure: {supported}'
+            )
 
         # One shared quantizer per pre_op: the attention group shares the
         # input_layernorm output, the mlp group shares
@@ -205,7 +234,7 @@ class ApplyScalingFusionPass:
                 first_member.act_type
             )
 
-        fused_layer = Qwen3FusedDecoderLayer.from_shared_map(
+        fused_layer = fused_layer_cls.from_shared_map(
             layer, shared_by_pre_op, layer_ref
         )
         ModuleHelper.replace_module_by_name(model, layer_ref, fused_layer)
