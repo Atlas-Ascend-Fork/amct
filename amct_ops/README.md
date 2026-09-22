@@ -72,15 +72,39 @@ cd amct_ops/
 bash ops_build.sh [--soc <soc>] [<算子>]
 
 # --soc 指定目标平台（默认 ascend910b）：
-#   ascend910b    A2（Ascend 910B1/B2/B3）
-#   ascend910_93  A3（Ascend 910_93）
-#   ascend950     A5（Ascend 950，需 CANN 编译器支持 dav-3510）
+#   ascend910b    A2（Atlas A2 训练/推理系列产品等）
+#   ascend910_93  A3（Atlas A3 训练/推理系列产品，Ascend 910C 芯片）
+#   ascend950     A5（Ascend 950PR/950DT，需 CANN 编译器支持 dav-3510）
 
 bash ops_build.sh                                # 全部算子，默认平台
 bash ops_build.sh --soc ascend910_93             # 全部算子，指定平台
 bash ops_build.sh hifloat8_cast                  # 指定算子，默认平台
 bash ops_build.sh --soc ascend950 hifloat8_cast  # 指定算子，指定平台
 ```
+
+#### 如何选择 `--soc`（确认本机产品系列）
+
+`--soc` 按本机产品系列选择，先按下述规则查询确认所属系列，再对照下表：
+
+| 产品系列 | SoC 代号 | `--soc` 取值 | CANN Ops 安装包 |
+| :--- | :--- | :--- | :--- |
+| Atlas A2 训练/推理系列产品、Atlas 200I/500 A2 推理产品、Atlas 推理/训练系列产品 | A2 | `ascend910b`（默认） | `Ascend-cann-910b-ops_*.run` |
+| Atlas A3 训练/推理系列产品（Ascend 910C 芯片） | A3 | `ascend910_93` | `Ascend-cann-A3-ops_*.run` |
+| Ascend 950PR/950DT | A5 | `ascend950` | `Ascend-cann-950-ops_*.run` |
+
+**如何查询本机soc_version**（即芯片型号的实际配置值，可用于确认所属产品系列）：
+
+- 针对如下产品：在安装AI处理器的服务器执行`npu-smi info`命令进行查询，获取**Name**信息。实际配置值为`Ascend${Name}`，例如Name取值为`xxxyy`，实际配置值为`Ascendxxxyy`。
+  - Atlas A2 训练系列产品/Atlas A2 推理系列产品
+  - Atlas 200I/500 A2 推理产品
+  - Atlas 推理系列产品
+  - Atlas 训练系列产品
+- 针对Atlas A3 训练系列产品/Atlas A3 推理系列产品：在安装AI处理器的服务器执行`npu-smi info -t board -i id -c chip_id`命令进行查询，获取**Chip Name**和**NPU Name**信息，实际配置值为`Chip Name_NPU Name`。例如Chip Name取值为`Ascendxxx`，NPU Name取值为`1234`，实际配置值为`Ascendxxx_1234`。其中：
+  - id：设备id，通过`npu-smi info -l`命令查出的NPU ID即为设备id。
+  - chip_id：芯片id，通过`npu-smi info -m`命令查出的Chip ID即为芯片id。
+- 针对Ascend 950PR/Ascend 950DT：在安装AI处理器的服务器执行`npu-smi info -t board -i id`命令进行查询，获取**Chip Name**和**NPU Name**信息，实际配置值为`Chip Name_NPU Name`。例如Chip Name取值为`Ascendxxx`，NPU Name取值为`1234`，实际配置值为`Ascendxxx_1234`。其中，id为设备id，通过`npu-smi info -l`命令查出的NPU ID即为设备id。
+
+> **注意**：Ascend 910C芯片用于Atlas A3系列产品，其`npu-smi`输出中不会出现“910C”字样，请勿据此误判为A2系列；请按上述A3系列产品的规则查询，构建时`--soc`选择`ascend910_93`，ops安装包SoC代号选择`A3`。
 
 ### 构建产物
 

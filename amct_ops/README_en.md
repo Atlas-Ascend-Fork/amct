@@ -72,15 +72,39 @@ cd amct_ops/
 bash ops_build.sh [--soc <soc>] [<operator>]
 
 # --soc specifies target platform (default ascend910b):
-#   ascend910b    A2 (Ascend 910B1/B2/B3)
-#   ascend910_93  A3 (Ascend 910_93)
-#   ascend950     A5 (Ascend 950, requires CANN compiler support for dav-3510)
+#   ascend910b    A2 (Atlas A2 training/inference products, etc.)
+#   ascend910_93  A3 (Atlas A3 training/inference products, Ascend 910C chip)
+#   ascend950     A5 (Ascend 950PR/950DT, requires CANN compiler support for dav-3510)
 
 bash ops_build.sh                                # All operators, default platform
 bash ops_build.sh --soc ascend910_93             # All operators, specified platform
 bash ops_build.sh hifloat8_cast                  # Specified operator, default platform
 bash ops_build.sh --soc ascend950 hifloat8_cast  # Specified operator, specified platform
 ```
+
+#### How to choose `--soc` (identify your product series)
+
+Choose `--soc` by your product series. First confirm the series with the soc_version query rules below, then pick from the table:
+
+| Product series | SoC code | `--soc` value | CANN Ops package |
+| :--- | :--- | :--- | :--- |
+| Atlas A2 training/inference products, Atlas 200I/500 A2 inference products, Atlas inference/training products | A2 | `ascend910b` (default) | `Ascend-cann-910b-ops_*.run` |
+| Atlas A3 training/inference products (Ascend 910C chip) | A3 | `ascend910_93` | `Ascend-cann-A3-ops_*.run` |
+| Ascend 950PR/950DT | A5 | `ascend950` | `Ascend-cann-950-ops_*.run` |
+
+**How to query the soc_version** (the actual configuration value of the chip model, used to confirm the product series):
+
+- For the following products: run `npu-smi info` on the server where the AI processor is installed and get the **Name**. The actual configuration value is `Ascend${Name}`; for example, if Name is `xxxyy`, the actual configuration value is `Ascendxxxyy`.
+  - Atlas A2 training products / Atlas A2 inference products
+  - Atlas 200I/500 A2 inference products
+  - Atlas inference products
+  - Atlas training products
+- For Atlas A3 training products / Atlas A3 inference products: run `npu-smi info -t board -i id -c chip_id` on the server and get the **Chip Name** and **NPU Name**. The actual configuration value is `Chip Name_NPU Name`; for example, if Chip Name is `Ascendxxx` and NPU Name is `1234`, the actual configuration value is `Ascendxxx_1234`. Where:
+  - id: the device id — the NPU ID reported by `npu-smi info -l` is the device id.
+  - chip_id: the chip id — the Chip ID reported by `npu-smi info -m` is the chip id.
+- For Ascend 950PR/Ascend 950DT: run `npu-smi info -t board -i id` on the server (no `-c` option) and get the **Chip Name** and **NPU Name**. The actual configuration value is `Chip Name_NPU Name`; for example, if Chip Name is `Ascendxxx` and NPU Name is `1234`, the actual configuration value is `Ascendxxx_1234`. Where id is the device id — the NPU ID reported by `npu-smi info -l` is the device id.
+
+> **Note**: The Ascend 910C chip is used in Atlas A3 series products, and `npu-smi` on those machines never prints the string "910C" — do not mistake them for the A2 series. Query per the A3 rules above, use `--soc ascend910_93` for building, and choose SoC code `A3` for the ops installation package.
 
 ### Build Artifacts
 

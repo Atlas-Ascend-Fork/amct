@@ -160,8 +160,22 @@ pip3 install -r requirements.txt
 
       - `${cann_version}`：表示CANN包版本号。
       - `${arch}`：表示CPU架构，如`aarch64`、`x86_64`。
-      - `${soc_name}`表示NPU型号名称。
+      - `${soc_name}`：表示NPU的SoC代号，须与本机实际产品系列匹配（如A2系列产品为`910b`、A3系列产品为`A3`、Ascend 950系列产品为`950`）。
       - `${install_path}`：表示指定安装路径，ops需要与Toolkit包安装在相同路径，root用户默认安装在`/usr/local/Ascend`目录。
+
+      **如何查询本机soc_version**（即芯片型号的实际配置值，可用于确认具体型号）：
+
+      - 针对如下产品：在安装AI处理器的服务器执行`npu-smi info`命令进行查询，获取**Name**信息。实际配置值为`Ascend${Name}`，例如Name取值为`xxxyy`，实际配置值为`Ascendxxxyy`。
+        - Atlas A2 训练系列产品/Atlas A2 推理系列产品
+        - Atlas 200I/500 A2 推理产品
+        - Atlas 推理系列产品
+        - Atlas 训练系列产品
+      - 针对Atlas A3 训练系列产品/Atlas A3 推理系列产品：在安装AI处理器的服务器执行`npu-smi info -t board -i id -c chip_id`命令进行查询，获取**Chip Name**和**NPU Name**信息，实际配置值为`Chip Name_NPU Name`。例如Chip Name取值为`Ascendxxx`，NPU Name取值为`1234`，实际配置值为`Ascendxxx_1234`。其中：
+        - id：设备id，通过`npu-smi info -l`命令查出的NPU ID即为设备id。
+        - chip_id：芯片id，通过`npu-smi info -m`命令查出的Chip ID即为芯片id。
+      - 针对Ascend 950PR/Ascend 950DT：在安装AI处理器的服务器执行`npu-smi info -t board -i id`命令进行查询，获取**Chip Name**和**NPU Name**信息，实际配置值为`Chip Name_NPU Name`。例如Chip Name取值为`Ascendxxx`，NPU Name取值为`1234`，实际配置值为`Ascendxxx_1234`。其中，id为设备id，通过`npu-smi info -l`命令查出的NPU ID即为设备id。
+
+      > **注意**：Ascend 910C芯片用于Atlas A3系列产品，其`npu-smi`输出中不会出现“910C”字样，请勿据此误判为A2系列；请按上述A3系列产品的规则查询，ops包`${soc_name}`选择`A3`（即`Ascend-cann-A3-ops_${cann_version}_linux-${arch}.run`）。
 
    **场景2：体验已发布版本能力或基于已发布版本进行开发**
 
