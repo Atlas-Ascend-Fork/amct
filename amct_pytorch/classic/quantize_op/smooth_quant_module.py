@@ -128,15 +128,22 @@ class SmoothQuant(BaseQuantizeModule):
                 group.batch_input = inputs.cpu()
             if group.status == 'calibrated':
                 group.writeback_if_pending(self)
-                return output
-            if group.finalize_if_ready(self):
-                return output
-            if group.status != 'skipped':
+            elif group.finalize_if_ready(self):
+                # finalize writes the shared activation parameters to this
+                # member. Continue below so this member computes its own
+                # weight scale, including the progressive FP8 x FP4 path.
+                pass
+            elif group.status != 'skipped':
                 return output
 
         if self.cur_batch == self.batch_num:
             act_max = torch.max(self.data_max.abs(), self.data_min.abs())
-            smooth_factor = self.calculate_smooth(act_max)
+            if group is not None and group.status == 'calibrated':
+                # FusionGroup has already written the common activation-side
+                # scale to this member.
+                smooth_factor = self.scale
+            else:
+                smooth_factor = self.calculate_smooth(act_max)
             weight = self.weight * smooth_factor
 
             # only FP8 * FP4 do progressive scale
@@ -151,14 +158,15 @@ class SmoothQuant(BaseQuantizeModule):
                     weight, self.quant_config.get('weights_cfg').get('strategy')
                 )
 
-            if self.act_granularity == 'tensor':
-                scale_d, offset_d = self._calculate_per_tensor_params(smooth_factor)
-            elif self.act_granularity == 'token':
-                scale_d, offset_d = self._calculate_per_token_params(smooth_factor)
+            if group is None or group.status == 'skipped':
+                if self.act_granularity == 'tensor':
+                    scale_d, offset_d = self._calculate_per_tensor_params(smooth_factor)
+                elif self.act_granularity == 'token':
+                    scale_d, offset_d = self._calculate_per_token_params(smooth_factor)
 
-            self.scale_d = scale_d
-            self.offset_d = offset_d
-            self.scale = smooth_factor
+                self.scale_d = scale_d
+                self.offset_d = offset_d
+                self.scale = smooth_factor
 
             LOGGER.logd(
                 "Calculate smooth quant params of layer '{}' success!".format(

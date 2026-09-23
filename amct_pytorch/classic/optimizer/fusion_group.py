@@ -216,16 +216,13 @@ class FusionGroup:
         '''Write common params onto one member (group-calibrated values only).'''
         if self.algorithm == 'smoothquant':
             smooth = self.smooth_factor
-            weight = member.weight.detach() * smooth.to(member.weight.dtype)
-            member.scale_w, member.offset_w = member.calculate_weights_scale_factor(
-                weight, member.wts_granularity
-            )
-            member.scale = smooth.to(member.scale_w.dtype)
-            member.scale_d = self.activation_scale.to(member.scale_w.dtype)
+            param_dtype = member.weight.dtype
+            member.scale = smooth.to(param_dtype)
+            member.scale_d = self.activation_scale.to(param_dtype)
             member.offset_d = (
                 None
                 if self.activation_offset is None
-                else self.activation_offset.to(member.scale_w.dtype)
+                else self.activation_offset.to(param_dtype)
             )
         else:
             member.scale_d = self.activation_scale

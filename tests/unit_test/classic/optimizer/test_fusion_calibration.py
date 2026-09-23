@@ -87,6 +87,11 @@ def test_smoothquant_group_params_are_common_and_weight_scales_independent():
             group.update_activation_stat(x)
 
     group.finalize_quant_params(members)
+    for member in members:
+        # Re-enter the member's batch_num branch to exercise member-owned
+        # weight-scale calculation after group activation writeback.
+        member.cur_batch = member.batch_num - 1
+        member.forward(torch.randn(4, 6))
     assert group.status == 'calibrated'
     assert group.smooth_factor is not None
     assert group.activation_scale is not None
