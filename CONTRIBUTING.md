@@ -72,6 +72,12 @@
 
 您可以按照[提交Issue/处理Issue任务](https://gitcode.com/cann/community#%E6%8F%90%E4%BA%A4Issue%E5%A4%84%E7%90%86Issue%E4%BB%BB%E5%8A%A1)指引新建 `Documentation|文档反馈` 类Issue指出对应文档的问题，然后在评论框中输入“/assign”或“/assign @yourself”，将该Issue分配给您纠正对应文档描述。
 
+## 体验反馈
+
+如果您在使用AMCT的过程中，发现文档、API与配置、样例、构建工具链或运行时反馈等环节存在体验问题（如不易学习、不易使用、报错信息不清晰等），欢迎您新建Issue进行反馈，帮助我们持续优化易用性。
+
+您可以按照[提交Issue/处理Issue任务](https://gitcode.com/cann/community#%E6%8F%90%E4%BA%A4Issue%E5%A4%84%E7%90%86Issue%E4%BB%BB%E5%8A%A1)指引新建 `Experience Request|体验需求` 类Issue，说明体验问题所属的功能链路与压缩流程阶段、实际遇到的问题以及期望的改进方式。若您希望直接参与改进，也可以在评论框中输入“/assign”或“/assign @yourself”，将该Issue分配给您进行处理。
+
 ## 帮助解决他人Issue
 
 如果社区中他人遇到的问题您有合适的解决方法，欢迎您在Issue中发表评论交流，帮助他人解决问题和痛点，共同优化易用性。

@@ -71,6 +71,12 @@ If you discover certain documentation description errors in this project, you ar
 
 You can follow the [Submit Issue/Process Issue Task](https://gitcode.com/cann/community#%E6%8F%90%E4%BA%A4Issue%E5%A4%84%E7%90%86Issue%E4%BB%BB%E5%8A%A1) guide to create a `Documentation|Documentation Feedback` type Issue to point out the problems in the corresponding documentation. Then enter "/assign" or "/assign @yourself" in the comment box to assign the Issue to yourself for correcting the corresponding documentation description.
 
+## Experience Feedback
+
+If you find usability problems in the documentation, APIs and configuration parameters, examples, build toolchain, or runtime feedback of AMCT (such as being hard to learn, hard to use, or unclear error messages), you are welcome to create an Issue for feedback, helping us continuously improve usability.
+
+You can follow the [Submit Issue/Process Issue Task](https://gitcode.com/cann/community#%E6%8F%90%E4%BA%A4Issue%E5%A4%84%E7%90%86Issue%E4%BB%BB%E5%8A%A1) guide to create an `Experience Request|Experience Feedback` type Issue, describing the feature chain and compression stage the problem belongs to, the problem you actually encountered, and the improvement you expect. If you would like to work on the improvement yourself, you can also enter "/assign" or "/assign @yourself" in the comment box to assign the Issue to yourself for processing.
+
 ## Help Solve Others' Issues
 
 If you have suitable solutions for problems encountered by others in the community, you are welcome to publish comments in the Issue to communicate and help others solve problems and pain points, jointly optimizing usability.
