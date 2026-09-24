@@ -45,6 +45,7 @@ from utils import (
     dump_json,
     eval_wikitext2_ppl,
     load_model,
+    to_device_batches,
 )
 
 disable_torchaudio()  # must run before transformers imports torchaudio
@@ -63,11 +64,19 @@ def _runtime_args(args):
         "device": args.device,
         "prune_ratio": args.prune_ratio,
         "preview_prune_ratio": args.preview_prune_ratio,
+        "skip_diagnose": args.skip_diagnose,
         "calib_samples": args.calib_samples,
         "calib_seq_len": args.calib_seq_len,
         "eval_batches": args.eval_batches if args.eval_batches is not None else "all",
         "seq_len": args.seq_len,
     }
+
+
+def _positive_int(text):
+    value = int(text)
+    if value < 1:
+        raise argparse.ArgumentTypeError("must be a positive integer (>= 1)")
+    return value
 
 
 def _prune_cfg(prune_ratio):
@@ -146,6 +155,11 @@ def parse_args():
         help="Dry-run prune ratio used by prune_diagnose()",
     )
     parser.add_argument(
+        "--skip-diagnose",
+        action="store_true",
+        help="Skip the prune_diagnose() dry-run (saves its runtime)",
+    )
+    parser.add_argument(
         "--calib-samples",
         type=int,
         default=8,
@@ -165,7 +179,7 @@ def parse_args():
     )
     parser.add_argument(
         "--eval-batches",
-        type=int,
+        type=_positive_int,
         default=None,
         help="Optional cap on WikiText2 4096-token batches; omit to use the full test split",
     )
@@ -179,11 +193,15 @@ def main():
     save_dir = Path(args.save_dir)
     dump_repro_metadata(save_dir)
 
-    model, tokenizer = load_model(args.model_path, dtype=torch.bfloat16)
+    model, tokenizer = load_model(args.model_path, torch_dtype=torch.bfloat16)
     model = model.to(args.device)
     calib_batches = build_pileval_batches(
         tokenizer, n_samples=args.calib_samples, seq_len=args.calib_seq_len
     )
+    # prune_diagnose()'s dry-run forwards calibration batches without moving
+    # them, so align them with the model device here (calib_nll's .to() makes
+    # this a no-op for the real prune).
+    calib_batches = to_device_batches(calib_batches, args.device)
     eval_batches = build_wikitext2_batches(tokenizer, seq_len=args.seq_len)
     eval_batches = eval_batches[: args.eval_batches]
 
@@ -194,15 +212,27 @@ def main():
     print(f"[qwen3_0_6b.low_variance.ratio] baseline ppl: {baseline_ppl:.6f}")
 
     cfg = _prune_cfg(args.prune_ratio)
-    diagnose = prune_diagnose(
-        model,
-        data=calib_batches,
-        config=copy.deepcopy(cfg),
-        prune_ratio=args.preview_prune_ratio,
-    )
-    print("[qwen3_0_6b.low_variance.ratio] prune_diagnose():")
-    diagnose_summary = diagnose.summary()
-    print(diagnose_summary)
+    diagnose_summary = None
+    diagnose_seconds = None
+    if args.skip_diagnose:
+        print(
+            "[qwen3_0_6b.low_variance.ratio] prune_diagnose(): skipped (--skip-diagnose)"
+        )
+    else:
+        diagnose_t0 = time.perf_counter()
+        diagnose = prune_diagnose(
+            model,
+            data=calib_batches,
+            config=copy.deepcopy(cfg),
+            prune_ratio=args.preview_prune_ratio,
+        )
+        diagnose_seconds = time.perf_counter() - diagnose_t0
+        print("[qwen3_0_6b.low_variance.ratio] prune_diagnose():")
+        diagnose_summary = diagnose.summary()
+        print(diagnose_summary)
+        print(
+            f"[qwen3_0_6b.low_variance.ratio] diagnose time: {diagnose_seconds / 60:.2f} min"
+        )
 
     report = PruneReport()
     prune_t0 = time.perf_counter()
@@ -221,19 +251,21 @@ def main():
     print(f"[qwen3_0_6b.low_variance.ratio] ppl {baseline_ppl:.6f} -> {pruned_ppl:.6f}")
     print(f"[qwen3_0_6b.low_variance.ratio] prune time: {prune_seconds / 60:.2f} min")
 
-    save_dir.mkdir(parents=True, exist_ok=True)
+    save_model_status = "not_requested"
     if args.save_model:
         try:
             model.save_pretrained(save_dir)
             tokenizer.save_pretrained(save_dir)
+            save_model_status = "saved"
         except OSError as exc:
+            save_model_status = f"failed: {type(exc).__name__}: {exc}"
             print(
-                f"[qwen3_0_6b.low_variance.ratio] save_pretrained skipped: "
-                f"{type(exc).__name__}: {exc}"
+                f"[qwen3_0_6b.low_variance.ratio] save_pretrained skipped: {save_model_status}"
             )
     dump_json(save_dir / "prune_report.json", report.as_dict())
     dump_json(save_dir / "run_config.json", _runtime_args(args))
-    (save_dir / "diagnose_summary.txt").write_text(diagnose_summary + "\n")
+    if diagnose_summary is not None:
+        (save_dir / "diagnose_summary.txt").write_text(diagnose_summary + "\n")
     dump_json(
         save_dir / "run_metrics.json",
         {
@@ -244,6 +276,12 @@ def main():
             "param_cut_ratio": 1 - report.params_after / report.params_before,
             "prune_time_seconds": prune_seconds,
             "prune_time_minutes": prune_seconds / 60,
+            "diagnose_time_seconds": diagnose_seconds,
+            "diagnose_time_minutes": diagnose_seconds / 60
+            if diagnose_seconds is not None
+            else None,
+            "diagnose_skipped": args.skip_diagnose,
+            "save_model_status": save_model_status,
             "device": args.device,
             "prune_ratio": args.prune_ratio,
             "preview_prune_ratio": args.preview_prune_ratio,

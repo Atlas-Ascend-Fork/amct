@@ -196,31 +196,11 @@ def disable_torchaudio():
 
 def load_model(
     model_path,
-    dtype=torch.bfloat16,
-    trust_remote_code=False,
-):
-    """Load a causal LM (e.g. Qwen3-0.6B) with its tokenizer on CPU."""
-    _disable_torchaudio_for_transformers()
-    from transformers import AutoModelForCausalLM, AutoTokenizer
-
-    tokenizer = AutoTokenizer.from_pretrained(
-        model_path, trust_remote_code=trust_remote_code
-    )
-    model = AutoModelForCausalLM.from_pretrained(
-        model_path,
-        dtype=dtype,
-        trust_remote_code=trust_remote_code,
-        low_cpu_mem_usage=True,
-    ).eval()
-    return model, tokenizer
-
-
-def load_qwen36_moe(
-    model_path,
     torch_dtype=torch.bfloat16,
-    trust_remote_code=True,
+    trust_remote_code=False,
     device_map=None,
 ):
+    """Load a causal LM (e.g. Qwen3-0.6B) with its tokenizer."""
     _disable_torchaudio_for_transformers()
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -231,16 +211,39 @@ def load_qwen36_moe(
         model_path,
         torch_dtype=torch_dtype,
         trust_remote_code=trust_remote_code,
-        low_cpu_mem_usage=True,
         device_map=device_map,
     ).eval()
     return model, tokenizer
+
+
+def load_qwen36_moe(
+    model_path,
+    torch_dtype=torch.bfloat16,
+    trust_remote_code=True,
+    device_map=None,
+):
+    """Thin alias of load_model kept for the MoE sample's defaults."""
+    return load_model(
+        model_path,
+        torch_dtype=torch_dtype,
+        trust_remote_code=trust_remote_code,
+        device_map=device_map,
+    )
 
 
 def build_pileval_batches(tokenizer, n_samples, seq_len):
     from amct_pytorch.common.datasets.preproc import get_pileval
 
     return get_pileval(tokenizer, n_samples=n_samples, seq_len=seq_len)
+
+
+def to_device_batches(batches, device):
+    """Move token-id batches to ``device`` (no-op when already there).
+
+    prune_diagnose()'s dry-run forward feeds the calibration data to the
+    model copy as-is (no internal .to()), so the caller must align devices.
+    """
+    return [batch.to(device) for batch in batches]
 
 
 def build_wikitext2_batches(tokenizer, seq_len=4096):

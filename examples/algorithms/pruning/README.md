@@ -618,8 +618,9 @@ python3 src/run_qwen3_0_6b_pruning_low_variance_ratio.py \
 | `--device` | `npu:0` | 模型放置与评测设备；单卡即可 |
 | `--calib-samples` / `--calib-seq-len` | 8 / 512 | Pileval 校准条数与长度 |
 | `--seq-len` | 4096 | WikiText2 评测序列长度 |
-| `--eval-batches` | 全量 | 可选，截断评测 batch 数，仅用于快速验证 |
+| `--eval-batches` | 全量 | 可选，截断评测 batch 数（正整数），仅用于快速验证 |
 | `--preview-prune-ratio` | 0.1 | `prune_diagnose()` dry-run 用的预览剪枝率，不影响正式剪枝 |
+| `--skip-diagnose` | 关闭 | 追加后跳过 `prune_diagnose()` 预览，节省其耗时（三档实测约 0.1 min） |
 | `--save-model` | 关闭 | 追加后保存剪枝模型与 tokenizer 到 `--save-dir` |
 
 脚本启动时打印完整运行参数，并保存 `run_command.txt` / `run_environment.txt` /
@@ -633,13 +634,17 @@ python3 src/run_qwen3_0_6b_pruning_low_variance_ratio.py \
 ```text
 [qwen3_0_6b.low_variance.ratio] baseline ppl: 19.153452
 [prune-diagnose] prunable targets: cnn=0, dense=28, moe=0
-  fixed-ratio prune: available (cut 4.4%, forward failed)
+  fixed-ratio prune: available (cut 4.4%, forward OK)
   acc binary search: unavailable
-  - acc search dry-run error: RuntimeError: Expected all tensors to be on the same device,
-    but found at least two devices, npu:0 and cpu!
-    # 说明：诊断 dry-run 在 CPU 上深拷贝模型副本后前向校验，输入仍在 npu:0，设备不一致导致
-    # 该预览项失败；仅影响诊断预览，不影响正式剪枝（正式剪枝与 PPL 评测均正常完成）
+  - acc search found no acceptable prune ratio at this tolerance (relax the tolerance).
+[qwen3_0_6b.low_variance.ratio] diagnose time: 0.11 min
 ```
+
+说明：诊断的 fixed-ratio 前向校验要求校准数据与模型同设备，脚本已把校准 batch 对齐到
+`--device`。acc binary search 预览未找到可接受剪枝率属正常——`low_variance` 切片在默认
+容差内损失过大；`ratio` 模式的正式剪枝不依赖该搜索结果。诊断耗时单列打印并写入
+`run_metrics.json` 的 `diagnose_time_minutes`（三档实测约 0.1 min），不需要预览时可加
+`--skip-diagnose` 跳过。
 
 `prune_ratio=0.1` 档正式剪枝后的 `PruneReport` 核心内容（完整 JSON 保存在
 `outputs/.../prune_report.json`）：
@@ -668,15 +673,17 @@ python3 src/run_qwen3_0_6b_pruning_low_variance_ratio.py \
 实测环境：单卡 Ascend 910（npu:0），bf16，全量 WikiText2 test split（73 个 4096-token batch，
 逐条前向）；校准集 Pileval 8 样本、`seq_len=512`。基线 PPL 三次独立运行均为 `19.153452`。
 
-| 模型 | 方法 | 实验设置 | 基线 PPL | 剪枝后 PPL | 后处理 PPL | 参数量（前 → 后） | 参数削减率 | 剪枝时长（min） |
-|:--|:--|:--|--:|--:|:--|:--|--:|--:|
-| Qwen3-0.6B | `low_variance` | `prune_ratio=0.1` | 19.153452 | 35.085606 | N/A | 596,049,920 → 569,643,008 | 4.43% | 0.02 |
-| Qwen3-0.6B | `low_variance` | `prune_ratio=0.2` | 19.153452 | 75.769569 | N/A | 596,049,920 → 543,236,096 | 8.86% | 0.02 |
-| Qwen3-0.6B | `low_variance` | `prune_ratio=0.5` | 19.153452 | 2809.957520 | N/A | 596,049,920 → 463,929,344 | 22.17% | 0.02 |
+| 模型 | 方法 | 实验设置 | 基线 PPL | 剪枝后 PPL | 后处理 PPL | 参数量（前 → 后） | 参数削减率 | 剪枝时长（min） | 诊断耗时（min） |
+|:--|:--|:--|--:|--:|:--|:--|--:|--:|--:|
+| Qwen3-0.6B | `low_variance` | `prune_ratio=0.1` | 19.153452 | 35.085606 | N/A | 596,049,920 → 569,643,008 | 4.43% | 0.02 | 0.11 |
+| Qwen3-0.6B | `low_variance` | `prune_ratio=0.2` | 19.153452 | 75.769569 | N/A | 596,049,920 → 543,236,096 | 8.86% | 0.02 | 0.11 |
+| Qwen3-0.6B | `low_variance` | `prune_ratio=0.5` | 19.153452 | 2809.957520 | N/A | 596,049,920 → 463,929,344 | 22.17% | 0.02 | 0.10 |
 
 说明：`low_variance` 无后处理步骤，后处理 PPL 记为 N/A。参数削减率低于剪枝率是因为
 dense FFN 中间维只占 Qwen3-0.6B 总参数的一部分（embedding、attention 与 lm_head 未剪）。
-剪枝本身只做方差统计与权重切片，三档耗时均约 0.02 min；剪枝后 PPL 随剪枝率快速上升，
+剪枝本身只做方差统计与权重切片，三档耗时均约 0.02 min；表中的“剪枝时长”仅指
+`amct.prune()` 正式剪枝一步，诊断 dry-run 耗时单列（可通过 `--skip-diagnose` 跳过）。
+剪枝后 PPL 随剪枝率快速上升，
 0.5 档已明显劣化，说明该规模下纯 `low_variance` 切片无补偿时高剪枝率不可用，可结合
 `reconstruct`（recovery 补偿）或恢复训练缓解。
 

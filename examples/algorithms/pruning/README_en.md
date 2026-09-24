@@ -635,8 +635,9 @@ Key parameters:
 | `--device` | `npu:0` | Device for model placement and evaluation; a single card is enough |
 | `--calib-samples` / `--calib-seq-len` | 8 / 512 | Pileval calibration sample count and length |
 | `--seq-len` | 4096 | WikiText2 evaluation sequence length |
-| `--eval-batches` | full split | Optional cap on eval batches, for quick validation only |
+| `--eval-batches` | full split | Optional cap on eval batches (positive integer), for quick validation only |
 | `--preview-prune-ratio` | 0.1 | Dry-run ratio for `prune_diagnose()` only; does not affect real pruning |
+| `--skip-diagnose` | off | Additionally skip the `prune_diagnose()` preview to save its runtime (~0.1 min measured) |
 | `--save-model` | off | Additionally save the pruned model and tokenizer into `--save-dir` |
 
 The script prints the full runtime arguments at startup and saves `run_command.txt` /
@@ -652,14 +653,18 @@ output of the `prune_ratio=0.1` run (single npu:0):
 ```text
 [qwen3_0_6b.low_variance.ratio] baseline ppl: 19.153452
 [prune-diagnose] prunable targets: cnn=0, dense=28, moe=0
-  fixed-ratio prune: available (cut 4.4%, forward failed)
+  fixed-ratio prune: available (cut 4.4%, forward OK)
   acc binary search: unavailable
-  - acc search dry-run error: RuntimeError: Expected all tensors to be on the same device,
-    but found at least two devices, npu:0 and cpu!
-    # Note: the diagnostic dry-run deep-copies the model on CPU and then runs a forward
-    # check, while the inputs stay on npu:0; the device mismatch fails this preview item
-    # only. The real prune is unaffected (pruning and PPL evaluation both completed).
+  - acc search found no acceptable prune ratio at this tolerance (relax the tolerance).
+[qwen3_0_6b.low_variance.ratio] diagnose time: 0.11 min
 ```
+
+Note: the diagnostic fixed-ratio forward check requires calibration data and model on the
+same device, so the script aligns calibration batches to `--device`. The acc binary-search
+preview finding no acceptable ratio is expected - plain `low_variance` slicing exceeds the
+default tolerance - and `ratio`-mode real pruning does not depend on that search. Diagnose
+runtime is printed separately and stored as `diagnose_time_minutes` in `run_metrics.json`
+(~0.1 min across the three runs); pass `--skip-diagnose` to skip the preview entirely.
 
 Key fields of the `PruneReport` after the real prune at `prune_ratio=0.1` (the full JSON is
 saved at `outputs/.../prune_report.json`):
@@ -689,16 +694,18 @@ Measured on a single Ascend 910 (npu:0), bf16, full WikiText2 test split (73 409
 batches, one forward each); calibration used 8 Pileval samples at `seq_len=512`. The baseline
 PPL was 19.153452 in all three independent runs.
 
-| Model | Method | Setting | Baseline PPL | Pruned PPL | Post-process PPL | Params (before -> after) | Param cut | Prune time (min) |
-|:--|:--|:--|--:|--:|:--|:--|--:|--:|
-| Qwen3-0.6B | `low_variance` | `prune_ratio=0.1` | 19.153452 | 35.085606 | N/A | 596,049,920 -> 569,643,008 | 4.43% | 0.02 |
-| Qwen3-0.6B | `low_variance` | `prune_ratio=0.2` | 19.153452 | 75.769569 | N/A | 596,049,920 -> 543,236,096 | 8.86% | 0.02 |
-| Qwen3-0.6B | `low_variance` | `prune_ratio=0.5` | 19.153452 | 2809.957520 | N/A | 596,049,920 -> 463,929,344 | 22.17% | 0.02 |
+| Model | Method | Setting | Baseline PPL | Pruned PPL | Post-process PPL | Params (before -> after) | Param cut | Prune time (min) | Diagnose time (min) |
+|:--|:--|:--|--:|--:|:--|:--|--:|--:|--:|
+| Qwen3-0.6B | `low_variance` | `prune_ratio=0.1` | 19.153452 | 35.085606 | N/A | 596,049,920 -> 569,643,008 | 4.43% | 0.02 | 0.11 |
+| Qwen3-0.6B | `low_variance` | `prune_ratio=0.2` | 19.153452 | 75.769569 | N/A | 596,049,920 -> 543,236,096 | 8.86% | 0.02 | 0.11 |
+| Qwen3-0.6B | `low_variance` | `prune_ratio=0.5` | 19.153452 | 2809.957520 | N/A | 596,049,920 -> 463,929,344 | 22.17% | 0.02 | 0.10 |
 
 Notes: `low_variance` has no post-processing step, so post-process PPL is N/A. The param cut
 ratio is lower than the prune ratio because the dense FFN intermediate dim is only a fraction
 of Qwen3-0.6B parameters (embeddings, attention, and lm_head are untouched). Pruning only
 does variance statistics and weight slicing, so all three ratios finished in ~0.02 min; the
+"prune time" column covers only the real `amct.prune()` step, while the diagnostic dry-run
+runtime is listed separately (skippable via `--skip-diagnose`). The
 pruned PPL degrades quickly as the ratio grows - the 0.5 run is clearly broken, showing that
 plain `low_variance` slicing without compensation is unusable at high ratios for this model
 size; combine it with `reconstruct` (recovery compensation) or recovery training to mitigate.
