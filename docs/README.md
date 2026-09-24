@@ -156,7 +156,7 @@ scale_offset_record_file = os.path.join(TMP, 'scale_offset_record.txt')
 result_path = os.path.join(RESULT, 'model')
 
 # 4.2 初始化Evaluator
-evaluator = AutoCalibrationEvaluator()
+evaluator = ModelEvaluator()
 
 # 4.3 进行基于精度的量化配置自动搜索
 amct.accuracy_based_auto_calibration(
