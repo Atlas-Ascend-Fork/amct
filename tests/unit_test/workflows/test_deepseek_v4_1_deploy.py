@@ -1,4 +1,3 @@
-# coding=utf-8
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -83,7 +82,9 @@ def checkpoint(tmp_path):
 
 def adapter(args):
     # Import registers the lightweight adapter without building PTQ models.
-    from amct_pytorch.common.models.llm.deepseek.deepseek_v4_1 import deepseekv4_1  # noqa: F401
+    from amct_pytorch.common.models.llm.deepseek.deepseek_v4_1 import (
+        deepseekv4_1,  # noqa: F401
+    )
 
     return MODEL_REGISTRY.get("deepseek_v4_1")(args)
 
@@ -92,6 +93,15 @@ def run_deploy(args, monkeypatch):
     workflow = LlmDeployWorkflow(args)
     monkeypatch.setattr(workflow, "_register_components", lambda: adapter(args))
     return workflow.run()
+
+
+def prepare_a3_source(args):
+    source = Path(args.model) / "model.safetensors"
+    tensors = load_file(str(source))
+    tensors["layers.0.ffn.experts.0.w1.weight"] = torch.arange(
+        64, dtype=torch.int8
+    ).reshape(4, 16)
+    save_file(tensors, str(source))
 
 
 def test_950_arguments_accept_mxfp_without_bit_config(checkpoint):
@@ -153,7 +163,6 @@ def test_missing_fp8_selection_fails_before_output(checkpoint, monkeypatch):
         (None, "mxfp", ValueError),
         ("A3", "mxfp", ValueError),
         ("ascend950", "int", ValueError),
-        ("A3", "int", NotImplementedError),
     ],
 )
 def test_platform_contract(checkpoint, platform, dtype, error):
@@ -163,11 +172,164 @@ def test_platform_contract(checkpoint, platform, dtype, error):
         validate_tensor_deploy_args(args)
 
 
-def test_ascend_is_explicitly_unimplemented(checkpoint):
+def test_a3_ascend_contract_is_accepted(checkpoint):
     args, _, _ = checkpoint
     args.deploy_format = "ascend"
-    with pytest.raises(NotImplementedError, match="ascend"):
-        validate_tensor_deploy_args(args)
+    args.deploy_platform, args.quant_dtype = "A3", "int"
+    validate_tensor_deploy_args(args)
+
+
+def test_a3_converts_mxfp8_and_mxfp4_before_int8_export(checkpoint):
+    args, original, config = checkpoint
+    args.deploy_format = "ascend"
+    args.deploy_platform, args.quant_dtype = "A3", "int"
+    prepare_a3_source(args)
+    output = Path(args.output_dir)
+    output.mkdir()
+    model = adapter(args)
+    weight_map = {name: "model.safetensors" for name in original}
+    quant_layers = {
+        "layers.0.attn.wq": 8,
+        "layers.0.ffn.experts.0.w1": 8,
+    }
+
+    exported = model.convert_tensorwise_shard(
+        "model.safetensors",
+        Path(args.model),
+        weight_map,
+        quant_layers,
+        {},
+    )
+    converted = load_file(str(output / "model.safetensors"))
+
+    assert converted["layers.0.attn.wq.weight"].dtype == torch.int8
+    assert converted["layers.0.attn.wq.weight_scale"].dtype == torch.bfloat16
+    assert converted["layers.0.attn.wq.weight_offset"].dtype == torch.bfloat16
+    assert converted["layers.0.ffn.experts.0.w1.weight"].dtype == torch.int8
+    assert converted["layers.0.ffn.experts.0.w1.weight"].shape == (4, 32)
+    assert converted["head.weight"].dtype == torch.bfloat16
+    assert converted["engram.weight"].dtype == torch.bfloat16
+    assert all(not name.endswith(".scale") for name in converted)
+    assert set(exported) == set(converted)
+    assert "quantization_config" in config
+
+
+def test_a3_allows_unselected_fp8_modules_to_remain_float(checkpoint):
+    args, original, _ = checkpoint
+    args.deploy_format = "ascend"
+    args.deploy_platform, args.quant_dtype = "A3", "int"
+    source = Path(args.model) / "model.safetensors"
+    tensors = load_file(str(source))
+    tensors["layers.0.attn.wo_a.weight"] = torch.ones(
+        (64, 32), dtype=torch.float8_e4m3fn
+    )
+    tensors["layers.0.attn.wo_a.scale"] = torch.full(
+        (2, 1), 127, dtype=torch.uint8
+    ).view(torch.float8_e8m0fnu)
+    save_file(tensors, str(source))
+    selection = Path(args.quant_layers_config)
+    selection.write_text(
+        json.dumps({"quant_layers": ["layers.0.attn.wq"]}), encoding="utf-8"
+    )
+    model = adapter(args)
+    weight_map = {name: "model.safetensors" for name in original}
+    weight_map.update(
+        {
+            "layers.0.attn.wo_a.weight": "model.safetensors",
+            "layers.0.attn.wo_a.scale": "model.safetensors",
+        }
+    )
+
+    plan = model.prepare_tensor_deploy_plan(weight_map)
+
+    assert plan.selected_modules == frozenset({"layers.0.attn.wq"})
+    assert "layers.0.attn.wo_a" in plan.unselected_weight_modules
+
+
+def test_a3_exports_unselected_fp8_module_as_float(checkpoint, monkeypatch):
+    args, original, _ = checkpoint
+    args.deploy_format = "ascend"
+    args.deploy_platform, args.quant_dtype = "A3", "int"
+    source = Path(args.model) / "model.safetensors"
+    tensors = load_file(str(source))
+    tensors["layers.0.attn.wo_a.weight"] = torch.ones(
+        (64, 32), dtype=torch.float8_e4m3fn
+    )
+    tensors["layers.0.attn.wo_a.scale"] = torch.full(
+        (2, 1), 127, dtype=torch.uint8
+    ).view(torch.float8_e8m0fnu)
+    save_file(tensors, str(source))
+    Path(args.quant_layers_config).write_text(
+        json.dumps({"quant_layers": ["layers.0.attn.wq"]}), encoding="utf-8"
+    )
+
+    run_deploy(args, monkeypatch)
+
+    output = Path(args.output_dir)
+    converted = load_file(str(output / "model.safetensors"))
+    description = json.loads(
+        (output / "quant_model_description.json").read_text()
+    )
+    assert converted["layers.0.attn.wo_a.weight"].dtype == torch.bfloat16
+    assert "layers.0.attn.wo_a.scale" not in converted
+    assert description["layers.0.attn.wo_a.weight"] == "FLOAT"
+    assert description["layers.0.attn.wq.weight"] == "W8A8_DYNAMIC"
+
+
+def test_a3_refreshes_config_and_description(checkpoint):
+    args, _, _ = checkpoint
+    args.deploy_format = "ascend"
+    args.deploy_platform, args.quant_dtype = "A3", "int"
+    prepare_a3_source(args)
+    output = Path(args.output_dir)
+    output.mkdir()
+    model = adapter(args)
+    model.refresh_config([], tensor_plan=None)
+    refreshed = json.loads((output / "config.json").read_text())
+    assert refreshed["quantization_config"] == {
+        "quant_method": "ascend",
+        "model_quant_type": "W8A8_DYNAMIC",
+    }
+    assert refreshed["vision_config"] == {"hidden_size": 64}
+
+    selected = frozenset(
+        {"layers.0.attn.wq", "layers.0.ffn.experts.0.w1"}
+    )
+    output_names = {
+        "layers.0.attn.wq.weight",
+        "layers.0.attn.wq.weight_scale",
+        "layers.0.attn.wq.weight_offset",
+        "layers.0.ffn.experts.0.w1.weight",
+        "layers.0.ffn.experts.0.w1.weight_scale",
+        "layers.0.ffn.experts.0.w1.weight_offset",
+        "head.weight",
+    }
+    description = model.make_ascend_description(output_names, selected)
+    assert description["layers.0.attn.wq.weight"] == "W8A8_DYNAMIC"
+    assert description["layers.0.attn.wq.weight_scale"] == "W8A8_DYNAMIC"
+    assert description["head.weight"] == "FLOAT"
+
+
+def test_a3_workflow_exports_mixed_checkpoint(checkpoint, monkeypatch):
+    args, _, _ = checkpoint
+    args.deploy_format = "ascend"
+    args.deploy_platform, args.quant_dtype = "A3", "int"
+    prepare_a3_source(args)
+    result = run_deploy(args, monkeypatch)
+    output = Path(args.output_dir)
+    description = json.loads(
+        (output / "quant_model_description.json").read_text()
+    )
+    config = json.loads((output / "config.json").read_text())
+    tensors = load_file(str(output / "model.safetensors"))
+
+    assert result["description_path"].endswith("quant_model_description.json")
+    assert config["quantization_config"] == {
+        "quant_method": "ascend",
+        "model_quant_type": "W8A8_DYNAMIC",
+    }
+    assert description["layers.0.attn.wq.weight"] == "W8A8_DYNAMIC"
+    assert tensors["layers.0.ffn.experts.0.w1.weight"].dtype == torch.int8
 
 
 @pytest.mark.parametrize("alias", ["short", "ids", "both"])
@@ -263,11 +425,10 @@ def test_custom_conversion_failure_does_not_fall_back(checkpoint, monkeypatch):
         run_deploy(args, monkeypatch)
 
 
-@pytest.mark.parametrize("platform,dtype", [("A3", "int"), ("ascend950", "mxfp")])
-def test_description_routes_to_explicit_placeholders(checkpoint, platform, dtype):
+def test_950_description_remains_unimplemented(checkpoint):
     args, _, _ = checkpoint
     model = adapter(args)
-    args.deploy_platform, args.quant_dtype = platform, dtype
+    args.deploy_platform, args.quant_dtype = "ascend950", "mxfp"
     with pytest.raises(NotImplementedError, match="ascend description"):
         model.make_ascend_description(set(), set())
 

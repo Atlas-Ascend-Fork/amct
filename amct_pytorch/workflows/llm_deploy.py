@@ -182,6 +182,12 @@ class LlmDeployWorkflow:
             raise ValueError("Ascend output directory must be new or empty")
 
     def _validate_ascend_source(self):
+        if self.model_name in MODEL_REGISTRY:
+            source_validator = getattr(
+                MODEL_REGISTRY.get(self.model_name), "validate_ascend_source", None
+            )
+            if callable(source_validator) and source_validator(self.args):
+                return
         source = Path(self.model_path)
         with open(source / "config.json", encoding="utf-8") as f:
             config = json.load(f)
@@ -410,9 +416,15 @@ class LlmDeployWorkflow:
             description = describe(set(updated_weight_map), plan.selected_modules)
             description_path = Path(self.output_dir) / "quant_model_description.json"
             self._write_json_file(description_path, description)
-            index_path = self._refresh_weight_index(
-                original_index, updated_weight_map, total_size=self._output_tensor_bytes
+            output_tensor_bytes = getattr(
+                self.pipeline, "output_tensor_bytes", self._output_tensor_bytes
             )
+            index_path = self._refresh_weight_index(
+                original_index, updated_weight_map, total_size=output_tensor_bytes
+            )
+            refresh = getattr(self.pipeline, "refresh_config", None)
+            if callable(refresh):
+                refresh(sorted(plan.ignored_modules), tensor_plan=plan)
             report = validate_ascend_artifacts(Path(self.output_dir), plan)
             validation_path = Path(self.output_dir) / "deployment_validation.json"
             self._write_json_file(validation_path, report)

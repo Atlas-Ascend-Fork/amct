@@ -1,0 +1,24 @@
+{
+  "quant_layers": [
+    "layers.*.attn.wkv",
+    "layers.*.attn.wq_a",
+    "layers.*.attn.wq_b",
+    "layers.*.attn.indexer.wq_b",
+    "layers.*.ffn.experts.*.w1",
+    "layers.*.ffn.experts.*.w2",
+    "layers.*.ffn.experts.*.w3",
+    "layers.*.ffn.shared_experts.w1",
+    "layers.*.ffn.shared_experts.w2",
+    "layers.*.ffn.shared_experts.w3",
+    "mtp.*.attn.wkv",
+    "mtp.*.attn.wq_a",
+    "mtp.*.attn.wq_b",
+    "mtp.*.ffn.experts.*.w1",
+    "mtp.*.ffn.experts.*.w2",
+    "mtp.*.ffn.experts.*.w3",
+    "mtp.*.ffn.shared_experts.w1",
+    "mtp.*.ffn.shared_experts.w2",
+    "mtp.*.ffn.shared_experts.w3"
+  ],
+  "ignore_layers": []
+}
