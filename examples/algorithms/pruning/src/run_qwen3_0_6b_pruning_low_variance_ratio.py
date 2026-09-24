@@ -91,8 +91,55 @@ def _prune_cfg(prune_ratio):
     }
 
 
+def _file_head(path):
+    """First "Version=..."-style line group of a CANN info file, or None."""
+    try:
+        lines = Path(path).read_text().splitlines()
+    except OSError:
+        return None
+    keys = ("Version=", "version=")
+    return next((line for line in lines if line.startswith(keys)), None)
+
+
+def _cann_versions():
+    """Best-effort CANN toolkit / driver versions (None when not installed)."""
+    toolkit = _file_head(
+        Path(os.environ.get("ASCEND_TOOLKIT_HOME", "")) / "opp" / "version.info"
+    )
+    driver = _file_head(Path("/usr/local/Ascend/driver/version.info"))
+    return {"cann_toolkit": toolkit, "npu_driver": driver}
+
+
+def _package_versions():
+    """Versions of every package the PPL results depend on (None when unknown)."""
+    import importlib.metadata
+
+    def _dist(name):
+        try:
+            return importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            return None
+
+    amct_version = None
+    amct_version_file = (
+        Path(__file__).resolve().parents[4] / "amct_pytorch" / ".version"
+    )
+    try:
+        amct_version = amct_version_file.read_text().strip() or None
+    except OSError:
+        amct_version = _dist("amct_pytorch")
+
+    versions = {
+        "python": sys.version.split()[0],
+        "amct_pytorch": amct_version,
+        **{name: _dist(name) for name in ("torch", "torch_npu", "transformers")},
+        **_cann_versions(),
+    }
+    return versions
+
+
 def dump_repro_metadata(save_dir):
-    """Persist the exact invocation and accelerator-related environment."""
+    """Persist the exact invocation, versions, and accelerator environment."""
     save_dir = Path(save_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
     (save_dir / "run_command.txt").write_text(
@@ -113,6 +160,7 @@ def dump_repro_metadata(save_dir):
         "TRANSFORMERS_OFFLINE",
     )
     env = {key: os.environ[key] for key in env_keys if key in os.environ}
+    env["versions"] = _package_versions()
     (save_dir / "run_environment.txt").write_text(
         json.dumps(env, ensure_ascii=False, indent=2) + "\n"
     )
@@ -257,7 +305,7 @@ def main():
             model.save_pretrained(save_dir)
             tokenizer.save_pretrained(save_dir)
             save_model_status = "saved"
-        except OSError as exc:
+        except Exception as exc:  # noqa: BLE001 - NPU OOM raises RuntimeError, not OSError
             save_model_status = f"failed: {type(exc).__name__}: {exc}"
             print(
                 f"[qwen3_0_6b.low_variance.ratio] save_pretrained skipped: {save_model_status}"

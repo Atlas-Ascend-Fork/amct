@@ -641,7 +641,9 @@ Key parameters:
 | `--save-model` | off | Additionally save the pruned model and tokenizer into `--save-dir` |
 
 The script prints the full runtime arguments at startup and saves `run_command.txt` /
-`run_environment.txt` / `run_config.json` for reproducibility; the output directory is excluded
+`run_environment.txt` / `run_config.json` for reproducibility; `run_environment.txt` also
+records python / amct_pytorch / torch / torch_npu / transformers / CANN toolkit / NPU driver
+versions (null when unavailable). The output directory is excluded
 by `.gitignore`, so no weights or datasets are committed.
 
 ### 7.2 Diagnostics and Report
@@ -704,10 +706,12 @@ Notes: `low_variance` has no post-processing step, so post-process PPL is N/A. T
 ratio is lower than the prune ratio because the dense FFN intermediate dim is only a fraction
 of Qwen3-0.6B parameters (embeddings, attention, and lm_head are untouched). Pruning only
 does variance statistics and weight slicing, so all three ratios finished in ~0.02 min; the
-"prune time" column covers only the real `amct.prune()` step, while the diagnostic dry-run
+`prune time` column covers only the real `amct.prune()` step, while the diagnostic dry-run
 runtime is listed separately (skippable via `--skip-diagnose`). The
 pruned PPL degrades quickly as the ratio grows - the 0.5 run is clearly broken, showing that
 plain `low_variance` slicing without compensation is unusable at high ratios for this model
-size; combine it with `reconstruct` (recovery compensation) or recovery training to mitigate.
+size; combine it with `reconstruct` (recovery compensation, see [section 2](#2-pruning-samples)
+for the API usage) or recovery training (see [section 6.6](#66-size_budget05-recovery-training))
+to mitigate.
 
 > After pruning, to export the model as a torchair offline model (.air) for ATC-to-om conversion and on-board inference, refer to [AMCT large-model offline torchair model export](../export/README_en.md).

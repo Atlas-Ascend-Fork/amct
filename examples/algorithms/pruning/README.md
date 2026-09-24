@@ -624,7 +624,9 @@ python3 src/run_qwen3_0_6b_pruning_low_variance_ratio.py \
 | `--save-model` | 关闭 | 追加后保存剪枝模型与 tokenizer 到 `--save-dir` |
 
 脚本启动时打印完整运行参数，并保存 `run_command.txt` / `run_environment.txt` /
-`run_config.json` 以便复现；输出目录被 `.gitignore` 排除，不会提交权重或数据。
+`run_config.json` 以便复现；`run_environment.txt` 同时记录 python / amct_pytorch / torch /
+torch_npu / transformers / CANN toolkit / NPU 驱动版本号（不可得时记为 null）。输出目录被
+`.gitignore` 排除，不会提交权重或数据。
 
 ### 7.2 诊断与报告
 
@@ -681,10 +683,11 @@ python3 src/run_qwen3_0_6b_pruning_low_variance_ratio.py \
 
 说明：`low_variance` 无后处理步骤，后处理 PPL 记为 N/A。参数削减率低于剪枝率是因为
 dense FFN 中间维只占 Qwen3-0.6B 总参数的一部分（embedding、attention 与 lm_head 未剪）。
-剪枝本身只做方差统计与权重切片，三档耗时均约 0.02 min；表中的“剪枝时长”仅指
+剪枝本身只做方差统计与权重切片，三档耗时均约 0.02 min；表中的`剪枝时长`仅指
 `amct.prune()` 正式剪枝一步，诊断 dry-run 耗时单列（可通过 `--skip-diagnose` 跳过）。
 剪枝后 PPL 随剪枝率快速上升，
 0.5 档已明显劣化，说明该规模下纯 `low_variance` 切片无补偿时高剪枝率不可用，可结合
-`reconstruct`（recovery 补偿）或恢复训练缓解。
+`reconstruct`（recovery 补偿，接口调用见[第 2 节](#2-剪枝示例)）或恢复训练
+（做法参考[第 6.6 节](#66-size_budget05-恢复训练)）缓解。
 
 > 剪枝完成后，如需将模型导出为 torchair 离线模型（.air）用于 ATC 转 om 板端推理，请参考 [AMCT大模型torchair离线模型导出](../export/README.md)。
