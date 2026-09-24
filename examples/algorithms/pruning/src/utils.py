@@ -171,7 +171,7 @@ def _disable_torchaudio_for_transformers():
     """Make transformers treat torchaudio as unavailable in this process.
 
     Some environments ship a torchaudio build whose import crashes while
-    transformers is importing RNNT losses. Qwen3.6 does not need torchaudio,
+    transformers is importing RNNT losses. Qwen3 does not need torchaudio,
     so we mask it out instead of touching the system package.
     """
 
@@ -187,6 +187,32 @@ def _disable_torchaudio_for_transformers():
 
     _find_spec._amct_torchaudio_patched = True  # type: ignore[attr-defined]
     importlib.util.find_spec = _find_spec
+
+
+def disable_torchaudio():
+    """Public alias so sample scripts can mask torchaudio before any import."""
+    _disable_torchaudio_for_transformers()
+
+
+def load_model(
+    model_path,
+    dtype=torch.bfloat16,
+    trust_remote_code=False,
+):
+    """Load a causal LM (e.g. Qwen3-0.6B) with its tokenizer on CPU."""
+    _disable_torchaudio_for_transformers()
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_path, trust_remote_code=trust_remote_code
+    )
+    model = AutoModelForCausalLM.from_pretrained(
+        model_path,
+        dtype=dtype,
+        trust_remote_code=trust_remote_code,
+        low_cpu_mem_usage=True,
+    ).eval()
+    return model, tokenizer
 
 
 def load_qwen36_moe(
