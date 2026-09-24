@@ -572,3 +572,47 @@ To improve recovery further, change only a small number of parameters in each ex
 Use separate reports and output directories for different recovery configurations to avoid overwriting the pruned model. The BF16 `size_budget=0.5` weights occupy approximately 28.4 GiB. When disk space is limited, record the PPL and report before removing recovery models that are no longer needed.
 
 > After pruning, to export the model as a torchair offline model (.air) for ATC-to-om conversion and on-board inference, refer to [AMCT large-model offline torchair model export](../export/README_en.md).
+
+## 8 Community Task Sample: Qwen3-0.6B Dense FFN Pruning (`reconstruct` + `size_budget`, Task 10)
+
+This section covers task 10 of issue #183: prune the dense FFN intermediate dimension with `reconstruct` under a **parameter-retention budget** (`size_budget = 0.9 / 0.8 / 0.5`), letting AMCT pick the pruning ratio from a candidate grid instead of fixing `prune_ratio`.
+
+### 8.1 How to run
+
+- Calibration: Pileval, `8` samples × `seq_len=2048` (16384 calibration token rows in total)
+- Evaluation: full WikiText2 test split at `seq_len=4096` (73 batches)
+- Budget wiring: `size_budget` and `ratio_grid` are passed to `amct.prune()`, and the method kwargs keep only `recovery` (same convention as the merged `activation_count` + `budget` sample)
+- Candidate grid: `--ratio-grid` defaults to `0.1,0.2,0.3,0.4,0.5,0.6`
+- Data sources: the Hugging Face datasets are the default; `--pileval_source modelscope` switches to the ModelScope mirror of the same split, and `--wiki-test-file` accepts a local copy of the WikiText2 test parquet. Both exist only for offline or restricted networks, and their chunking matches `preproc.get_wiki_inputs` (measured: also 73 batches, same `19.157549` baseline PPL as the official route)
+- Artifacts: `prune_report.json`, `run_metrics.json`, `run_config.json`, `diagnose_summary.txt`, `run_command.txt`, `run_environment.txt`
+
+Run command (once per budget):
+
+```bash
+python3 src/run_qwen3_0_6b_pruning_reconstruct_budget.py \
+  --model-path ./path/to/Qwen3-0.6B \
+  --save-dir ./outputs/qwen3_0_6b_reconstruct_budget/b0_9 \
+  --size-budget 0.9
+```
+
+### 8.2 Diagnosis and report
+
+On a single 910B3, `prune_diagnose()` found 28 prunable dense targets (28 FFN layers, cnn/moe = 0); the fixed-ratio dry run, its forward check and the accuracy-search dry run were all available.
+
+### 8.3 Results
+
+All numbers below were measured on a single Ascend 910B3 (64 GiB), calibrated on Pileval 8 × 2048 and evaluated on the full WikiText2 test split at `seq_len=4096` (73 batches).
+
+| size_budget | Baseline PPL | Pruned PPL | PPL delta | Parameters (before → after) | Cut ratio | Retained fraction | Per-layer sparsity | Prune time (min) |
+| --- | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: |
+| `0.9` | 19.157549 | 35.622875 | +16.465326 | 596049920 → 516743168 | 13.31% | 0.866946 | 0.30013 | 0.54 |
+| `0.8` | 19.157549 | 73.848221 | +54.690672 | 596049920 → 463929344 | 22.17% | 0.778340 | 0.50000 | 0.37 |
+| `0.5` | 19.157549 | 19.157549 | +0.000000 | 596049920 (unchanged) | 0.00% | 1.000000 | n/a | 0.30 |
+
+> Prune time is the wall time of the `amct.prune()` call itself, including the budget search over the candidate grid, and excludes data preparation and PPL evaluation.
+
+### 8.4 Two measurements worth flagging
+
+1. **`size_budget=0.5` is unreachable within this task's pruning domain.** Pruning only the dense FFN gives `PruneReport.prunable_fraction = 0.443321`, so even deleting every prunable parameter leaves a retention floor of `0.556679`. AMCT therefore reports
+   `[budget] size budget unreachable: target 298,024,960 is below the reachable floor 331,808,768`, sets `budget_unreachable=True` and leaves the model untouched (empty `per_layer_sparsity`, no pruning events). This sample reports that outcome as measured rather than loosening `skip_layers` (i.e. pruning attention too) to force the budget through.
+2. **The budget search overshoots the target retention slightly.** With `size_budget=0.9` it selected a per-layer sparsity of `0.30013` (retention 0.866946, below the 0.9 target), and with `size_budget=0.8` it selected `0.5` (retention 0.778340, below 0.8), although closer candidates exist in the grid (about 0.911 retention for the 0.9 case). This is AMCT's existing behaviour, not a choice made by this sample, and is recorded here for the maintainers to judge whether the search should be tightened.
