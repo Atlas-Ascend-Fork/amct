@@ -1,0 +1,70 @@
+name: Experience Request|体验需求
+description: 当您在 AMCT 使用体验过程中发现可改进的问题时，请使用此模板。
+title: "[Experience Request|体验需求]: "
+labels: ["requirement"]
+type: "需求"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for sending an issue! Please fill in the following template to help quickly solve your problem.
+  - type: dropdown
+    attributes:
+      label: 涉及功能链路
+      description: AMCT 各链路的实现与文档相互独立，请选择体验问题所属的链路，便于分派给对应维护者。
+      options:
+        - LLM 量化（大模型 PTQ/QAT、eval、deploy 等 CLI 流程）
+        - 通用模型量化（quantize / convert、QAT、基于图的量化）
+        - 结构化剪枝（MoE 专家 / Dense FFN / CNN 通道）
+        - 低秩分解与知识蒸馏
+        - 实验特性（HiFloat8、DeepSeek-V4、FlatQuant 等 experimental 能力）
+        - 自定义算子（amct_ops）
+        - 通用（安装构建、文档、社区流程等）
+    validations:
+      required: true
+  - type: dropdown
+    attributes:
+      label: 体验活动所处阶段
+      description: 请选择发现体验问题时您所处的压缩流程阶段。
+      options:
+        - 感知学习（压缩概念、算法原理、文档资料查阅等）
+        - 环境准备与构建安装（CANN/PyTorch/TorchNPU 配套、build.sh、pip 安装等）
+        - 压缩方案设计（精度格式与算法选型、量化配置编写等）
+        - 模型与校准数据准备（模型接入、数据集处理、PTQ 数据提取等）
+        - 压缩执行（PTQ / QAT / 剪枝 / 低秩分解等）
+        - 精度评估与调优（eval、精度下降排查、敏感层回退等）
+        - 部署与上板验证（deploy 导出、NPU 推理、性能收益确认等）
+    validations:
+      required: true
+  - type: dropdown
+    attributes:
+      label: 体验改进触点（问题出现在哪类内容或环节）
+      description: 请选择体验问题对应的触点。
+      options:
+        - 开发文档（README、docs、API 文档）
+        - 样例与实践（examples 脚本、模型样例）
+        - API 与配置参数（Python API、CLI 命令、量化配置模板）
+        - 构建与工具链（build.sh、ops_build.sh、打包安装）
+        - 运行时反馈（日志、报错信息、精度/性能评估结果）
+        - 产物与交付（量化模型、部署权重、压缩报告）
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: 详细描述
+      description: 说明具体体验场景和未达到预期的体验维度（如易学性、易用性、反馈清晰度），并描述实际遇到的问题。
+      placeholder: |
+        针对您遇到的问题，请尽可能提供以下信息：
+        - 文档链接、API/CLI/配置项名称（如 quantize、--algos、w8a8.yaml 中的某个字段）
+        - 模型、精度格式与算法（如 Qwen3.6-MoE、W4A8、AWQ）
+        - 环境信息（CANN、PyTorch/TorchNPU 版本、SoC 平台如 Atlas A2/A3）
+        - 操作步骤、命令、日志或截图
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: 改进建议
+      description: 请描述您期望的改进方式或理想体验。
+      placeholder: 例如期望补充哪些说明、简化哪些操作，或优化成什么样。
+    validations:
+      required: false
