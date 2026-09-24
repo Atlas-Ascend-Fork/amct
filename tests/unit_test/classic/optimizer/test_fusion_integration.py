@@ -23,17 +23,34 @@ from amct_pytorch.classic.optimizer.fusion_group import FusionGroup
 from amct_pytorch.classic.quantize_op import SmoothQuant
 
 
-class TinySharedModel(nn.Module):
+class TinyQwenLayer(nn.Module):
     def __init__(self):
         super().__init__()
-        self.norm = nn.LayerNorm(8)
-        self.q_proj = nn.Linear(8, 8)
-        self.k_proj = nn.Linear(8, 8)
-        self.v_proj = nn.Linear(8, 8)
+        self.input_layernorm = nn.LayerNorm(8)
+        self.self_attn = nn.Module()
+        self.self_attn.q_proj = nn.Linear(8, 8)
+        self.self_attn.k_proj = nn.Linear(8, 8)
+        self.self_attn.v_proj = nn.Linear(8, 8)
+        self.post_attention_layernorm = nn.LayerNorm(8)
+        self.mlp = nn.Module()
+        self.mlp.up_proj = nn.Linear(8, 8)
+        self.mlp.gate_proj = nn.Linear(8, 8)
 
     def forward(self, x):
-        h = self.norm(x)
-        return self.q_proj(h) + self.k_proj(h) + self.v_proj(h)
+        h = self.input_layernorm(x)
+        attn = self.self_attn.q_proj(h) + self.self_attn.k_proj(h)
+        attn = attn + self.self_attn.v_proj(h)
+        h2 = self.post_attention_layernorm(attn)
+        return self.mlp.up_proj(h2) + self.mlp.gate_proj(h2)
+
+
+class TinyModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.layers = nn.ModuleList([TinyQwenLayer()])
+
+    def forward(self, x):
+        return self.layers[0](x)
 
 
 def _config(algorithm, batch_num=1):
@@ -50,12 +67,12 @@ def _config(algorithm, batch_num=1):
 
 
 def test_real_minmax_group_is_identified_and_calibrated_after_first_forward():
-    model = TinySharedModel().to(torch.float16)
+    model = TinyModel().to(torch.float16)
     quantize(model, _config('minmax'))
     model(torch.randn(2, 3, 8, dtype=torch.float16))
 
     groups = model._amct_fusion_registry.groups
-    assert len(groups) == 1
+    assert len(groups) == 2
     group = groups[0]
     assert group.algorithm == 'minmax'
     assert group.status == 'calibrated'
@@ -63,13 +80,13 @@ def test_real_minmax_group_is_identified_and_calibrated_after_first_forward():
 
 
 def test_real_smoothquant_group_uses_string_algorithm_and_calibrates_after_two_forwards():
-    model = TinySharedModel().to(torch.float16)
+    model = TinyModel().to(torch.float16)
     quantize(model, _config('smoothquant', batch_num=2))
     model(torch.randn(2, 3, 8, dtype=torch.float16))
     model(torch.randn(2, 3, 8, dtype=torch.float16))
 
     groups = model._amct_fusion_registry.groups
-    assert len(groups) == 1
+    assert len(groups) == 2
     group = groups[0]
     assert group.algorithm == 'smoothquant'
     assert group.status == 'calibrated'

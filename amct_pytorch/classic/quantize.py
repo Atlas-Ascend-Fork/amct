@@ -24,7 +24,9 @@ from amct_pytorch.classic.optimizer import (
     ModelOptimizer,
     ReplaceNpuQuantModulePass,
 )
-from amct_pytorch.classic.optimizer.fusion_hooks import install_fusion_hooks
+from amct_pytorch.classic.optimizer.fusion_pattern import (
+    build_fusion_groups_from_patterns,
+)
 from amct_pytorch.classic.optimizer.apply_scaling_fusion_pass import (
     ApplyScalingFusionPass,
 )
@@ -49,7 +51,7 @@ def quantize(model, config=None):
     optimizer = ModelOptimizer()
     optimizer.add_pass(InsertQuantizeModulePass(layer_config))
     optimizer.do_optimizer(model)
-    install_fusion_hooks(model)
+    model._amct_fusion_registry = build_fusion_groups_from_patterns(model)
 
 
 @check_params(model=nn.Module)
