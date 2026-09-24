@@ -55,7 +55,7 @@ body:
       description: 说明具体体验场景和未达到预期的体验维度（如易学性、易用性、反馈清晰度），并描述实际遇到的问题。
       placeholder: |
         针对您遇到的问题，请尽可能提供以下信息：
-        - 文档链接、API/CLI/配置项名称（如 quantize、--algorithm、w8a8.yaml 中的某个字段）
+        - 文档链接、API/CLI/配置项名称（如 quantize、--algos、w8a8.yaml 中的某个字段）
         - 模型、精度格式与算法（如 Qwen3.6-MoE、W4A8、AWQ）
         - 环境信息（CANN、PyTorch/TorchNPU 版本、SoC 平台如 Atlas A2/A3）
         - 操作步骤、命令、日志或截图
