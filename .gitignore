@@ -42,6 +42,4 @@ oat_reports/
 log/
 
 # Local community-sample artifacts (PTQ data / reports)
-examples/models/qwen3/outputs/
-examples/models/deepseekv4/outputs/
-examples/models/qwen3.6-35b-a3b-w4a4/outputs/
+examples/models/*/outputs/
