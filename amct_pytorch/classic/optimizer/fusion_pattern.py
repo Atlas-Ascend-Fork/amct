@@ -90,7 +90,7 @@ FUSION_PATTERNS.register(
         groups=(
             FusionGroupPattern(
                 pre_op='layernorm_before',
-                members=('attention.query', 'attention.key', 'attention.value'),
+                members=('attention.q_proj', 'attention.k_proj', 'attention.v_proj'),
                 group_type='norm',
             ),
             FusionGroupPattern(

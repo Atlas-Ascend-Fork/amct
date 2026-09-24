@@ -82,16 +82,16 @@ class VitLayer(nn.Module):
         self.layernorm_before = nn.LayerNorm(8)
         self.layernorm_after = nn.LayerNorm(8)
         self.attention = nn.Module()
-        self.attention.query = Quant(algorithm)
-        self.attention.key = Quant(algorithm)
-        self.attention.value = Quant(algorithm)
+        self.attention.q_proj = Quant(algorithm)
+        self.attention.k_proj = Quant(algorithm)
+        self.attention.v_proj = Quant(algorithm)
         self.mlp = nn.Module()
         self.mlp.fc1 = Quant(algorithm)
 
     def forward(self, x):
         h = self.layernorm_before(x)
-        out = self.attention.query(h) + self.attention.key(h)
-        out = out + self.attention.value(h)
+        out = self.attention.q_proj(h) + self.attention.k_proj(h)
+        out = out + self.attention.v_proj(h)
         return self.mlp.fc1(self.layernorm_after(out))
 
 
@@ -145,7 +145,7 @@ def test_pattern_whitelist_builds_vit_groups_and_single_member_smooth_group():
     groups = {(g.pre_op_ref, tuple(g.scaling_layer_refs)): g for g in registry.groups}
     assert (
         'layernorm_before',
-        ('attention.query', 'attention.key', 'attention.value'),
+        ('attention.q_proj', 'attention.k_proj', 'attention.v_proj'),
     ) in groups
     assert ('layernorm_after', ('mlp.fc1',)) in groups
 
