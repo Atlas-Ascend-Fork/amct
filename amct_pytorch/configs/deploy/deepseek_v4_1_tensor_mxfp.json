@@ -1,0 +1,4 @@
+{
+  "quant_layers": ["*"],
+  "ignore_layers": []
+}

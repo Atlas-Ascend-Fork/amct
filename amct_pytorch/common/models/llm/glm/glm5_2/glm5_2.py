@@ -16,6 +16,7 @@
 # ----------------------------------------------------------------------------
 
 import functools
+import re
 
 import torch
 from compressed_tensors.utils.safetensors_load import get_weight_mappings
@@ -77,10 +78,107 @@ class GLM5_2(BaseModel):
         return indexer_types[layer_idx] == "full"
 
     def parse_quant_mode(self):
+        if (
+            getattr(self.args, "granularity", None) == "tensor"
+            and getattr(self.args, "deploy_selection", None) is not None
+        ):
+            return
         if "mlp" in self.quant_target:
             raise ValueError(
                 "GLM-5.2 is a moe model and does not support quant_target='mlp'."
             )
+
+    def get_ascend_deploy_mtp_modules(self, module_names: set[str]) -> set[str]:
+        start = self.config.num_hidden_layers
+        end = start + getattr(self.config, "num_nextn_predict_layers", 0)
+        prefixes = tuple(f"model.layers.{idx}." for idx in range(start, end))
+        return {name for name in module_names if name.startswith(prefixes)}
+
+    def _ascend_deploy_role(self, name: str) -> tuple[str, str] | None:
+        """Map supported checkpoint modules to BitPolicy group/projection."""
+        match = re.fullmatch(r"model\.layers\.(\d+)\.(.+)", name)
+        if match is None:
+            return None
+        layer_idx, suffix = int(match[1]), match[2]
+        if not 0 <= layer_idx < self.config.num_hidden_layers:
+            return None
+        if suffix in {
+            "self_attn.q_a_proj",
+            "self_attn.q_b_proj",
+            "self_attn.kv_a_proj_with_mqa",
+            "self_attn.o_proj",
+        }:
+            return "attn-linear", suffix.rsplit(".", 1)[1]
+        if suffix == "self_attn.indexer.wq_b":
+            if self._is_indexer_layer(
+                layer_idx,
+                self.config.num_hidden_layers,
+                getattr(self.config, "indexer_types", None),
+            ):
+                return "attn-linear", "wq_b"
+            return None
+        dense = layer_idx < self.config.first_k_dense_replace
+        if dense and suffix in {f"mlp.{p}" for p in self.MLP_LINEAR_NAMES}:
+            return "mlp", suffix.rsplit(".", 1)[1]
+        if not dense:
+            if getattr(self.config, "n_shared_experts", 0) and suffix in {
+                f"mlp.shared_experts.{p}" for p in self.MLP_LINEAR_NAMES
+            }:
+                return "moe.shared", suffix.rsplit(".", 1)[1]
+            expert = re.fullmatch(
+                r"mlp\.experts\.(\d+)\.(gate_proj|up_proj|down_proj)", suffix
+            )
+            if expert and int(expert[1]) < self.config.n_routed_experts:
+                return "moe.routed", expert[2]
+        return None
+
+    def get_ascend_deploy_candidates(self, module_names: set[str]) -> set[str]:
+        """Ascend INT candidates independent of legacy INT exclusions."""
+        return {
+            name for name in module_names if self._ascend_deploy_role(name) is not None
+        }
+
+    def validate_ascend_deploy_selection(self, selected: set[str]) -> None:
+        policy = ensure_bit_policy(self.args)
+        for name in sorted(selected):
+            role = self._ascend_deploy_role(name)
+            if role is None:
+                raise ValueError(f"Unsupported Ascend deployment module: {name}")
+            group, projection = role
+            bits = policy.linear_bits(name=projection, group=group)
+            if bits != (8, 8):
+                raise ValueError(
+                    f"Ascend deployment requires W8A8 for {name}, got {bits}"
+                )
+
+        def require_pair(first, second):
+            if (first in selected) != (second in selected):
+                raise ValueError(
+                    f"Fused modules must share quantization: {first}, {second}"
+                )
+
+        for idx in range(self.config.num_hidden_layers):
+            prefix = f"model.layers.{idx}."
+            require_pair(
+                prefix + "self_attn.q_a_proj", prefix + "self_attn.kv_a_proj_with_mqa"
+            )
+            mlp = prefix + "mlp."
+            if idx < self.config.first_k_dense_replace:
+                require_pair(mlp + "gate_proj", mlp + "up_proj")
+                continue
+            require_pair(
+                mlp + "shared_experts.gate_proj", mlp + "shared_experts.up_proj"
+            )
+            experts = {
+                f"{mlp}experts.{expert}.{proj}"
+                for expert in range(self.config.n_routed_experts)
+                for proj in self.MLP_LINEAR_NAMES
+            }
+            if selected & experts and not experts <= selected:
+                raise ValueError(
+                    f"Ascend deployment requires all experts and projections in {mlp}experts "
+                    "to share quantization"
+                )
 
     def float_model(self):
         return super().float_model()
