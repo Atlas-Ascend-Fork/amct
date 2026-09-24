@@ -124,10 +124,17 @@ class SmoothQuant(BaseQuantizeModule):
             # group de-duplicates by tensor identity and owns the batch count.
             group.update_activation_stat(inputs)
             group.update_weight_stat(self)
-            if group.act_granularity == 'token' and group.batch_input is None:
-                group.batch_input = inputs.cpu()
             if group.status == 'calibrated':
                 group.writeback_if_pending(self)
+                # Continue to the parameter branch if this member still needs
+                # its own weight scale; otherwise use the fake-quant forward.
+                if self.cur_batch != self.batch_num:
+                    return output
+                if (
+                    getattr(self, 'scale_w', None) is not None
+                    or getattr(self, 'scale_w1', None) is not None
+                ):
+                    return self.fake_quant_forward(inputs)
             elif group.finalize_if_ready(self):
                 # finalize writes the shared activation parameters to this
                 # member. Continue below so this member computes its own

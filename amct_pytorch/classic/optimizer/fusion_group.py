@@ -88,6 +88,13 @@ class FusionGroup:
         )
         self.batch_count += 1
         self.last_input = inputs
+        if self.act_granularity == 'token':
+            batch_input = inputs.cpu()
+            self.batch_input = (
+                batch_input
+                if self.batch_input is None
+                else torch.cat((self.batch_input, batch_input), dim=-1)
+            )
 
     def finalize_if_ready(self, caller):
         '''Finalize group params once the group batch count reaches batch_num.
