@@ -120,18 +120,25 @@ def _package_versions():
         except importlib.metadata.PackageNotFoundError:
             return None
 
-    amct_version = None
-    amct_version_file = (
-        Path(__file__).resolve().parents[4] / "amct_pytorch" / ".version"
-    )
-    try:
-        amct_version = amct_version_file.read_text().strip() or None
-    except OSError:
-        amct_version = _dist("amct_pytorch")
+    def _amct_version():
+        # Prefer the version of the package actually imported: installed wheels
+        # carry their own .version next to __init__.py, which may differ from
+        # the source checkout the sample script lives in.
+        try:
+            import amct_pytorch
+
+            content = (
+                (Path(amct_pytorch.__file__).parent / ".version").read_text().strip()
+            )
+            if content:
+                return content
+        except (ImportError, OSError):
+            pass
+        return _dist("amct_pytorch")
 
     versions = {
         "python": sys.version.split()[0],
-        "amct_pytorch": amct_version,
+        "amct_pytorch": _amct_version(),
         **{name: _dist(name) for name in ("torch", "torch_npu", "transformers")},
         **_cann_versions(),
     }

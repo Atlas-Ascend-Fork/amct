@@ -710,8 +710,8 @@ does variance statistics and weight slicing, so all three ratios finished in ~0.
 runtime is listed separately (skippable via `--skip-diagnose`). The
 pruned PPL degrades quickly as the ratio grows - the 0.5 run is clearly broken, showing that
 plain `low_variance` slicing without compensation is unusable at high ratios for this model
-size; combine it with `reconstruct` (recovery compensation, see [section 2](#2-pruning-samples)
-for the API usage) or recovery training (see [section 6.6](#66-size_budget05-recovery-training))
+size; combine it with `reconstruct` (recovery compensation, see [section 2](#2-pruning-example)
+for the API usage) or recovery training (see [section 6.6](#66-recovery-fine-tuning-for-size_budget05))
 to mitigate.
 
 > After pruning, to export the model as a torchair offline model (.air) for ATC-to-om conversion and on-board inference, refer to [AMCT large-model offline torchair model export](../export/README_en.md).
