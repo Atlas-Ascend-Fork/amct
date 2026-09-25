@@ -92,19 +92,23 @@ def _prune_cfg(prune_ratio):
 
 
 def _file_head(path):
-    """First "Version=..."-style line group of a CANN info file, or None."""
+    """Value of the first "Version=..."-style line of a CANN info file, or None."""
     try:
         lines = Path(path).read_text().splitlines()
     except OSError:
         return None
     keys = ("Version=", "version=")
-    return next((line for line in lines if line.startswith(keys)), None)
+    line = next((line for line in lines if line.startswith(keys)), None)
+    return line.split("=", 1)[1].strip() if line else None
 
 
 def _cann_versions():
     """Best-effort CANN toolkit / driver versions (None when not installed)."""
-    toolkit = _file_head(
-        Path(os.environ.get("ASCEND_TOOLKIT_HOME", "")) / "opp" / "version.info"
+    toolkit_home = os.environ.get("ASCEND_TOOLKIT_HOME", "")
+    toolkit = (
+        _file_head(Path(toolkit_home) / "opp" / "version.info")
+        if toolkit_home
+        else None
     )
     driver = _file_head(Path("/usr/local/Ascend/driver/version.info"))
     return {"cann_toolkit": toolkit, "npu_driver": driver}
@@ -312,7 +316,7 @@ def main():
             model.save_pretrained(save_dir)
             tokenizer.save_pretrained(save_dir)
             save_model_status = "saved"
-        except Exception as exc:  # noqa: BLE001 - NPU OOM raises RuntimeError, not OSError
+        except Exception as exc:  # NPU OOM raises RuntimeError, not OSError
             save_model_status = f"failed: {type(exc).__name__}: {exc}"
             print(
                 f"[qwen3_0_6b.low_variance.ratio] save_pretrained skipped: {save_model_status}"
