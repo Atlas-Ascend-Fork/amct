@@ -58,7 +58,7 @@ bash build.sh --torch
 - 安装[编译](#编译)环节生成的安装包（如果安装用户为root，请将安装命令中的--user删除）。
 
   ```bash
-  pip3 install amct_pytorch-${version}-py3-none-linux_${arch}.tar.gz --user
+  pip3 install build_out/amct_pytorch-${version}-py3-none-linux_${arch}.tar.gz --user
   ```
 
   > [!NOTE]说明
