@@ -113,7 +113,7 @@ class FlatQuantAttention(nn.Module):
 
     def add_fq_trans(self):
         '''
-        addd the low rank trans matrix before the ln
+        add the low rank trans matrix before the ln
         '''
         self.ln_trans, self.o_trans = None, None
         self.vcache_trans, self.kcache_trans = None, None
