@@ -204,7 +204,7 @@ class Logger(LoggerBase):
         """
         super().__init__(log_dir, log_name)
 
-        # Get loging level from env
+        # Get logging level from env
         console_level_pytorch = 'info'
         env_dist = os.environ
         if LOG_SET_ENV in env_dist:

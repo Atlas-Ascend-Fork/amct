@@ -710,7 +710,7 @@ class TestConfigParse(unittest.TestCase):
         try:
             parse_config(model, cfg, AlgorithmRegistry)
         except Exception as e:
-            self.assertIn('Not support algorithm AA, pls regiter it first', str(e))
+            self.assertIn('Not support algorithm AA, pls register it first', str(e))
 
     def test_customize_algo_cfg(self):
         cfg = {

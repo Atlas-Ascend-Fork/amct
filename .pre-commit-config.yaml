@@ -20,6 +20,10 @@ repos:
         args: [--maxkb=1024]
       - id: check-merge-conflict
       - id: detect-private-key
+      # 行尾检查：任何非 LF 行尾（含整文件 CRLF）都会被改写为 LF 并使检查失败。
+      # 注意不能用默认的 --fix=auto：纯 CRLF 文件不算「混用」，auto 模式不会报错。
+      - id: mixed-line-ending
+        args: [--fix=lf]
 
   # C/C++ 格式化（遵循仓库根目录 .clang-format，style=file）
   - repo: https://gitcode.com/pre-commit-clang/mirrors-clang-format
