@@ -21,7 +21,7 @@ import torch
 
 def adapt(weight_name, payload):
     module = importlib.import_module(
-        "amct_pytorch.common.models.llm.common.ascend_deploy_export"
+        "amct_pytorch.common.models.llm.common.deploy_export"
     )
     return module.adapt_ascend_payload(weight_name, payload)
 
@@ -85,7 +85,7 @@ def test_rejects_missing_scale_or_unexpected_payload(extra):
 
 def test_description_tracks_actual_tensors():
     module = importlib.import_module(
-        "amct_pytorch.common.models.llm.common.ascend_deploy_export"
+        "amct_pytorch.common.models.llm.common.deploy_export"
     )
     names = {
         "x.weight",
@@ -114,7 +114,7 @@ def test_description_tracks_actual_tensors():
 @pytest.mark.parametrize("missing", ["weight", "weight_scale", "weight_offset"])
 def test_description_rejects_incomplete_selected_payload(missing):
     module = importlib.import_module(
-        "amct_pytorch.common.models.llm.common.ascend_deploy_export"
+        "amct_pytorch.common.models.llm.common.deploy_export"
     )
     names = {"x.weight", "x.weight_scale", "x.weight_offset"} - {"x." + missing}
     with pytest.raises(ValueError, match="missing"):

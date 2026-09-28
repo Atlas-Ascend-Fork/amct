@@ -33,15 +33,13 @@ from transformers.utils import SAFE_WEIGHTS_INDEX_NAME, SAFE_WEIGHTS_NAME
 from amct_pytorch.algorithms.quant import register_algorithms
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm import register_llm_models
-from amct_pytorch.common.models.llm.common.ascend_deploy_export import (
-    adapt_ascend_payload,
-    make_ascend_description,
-)
 from amct_pytorch.common.models.llm.common.deploy_export import (
+    adapt_ascend_payload,
     convert_state_dict,
     export_block_deploy,
     generate_quant_config,
     generate_tensor_quant_config,
+    make_ascend_description,
     quant_payload,
 )
 from amct_pytorch.common.models.llm.common.deploy_selection import (

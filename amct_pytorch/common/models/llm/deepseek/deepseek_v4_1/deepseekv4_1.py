@@ -27,12 +27,10 @@ from safetensors import safe_open
 from safetensors.torch import load_file, save_file
 
 from amct_pytorch.common.models import MODEL_REGISTRY
-from amct_pytorch.common.models.llm.common.ascend_deploy_export import (
-    adapt_ascend_payload,
-    make_ascend_description,
-)
 from amct_pytorch.common.models.llm.common.deploy_export import (
+    adapt_ascend_payload,
     convert_state_dict,
+    make_ascend_description,
     quant_payload,
 )
 from amct_pytorch.common.models.llm.common.weight_path_validation import (
