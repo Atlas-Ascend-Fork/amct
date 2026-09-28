@@ -16,6 +16,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import copy
+import inspect
 from unittest.mock import patch
 
 import pytest
@@ -100,6 +101,11 @@ def _set_vit_mlp_input(layer, module):
         setattr(parent, path[-1], module(old))
         return
     raise AttributeError('cannot resolve ViT MLP input projection')
+
+
+def _vit_layer_accepts_attention_mask(layer):
+    parameters = inspect.signature(type(layer).forward).parameters
+    return 'attention_mask' in parameters
 
 
 def _fuse_vit(layer):
@@ -202,9 +208,15 @@ def test_vit_positional_mask_and_dropout_match(training, backend):
     mask = torch.zeros(2, 1, 5, 5)
     mask[..., -1] = float('-inf')
     torch.manual_seed(15)
-    expected = original(x, mask)
+    if _vit_layer_accepts_attention_mask(original):
+        expected = original(x, attention_mask=mask)
+    else:
+        expected = original(x)
     torch.manual_seed(15)
-    actual = fused(x, mask)
+    if _vit_layer_accepts_attention_mask(fused):
+        actual = fused(x, attention_mask=mask)
+    else:
+        actual = fused(x)
     torch.testing.assert_close(actual, expected)
     assert fused.training == original.training
     fused.double()
