@@ -26,6 +26,7 @@ from amct_pytorch.classic.quantize_op.linear_awq_module import LinearAWQuant
 from amct_pytorch.classic.quantize_op.smooth_quant_module import SmoothQuant
 from amct_pytorch.classic.quantize_op.quantile_module import QuantileQuant
 from amct_pytorch.classic.quantize_op.utils import calculate_hifloat8_weight_scale
+from amct_pytorch.common.utils.quant_util import quant_dequant_tensor
 from amct_pytorch.common.utils.vars import HIFLOAT8, INT8
 
 
@@ -202,6 +203,22 @@ class TestOfmrQuantFakeQuantForward(unittest.TestCase):
         x = torch.randn(1, 2, 8, 8)
         q(x)  # single batch → _calc_weight_quant_loss with cout>1 → scale_w computed
         self.assertIsNotNone(q.scale_w)
+
+    def test_conv2d_per_channel_fake_quant_uses_output_channel_scales(self):
+        mod = nn.Conv2d(2, 4, kernel_size=3, padding=1, bias=False)
+        cfg = _make_ofmr_config(
+            batch_num=1, strategy="channel", weight_compress_only=True
+        )
+        q = OfmrQuant(mod, "conv", cfg)
+        x = torch.randn(1, 2, 8, 8)
+        q(x)  # calibration
+        out = q(x)  # post-calibration fake-quant forward
+
+        expected_weight = quant_dequant_tensor(
+            q.weight.data, INT8, q.scale_w.reshape(-1, 1, 1, 1)
+        )
+        self.assertEqual(out.shape, (1, 4, 8, 8))
+        self.assertTrue(torch.equal(q.cached_dq_w, expected_weight))
 
 
 class TestLinearAWQuantInit(unittest.TestCase):
