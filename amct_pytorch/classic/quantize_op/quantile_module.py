@@ -176,11 +176,7 @@ class QuantileQuant(BaseQuantizeModule):
         if self.act_granularity == 'tensor':
             return torch.max(torch.abs(inputs)).reshape(-1)
         elif self.act_granularity == 'token':
-            cout_axis = -2
-            axis_list = list(range(0, inputs.dim()))
-            axis_list.pop(cout_axis)
-            axis = tuple(axis_list)
-            return torch.amax(torch.abs(inputs), dim=axis, keepdim=True)
+            return torch.amax(torch.abs(inputs), dim=-1, keepdim=True)
         return None
 
     def _update_act_scale_tensor(self, batch_max):

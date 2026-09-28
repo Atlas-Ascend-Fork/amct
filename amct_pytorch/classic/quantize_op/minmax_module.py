@@ -124,12 +124,8 @@ class MinMaxQuant(BaseQuantizeModule):
             batch_max = torch.max(inputs).reshape(-1)
             batch_min = torch.min(inputs).reshape(-1)
         elif self.act_granularity == 'token':
-            cout_axis = -2
-            axis_list = list(range(0, inputs.dim()))
-            axis_list.pop(cout_axis)
-            axis = tuple(axis_list)
-            batch_max = torch.amax(inputs, dim=axis, keepdim=True)
-            batch_min = torch.amin(inputs, dim=axis, keepdim=True)
+            batch_max = torch.amax(inputs, dim=-1, keepdim=True)
+            batch_min = torch.amin(inputs, dim=-1, keepdim=True)
 
         self.data_max = batch_max if self.data_max is None else self.data_max
         self.data_min = batch_min if self.data_min is None else self.data_min
