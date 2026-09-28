@@ -142,8 +142,10 @@ class _ViTFusedLayer(torch.nn.Module):
         attn = self.attention
         input_shape = hidden_states.shape[:-1]
         projection = getattr(attn, 'attention', attn)
-        head_dim = getattr(attn, 'head_dim', None) or getattr(
-            projection, 'head_dim', None
+        head_dim = (
+            getattr(attn, 'head_dim', None)
+            or getattr(projection, 'head_dim', None)
+            or getattr(projection, 'attention_head_size', None)
         )
         if head_dim is None:
             raise ValueError('cannot resolve head_dim for fused attention')
