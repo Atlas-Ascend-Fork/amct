@@ -236,8 +236,11 @@ class _ViTFusedLayer(torch.nn.Module):
 
     def forward(self, hidden_states, attention_mask=None, **kwargs):
         residual = hidden_states
-        hidden_states = self._attention_forward(hidden_states, attention_mask, **kwargs)
-        hidden_states = residual + self.dropout(hidden_states)
+        attention_output = self._attention_forward(
+            hidden_states, attention_mask, **kwargs
+        )
         if hasattr(self, 'mlp'):
+            hidden_states = residual + self.dropout(attention_output)
             return hidden_states + self.dropout(self._mlp_forward(hidden_states))
+        hidden_states = residual + attention_output
         return self._mlp_forward(hidden_states) + hidden_states
