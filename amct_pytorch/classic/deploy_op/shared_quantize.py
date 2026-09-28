@@ -129,6 +129,6 @@ class SharedDynamicQuantize(nn.Module):
             return torch_npu.npu_dynamic_quant(
                 x, dst_type=torch_npu.hifloat8, dst_type_max=15
             )
-        if self.act_type == 'float8_e4m3fn':
-            return torch_npu.npu_dynamic_quant(x, dst_type=torch.float8_e4m3fn)
-        return torch_npu.npu_dynamic_quant(x, dst_type=torch.int8)
+        if self.act_type == 'int8':
+            return torch_npu.npu_dynamic_quant(x, dst_type=torch.int8)
+        raise ValueError(f'Unsupported activation dtype: {self.act_type}')

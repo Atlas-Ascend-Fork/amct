@@ -182,3 +182,43 @@ def test_qwen_all_shared_quantizers_are_registered():
         q.marker.dtype == torch.float64 for q in fused._shared_by_pre_op.values()
     )
     assert all(q in list(fused.modules()) for q in fused._shared_by_pre_op.values())
+
+
+def test_qwen_fused_layer_preserves_layer_type_and_output_capture():
+    from transformers.modeling_layers import GradientCheckpointingLayer
+    from transformers.models.qwen3.modeling_qwen3 import Qwen3DecoderLayer
+
+    original = _qwen('eager')
+    fused = copy.deepcopy(original)
+    fused.model.layers[0] = _fuse_qwen(fused.model.layers[0])
+    assert isinstance(fused.model.layers[0], Qwen3DecoderLayer)
+    assert isinstance(fused.model.layers[0], GradientCheckpointingLayer)
+    with torch.no_grad():
+        expected = original(torch.tensor([[1, 2, 3]]), output_hidden_states=True)
+        actual = fused(torch.tensor([[1, 2, 3]]), output_hidden_states=True)
+    assert len(actual.hidden_states) == len(expected.hidden_states)
+
+
+def test_vit_fused_layer_preserves_layer_type_and_output_capture():
+    config = ViTConfig(hidden_size=16, intermediate_size=32, num_attention_heads=4)
+    config._attn_implementation = 'eager'
+    original = ViTLayer(config).eval()
+    layer = copy.deepcopy(original)
+    for name in ('q_proj', 'k_proj', 'v_proj'):
+        setattr(layer.attention, name, Projection(getattr(layer.attention, name)))
+    layer.mlp.fc1 = Projection(layer.mlp.fc1)
+    fused = _load_vit_fused_layer().from_shared_map(
+        layer,
+        {
+            'layer.layernorm_before': IdentityQuant(),
+            'layer.layernorm_after': IdentityQuant(),
+        },
+        'layer',
+    )
+    assert isinstance(fused, ViTLayer)
+
+
+def test_qwen_fused_layer_requires_position_embeddings():
+    layer = _fuse_qwen(_qwen('eager').model.layers[0])
+    with pytest.raises(ValueError, match='position_embeddings'):
+        layer(torch.randn(1, 2, 16))

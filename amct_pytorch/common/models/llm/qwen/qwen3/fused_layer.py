@@ -19,6 +19,22 @@
 import torch
 
 
+def _make_fused_layer_class(layer_type, mixin):
+    """Keep a concrete original layer type in the fused wrapper's MRO.
+
+    Transformers output capture and gradient checkpointing are enabled by
+    isinstance checks against the registered layer class. Test stubs derived
+    directly from nn.Module keep the plain mixin because inheriting the same
+    base twice would create an inconsistent MRO.
+    """
+    bases = (layer_type, mixin) if layer_type is not torch.nn.Module else (mixin,)
+    return type(
+        f'Fused{layer_type.__name__}',
+        bases,
+        {'__init__': mixin.__init__, 'forward': mixin.forward},
+    )
+
+
 class Qwen3FusedDecoderLayer:
     '''Move a Qwen3 decoder layer into a shared-quantization wrapper.
 
@@ -42,7 +58,9 @@ class Qwen3FusedDecoderLayer:
         own quantizer; missing entries fall back to no shared quantization
         for that block (members keep their own input quantization).
         '''
-        return _Qwen3FusedDecoderLayer(layer, shared_by_pre_op, layer_ref)
+        return _make_fused_layer_class(type(layer), _Qwen3FusedDecoderLayer)(
+            layer, shared_by_pre_op, layer_ref
+        )
 
 
 class _Qwen3FusedDecoderLayer(torch.nn.Module):
@@ -119,7 +137,7 @@ class _Qwen3FusedDecoderLayer(torch.nn.Module):
         input_shape = hidden_states.shape[:-1]
         head_dim = getattr(attn, 'head_dim', None)
         if head_dim is None:
-            head_dim = attn.q_proj.weight.shape[-1] // getattr(attn, 'num_heads', 1)
+            raise ValueError('cannot resolve head_dim for fused attention')
         hidden_shape = (*input_shape, -1, head_dim)
 
         shared = self._shared_for('input_layernorm')
@@ -138,9 +156,12 @@ class _Qwen3FusedDecoderLayer(torch.nn.Module):
         key = self._norm_and_transpose(attn, 'k_norm', key, hidden_shape)
         value = value.view(hidden_shape).transpose(1, 2)
 
-        if position_embeddings is not None:
-            cos, sin = position_embeddings
-            query, key = _apply_rope(query, key, cos, sin)
+        if position_embeddings is None:
+            raise ValueError(
+                'position_embeddings is required by Qwen3FusedDecoderLayer'
+            )
+        cos, sin = position_embeddings
+        query, key = _apply_rope(query, key, cos, sin)
         if past_key_values is not None:
             key, value = past_key_values.update(key, value, attn.layer_idx)
 

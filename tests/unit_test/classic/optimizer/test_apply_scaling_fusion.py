@@ -17,6 +17,8 @@
 # ----------------------------------------------------------------------------
 from unittest.mock import patch
 
+import pytest
+
 import torch
 from torch import nn
 
@@ -291,7 +293,7 @@ def test_dynamic_per_token_replaces_qwen3_layer_and_shares_quantization():
     ApplyScalingFusionPass().run(model)
 
     assert group.status == 'fused'
-    assert type(model.layer).__name__ == '_Qwen3FusedDecoderLayer'
+    assert type(model.layer).__name__.startswith('Fused')
     assert model.layer.shared_quantize.act_type == 'int8'
     for name in ('q_proj', 'k_proj', 'v_proj'):
         member = getattr(model.layer.self_attn, name)
@@ -324,6 +326,7 @@ def test_dynamic_per_token_passes_shared_scale_to_all_members(monkeypatch):
             self.layer.self_attn.k_proj = SharedMember()
             self.layer.self_attn.v_proj = SharedMember()
             self.layer.self_attn.head_dim = 3
+            self.layer.self_attn.num_attention_heads = 1
             self.layer.self_attn.num_key_value_groups = 1
             self.layer.post_attention_layernorm = nn.LayerNorm(3)
             self.layer.mlp = nn.Module()
@@ -351,7 +354,9 @@ def test_dynamic_per_token_passes_shared_scale_to_all_members(monkeypatch):
             return x, torch.full((x.numel() // x.shape[-1],), 0.5)
 
     model.layer.shared_quantize = CountingQuant()
-    output = model(torch.randn(2, 4, 3))
+    x = torch.randn(2, 4, 3)
+    rope = (torch.ones(2, 4, 3), torch.zeros(2, 4, 3))
+    output = model.layer(x, position_embeddings=rope)
     assert output.shape == (2, 4, 3)
     assert len(calls) == 1
 
@@ -484,3 +489,24 @@ def test_shared_token_matmul_flattens_batches_and_preserves_static_scales(monkey
         torch.testing.assert_close(actual, expected)
         if not dynamic:
             torch.testing.assert_close(deploy.pertoken_scale, before)
+
+
+def test_shared_dynamic_quantize_rejects_unsupported_dtype(monkeypatch):
+    import sys
+    from types import SimpleNamespace
+    from amct_pytorch.classic.deploy_op.shared_quantize import SharedDynamicQuantize
+
+    calls = []
+
+    def dynamic_quant(x, *, dst_type, **kwargs):
+        calls.append((dst_type, kwargs))
+        return x, torch.ones_like(x[..., 0])
+
+    torch_npu = sys.modules['torch_npu']
+    monkeypatch.setattr(torch_npu, 'npu_dynamic_quant', dynamic_quant)
+    monkeypatch.setattr(torch_npu, 'hifloat8', SimpleNamespace(marker='hifloat8'))
+    SharedDynamicQuantize('int8')(torch.randn(1, 2, 3))
+    SharedDynamicQuantize('hifloat8')(torch.randn(1, 2, 3))
+    assert calls[-1][1] == {'dst_type_max': 15}
+    with pytest.raises(ValueError, match='Unsupported activation dtype'):
+        SharedDynamicQuantize('int4')(torch.randn(1, 2, 3))

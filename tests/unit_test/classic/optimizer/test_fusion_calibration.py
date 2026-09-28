@@ -36,7 +36,7 @@ def _layer_config(algorithm='smoothquant', strategy='tensor', batch_num=2):
         'algorithm': {'smoothquant': {'smooth_strength': 0.5}},
     }
     if algorithm == 'minmax':
-        cfg['algorithm'] = {'minmax'}
+        cfg['algorithm'] = {'minmax': {}}
     return cfg
 
 

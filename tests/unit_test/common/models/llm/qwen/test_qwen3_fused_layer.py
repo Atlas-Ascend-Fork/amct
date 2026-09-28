@@ -45,6 +45,7 @@ class Linear(nn.Module):
 class Attention(nn.Module):
     def __init__(self, hidden):
         super().__init__()
+        self.head_dim = hidden
         self.q_proj = Linear(hidden, hidden)
         self.k_proj = Linear(hidden, hidden)
         self.v_proj = Linear(hidden, hidden)
@@ -91,7 +92,8 @@ def test_qwen3_fused_layer_one_dynamic_quant_for_qkv_and_mlp():
 
     fused.shared_quantize = CountingQuant()
     x = torch.randn(2, 3, hidden)
-    output = fused(x)
+    rope = (torch.ones(2, 3, hidden), torch.zeros(2, 3, hidden))
+    output = fused(x, position_embeddings=rope)
     assert output.shape == x.shape
     assert len(calls) == 2
     assert calls[0] is not None

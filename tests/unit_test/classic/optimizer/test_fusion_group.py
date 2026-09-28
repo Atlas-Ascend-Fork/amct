@@ -271,3 +271,17 @@ def register_test_patterns(monkeypatch):
         patterns['vit'], layer_types=(f'{VitLayer.__module__}.{VitLayer.__qualname__}',)
     )
     monkeypatch.setattr(FUSION_PATTERNS, '_patterns', patterns)
+
+
+def test_minmax_single_member_calibration_group_is_skipped_after_real_config_shape():
+    from amct_pytorch.classic.optimizer.fusion_pattern import (
+        build_fusion_groups_from_patterns,
+    )
+
+    model = VitLayer(algorithm='minmax')
+    model.attention.q_proj.quant_config['algorithm'] = {'minmax': {}}
+    model.attention.k_proj.quant_config['algorithm'] = {'minmax': {}}
+    model.attention.v_proj.quant_config['algorithm'] = {'minmax': {}}
+    model.mlp.fc1.quant_config['algorithm'] = {'minmax': {}}
+    registry = build_fusion_groups_from_patterns(model)
+    assert all(len(group.scaling_layer_refs) > 1 for group in registry.groups)
