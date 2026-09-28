@@ -87,10 +87,25 @@ def _set_vit_projection(attn, role, module):
     raise AttributeError(f'cannot resolve ViT {role} projection')
 
 
+def _set_vit_mlp_input(layer, module):
+    paths = (('mlp', 'fc1'), ('intermediate', 'dense'))
+    for path in paths:
+        parent = layer
+        try:
+            for attr in path[:-1]:
+                parent = getattr(parent, attr)
+            old = getattr(parent, path[-1])
+        except AttributeError:
+            continue
+        setattr(parent, path[-1], module(old))
+        return
+    raise AttributeError('cannot resolve ViT MLP input projection')
+
+
 def _fuse_vit(layer):
     for role in ('q', 'k', 'v'):
         _set_vit_projection(layer.attention, role, Projection)
-    layer.mlp.fc1 = Projection(layer.mlp.fc1)
+    _set_vit_mlp_input(layer, Projection)
     return _load_vit_fused_layer().from_shared_map(
         layer,
         {

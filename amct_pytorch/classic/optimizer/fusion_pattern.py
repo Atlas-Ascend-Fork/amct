@@ -105,7 +105,7 @@ FUSION_PATTERNS.register(
             ),
             FusionGroupPattern(
                 pre_op='layernorm_after',
-                members=('mlp.fc1',),
+                members=(('mlp.fc1', 'intermediate.dense'),),
                 group_type='norm',
             ),
         ),

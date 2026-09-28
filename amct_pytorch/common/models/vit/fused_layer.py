@@ -51,8 +51,6 @@ class ViTFusedLayer:
 
 
 class _ViTFusedLayer(torch.nn.Module):
-    _LAYER_ATTRS = ('attention', 'layernorm_before', 'layernorm_after', 'mlp')
-
     def __init__(self, layer, shared_by_pre_op, layer_ref):
         super().__init__()
         self._layer_ref = layer_ref
@@ -62,10 +60,10 @@ class _ViTFusedLayer(torch.nn.Module):
         self.training = layer.training
         self.dropout = getattr(layer, 'dropout', torch.nn.Identity())
         self.shared_quantize = next(iter(self._shared_by_pre_op.values()), None)
-        for attr in self._LAYER_ATTRS:
-            setattr(self, attr, getattr(layer, attr))
+        for key, value in layer._modules.items():  # pylint: disable=protected-access
+            setattr(self, key, value)
         for key, value in vars(layer).items():
-            if key.startswith('_') or key in self._LAYER_ATTRS:
+            if key.startswith('_') or key in self._modules:
                 continue
             if isinstance(value, torch.nn.Module):
                 setattr(self, key, value)
@@ -118,6 +116,21 @@ class _ViTFusedLayer(torch.nn.Module):
                 ('attention', 'output', 'dense'),
             ),
         )
+
+    @classmethod
+    def _mlp_modules(cls, layer):
+        if hasattr(layer, 'mlp'):
+            mlp = layer.mlp
+            up = getattr(mlp, 'fc1', None)
+            down = getattr(mlp, 'fc2', None)
+            activation = getattr(mlp, 'activation_fn', None)
+        else:
+            up = layer.intermediate.dense
+            down = layer.output.dense
+            activation = layer.intermediate.intermediate_act_fn
+            dropout = getattr(layer.output, 'dropout', None)
+            return up, down, activation, dropout
+        return up, down, activation, None
 
     @staticmethod
     def _project(module, hidden, pertoken_scale):
@@ -185,25 +198,30 @@ class _ViTFusedLayer(torch.nn.Module):
         return self._project(self._output_projection(attn), output, None)
 
     def _mlp_forward(self, hidden_states):
-        mlp = self.mlp
+        mlp = getattr(self, 'mlp', None)
+        output_dropout = None
+        if mlp is not None:
+            up, down, activation, _ = self._mlp_modules(self)
+        else:
+            up, down, activation, output_dropout = self._mlp_modules(self)
         shared = self._shared_for('layernorm_after')
         h = self.layernorm_after(hidden_states)
         if shared is not None:
             q, scale = shared(h)
-            intermediate = self._project(mlp.fc1, q, scale)
+            intermediate = self._project(up, q, scale)
         else:
-            intermediate = self._project(mlp.fc1, h, None)
-        if hasattr(mlp, 'activation_fn'):
-            intermediate = mlp.activation_fn(intermediate)
-        elif hasattr(mlp, 'act_fn'):
-            intermediate = mlp.act_fn(intermediate)
-        down = getattr(mlp, 'fc2', None)
-        if down is not None:
-            return self._project(down, intermediate, None)
-        return intermediate
+            intermediate = self._project(up, h, None)
+        if activation is not None:
+            intermediate = activation(intermediate)
+        output = self._project(down, intermediate, None)
+        if output_dropout is not None:
+            output = output_dropout(output)
+        return output
 
     def forward(self, hidden_states, attention_mask=None, **kwargs):
         residual = hidden_states
         hidden_states = self._attention_forward(hidden_states, attention_mask, **kwargs)
         hidden_states = residual + self.dropout(hidden_states)
-        return hidden_states + self.dropout(self._mlp_forward(hidden_states))
+        if hasattr(self, 'mlp'):
+            return hidden_states + self.dropout(self._mlp_forward(hidden_states))
+        return self._mlp_forward(hidden_states) + hidden_states
