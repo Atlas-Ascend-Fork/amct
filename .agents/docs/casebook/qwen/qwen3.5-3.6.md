@@ -91,3 +91,5 @@
 | MXFP | A4w4: mlp | omniquant | 7.8741 |
 | MXFP | A4w4: mlp | autoround | 7.9661 |
 | MXFP | A4w4: mlp | flatquant | 7.7327 |
+| MXFP | A8w8: attn-linear | 无 | 7.5638 |
+| MXFP | A8w8: mlp | 无 | 7.6255 |
