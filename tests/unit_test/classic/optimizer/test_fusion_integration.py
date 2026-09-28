@@ -15,6 +15,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import pytest
+from dataclasses import replace
+from amct_pytorch.classic.optimizer.fusion_pattern import FUSION_PATTERNS
+
 import torch
 from torch import nn
 
@@ -150,6 +154,7 @@ def _smooth_group(pre_ref, members, dynamic=False):
     group.activation_scale = torch.tensor([0.1])
     group.dynamic_per_token = dynamic
     if dynamic:
+        group.dynamic_layer = 'decoder_layer'
         group.layer_ref = 'layer'
     return group
 
@@ -176,6 +181,9 @@ def test_real_weight_smoothquant_static_group_fuses_without_linear_attribute():
     registry = FusionRegistry()
     registry.add_group(group)
     model._amct_fusion_registry = registry
+    group._writeback_done = {
+        id(model.get_submodule(ref)): True for ref in group.scaling_layer_refs
+    }
     ApplyScalingFusionPass().run(model)
     assert group.status == 'fused'
 
@@ -226,6 +234,9 @@ def test_dynamic_smoothquant_group_fuses_scaling_before_layer_replacement():
     old_norm = model.layer.input_layernorm.weight.detach().clone()
     old_weight = model.layer.self_attn.q_proj.weight.detach().clone()
 
+    group._writeback_done = {
+        id(model.get_submodule(ref)): True for ref in group.scaling_layer_refs
+    }
     ApplyScalingFusionPass().run(model)
     assert group.status == 'fused'
     assert not torch.allclose(model.layer.input_layernorm.weight, old_norm)
@@ -266,3 +277,16 @@ def test_qwen3_fused_layer_single_quantizer_constructor():
 
     layer = Qwen3FusedDecoderLayer(Layer(), SharedDynamicQuantize())
     assert layer.shared_quantize is not None
+
+
+# Stub structures are explicitly registered for these unit tests only.
+
+
+@pytest.fixture(autouse=True)
+def register_test_patterns(monkeypatch):
+    patterns = dict(FUSION_PATTERNS._patterns)
+    patterns['qwen3'] = replace(
+        patterns['qwen3'],
+        layer_types=(f'{TinyQwenLayer.__module__}.{TinyQwenLayer.__qualname__}',),
+    )
+    monkeypatch.setattr(FUSION_PATTERNS, '_patterns', patterns)

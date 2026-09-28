@@ -15,6 +15,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import pytest
+from dataclasses import replace
+from amct_pytorch.classic.optimizer.fusion_pattern import FUSION_PATTERNS
+
 from unittest.mock import patch
 
 from torch import nn
@@ -163,6 +167,7 @@ def test_dynamic_group_uses_containing_layer_ref():
     registry = _registry_for(model)
     for group in registry.groups:
         group.dynamic_per_token = True
+        group.dynamic_layer = 'decoder_layer'
         group.layer_ref = 'layers.0'
     assert all(group.layer_ref == 'layers.0' for group in registry.groups)
 
@@ -231,3 +236,38 @@ def test_quantize_builds_pattern_registry_directly():
     ):
         quantize_module.quantize(model)
     mock_build.assert_called_once_with(model)
+
+
+def test_attribute_lookalike_is_not_a_registered_model():
+    class UnregisteredLookalike(QwenLayer):
+        pass
+
+    model = nn.Module()
+    model.layer = UnregisteredLookalike()
+    assert build_fusion_groups_from_patterns(model).groups == []
+
+
+def test_dynamic_root_layer_falls_back_before_binding_members():
+    model = QwenLayer()
+    for module in model.modules():
+        if isinstance(module, Quant):
+            module.quant_config['inputs_cfg']['strategy'] = 'token'
+            module.quant_config['inputs_cfg']['dynamic'] = True
+    assert build_fusion_groups_from_patterns(model).groups == []
+    assert model.self_attn.q_proj.fusion_group is None
+
+
+# Stub structures are explicitly registered for these unit tests only.
+
+
+@pytest.fixture(autouse=True)
+def register_test_patterns(monkeypatch):
+    patterns = dict(FUSION_PATTERNS._patterns)
+    patterns['qwen3'] = replace(
+        patterns['qwen3'],
+        layer_types=(f'{QwenLayer.__module__}.{QwenLayer.__qualname__}',),
+    )
+    patterns['vit'] = replace(
+        patterns['vit'], layer_types=(f'{VitLayer.__module__}.{VitLayer.__qualname__}',)
+    )
+    monkeypatch.setattr(FUSION_PATTERNS, '_patterns', patterns)

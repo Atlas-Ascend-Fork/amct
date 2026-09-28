@@ -38,7 +38,11 @@ class _ViTFusedLayer(torch.nn.Module):
     def __init__(self, layer, shared_by_pre_op, layer_ref):
         super().__init__()
         self._layer_ref = layer_ref
-        self._shared_by_pre_op = dict(shared_by_pre_op)
+        self._shared_by_pre_op = torch.nn.ModuleDict(
+            {ref.rsplit('.', 1)[-1]: quant for ref, quant in shared_by_pre_op.items()}
+        )
+        self.training = layer.training
+        self.dropout = getattr(layer, 'dropout', torch.nn.Identity())
         self.shared_quantize = next(iter(self._shared_by_pre_op.values()), None)
         for attr in self._LAYER_ATTRS:
             setattr(self, attr, getattr(layer, attr))
@@ -54,21 +58,12 @@ class _ViTFusedLayer(torch.nn.Module):
                     pass
 
     def _shared_for(self, pre_op):
-        if self._layer_ref is not None:
-            shared = self._shared_by_pre_op.get(f'{self._layer_ref}.{pre_op}')
-            if shared is not None:
-                if (
-                    len(self._shared_by_pre_op) == 1
-                    and self.shared_quantize is not shared
-                ):
-                    return self.shared_quantize
-                return shared
-        if len(self._shared_by_pre_op) == 1 or '_default' in self._shared_by_pre_op:
-            if self.shared_quantize is not None:
+        if pre_op in self._shared_by_pre_op:
+            if len(self._shared_by_pre_op) == 1:
                 return self.shared_quantize
-            return self._shared_by_pre_op.get(
-                '_default', next(iter(self._shared_by_pre_op.values()))
-            )
+            return self._shared_by_pre_op[pre_op]
+        if '_default' in self._shared_by_pre_op:
+            return self.shared_quantize
         return None
 
     @staticmethod
@@ -77,7 +72,7 @@ class _ViTFusedLayer(torch.nn.Module):
             return module(hidden, pertoken_scale)
         return module(hidden)
 
-    def _attention_forward(self, hidden_states, attention_mask):
+    def _attention_forward(self, hidden_states, attention_mask, **kwargs):
         attn = self.attention
         input_shape = hidden_states.shape[:-1]
         head_dim = getattr(attn, 'head_dim', None)
@@ -101,24 +96,32 @@ class _ViTFusedLayer(torch.nn.Module):
         key = key.view(hidden_shape).transpose(1, 2)
         value = value.view(hidden_shape).transpose(1, 2)
 
-        scaling = getattr(attn, 'scaling', head_dim**-0.5)
-        attn_weight = torch.matmul(query, key.transpose(2, 3)) * scaling
-        if attention_mask is not None:
-            if attention_mask.dtype == torch.bool:
-                additive_mask = torch.zeros_like(
-                    attn_weight[..., : attention_mask.shape[-1]],
-                    dtype=attn_weight.dtype,
-                )
-                additive_mask.masked_fill_(attention_mask.logical_not(), float('-inf'))
-                attn_weight = attn_weight + additive_mask
-            else:
-                attn_weight = attn_weight + attention_mask
-        attn_weight = torch.softmax(attn_weight, dim=-1, dtype=torch.float32).to(
-            query.dtype
-        )
-        attn_output = torch.matmul(attn_weight, value)
-        attn_output = attn_output.transpose(1, 2).contiguous()
-        output = attn_output.reshape(*input_shape, -1)
+        if hasattr(attn, 'config'):
+            from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
+            from transformers.models.vit.modeling_vit import eager_attention_forward
+
+            interface = ALL_ATTENTION_FUNCTIONS.get_interface(
+                attn.config._attn_implementation, eager_attention_forward
+            )
+            attn_output, _ = interface(
+                attn,
+                query,
+                key,
+                value,
+                attention_mask,
+                dropout=attn.attention_dropout if attn.training else 0.0,
+                scaling=attn.scaling,
+                **kwargs,
+            )
+        else:
+            attn_output = torch.nn.functional.scaled_dot_product_attention(
+                query,
+                key,
+                value,
+                attn_mask=attention_mask,
+                scale=getattr(attn, 'scaling', head_dim**-0.5),
+            ).transpose(1, 2)
+        output = attn_output.reshape(*input_shape, -1).contiguous()
         o_proj = getattr(attn, 'o_proj', None)
         if o_proj is not None:
             return self._project(o_proj, output, None)
@@ -142,10 +145,8 @@ class _ViTFusedLayer(torch.nn.Module):
             return self._project(down, intermediate, None)
         return intermediate
 
-    def forward(self, hidden_states, *args, **kwargs):
+    def forward(self, hidden_states, attention_mask=None, **kwargs):
         residual = hidden_states
-        hidden_states = self._attention_forward(
-            hidden_states, kwargs.get('attention_mask')
-        )
-        hidden_states = residual + hidden_states
-        return hidden_states + self._mlp_forward(hidden_states)
+        hidden_states = self._attention_forward(hidden_states, attention_mask, **kwargs)
+        hidden_states = residual + self.dropout(hidden_states)
+        return hidden_states + self.dropout(self._mlp_forward(hidden_states))

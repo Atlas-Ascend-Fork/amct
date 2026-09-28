@@ -103,10 +103,16 @@ class SmoothQuant(BaseQuantizeModule):
 
         self.cur_batch += 1
         if self.cur_batch > self.batch_num:
+            group = getattr(self, 'fusion_group', None)
+            if group is not None:
+                group.writeback_if_pending(self)
             return self.fake_quant_forward(inputs)
         batch_max = inputs.reshape(-1, inputs.shape[-1]).amax(dim=0, keepdim=True)
         batch_min = inputs.reshape(-1, inputs.shape[-1]).amin(dim=0, keepdim=True)
-        if self.act_granularity == 'token':
+        group = getattr(self, 'fusion_group', None)
+        if self.act_granularity == 'token' and (
+            group is None or group.status == 'skipped'
+        ):
             if self.batch_input is None:
                 self.batch_input = inputs.cpu()
             else:
@@ -120,9 +126,9 @@ class SmoothQuant(BaseQuantizeModule):
 
         group = getattr(self, 'fusion_group', None)
         if group is not None:
-            # Group members report the shared input once per forward; the
-            # group de-duplicates by tensor identity and owns the batch count.
-            group.update_activation_stat(inputs)
+            # Group members report the same calibration batch index; the
+            # group counts and reduces each shared input once.
+            group.update_activation_stat(inputs, self.cur_batch)
             group.update_weight_stat(self)
             if group.status == 'calibrated':
                 group.writeback_if_pending(self)
@@ -151,19 +157,8 @@ class SmoothQuant(BaseQuantizeModule):
                 smooth_factor = self.scale
             else:
                 smooth_factor = self.calculate_smooth(act_max)
-            weight = self.weight * smooth_factor
-
-            # only FP8 * FP4 do progressive scale
-            if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
-                self.scale_w1, self.scale_w2 = (
-                    calculate_progressive_weights_scale_factor(
-                        weight.data, group_size=self.group_size
-                    )
-                )
-            else:
-                self.scale_w, self.offset_w = self.calculate_weights_scale_factor(
-                    weight, self.quant_config.get('weights_cfg').get('strategy')
-                )
+            self.scale = smooth_factor
+            self.finalize_weight_params()
 
             if group is None or group.status == 'skipped':
                 if self.act_granularity == 'tensor':
@@ -182,6 +177,21 @@ class SmoothQuant(BaseQuantizeModule):
                 'SmoothQuant',
             )
         return output
+
+    @torch.no_grad()
+    def finalize_weight_params(self):
+        """Finish member-owned weight scales after common smooth writeback."""
+        if self.scale_w is not None or self.scale_w1 is not None:
+            return
+        weight = self.weight * self.scale
+        if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
+            self.scale_w1, self.scale_w2 = calculate_progressive_weights_scale_factor(
+                weight.data, group_size=self.group_size
+            )
+        else:
+            self.scale_w, self.offset_w = self.calculate_weights_scale_factor(
+                weight, self.wts_granularity
+            )
 
     def calculate_smooth(self, act_max):
         """
@@ -262,7 +272,16 @@ class SmoothQuant(BaseQuantizeModule):
 
         smooth_x = self.scale.to(device=inputs.device, dtype=inputs.dtype)
         x = inputs / smooth_x
-        if self.scale_d is not None:
+        group = getattr(self, 'fusion_group', None)
+        if group is not None and group.dynamic_per_token:
+            scale_d, offset_d = calculate_scale_offset(
+                x.amax(dim=-1, keepdim=True),
+                x.amin(dim=-1, keepdim=True),
+                self.act_symmetric,
+                self.act_type,
+            )
+            dq_x = quant_dequant_tensor(x, self.act_type, scale_d, offset_d)
+        elif self.scale_d is not None:
             dq_x = quant_dequant_tensor(x, self.act_type, self.scale_d, self.offset_d)
         else:
             dq_x = x

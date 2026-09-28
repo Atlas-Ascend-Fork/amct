@@ -29,13 +29,14 @@ class SharedQuantize(nn.Module):
         activation_offset=None,
         act_type='int8',
         output_dtype=torch.float16,
+        act_granularity='tensor',
     ):
         super().__init__()
         self.act_type = act_type
         self.output_dtype = output_dtype
         # Mirror NpuQuantizationLinear._init_act_quant_params: act_scale is
         # 1/scale_d cast to the deploy output dtype, offset is repeated to
-        # the scale shape, and INT4 input quant uses axis=-2.
+        # the scale shape, and token input quant uses axis=-2.
         scale_d = activation_scale.reshape(-1)
         self.register_buffer(
             'act_scale',
@@ -48,18 +49,28 @@ class SharedQuantize(nn.Module):
         )
         self.register_buffer(
             'act_offset',
-            offset_d.reshape(-1).repeat(scale_d.shape[0]).to(output_dtype),
+            offset_d.reshape(-1).expand_as(scale_d).clone().to(output_dtype),
         )
-        self.quantize_axis = -2 if act_type == 'int4' else -1
+        self.quantize_axis = -2 if act_granularity == 'token' else -1
 
     def forward(self, x):
         import torch_npu
 
+        if self.act_type == 'hifloat8':
+            dtype = torch_npu.hifloat8
+        elif self.act_type == 'float8_e4m3fn':
+            dtype = torch.float8_e4m3fn
+        elif self.act_type == 'int4':
+            dtype = torch_npu.int4
+        elif self.act_type == 'int8':
+            dtype = torch.int8
+        else:
+            raise ValueError(f'Unsupported activation dtype: {self.act_type}')
         return torch_npu.npu_quantize(
             x,
             self.act_scale,
             self.act_offset,
-            dtype=self.act_type,
+            dtype=dtype,
             axis=self.quantize_axis,
             div_mode=False,
         )
@@ -72,6 +83,33 @@ class FusedPreOp(nn.Module):
         super().__init__()
         self.pre_op = pre_op
         self.shared = shared_quantize
+
+    def _load_from_state_dict(
+        self,
+        state_dict,
+        prefix,
+        local_metadata,
+        strict,
+        missing_keys,
+        unexpected_keys,
+        error_msgs,
+    ):
+        # Accept a legacy pre-op path for already-fused deployment tensors.
+        # Shared quantization buffers are still required by strict loading.
+        for name in self.pre_op.state_dict():
+            old_key = prefix + name
+            new_key = prefix + 'pre_op.' + name
+            if old_key in state_dict and new_key not in state_dict:
+                state_dict[new_key] = state_dict.pop(old_key)
+        super()._load_from_state_dict(
+            state_dict,
+            prefix,
+            local_metadata,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
+        )
 
     def forward(self, *args, **kwargs):
         return self.shared(self.pre_op(*args, **kwargs))

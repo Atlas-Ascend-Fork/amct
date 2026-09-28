@@ -56,7 +56,10 @@ class _Qwen3FusedDecoderLayer(torch.nn.Module):
     def __init__(self, layer, shared_by_pre_op, layer_ref):
         super().__init__()
         self._layer_ref = layer_ref
-        self._shared_by_pre_op = dict(shared_by_pre_op)
+        self._shared_by_pre_op = torch.nn.ModuleDict(
+            {ref.rsplit('.', 1)[-1]: quant for ref, quant in shared_by_pre_op.items()}
+        )
+        self.training = layer.training
         # Keep the single-quantizer attribute name for layers with one group
         # (and as the injection point used by tests): the first shared
         # quantizer of the layer.
@@ -78,29 +81,12 @@ class _Qwen3FusedDecoderLayer(torch.nn.Module):
                     pass
 
     def _shared_for(self, pre_op):
-        '''Return the shared quantizer attached to a pre_op, if any.
-
-        Falls back to the single shared_quantize attribute when the layer has
-        only one quantizer, so test injection points and single-group layers
-        keep the pre-existing API working.
-        '''
-        if self._layer_ref is not None:
-            shared = self._shared_by_pre_op.get(f'{self._layer_ref}.{pre_op}')
-            if shared is not None:
-                # Allow the single-quantizer attribute to override the map
-                # entry when it has been swapped after construction.
-                if (
-                    len(self._shared_by_pre_op) == 1
-                    and self.shared_quantize is not shared
-                ):
-                    return self.shared_quantize
-                return shared
-        if len(self._shared_by_pre_op) == 1 or '_default' in self._shared_by_pre_op:
-            if self.shared_quantize is not None:
+        if pre_op in self._shared_by_pre_op:
+            if len(self._shared_by_pre_op) == 1:
                 return self.shared_quantize
-            return self._shared_by_pre_op.get(
-                '_default', next(iter(self._shared_by_pre_op.values()))
-            )
+            return self._shared_by_pre_op[pre_op]
+        if '_default' in self._shared_by_pre_op:
+            return self.shared_quantize
         return None
 
     @staticmethod
@@ -122,7 +108,12 @@ class _Qwen3FusedDecoderLayer(torch.nn.Module):
         return module(hidden)
 
     def _attention_forward(
-        self, hidden_states, attention_mask, position_embeddings, past_key_values
+        self,
+        hidden_states,
+        attention_mask,
+        position_embeddings,
+        past_key_values,
+        **kwargs,
     ):
         attn = self.self_attn
         input_shape = hidden_states.shape[:-1]
@@ -153,27 +144,37 @@ class _Qwen3FusedDecoderLayer(torch.nn.Module):
         if past_key_values is not None:
             key, value = past_key_values.update(key, value, attn.layer_idx)
 
-        groups = getattr(attn, 'num_key_value_groups', 1)
-        key = self._repeat_kv(key, groups)
-        value = self._repeat_kv(value, groups)
-        scaling = getattr(attn, 'scaling', head_dim**-0.5)
-        attn_weight = torch.matmul(query, key.transpose(2, 3)) * scaling
-        if attention_mask is not None:
-            if attention_mask.dtype == torch.bool:
-                additive_mask = torch.zeros_like(
-                    attn_weight[..., : attention_mask.shape[-1]],
-                    dtype=attn_weight.dtype,
-                )
-                additive_mask.masked_fill_(attention_mask.logical_not(), float('-inf'))
-                attn_weight = attn_weight + additive_mask
-            else:
-                attn_weight = attn_weight + attention_mask
-        attn_weight = torch.softmax(attn_weight, dim=-1, dtype=torch.float32).to(
-            query.dtype
-        )
-        attn_output = torch.matmul(attn_weight, value)
-        attn_output = attn_output.transpose(1, 2).contiguous()
-        output = attn_output.reshape(*input_shape, -1)
+        if hasattr(attn, 'config'):
+            from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
+            from transformers.models.qwen3.modeling_qwen3 import eager_attention_forward
+
+            interface = ALL_ATTENTION_FUNCTIONS.get_interface(
+                attn.config._attn_implementation, eager_attention_forward
+            )
+            attn_output, _ = interface(
+                attn,
+                query,
+                key,
+                value,
+                attention_mask,
+                dropout=attn.attention_dropout if attn.training else 0.0,
+                scaling=attn.scaling,
+                sliding_window=attn.sliding_window,
+                **kwargs,
+            )
+        else:
+            groups = getattr(attn, 'num_key_value_groups', 1)
+            key = self._repeat_kv(key, groups)
+            value = self._repeat_kv(value, groups)
+            attn_output = torch.nn.functional.scaled_dot_product_attention(
+                query,
+                key,
+                value,
+                attn_mask=attention_mask,
+                is_causal=attention_mask is None and query.shape[-2] > 1,
+                scale=getattr(attn, 'scaling', head_dim**-0.5),
+            ).transpose(1, 2)
+        output = attn_output.reshape(*input_shape, -1).contiguous()
         o_proj = getattr(attn, 'o_proj', None)
         if o_proj is not None:
             return self._project(o_proj, output, None)
@@ -209,13 +210,25 @@ class _Qwen3FusedDecoderLayer(torch.nn.Module):
             return self._project(down_proj, hidden, None)
         return hidden
 
-    def forward(self, hidden_states, *args, **kwargs):
+    def forward(
+        self,
+        hidden_states,
+        attention_mask=None,
+        position_ids=None,
+        past_key_values=None,
+        use_cache=False,
+        position_embeddings=None,
+        **kwargs,
+    ):
         residual = hidden_states
         hidden_states = self._attention_forward(
             hidden_states,
-            kwargs.get('attention_mask'),
-            kwargs.get('position_embeddings'),
-            kwargs.get('past_key_values'),
+            attention_mask,
+            position_embeddings,
+            past_key_values,
+            position_ids=position_ids,
+            use_cache=use_cache,
+            **kwargs,
         )
         hidden_states = residual + hidden_states
         return hidden_states + self._mlp_forward(hidden_states)

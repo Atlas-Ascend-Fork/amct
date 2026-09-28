@@ -105,15 +105,33 @@ class NpuQuantizationLinear(torch.nn.Module):
                 axis=self.quantize_axis,
                 div_mode=False,
             )
+        ori_shape = quant_x.shape
+        matmul_token_scale = self.pertoken_scale
+        flatten_input = self.act_granularity == 'token' or (
+            self.is_new_torch_npu
+            and self.act_type == FLOAT8_E4M3FN
+            and self.wts_type == FLOAT4_E2M1
+        )
+        if (
+            self.act_granularity == 'token'
+            and self.input_quant_disabled
+            and pertoken_scale is None
+        ):
+            # Static token scales share sequence positions across batches.
+            # Keep the calibrated vector unchanged for subsequent forwards.
+            matmul_token_scale = (
+                self.pertoken_scale.reshape(-1, 1)
+                .expand(*ori_shape[:-1], 1)
+                .reshape(-1)
+            )
+        if flatten_input:
+            quant_x = quant_x.reshape(-1, ori_shape[-1])
         if self.is_new_torch_npu:
-            if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
-                ori_shape = quant_x.shape
-                quant_x = quant_x.reshape(-1, x.shape[-1])
             output = torch_npu.npu_quant_matmul(
                 quant_x,
                 self.quantized_weight,
                 scale=self.deq_scale,
-                pertoken_scale=self.pertoken_scale,
+                pertoken_scale=matmul_token_scale,
                 bias=self.bias,
                 output_dtype=self.output_dtype,
                 x1_dtype=self.x1_dtype,
@@ -121,18 +139,18 @@ class NpuQuantizationLinear(torch.nn.Module):
                 group_sizes=self.group_sizes,
                 y_scale=self.y_scale,
             )
-            if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
-                output = output.reshape(*ori_shape[:-1], -1)
         else:
             output = torch_npu.npu_quant_matmul(
                 quant_x,
                 self.quantized_weight,
                 scale=self.deq_scale,
-                pertoken_scale=self.pertoken_scale,
+                pertoken_scale=matmul_token_scale,
                 bias=self.bias,
                 output_dtype=self.output_dtype,
             )
 
+        if flatten_input:
+            output = output.reshape(*ori_shape[:-1], -1)
         return output
 
     def _init_act_quant_params(self, quant_module, device):

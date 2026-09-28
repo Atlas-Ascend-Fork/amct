@@ -89,6 +89,13 @@ class ApplyScalingFusionPass:
         if registry is None:
             return
 
+        # The last member can finalize a one-batch group after earlier members
+        # have returned. Complete their parameters before changing any weights.
+        for group in registry.groups:
+            if group.status == 'calibrated':
+                for ref in group.scaling_layer_refs:
+                    group.writeback_if_pending(model.get_submodule(ref))
+
         # Dynamic per-token groups that share one decoder layer must be fused
         # into a single layer replacement: replacing the layer once per group
         # would nest wrappers and replay the layer forward twice (B2).
@@ -142,7 +149,7 @@ class ApplyScalingFusionPass:
                         f'scaling_layers={group.scaling_layer_refs}',
                         'ScalingFusion',
                     )
-            except (ValueError, RuntimeError, OSError) as exc:
+            except (ValueError, RuntimeError, OSError, AttributeError) as exc:
                 for group in pending:
                     group.status = 'skipped'
                     group.skip_reason = str(exc)
@@ -164,7 +171,8 @@ class ApplyScalingFusionPass:
                 group.activation_offset,
                 act_type=members[0].act_type,
                 output_dtype=output_dtype,
-            )
+                act_granularity=group.act_granularity or 'tensor',
+            ).to(_member_weight(members[0]).device)
             fused = FusedPreOp(pre_op, shared)
             ModuleHelper.replace_module_by_name(model, group.pre_op_ref, fused)
             for member in members:
@@ -195,31 +203,16 @@ class ApplyScalingFusionPass:
 
     @staticmethod
     def _apply_dynamic_layer(model, layer_ref, groups):
+        if not isinstance(layer_ref, str) or not layer_ref:
+            raise ValueError('dynamic fusion requires a non-root layer path')
         layer = model.get_submodule(layer_ref)
-        if all(
-            hasattr(layer, attr)
-            for attr in (
-                'input_layernorm',
-                'self_attn',
-                'post_attention_layernorm',
-                'mlp',
-            )
-        ):
+        adapters = {group.dynamic_layer for group in groups}
+        if adapters == {'decoder_layer'}:
             fused_layer_cls = _load_qwen3_fused_layer()
-        elif all(
-            hasattr(layer, attr)
-            for attr in ('attention', 'layernorm_before', 'layernorm_after', 'mlp')
-        ):
+        elif adapters == {'encoder_layer'}:
             fused_layer_cls = _load_vit_fused_layer()
         else:
-            supported = (
-                'Qwen3 decoder structure (input_layernorm/self_attn/'
-                'post_attention_layernorm/mlp) or ViT encoder structure '
-                '(attention/layernorm_before/layernorm_after/mlp)'
-            )
-            raise ValueError(
-                f'layer {layer_ref} does not match a supported structure: {supported}'
-            )
+            raise ValueError(f'unsupported dynamic layer adapters: {adapters}')
 
         # One shared quantizer per pre_op: the attention group shares the
         # input_layernorm output, the mlp group shares

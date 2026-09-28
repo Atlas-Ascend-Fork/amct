@@ -36,6 +36,7 @@ def _group(pre_op, members, algorithm='smoothquant'):
         fusion_rule='norm' if isinstance(pre_op, nn.LayerNorm) else 'linear',
     )
     group.status = 'calibrated'
+    group._writeback_done = {id(member): True for member in members}
     if algorithm == 'smoothquant':
         group.smooth_factor = torch.tensor([[1.0, 2.0, 4.0]])
     group.activation_scale = torch.tensor([0.1])
@@ -274,6 +275,7 @@ def _dynamic_group(model, members):
     )
     group.status = 'calibrated'
     group.activation_scale = torch.tensor([0.1])
+    group.dynamic_layer = 'decoder_layer'
     group.dynamic_per_token = True
     group.layer_ref = 'layer'
     return group
@@ -351,7 +353,7 @@ def test_dynamic_per_token_passes_shared_scale_to_all_members(monkeypatch):
     model.layer.shared_quantize = CountingQuant()
     output = model(torch.randn(2, 4, 3))
     assert output.shape == (2, 4, 3)
-    assert len(calls) == 2
+    assert len(calls) == 1
 
     attention_members = [
         model.layer.self_attn.q_proj,
@@ -369,4 +371,116 @@ def test_dynamic_per_token_passes_shared_scale_to_all_members(monkeypatch):
 
     mlp_members = [model.layer.mlp.up_proj, model.layer.mlp.gate_proj]
     assert mlp_members[0].last_input is mlp_members[1].last_input
-    assert torch.equal(mlp_members[0].last_scale, mlp_members[1].last_scale)
+    assert all(member.last_scale is None for member in mlp_members)
+
+
+def test_shared_quantize_uses_granularity_axis_and_one_offset_per_scale(monkeypatch):
+    import sys
+    from amct_pytorch.classic.deploy_op.shared_quantize import SharedQuantize
+
+    calls = []
+    monkeypatch.setattr(
+        sys.modules['torch_npu'],
+        'npu_quantize',
+        lambda x, scale, offset, **kwargs: calls.append((scale, offset, kwargs)),
+    )
+    for act_type in ('int8', 'int4'):
+        for granularity, axis in (('tensor', -1), ('token', -2)):
+            scales = (
+                torch.tensor([0.1, 0.2])
+                if granularity == 'token'
+                else torch.tensor([0.1])
+            )
+            offsets = torch.arange(scales.numel())
+            shared = SharedQuantize(
+                scales, offsets, act_type, act_granularity=granularity
+            )
+            shared(torch.randn(1, 2, 4))
+            assert calls[-1][2]['axis'] == axis
+            assert calls[-1][2]['dtype'] == (
+                torch.int8 if act_type == 'int8' else sys.modules['torch_npu'].int4
+            )
+            assert calls[-1][1].numel() == scales.numel()
+
+
+def test_fused_preop_loads_legacy_norm_paths_with_fused_parameters():
+    from amct_pytorch.classic.deploy_op.shared_quantize import (
+        FusedPreOp,
+        SharedQuantize,
+    )
+
+    source = nn.Module()
+    source.norm = FusedPreOp(nn.LayerNorm(3), SharedQuantize(torch.tensor([0.2])))
+    state = source.state_dict()
+    legacy_state = {
+        key.replace('norm.pre_op.', 'norm.'): value.clone()
+        for key, value in state.items()
+    }
+    target = nn.Module()
+    target.norm = FusedPreOp(nn.LayerNorm(3), SharedQuantize(torch.tensor([0.1])))
+    target.load_state_dict(legacy_state, strict=True)
+    for key, value in target.state_dict().items():
+        torch.testing.assert_close(value, state[key])
+
+
+def test_shared_buffers_follow_deployment_member_device():
+    model = NormModel().to('meta')
+    group = _group(model.pre, [model.m0, model.m1], algorithm='minmax')
+    registry = FusionRegistry()
+    registry.add_group(group)
+    model._amct_fusion_registry = registry
+    ApplyScalingFusionPass().run(model)
+    assert model.pre.shared.act_scale.device.type == 'meta'
+    assert model.pre.shared.act_offset.device.type == 'meta'
+
+
+def test_shared_token_matmul_flattens_batches_and_preserves_static_scales(monkeypatch):
+    import sys
+    from types import SimpleNamespace
+    from amct_pytorch.classic.deploy_op.npu_quantization_linear import (
+        NpuQuantizationLinear,
+    )
+    from amct_pytorch.classic.quantize_op import MinMaxQuant
+
+    def matmul(x, weight, *, scale, pertoken_scale, bias, output_dtype):
+        assert x.ndim == 2
+        assert pertoken_scale.numel() == x.shape[0]
+        return ((x.float() @ weight.float()) * scale * pertoken_scale[:, None]).to(
+            output_dtype
+        )
+
+    matmul._schemas = {'default': SimpleNamespace(arguments=[])}
+    monkeypatch.setattr(sys.modules['torch_npu'], 'npu_quant_matmul', matmul)
+    for dynamic in (False, True):
+        config = {
+            'batch_num': 1,
+            'algorithm': {'minmax': {}},
+            'inputs_cfg': {
+                'quant_type': 'int8',
+                'symmetric': True,
+                'strategy': 'token',
+                'dynamic': dynamic,
+            },
+            'weights_cfg': {
+                'quant_type': 'int8',
+                'symmetric': True,
+                'strategy': 'channel',
+            },
+        }
+        quant = MinMaxQuant(nn.Linear(4, 3, bias=False), 'linear', config)
+        quant(torch.randn(2, 2, 4))
+        quant.input_quant_disabled = True
+        deploy = NpuQuantizationLinear(quant)
+        x = torch.ones(2, 2, 4, dtype=torch.int8)
+        runtime_scale = torch.tensor([[0.1, 0.2], [0.3, 0.4]]) if dynamic else None
+        before = None if dynamic else deploy.pertoken_scale.clone()
+        actual = deploy(x, runtime_scale)
+        scales = runtime_scale if dynamic else before.reshape(1, 2).expand(2, 2)
+        expected = (
+            (x.float() @ deploy.quantized_weight.float())
+            * deploy.deq_scale
+            * scales[..., None]
+        )
+        torch.testing.assert_close(actual, expected)
+        if not dynamic:
+            torch.testing.assert_close(deploy.pertoken_scale, before)

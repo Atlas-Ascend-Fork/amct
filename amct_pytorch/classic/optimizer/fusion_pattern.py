@@ -39,6 +39,7 @@ class FusionLayerPattern:
     required_attrs: tuple[str, ...]
     groups: tuple[FusionGroupPattern, ...]
     dynamic_layer: str
+    layer_types: tuple[str, ...]
 
 
 class FusionPatternRegistry:
@@ -81,6 +82,7 @@ FUSION_PATTERNS.register(
             ),
         ),
         dynamic_layer='decoder_layer',
+        layer_types=('transformers.models.qwen3.modeling_qwen3.Qwen3DecoderLayer',),
     )
 )
 FUSION_PATTERNS.register(
@@ -100,6 +102,7 @@ FUSION_PATTERNS.register(
             ),
         ),
         dynamic_layer='encoder_layer',
+        layer_types=('transformers.models.vit.modeling_vit.ViTLayer',),
     )
 )
 
@@ -117,10 +120,20 @@ def build_fusion_groups_from_patterns(model, patterns=None):
     used_members = set()
     for layer_name, module in model.named_modules():
         for pattern in patterns:
+            module_type = f'{type(module).__module__}.{type(module).__qualname__}'
+            if module_type not in pattern.layer_types:
+                continue
             if not all(hasattr(module, attr) for attr in pattern.required_attrs):
                 continue
             for group_pattern in pattern.groups:
-                _build_group(model, registry, layer_name, group_pattern, used_members)
+                _build_group(
+                    model,
+                    registry,
+                    layer_name,
+                    group_pattern,
+                    used_members,
+                    pattern.dynamic_layer,
+                )
     return registry
 
 
@@ -130,6 +143,7 @@ def _build_group(
     layer_name,
     group_pattern,
     used_members,
+    dynamic_layer,
 ):
     pre_ref = _join_ref(layer_name, group_pattern.pre_op)
     member_refs = [_join_ref(layer_name, member) for member in group_pattern.members]
@@ -189,7 +203,14 @@ def _build_group(
     )
     group.dynamic_per_token = first['strategy'] == 'token' and first['dynamic'] is True
     if group.dynamic_per_token:
-        group.layer_ref = layer_name or None
+        if not layer_name:
+            LOGGER.logw(
+                f'Skip dynamic fusion group {pre_ref}: root layer cannot be replaced in place',
+                'FusionGroup',
+            )
+            return
+        group.layer_ref = layer_name
+        group.dynamic_layer = dynamic_layer
     registry.add_group(group)
     used_members.update(member_refs)
     for ref, member in zip(member_refs, members):

@@ -16,6 +16,8 @@
 # ----------------------------------------------------------------------------
 '''Shared-input fusion group registry.'''
 
+import weakref
+
 import torch
 
 from amct_pytorch.common.utils.log import LOGGER
@@ -52,9 +54,12 @@ class FusionGroup:
         self.last_input = None
         self.dynamic_per_token = False
         self.layer_ref = None
+        self.dynamic_layer = None
         self.batch_num = None
         self.act_granularity = None
         self.batch_input = None
+        self.token_max = None
+        self.token_min = None
         self._finalized = False
         self._writeback_done = {}
         self._member_refs = list(self.scaling_layer_refs)
@@ -72,10 +77,20 @@ class FusionGroup:
         )
         self._member_refs = list(self.scaling_layer_refs)
 
-    def update_activation_stat(self, inputs):
-        if inputs is self.last_input:
+    def update_activation_stat(self, inputs, batch_index=None):
+        if self.status in ('calibrated', 'fused', 'skipped'):
             return
-        batch_max, batch_min = _reduce_channel_extrema(inputs)
+        if batch_index is not None:
+            if batch_index <= self.batch_count:
+                return
+        elif self.last_input is not None and self.last_input() is inputs:
+            return
+        if self.algorithm == 'minmax' and self.act_granularity == 'token':
+            axes = tuple(i for i in range(inputs.ndim) if i != inputs.ndim - 2)
+            batch_max = inputs.amax(dim=axes, keepdim=True)
+            batch_min = inputs.amin(dim=axes, keepdim=True)
+        else:
+            batch_max, batch_min = _reduce_channel_extrema(inputs)
         self.act_max = (
             batch_max
             if self.act_max is None
@@ -87,13 +102,31 @@ class FusionGroup:
             else torch.minimum(self.act_min, batch_min)
         )
         self.batch_count += 1
-        self.last_input = inputs
-        if self.act_granularity == 'token':
-            batch_input = inputs.cpu()
-            self.batch_input = (
-                batch_input
-                if self.batch_input is None
-                else torch.cat((self.batch_input, batch_input), dim=-1)
+        self.last_input = weakref.ref(inputs)
+        if (
+            self.algorithm == 'smoothquant'
+            and self.act_granularity == 'token'
+            and not self.dynamic_per_token
+        ):
+            # Preserve token/channel extrema across batches. Since smooth is
+            # positive and fixed per channel, reducing before division is exact.
+            axes = tuple(range(inputs.ndim - 2))
+            token_max = (
+                inputs.amax(dim=axes, keepdim=True) if axes else inputs.detach().clone()
+            )
+            token_min = (
+                inputs.amin(dim=axes, keepdim=True) if axes else inputs.detach().clone()
+            )
+            token_max, token_min = token_max.cpu(), token_min.cpu()
+            self.token_max = (
+                token_max
+                if self.token_max is None
+                else torch.maximum(self.token_max, token_max)
+            )
+            self.token_min = (
+                token_min
+                if self.token_min is None
+                else torch.minimum(self.token_min, token_min)
             )
 
     def finalize_if_ready(self, caller):
@@ -101,8 +134,8 @@ class FusionGroup:
 
         Called from member forwards. Any member may trigger the shared
         calculation exactly once; group params are stored on the group and
-        written back to each member via writeback_if_pending at its own next
-        forward, so no cross-module resolution is needed.
+        written back at the next member forward or before convert resolves
+        the stored member paths. The group does not own module references.
         Returns True when this call performed the finalization.
         '''
         if self._finalized or self.status == 'skipped':
@@ -149,20 +182,25 @@ class FusionGroup:
                         else torch.maximum(wts_max, member_max)
                     )
                 if len(members) < len(self._member_refs):
-                    # The triggering member only sees its own weights; other
-                    # members' weight stats are collected at their writeback.
-                    # Fallback: use per-layer stats already reported by each
-                    # member via update_weight_stat (kept on the group).
+                    # Combine all member statistics collected during calibration,
+                    # even when only the last member triggers finalization.
                     wts_max = self._collect_wts_max(members, wts_max)
                 alpha = members[0].quant_config['algorithm']['smoothquant'][
                     'smooth_strength'
                 ]
-                self.smooth_factor = _safe_smooth_factor(self.act_max, wts_max, alpha)
+                self.smooth_factor = _safe_smooth_factor(
+                    torch.maximum(self.act_max.abs(), self.act_min.abs()),
+                    wts_max,
+                    alpha,
+                )
             smooth = self.smooth_factor
-            if self.act_granularity == 'token' and self.batch_input is not None:
-                smooth_input = self.batch_input / smooth.cpu()
-                per_token_max = smooth_input.amax(dim=-1, keepdim=True)
-                per_token_min = smooth_input.amin(dim=-1, keepdim=True)
+            if self.act_granularity == 'token' and self.token_max is not None:
+                per_token_max = (self.token_max / smooth.cpu()).amax(
+                    dim=-1, keepdim=True
+                )
+                per_token_min = (self.token_min / smooth.cpu()).amin(
+                    dim=-1, keepdim=True
+                )
                 scale_d, offset_d = calculate_scale_offset(
                     per_token_max,
                     per_token_min,
@@ -197,6 +235,9 @@ class FusionGroup:
             self._writeback_done[id(member)] = True
         if self.status != 'skipped':
             self.status = 'calibrated'
+            self.last_input = None
+            self.token_max = None
+            self.token_min = None
             LOGGER.logd(
                 f'Group {self.group_id} params finalized: '
                 f'batch_count={self.batch_count}',
@@ -226,15 +267,13 @@ class FusionGroup:
             param_dtype = member.weight.dtype
             member.scale = smooth.to(param_dtype)
             member.scale_d = self.activation_scale.to(param_dtype)
-            member.offset_d = (
-                None
-                if self.activation_offset is None
-                else self.activation_offset.to(param_dtype)
-            )
+            member.offset_d = self.activation_offset
         else:
             member.scale_d = self.activation_scale
             member.offset_d = self.activation_offset
         member.fake_quant_cache_ready = False
+        if self.algorithm == 'smoothquant':
+            member.finalize_weight_params()
 
 
 class FusionRegistry:

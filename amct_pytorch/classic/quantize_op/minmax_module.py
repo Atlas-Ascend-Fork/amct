@@ -140,9 +140,9 @@ class MinMaxQuant(BaseQuantizeModule):
 
         group = getattr(self, 'fusion_group', None)
         if group is not None:
-            # Group members report the shared input once per forward; the
-            # group de-duplicates by tensor identity and owns the batch count.
-            group.update_activation_stat(inputs)
+            # Group members report the same calibration batch index; the
+            # group counts and reduces each shared input once.
+            group.update_activation_stat(inputs, self.cur_batch)
             if group.status == 'calibrated':
                 group.writeback_if_pending(self)
                 return fp_out
@@ -193,7 +193,16 @@ class MinMaxQuant(BaseQuantizeModule):
             self.cached_bias = bias
             self.fake_quant_cache_ready = True
 
-        if self.scale_d is not None:
+        group = getattr(self, 'fusion_group', None)
+        if group is not None and group.dynamic_per_token:
+            scale_d, offset_d = calculate_scale_offset(
+                inputs.amax(dim=-1, keepdim=True),
+                inputs.amin(dim=-1, keepdim=True),
+                self.act_symmetric,
+                self.act_type,
+            )
+            dq_x = quant_dequant_tensor(inputs, self.act_type, scale_d, offset_d)
+        elif self.scale_d is not None:
             dq_x = quant_dequant_tensor(
                 inputs, self.act_type, self.scale_d, self.offset_d
             )
