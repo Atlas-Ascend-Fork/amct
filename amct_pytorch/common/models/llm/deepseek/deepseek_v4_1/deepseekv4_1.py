@@ -84,9 +84,10 @@ class DeepseekV41:
     @classmethod
     def validate_ascend_source(cls, args):
         """Allow the official FP8/FP4 source only for the A3 conversion path."""
-        if getattr(args, "deploy_platform", None) != "A3" or getattr(
-            args, "quant_dtype", None
-        ) != "int":
+        if (
+            getattr(args, "deploy_platform", None) != "A3"
+            or getattr(args, "quant_dtype", None) != "int"
+        ):
             return False
         source = Path(args.model)
         try:
@@ -269,7 +270,10 @@ class DeepseekV41:
 
         for weight_name, source_weight in current_state_dict.items():
             if weight_name.endswith(".scale"):
-                if weight_name.removesuffix(".scale") + ".weight" in original_weight_map:
+                if (
+                    weight_name.removesuffix(".scale") + ".weight"
+                    in original_weight_map
+                ):
                     continue
                 new_state_dict[weight_name] = source_weight
                 continue
