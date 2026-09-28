@@ -183,7 +183,12 @@ class _ViTFusedLayer(torch.nn.Module):
                 value,
                 attention_mask,
                 dropout=(
-                    attention_impl.attention_dropout if attention_impl.training else 0.0
+                    (
+                        getattr(attention_impl, 'attention_dropout', None)
+                        or getattr(attention_impl, 'dropout_prob', 0.0)
+                    )
+                    if attention_impl.training
+                    else 0.0
                 ),
                 scaling=attention_impl.scaling,
                 **kwargs,
@@ -197,7 +202,16 @@ class _ViTFusedLayer(torch.nn.Module):
                 scale=getattr(attention_impl, 'scaling', head_dim**-0.5),
             ).transpose(1, 2)
         output = attn_output.reshape(*input_shape, -1).contiguous()
-        return self._project(self._output_projection(attn), output, None)
+        output = self._project(self._output_projection(attn), output, None)
+        output_dropout = getattr(self._output_parent(attn), 'dropout', None)
+        if output_dropout is not None:
+            output = output_dropout(output)
+        return output
+
+    @staticmethod
+    def _output_parent(attn):
+        output = getattr(attn, 'output', None)
+        return output if output is not None else attn
 
     def _mlp_forward(self, hidden_states):
         mlp = getattr(self, 'mlp', None)
