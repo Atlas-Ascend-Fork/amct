@@ -24,7 +24,11 @@ from amct_pytorch.classic.optimizer.fusion_group import FusionGroup, FusionRegis
 
 @dataclass(frozen=True)
 class FusionGroupPattern:
-    '''One pre_op and the relative paths of its shared-input members.'''
+    '''One pre_op and the relative member paths of its shared-input group.
+
+    A member can declare multiple candidate paths because upstream model
+    implementations may expose equivalent projections at different locations.
+    '''
 
     pre_op: str
     members: tuple[str, ...]
@@ -92,7 +96,11 @@ FUSION_PATTERNS.register(
         groups=(
             FusionGroupPattern(
                 pre_op='layernorm_before',
-                members=('attention.q_proj', 'attention.k_proj', 'attention.v_proj'),
+                members=(
+                    ('attention.q_proj', 'attention.attention.query'),
+                    ('attention.k_proj', 'attention.attention.key'),
+                    ('attention.v_proj', 'attention.attention.value'),
+                ),
                 group_type='norm',
             ),
             FusionGroupPattern(
@@ -146,10 +154,13 @@ def _build_group(
     dynamic_layer,
 ):
     pre_ref = _join_ref(layer_name, group_pattern.pre_op)
-    member_refs = [_join_ref(layer_name, member) for member in group_pattern.members]
+    resolved_members = [
+        _resolve_member(model, layer_name, member) for member in group_pattern.members
+    ]
+    member_refs = [ref for ref, _ in resolved_members]
     try:
         pre_op = model.get_submodule(pre_ref)
-        members = [model.get_submodule(ref) for ref in member_refs]
+        members = [module for _, module in resolved_members]
     except AttributeError as exc:
         LOGGER.logw(
             f'Skip fusion group {pre_ref} -> {member_refs}: module path is missing '
@@ -221,6 +232,17 @@ def _build_group(
         f'scaling_layers={member_refs}',
         'FusionGroup',
     )
+
+
+def _resolve_member(model, layer_name, member):
+    candidates = (member,) if isinstance(member, str) else member
+    for candidate in candidates:
+        ref = _join_ref(layer_name, candidate)
+        try:
+            return ref, model.get_submodule(ref)
+        except AttributeError:
+            continue
+    raise AttributeError(f'none of the member paths exists: {candidates}')
 
 
 def _is_norm(module):

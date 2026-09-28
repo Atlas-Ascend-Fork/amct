@@ -85,6 +85,41 @@ class _ViTFusedLayer(torch.nn.Module):
         return None
 
     @staticmethod
+    def _module_by_path(root, path):
+        module = root
+        for attr in path:
+            module = getattr(module, attr)
+        return module
+
+    @classmethod
+    def _projection(cls, attn, paths):
+        for path in paths:
+            try:
+                return cls._module_by_path(attn, path)
+            except AttributeError:
+                continue
+        raise AttributeError(f'cannot resolve projection paths: {paths}')
+
+    @classmethod
+    def _qkv_projection(cls, attn):
+        return (
+            cls._projection(attn, (('q_proj',), ('attention', 'query'))),
+            cls._projection(attn, (('k_proj',), ('attention', 'key'))),
+            cls._projection(attn, (('v_proj',), ('attention', 'value'))),
+        )
+
+    @classmethod
+    def _output_projection(cls, attn):
+        return cls._projection(
+            attn,
+            (
+                ('o_proj',),
+                ('output', 'dense'),
+                ('attention', 'output', 'dense'),
+            ),
+        )
+
+    @staticmethod
     def _project(module, hidden, pertoken_scale):
         if pertoken_scale is not None:
             return module(hidden, pertoken_scale)
@@ -93,42 +128,49 @@ class _ViTFusedLayer(torch.nn.Module):
     def _attention_forward(self, hidden_states, attention_mask, **kwargs):
         attn = self.attention
         input_shape = hidden_states.shape[:-1]
-        head_dim = getattr(attn, 'head_dim', None)
+        projection = getattr(attn, 'attention', attn)
+        head_dim = getattr(attn, 'head_dim', None) or getattr(
+            projection, 'head_dim', None
+        )
         if head_dim is None:
             raise ValueError('cannot resolve head_dim for fused attention')
         hidden_shape = (*input_shape, -1, head_dim)
+        q_proj, k_proj, v_proj = self._qkv_projection(attn)
 
         shared = self._shared_for('layernorm_before')
         h = self.layernorm_before(hidden_states)
         if shared is not None:
             q, scale = shared(h)
-            query = self._project(attn.q_proj, q, scale)
-            key = self._project(attn.k_proj, q, scale)
-            value = self._project(attn.v_proj, q, scale)
+            query = self._project(q_proj, q, scale)
+            key = self._project(k_proj, q, scale)
+            value = self._project(v_proj, q, scale)
         else:
-            query = self._project(attn.q_proj, h, None)
-            key = self._project(attn.k_proj, h, None)
-            value = self._project(attn.v_proj, h, None)
+            query = self._project(q_proj, h, None)
+            key = self._project(k_proj, h, None)
+            value = self._project(v_proj, h, None)
 
         query = query.view(hidden_shape).transpose(1, 2)
         key = key.view(hidden_shape).transpose(1, 2)
         value = value.view(hidden_shape).transpose(1, 2)
 
-        if hasattr(attn, 'config'):
+        attention_impl = attn if hasattr(attn, 'config') else projection
+        if hasattr(attention_impl, 'config'):
             from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
             from transformers.models.vit.modeling_vit import eager_attention_forward
 
             interface = ALL_ATTENTION_FUNCTIONS.get_interface(
-                attn.config._attn_implementation, eager_attention_forward
+                attention_impl.config._attn_implementation, eager_attention_forward
             )
             attn_output, _ = interface(
-                attn,
+                attention_impl,
                 query,
                 key,
                 value,
                 attention_mask,
-                dropout=attn.attention_dropout if attn.training else 0.0,
-                scaling=attn.scaling,
+                dropout=(
+                    attention_impl.attention_dropout if attention_impl.training else 0.0
+                ),
+                scaling=attention_impl.scaling,
                 **kwargs,
             )
         else:
@@ -137,13 +179,10 @@ class _ViTFusedLayer(torch.nn.Module):
                 key,
                 value,
                 attn_mask=attention_mask,
-                scale=getattr(attn, 'scaling', head_dim**-0.5),
+                scale=getattr(attention_impl, 'scaling', head_dim**-0.5),
             ).transpose(1, 2)
         output = attn_output.reshape(*input_shape, -1).contiguous()
-        o_proj = getattr(attn, 'o_proj', None)
-        if o_proj is not None:
-            return self._project(o_proj, output, None)
-        return output
+        return self._project(self._output_projection(attn), output, None)
 
     def _mlp_forward(self, hidden_states):
         mlp = self.mlp

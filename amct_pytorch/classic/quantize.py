@@ -61,7 +61,7 @@ def _build_fusion_registry_safely(model):
         return build_fusion_groups_from_patterns(model)
     except Exception as exc:  # pylint: disable=broad-except
         LOGGER.logw(
-            f'Failed to build fusion groups: {exc}. '
+            f'Unable to build fusion groups: {exc}. '
             'Skip group optimization and keep the existing flow.',
             'FusionGroup',
         )

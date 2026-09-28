@@ -68,6 +68,39 @@ def _fuse_qwen(layer):
     )
 
 
+def _set_vit_projection(attn, role, module):
+    paths = {
+        'q': (('q_proj',), ('attention', 'query')),
+        'k': (('k_proj',), ('attention', 'key')),
+        'v': (('v_proj',), ('attention', 'value')),
+    }[role]
+    for path in paths:
+        parent = attn
+        try:
+            for attr in path[:-1]:
+                parent = getattr(parent, attr)
+            old = getattr(parent, path[-1])
+        except AttributeError:
+            continue
+        setattr(parent, path[-1], module(old))
+        return
+    raise AttributeError(f'cannot resolve ViT {role} projection')
+
+
+def _fuse_vit(layer):
+    for role in ('q', 'k', 'v'):
+        _set_vit_projection(layer.attention, role, Projection)
+    layer.mlp.fc1 = Projection(layer.mlp.fc1)
+    return _load_vit_fused_layer().from_shared_map(
+        layer,
+        {
+            'layer.layernorm_before': IdentityQuant(),
+            'layer.layernorm_after': IdentityQuant(),
+        },
+        'layer',
+    )
+
+
 def _qwen(backend, sliding=False):
     config = Qwen3Config(
         vocab_size=32,
@@ -149,17 +182,7 @@ def test_vit_positional_mask_and_dropout_match(training, backend):
     config._attn_implementation = backend
     original = ViTLayer(config).train(training)
     layer = copy.deepcopy(original)
-    for name in ('q_proj', 'k_proj', 'v_proj'):
-        setattr(layer.attention, name, Projection(getattr(layer.attention, name)))
-    layer.mlp.fc1 = Projection(layer.mlp.fc1)
-    fused = _load_vit_fused_layer().from_shared_map(
-        layer,
-        {
-            'layer.layernorm_before': IdentityQuant(),
-            'layer.layernorm_after': IdentityQuant(),
-        },
-        'layer',
-    )
+    fused = _fuse_vit(layer)
     x = torch.randn(2, 5, 16)
     mask = torch.zeros(2, 1, 5, 5)
     mask[..., -1] = float('-inf')
@@ -204,17 +227,7 @@ def test_vit_fused_layer_preserves_layer_type_and_output_capture():
     config._attn_implementation = 'eager'
     original = ViTLayer(config).eval()
     layer = copy.deepcopy(original)
-    for name in ('q_proj', 'k_proj', 'v_proj'):
-        setattr(layer.attention, name, Projection(getattr(layer.attention, name)))
-    layer.mlp.fc1 = Projection(layer.mlp.fc1)
-    fused = _load_vit_fused_layer().from_shared_map(
-        layer,
-        {
-            'layer.layernorm_before': IdentityQuant(),
-            'layer.layernorm_after': IdentityQuant(),
-        },
-        'layer',
-    )
+    fused = _fuse_vit(layer)
     assert isinstance(fused, ViTLayer)
 
 
