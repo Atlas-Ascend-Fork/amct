@@ -100,7 +100,7 @@ def test_vit_fused_layer_one_dynamic_quant_for_qkv_and_mlp():
             calls.append(x)
             return x, torch.ones(x.shape[:-1], dtype=torch.float32).reshape(-1)
 
-    fused.shared_quantize = CountingQuant()
+    fused._shared_by_pre_op = torch.nn.ModuleDict({'_default': CountingQuant()})
     x = torch.randn(2, 5, 8)
     output = fused(x)
     assert output.shape == x.shape

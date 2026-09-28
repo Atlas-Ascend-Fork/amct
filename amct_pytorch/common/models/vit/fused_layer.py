@@ -59,7 +59,6 @@ class _ViTFusedLayer(torch.nn.Module):
         )
         self.training = layer.training
         self.dropout = getattr(layer, 'dropout', torch.nn.Identity())
-        self.shared_quantize = next(iter(self._shared_by_pre_op.values()), None)
         for key, value in layer._modules.items():  # pylint: disable=protected-access
             setattr(self, key, value)
         for key, value in vars(layer).items():
@@ -75,11 +74,9 @@ class _ViTFusedLayer(torch.nn.Module):
 
     def _shared_for(self, pre_op):
         if pre_op in self._shared_by_pre_op:
-            if len(self._shared_by_pre_op) == 1:
-                return self.shared_quantize
             return self._shared_by_pre_op[pre_op]
         if '_default' in self._shared_by_pre_op:
-            return self.shared_quantize
+            return self._shared_by_pre_op['_default']
         return None
 
     @staticmethod

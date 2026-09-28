@@ -78,10 +78,6 @@ class _Qwen3FusedDecoderLayer(torch.nn.Module):
             {ref.rsplit('.', 1)[-1]: quant for ref, quant in shared_by_pre_op.items()}
         )
         self.training = layer.training
-        # Keep the single-quantizer attribute name for layers with one group
-        # (and as the injection point used by tests): the first shared
-        # quantizer of the layer.
-        self.shared_quantize = next(iter(self._shared_by_pre_op.values()), None)
         # Move the original submodules in by reference (no copies).
         for attr in self._LAYER_ATTRS:
             setattr(self, attr, getattr(layer, attr))
@@ -100,11 +96,9 @@ class _Qwen3FusedDecoderLayer(torch.nn.Module):
 
     def _shared_for(self, pre_op):
         if pre_op in self._shared_by_pre_op:
-            if len(self._shared_by_pre_op) == 1:
-                return self.shared_quantize
             return self._shared_by_pre_op[pre_op]
         if '_default' in self._shared_by_pre_op:
-            return self.shared_quantize
+            return self._shared_by_pre_op['_default']
         return None
 
     @staticmethod

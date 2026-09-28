@@ -234,6 +234,15 @@ def test_qwen_all_shared_quantizers_are_registered():
     assert all(q in list(fused.modules()) for q in fused._shared_by_pre_op.values())
 
 
+def test_qwen_shared_quantizers_are_not_aliased_in_module_tree():
+    fused = _fuse_qwen(_qwen('eager').model.layers[0])
+    quantizers = list(fused._shared_by_pre_op.values())
+    shared_modules = [
+        module for module in fused.modules() if isinstance(module, IdentityQuant)
+    ]
+    assert len(shared_modules) == len(quantizers)
+
+
 def test_qwen_fused_layer_preserves_layer_type_and_output_capture():
     from transformers.modeling_layers import GradientCheckpointingLayer
     from transformers.models.qwen3.modeling_qwen3 import Qwen3DecoderLayer

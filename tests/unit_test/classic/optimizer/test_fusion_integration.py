@@ -276,7 +276,7 @@ def test_qwen3_fused_layer_single_quantizer_constructor():
             return x
 
     layer = Qwen3FusedDecoderLayer(Layer(), SharedDynamicQuantize())
-    assert layer.shared_quantize is not None
+    assert layer._shared_by_pre_op['_default'] is not None
 
 
 # Stub structures are explicitly registered for these unit tests only.

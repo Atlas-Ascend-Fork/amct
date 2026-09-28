@@ -294,7 +294,7 @@ def test_dynamic_per_token_replaces_qwen3_layer_and_shares_quantization():
 
     assert group.status == 'fused'
     assert type(model.layer).__name__.startswith('Fused')
-    assert model.layer.shared_quantize.act_type == 'int8'
+    assert model.layer._shared_by_pre_op['input_layernorm'].act_type == 'int8'
     for name in ('q_proj', 'k_proj', 'v_proj'):
         member = getattr(model.layer.self_attn, name)
         assert member.input_quant_disabled is True
@@ -353,7 +353,7 @@ def test_dynamic_per_token_passes_shared_scale_to_all_members(monkeypatch):
             calls.append(x)
             return x, torch.full((x.numel() // x.shape[-1],), 0.5)
 
-    model.layer.shared_quantize = CountingQuant()
+    model.layer._shared_by_pre_op['input_layernorm'] = CountingQuant()
     x = torch.randn(2, 4, 3)
     rope = (torch.ones(2, 4, 3), torch.zeros(2, 4, 3))
     output = model.layer(x, position_embeddings=rope)
