@@ -60,6 +60,7 @@
 **约束**：
 - 考虑到用户环境的限制，`granularity`请尽量选择block。
 - `bit_config`、`model`请配置本地路径，`bit_config`对应的yaml文件可以参考仓上amct_pytorch/configs内的文件
+- 断点续测 `--dump` 仅支持 `granularity=block`。
 
 #### BF16 基线 PPL 测量
 
@@ -117,6 +118,33 @@ python -m amct_pytorch.eval \
 ```
 
 参数详细解释请参见[参数说明](#参数说明)。
+
+#### Blockwise 断点续测
+
+在 blockwise PPL 评估命令中增加 `--dump`，可以在每个 block 完成后保存其 CPU 输出：
+
+```bash
+python -m amct_pytorch.eval \
+  --trust_remote_code \
+  --model /path/to/model \
+  --model_name qwen3 \
+  --device npu:0 \
+  --granularity block \
+  --eval_mode quant \
+  --quant_target mlp \
+  --quant_dtype int \
+  --bit_config amct_pytorch/configs/example_w4a8.yaml \
+  --dump
+```
+
+断点保存在 `output_dir/temp/eval/<run_name>/checkpoint.pt`。同一任务仅保留最近一个已完成
+block 的输出；重新执行相同命令时会从下一个 block 继续。恢复前仍会执行 embedding，以初始化
+模型所需的 position、attention mask 等状态。
+
+`run_name` 包含模型、评估模式、量化类型、排序后的 `quant_target`、保持传参顺序的算法列表、
+YAML 名称和 8 位配置签名。配置签名使用本次 `quant_target` 实际生效的 bit 配置，并包含 PTQ
+参数文件内容指纹，避免不同配置误用同一断点。PPL 成功输出后会自动删除对应任务目录；运行中断或
+评估失败时保留断点。保存采用临时文件原子替换，因此写入期间最多需要约两份 checkpoint 的磁盘空间。
 
 `eval`相关启动指令也可参考[eval.sh](../../examples/eval.sh)
 
@@ -267,6 +295,7 @@ python -m amct_pytorch.deploy \
 | 参数 | 默认值 | 含义 |
 |------|------|------|
 | `--eval_mode` | `bf16` | 评估模式，指定模型在计算困惑度（PPL）时使用的精度格式，支持如下两种格式：<br> `bf16`：半精度浮点数（BF16），常用于加速推理并保持较高精度。<br>`quant`：量化模式，可能指 INT8/INT4 等量化格式，用于降低内存和计算开销，但可能牺牲少量精度。 |
+| `--dump` | 默认关闭 | 仅用于 `granularity=block` 的 PPL 评估。启用后保存最近一个已完成 block 的输出，并在相同评估配置再次运行时自动续测；PPL 成功输出后自动清理断点目录。 |
 | `--wikitext_final_out` | 空字符串 | WikiText 末端输出路径参数，用于指定WikiText 数据集处理后最终输出的文件路径，目前该参数预留。 |
 
 说明：
