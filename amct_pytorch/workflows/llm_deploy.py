@@ -144,10 +144,9 @@ class LlmDeployWorkflow:
             logger.remove(sink_id)
 
     def _uses_tensor_deploy_plan(self):
-        return (
-            getattr(self.args, "deploy_format", "legacy") == "ascend"
-            or requires_tensor_deploy_config(self.args)
-        )
+        return getattr(
+            self.args, "deploy_format", "legacy"
+        ) == "ascend" or requires_tensor_deploy_config(self.args)
 
     def setup(self):
         if self.granularity != "tensor":
