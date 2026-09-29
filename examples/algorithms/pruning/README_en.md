@@ -572,3 +572,146 @@ To improve recovery further, change only a small number of parameters in each ex
 Use separate reports and output directories for different recovery configurations to avoid overwriting the pruned model. The BF16 `size_budget=0.5` weights occupy approximately 28.4 GiB. When disk space is limited, record the PPL and report before removing recovery models that are no longer needed.
 
 > After pruning, to export the model as a torchair offline model (.air) for ATC-to-om conversion and on-board inference, refer to [AMCT large-model offline torchair model export](../export/README_en.md).
+
+## 7 Community Task Sample: Qwen3-0.6B Dense FFN `low_variance` + `ratio` (Task 5)
+
+This section covers task 5 of issue [#183](https://gitcode.com/cann/amct/issues/183): pruning the
+dense FFN intermediate dim of Qwen3-0.6B with `low_variance` in fixed-`ratio` mode, at
+`prune_ratio=0.1/0.2/0.5`. Script:
+[`src/run_qwen3_0_6b_pruning_low_variance_ratio.py`](src/run_qwen3_0_6b_pruning_low_variance_ratio.py).
+
+### 7.1 How to Run
+
+```text
+Model: Qwen3-0.6B (downloaded from ModelScope to a local dir, ~1.5 GiB bf16)
+Method: low_variance (dense FFN intermediate dim; attention projections untouched)
+Mode: ratio (prune_ratio fixed in config; no search)
+prune_ratio: 0.1, 0.2, 0.5 (each ratio starts from the unpruned original model)
+Calibration: Pileval (mit-han-lab/pile-val-backup, validation), 8 samples, seq_len=512
+Evaluation: WikiText2 (wikitext-2-raw-v1, test split), full split, seq_len=4096
+Device: single npu:0
+```
+
+Download the model from [ModelScope](https://modelscope.cn) or HuggingFace into a local
+directory (placeholder path below); neither weights nor datasets are committed to the repo:
+
+```bash
+# Optional: download from ModelScope (or use hf-mirror / official HF)
+pip3 install modelscope
+modelscope download --model Qwen/Qwen3-0.6B --local_dir ./path/to/Qwen3-0.6B
+```
+
+Run each ratio from the `examples/algorithms/pruning` directory (each run starts from the
+original unpruned model):
+
+```bash
+export PYTHONPATH=<amct repo root>   # needed when running from source
+# If huggingface.co is unreachable, route datasets via a mirror:
+#   export HF_ENDPOINT=https://hf-mirror.com
+
+python3 src/run_qwen3_0_6b_pruning_low_variance_ratio.py \
+  --model-path ./path/to/Qwen3-0.6B \
+  --save-dir ./outputs/qwen3_0_6b_low_variance_ratio/r0_1 \
+  --prune-ratio 0.1 --calib-samples 8 --calib-seq-len 512
+
+python3 src/run_qwen3_0_6b_pruning_low_variance_ratio.py \
+  --model-path ./path/to/Qwen3-0.6B \
+  --save-dir ./outputs/qwen3_0_6b_low_variance_ratio/r0_2 \
+  --prune-ratio 0.2 --calib-samples 8 --calib-seq-len 512
+
+python3 src/run_qwen3_0_6b_pruning_low_variance_ratio.py \
+  --model-path ./path/to/Qwen3-0.6B \
+  --save-dir ./outputs/qwen3_0_6b_low_variance_ratio/r0_5 \
+  --prune-ratio 0.5 --calib-samples 8 --calib-seq-len 512
+```
+
+Key parameters:
+
+| Parameter | Default | Meaning |
+|:--|:--|:--|
+| `--model-path` | required | Local Qwen3-0.6B weights directory (relative/placeholder path) |
+| `--prune-ratio` | required | Fixed FFN intermediate-dim prune ratio; the task uses 0.1 / 0.2 / 0.5 |
+| `--save-dir` | `./outputs/qwen3_0_6b_low_variance_ratio` | Output directory for reports and (optional) pruned model |
+| `--device` | `npu:0` | Device for model placement and evaluation; a single card is enough |
+| `--calib-samples` / `--calib-seq-len` | 8 / 512 | Pileval calibration sample count and length |
+| `--seq-len` | 4096 | WikiText2 evaluation sequence length |
+| `--eval-batches` | full split | Optional cap on eval batches (positive integer), for quick validation only |
+| `--preview-prune-ratio` | 0.1 | Dry-run ratio for `prune_diagnose()` only; does not affect real pruning |
+| `--skip-diagnose` | off | Additionally skip the `prune_diagnose()` preview to save its runtime (~0.1 min measured) |
+| `--save-model` | off | Additionally save the pruned model and tokenizer into `--save-dir` |
+
+The script prints the full runtime arguments at startup and saves `run_command.txt` /
+`run_environment.txt` / `run_config.json` for reproducibility; `run_environment.txt` also
+records python / amct_pytorch / torch / torch_npu / transformers / CANN toolkit / NPU driver
+versions (null when unavailable). The output directory is excluded
+by `.gitignore`, so no weights or datasets are committed.
+
+### 7.2 Diagnostics and Report
+
+The script prints, in order: full runtime arguments -> baseline PPL -> the `prune_diagnose()`
+summary -> the `PruneReport` of the real prune -> pruned PPL and parameter changes. Measured
+output of the `prune_ratio=0.1` run (single npu:0):
+
+```text
+[qwen3_0_6b.low_variance.ratio] baseline ppl: 19.153452
+[prune-diagnose] prunable targets: cnn=0, dense=28, moe=0
+  fixed-ratio prune: available (cut 4.4%, forward OK)
+  acc binary search: unavailable
+  - acc search found no acceptable prune ratio at this tolerance (relax the tolerance).
+[qwen3_0_6b.low_variance.ratio] diagnose time: 0.11 min
+```
+
+Note: the diagnostic fixed-ratio forward check requires calibration data and model on the
+same device, so the script aligns calibration batches to `--device`. The acc binary-search
+preview finding no acceptable ratio is expected - plain `low_variance` slicing exceeds the
+default tolerance - and `ratio`-mode real pruning does not depend on that search. Diagnose
+runtime is printed separately and stored as `diagnose_time_minutes` in `run_metrics.json`
+(~0.1 min across the three runs); pass `--skip-diagnose` to skip the preview entirely.
+
+Key fields of the `PruneReport` after the real prune at `prune_ratio=0.1` (the full JSON is
+saved at `outputs/.../prune_report.json`):
+
+```json
+{
+  "backend": "huggingface",
+  "params_before": 596049920,
+  "params_after": 569643008,
+  "budget_unreachable": false,
+  "prunable_fraction": null,
+  "warnings": [],
+  "per_layer_sparsity": {"model.layers.0.mlp": 0.099935, "...": "28 layers, same value"},
+  "events": [
+    {"stage": "dense", "method": "low_variance", "module": "model.layers.0.mlp",
+     "detail": "Activation variance prune 3072 -> 2765"}
+  ]
+}
+```
+
+Per-layer intermediate-dim changes of the three ratios (identical across all 28 layers):
+`0.1 -> 3072->2765` (9.99% cut), `0.2 -> 3072->2458` (19.99%), `0.5 -> 3072->1536` (50.00%).
+
+### 7.3 Results
+
+Measured on a single Ascend 910 (npu:0), bf16, full WikiText2 test split (73 4096-token
+batches, one forward each); calibration used 8 Pileval samples at `seq_len=512`. The baseline
+PPL was 19.153452 in all three independent runs.
+
+| Model | Method | Setting | Baseline PPL | Pruned PPL | Post-process PPL | Params (before -> after) | Param cut | Prune time (min) | Diagnose time (min) |
+|:--|:--|:--|--:|--:|:--|:--|--:|--:|--:|
+| Qwen3-0.6B | `low_variance` | `prune_ratio=0.1` | 19.153452 | 35.085606 | N/A | 596,049,920 -> 569,643,008 | 4.43% | 0.02 | 0.11 |
+| Qwen3-0.6B | `low_variance` | `prune_ratio=0.2` | 19.153452 | 75.769569 | N/A | 596,049,920 -> 543,236,096 | 8.86% | 0.02 | 0.11 |
+| Qwen3-0.6B | `low_variance` | `prune_ratio=0.5` | 19.153452 | 2809.957520 | N/A | 596,049,920 -> 463,929,344 | 22.17% | 0.02 | 0.10 |
+
+Notes: `low_variance` has no post-processing step, so post-process PPL is N/A. The param cut
+ratio is lower than the prune ratio because the dense FFN intermediate dim is only a fraction
+of Qwen3-0.6B parameters (embeddings, attention, and lm_head are untouched). Pruning only
+does variance statistics and weight slicing, so all three ratios finished in ~0.02 min; the
+`prune time` column covers only the real `amct.prune()` step, while the diagnostic dry-run
+runtime is listed separately (skippable via `--skip-diagnose`). The
+pruned PPL degrades quickly as the ratio grows - the 0.5 run is clearly broken, showing that
+plain `low_variance` slicing without compensation is unusable at high ratios for this model
+size; combine it with `reconstruct` (recovery compensation, see [section 2](#2-pruning-example)
+for the API usage) or recovery training (see [section 6.6](#66-recovery-fine-tuning-for-size_budget05))
+to mitigate.
+
+> After pruning, to export the model as a torchair offline model (.air) for ATC-to-om conversion and on-board inference, refer to [AMCT large-model offline torchair model export](../export/README_en.md).

@@ -558,3 +558,136 @@ model.save_pretrained(
 多组恢复参数应使用独立报告和输出目录，避免覆盖剪枝模型。BF16 的 `size_budget=0.5` 权重约占 28.4 GiB；磁盘不足时，记录 PPL 和报告后再清理不再需要的恢复模型。
 
 > 剪枝完成后，如需将模型导出为 torchair 离线模型（.air）用于 ATC 转 om 板端推理，请参考 [AMCT大模型torchair离线模型导出](../export/README.md)。
+
+## 7 社区任务样例：Qwen3-0.6B Dense FFN `low_variance` + `ratio`（任务 5）
+
+本节对应 issue [#183](https://gitcode.com/cann/amct/issues/183) 任务 5：对 Qwen3-0.6B 的
+dense FFN 中间维做 `low_variance` 结构化剪枝，`ratio` 模式固定剪枝率，`prune_ratio=0.1/0.2/0.5`
+三档。脚本：[`src/run_qwen3_0_6b_pruning_low_variance_ratio.py`](src/run_qwen3_0_6b_pruning_low_variance_ratio.py)。
+
+### 7.1 运行说明
+
+```text
+模型：Qwen3-0.6B（ModelScope 下载到本地，约 1.5 GiB bf16）
+方法：low_variance（dense FFN 中间维，自动避开注意力投影）
+模式：ratio（config 内直接指定 prune_ratio，无搜索）
+prune_ratio：0.1、0.2、0.5（三档均从未剪枝原始模型独立开始）
+校准集：Pileval（mit-han-lab/pile-val-backup，validation），8 个样本、seq_len=512
+评估集：WikiText2（wikitext-2-raw-v1，test split），全量、seq_len=4096
+设备：单卡 npu:0
+```
+
+模型从 [ModelScope](https://modelscope.cn) 或 HuggingFace 下载到本地目录（占位路径如下），
+权重与数据集均不提交仓库：
+
+```bash
+# 可选：从 ModelScope 下载（或任选 hf-mirror /官方 HF）
+pip3 install modelscope
+modelscope download --model Qwen/Qwen3-0.6B --local_dir ./path/to/Qwen3-0.6B
+```
+
+在 `examples/algorithms/pruning` 目录逐档运行（每档都从原始模型独立开始）：
+
+```bash
+export PYTHONPATH=<amct 仓根目录>   # 源码运行时需要
+# 若 huggingface.co 不可达，数据集走镜像：export HF_ENDPOINT=https://hf-mirror.com
+
+python3 src/run_qwen3_0_6b_pruning_low_variance_ratio.py \
+  --model-path ./path/to/Qwen3-0.6B \
+  --save-dir ./outputs/qwen3_0_6b_low_variance_ratio/r0_1 \
+  --prune-ratio 0.1 --calib-samples 8 --calib-seq-len 512
+
+python3 src/run_qwen3_0_6b_pruning_low_variance_ratio.py \
+  --model-path ./path/to/Qwen3-0.6B \
+  --save-dir ./outputs/qwen3_0_6b_low_variance_ratio/r0_2 \
+  --prune-ratio 0.2 --calib-samples 8 --calib-seq-len 512
+
+python3 src/run_qwen3_0_6b_pruning_low_variance_ratio.py \
+  --model-path ./path/to/Qwen3-0.6B \
+  --save-dir ./outputs/qwen3_0_6b_low_variance_ratio/r0_5 \
+  --prune-ratio 0.5 --calib-samples 8 --calib-seq-len 512
+```
+
+主要参数：
+
+| 参数 | 默认值 | 含义 |
+|:--|:--|:--|
+| `--model-path` | 无（必填） | 本地 Qwen3-0.6B 权重目录，相对/占位路径 |
+| `--prune-ratio` | 无（必填） | FFN 中间维固定剪枝率，任务要求 0.1 / 0.2 / 0.5 |
+| `--save-dir` | `./outputs/qwen3_0_6b_low_variance_ratio` | 报告与（可选）剪枝模型输出目录 |
+| `--device` | `npu:0` | 模型放置与评测设备；单卡即可 |
+| `--calib-samples` / `--calib-seq-len` | 8 / 512 | Pileval 校准条数与长度 |
+| `--seq-len` | 4096 | WikiText2 评测序列长度 |
+| `--eval-batches` | 全量 | 可选，截断评测 batch 数（正整数），仅用于快速验证 |
+| `--preview-prune-ratio` | 0.1 | `prune_diagnose()` dry-run 用的预览剪枝率，不影响正式剪枝 |
+| `--skip-diagnose` | 关闭 | 追加后跳过 `prune_diagnose()` 预览，节省其耗时（三档实测约 0.1 min） |
+| `--save-model` | 关闭 | 追加后保存剪枝模型与 tokenizer 到 `--save-dir` |
+
+脚本启动时打印完整运行参数，并保存 `run_command.txt` / `run_environment.txt` /
+`run_config.json` 以便复现；`run_environment.txt` 同时记录 python / amct_pytorch / torch /
+torch_npu / transformers / CANN toolkit / NPU 驱动版本号（不可得时记为 null）。输出目录被
+`.gitignore` 排除，不会提交权重或数据。
+
+### 7.2 诊断与报告
+
+脚本依次打印：完整运行参数 → baseline PPL → `prune_diagnose()` 诊断摘要 → 正式剪枝
+`PruneReport` → 剪枝后 PPL 与参数量变化。`prune_ratio=0.1` 档实测输出（单卡 npu:0）：
+
+```text
+[qwen3_0_6b.low_variance.ratio] baseline ppl: 19.153452
+[prune-diagnose] prunable targets: cnn=0, dense=28, moe=0
+  fixed-ratio prune: available (cut 4.4%, forward OK)
+  acc binary search: unavailable
+  - acc search found no acceptable prune ratio at this tolerance (relax the tolerance).
+[qwen3_0_6b.low_variance.ratio] diagnose time: 0.11 min
+```
+
+说明：诊断的 fixed-ratio 前向校验要求校准数据与模型同设备，脚本已把校准 batch 对齐到
+`--device`。acc binary search 预览未找到可接受剪枝率属正常——`low_variance` 切片在默认
+容差内损失过大；`ratio` 模式的正式剪枝不依赖该搜索结果。诊断耗时单列打印并写入
+`run_metrics.json` 的 `diagnose_time_minutes`（三档实测约 0.1 min），不需要预览时可加
+`--skip-diagnose` 跳过。
+
+`prune_ratio=0.1` 档正式剪枝后的 `PruneReport` 核心内容（完整 JSON 保存在
+`outputs/.../prune_report.json`）：
+
+```json
+{
+  "backend": "huggingface",
+  "params_before": 596049920,
+  "params_after": 569643008,
+  "budget_unreachable": false,
+  "prunable_fraction": null,
+  "warnings": [],
+  "per_layer_sparsity": {"model.layers.0.mlp": 0.099935, "...": "共 28 层，数值相同"},
+  "events": [
+    {"stage": "dense", "method": "low_variance", "module": "model.layers.0.mlp",
+     "detail": "Activation variance prune 3072 -> 2765"}
+  ]
+}
+```
+
+三档的每层中间维变化（28 层一致）：`0.1 → 3072→2765`（削减 9.99%）、
+`0.2 → 3072→2458`（19.99%）、`0.5 → 3072→1536`（50.00%）。
+
+### 7.3 结果表
+
+实测环境：单卡 Ascend 910（npu:0），bf16，全量 WikiText2 test split（73 个 4096-token batch，
+逐条前向）；校准集 Pileval 8 样本、`seq_len=512`。基线 PPL 三次独立运行均为 `19.153452`。
+
+| 模型 | 方法 | 实验设置 | 基线 PPL | 剪枝后 PPL | 后处理 PPL | 参数量（前 → 后） | 参数削减率 | 剪枝时长（min） | 诊断耗时（min） |
+|:--|:--|:--|--:|--:|:--|:--|--:|--:|--:|
+| Qwen3-0.6B | `low_variance` | `prune_ratio=0.1` | 19.153452 | 35.085606 | N/A | 596,049,920 → 569,643,008 | 4.43% | 0.02 | 0.11 |
+| Qwen3-0.6B | `low_variance` | `prune_ratio=0.2` | 19.153452 | 75.769569 | N/A | 596,049,920 → 543,236,096 | 8.86% | 0.02 | 0.11 |
+| Qwen3-0.6B | `low_variance` | `prune_ratio=0.5` | 19.153452 | 2809.957520 | N/A | 596,049,920 → 463,929,344 | 22.17% | 0.02 | 0.10 |
+
+说明：`low_variance` 无后处理步骤，后处理 PPL 记为 N/A。参数削减率低于剪枝率是因为
+dense FFN 中间维只占 Qwen3-0.6B 总参数的一部分（embedding、attention 与 lm_head 未剪）。
+剪枝本身只做方差统计与权重切片，三档耗时均约 0.02 min；表中的 `剪枝时长` 仅指
+`amct.prune()` 正式剪枝一步，诊断 dry-run 耗时单列（可通过 `--skip-diagnose` 跳过）。
+剪枝后 PPL 随剪枝率快速上升，
+0.5 档已明显劣化，说明该规模下纯 `low_variance` 切片无补偿时高剪枝率不可用，可结合
+`reconstruct`（recovery 补偿，接口调用见[第 2 节](#2-剪枝示例)）或恢复训练
+（做法参考[第 6.6 节](#66-size_budget05-恢复训练)）缓解。
+
+> 剪枝完成后，如需将模型导出为 torchair 离线模型（.air）用于 ATC 转 om 板端推理，请参考 [AMCT大模型torchair离线模型导出](../export/README.md)。
