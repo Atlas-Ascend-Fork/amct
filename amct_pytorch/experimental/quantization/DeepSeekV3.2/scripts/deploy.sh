@@ -1,3 +1,4 @@
+#!/bin/bash
 # -*- coding: UTF-8 -*-
 # ----------------------------------------------------------------------------
 # Copyright (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
@@ -16,7 +17,6 @@
 # ----------------------------------------------------------------------------
 
 
-#!/bin/bash
 INPUT_WEIGHT_PATH=""
 OUTPUT_WEIGHT_PATH=""
 QUANT_MODE=""
