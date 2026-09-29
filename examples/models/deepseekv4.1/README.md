@@ -85,6 +85,8 @@ python -m amct_pytorch.cli.llm.deploy \
 
 HiFloat8 路径面向 Atlas A5 上的 vLLM-Ascend。它把配置选中的注意力 Linear 从 32x32 块 FP8 反量化后重新编码为 HiFloat8，以 uint8 落盘并配一个逐输出通道的 float32 scale；未选中的张量逐字节保留，MXFP4 专家、MXFP8 shared experts 和 engram 表都不受影响。
 
+这条链路的完整实践与精度结果见 [DeepSeekV4.1-Flash-HiFloat8 量化Agent实践](./DeepSeekV4.1-Flash-Quantization-Agent.md)。
+
 ```shell
 python -m amct_pytorch.cli.llm.deploy \
   --model <MODEL_DIR> \

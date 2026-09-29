@@ -85,6 +85,8 @@ During conversion, eligible scales are expanded from `[N/32, K/32]` to `[N, K/32
 
 The HiFloat8 path targets vLLM-Ascend on Atlas A5. It dequantizes the selected attention Linears from 32x32 block FP8 and re-encodes them to HiFloat8, stored as uint8 with one float32 scale per output channel. Tensors that are not selected are copied byte for byte, so the MXFP4 experts, the MXFP8 shared experts and the Engram table are untouched.
 
+For the full practice on this path, including accuracy results, see [DeepSeekV4.1-Flash-HiFloat8 Quantization Agent Practice](./DeepSeekV4.1-Flash-Quantization-Agent_en.md).
+
 ```shell
 python -m amct_pytorch.cli.llm.deploy \
   --model <MODEL_DIR> \
