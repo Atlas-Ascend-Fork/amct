@@ -25,6 +25,9 @@ from torch import nn
 from amct_pytorch.classic.optimizer.apply_scaling_fusion_pass import (
     ApplyScalingFusionPass,
 )
+from amct_pytorch.classic.optimizer.base_module_fusion_pass import (
+    BaseModuleFusionPass,
+)
 
 
 class Member(nn.Module):
@@ -52,6 +55,27 @@ class NormModel(nn.Module):
     def forward(self, x):
         h = self.pre(x)
         return self.m0.linear(h) + self.m1.linear(h)
+
+
+def test_scaling_fusion_pass_uses_module_fusion_interface():
+    model = NormModel()
+    from amct_pytorch.classic.optimizer.layer_norm_quant import LayerNormQuant
+
+    wrapper = LayerNormQuant(
+        pre_op=model.pre,
+        scaling_layers=(model.m0, model.m1),
+        member_refs=('m0', 'm1'),
+        target_ref='m0',
+        adapter='qwen3_attention',
+        algorithm='minmax',
+        act_granularity='tensor',
+        batch_num=1,
+    )
+    fusion_pass = ApplyScalingFusionPass()
+
+    assert isinstance(fusion_pass, BaseModuleFusionPass)
+    assert fusion_pass.match_pattern(wrapper, 'pre')
+    assert not fusion_pass.match_pattern(model.pre, 'pre')
 
 
 def test_convert_runs_fusion_before_replacement():

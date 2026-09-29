@@ -29,9 +29,7 @@ with patch('transformers.utils.is_torchaudio_available', return_value=False):
     from transformers.models.qwen3.modeling_qwen3 import Qwen3ForCausalLM
     from transformers.models.vit.modeling_vit import ViTLayer
 
-from amct_pytorch.classic.optimizer.apply_scaling_fusion_pass import (
-    _build_dynamic_target,
-)
+from amct_pytorch.classic.deploy_op.local_dynamic import build_local_adapter
 
 
 class IdentityQuant(nn.Module):
@@ -58,8 +56,8 @@ def _fuse_qwen(layer):
         setattr(layer.self_attn, name, Projection(getattr(layer.self_attn, name)))
     for name in ('up_proj', 'gate_proj'):
         setattr(layer.mlp, name, Projection(getattr(layer.mlp, name)))
-    layer.self_attn = _build_dynamic_target(layer.self_attn, 'qwen3_attention', 'int8')
-    layer.mlp = _build_dynamic_target(layer.mlp, 'qwen3_mlp', 'int8')
+    layer.self_attn = build_local_adapter('qwen3_attention', layer.self_attn, 'int8')
+    layer.mlp = build_local_adapter('qwen3_mlp', layer.mlp, 'int8')
     layer.self_attn.shared_quantize = IdentityQuant()
     layer.mlp.shared_quantize = IdentityQuant()
     return layer
@@ -109,20 +107,16 @@ def _fuse_vit(layer):
         _set_vit_projection(layer.attention, role, Projection)
     _set_vit_mlp_input(layer, Projection)
     if hasattr(layer.attention, 'q_proj'):
-        layer.attention = _build_dynamic_target(
-            layer.attention, 'vit_attention', 'int8'
-        )
+        layer.attention = build_local_adapter('vit_attention', layer.attention, 'int8')
         attn = layer.attention
-        layer.mlp = _build_dynamic_target(layer.mlp, 'vit_mlp', 'int8')
+        layer.mlp = build_local_adapter('vit_mlp', layer.mlp, 'int8')
         mlp = layer.mlp
     else:
-        layer.attention.attention = _build_dynamic_target(
-            layer.attention.attention, 'vit_attention', 'int8'
+        layer.attention.attention = build_local_adapter(
+            'vit_attention', layer.attention.attention, 'int8'
         )
         attn = layer.attention.attention
-        layer.intermediate = _build_dynamic_target(
-            layer.intermediate, 'vit_mlp', 'int8'
-        )
+        layer.intermediate = build_local_adapter(layer.intermediate, 'vit_mlp', 'int8')
         mlp = layer.intermediate
     attn.shared_quantize = IdentityQuant()
     mlp.shared_quantize = IdentityQuant()

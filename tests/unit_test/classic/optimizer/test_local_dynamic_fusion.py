@@ -161,7 +161,7 @@ def test_adapter_failure_keeps_norm_and_weights_unmodified(monkeypatch):
     def unavailable(*args):
         raise ValueError('adapter unavailable')
 
-    monkeypatch.setattr(fusion, '_build_dynamic_target', unavailable)
+    monkeypatch.setattr(fusion, 'build_local_adapter', unavailable)
     ApplyScalingFusionPass().run(model)
     for name, p in model.named_parameters():
         old_name = name.replace('input_layernorm.', 'input_layernorm.pre_op.')
