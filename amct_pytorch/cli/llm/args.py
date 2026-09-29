@@ -19,6 +19,11 @@
 import argparse
 import os
 
+from amct_pytorch.common.models.llm.common.deploy_selection import (
+    requires_tensor_deploy_config,
+    validate_ascend_deploy_args,
+    validate_tensor_deploy_args,
+)
 from amct_pytorch.quantization.bit_policy import BitPolicy
 
 
@@ -35,6 +40,27 @@ def _validate_eval_mode(args):
 
 def parser_gen(command=None):
     parser = argparse.ArgumentParser()
+
+    if command == "deploy":
+        parser.add_argument(
+            "--deploy_platform",
+            choices=["A3", "ascend950"],
+            default=None,
+            help="Target deployment hardware; required for DeepSeek V4.1.",
+        )
+        parser.add_argument(
+            "--deploy_format",
+            choices=["legacy", "ascend"],
+            default="legacy",
+            help="Deployment format. Ascend exports modelslim-compatible W8A8_DYNAMIC metadata for vllm-ascend.",
+        )
+        parser.add_argument(
+            "--quant_layers_config",
+            type=str,
+            default=None,
+            help="Required for tensor deployment: JSON quant_layers/ignore_layers module globs; "
+            "replaces quant_target selection for both legacy and ascend.",
+        )
 
     parser.add_argument(
         '--model',
@@ -167,13 +193,23 @@ def parser_gen(command=None):
 
     args = parser.parse_args()
 
-    if args.bit_config:
+    if (
+        command == "deploy"
+        and args.granularity == "tensor"
+        and requires_tensor_deploy_config(args)
+    ):
+        validate_tensor_deploy_args(args)
+    elif args.bit_config:
         args.bit_policy = BitPolicy.from_yaml(args.bit_config)
     else:
         args.bit_policy = BitPolicy()
 
     if command == "eval":
         _validate_eval_mode(args)
+    elif command == "deploy":
+        validate_ascend_deploy_args(args)
+        if args.granularity != "tensor":
+            args.deploy_selection = None
 
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
 

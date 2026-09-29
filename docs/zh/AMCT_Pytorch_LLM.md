@@ -208,7 +208,7 @@ python -m amct_pytorch.ptq \
 
 **入口**：`amct_pytorch/cli/llm/deploy.py`
 
-**功能特性**：该入口用来导出部署的权重，流程如下：
+**功能特性**：该入口用来导出部署权重，支持 blockwise 量化导出和 tensorwise 权重转换，流程如下：
 
 - 加载基础safetensors文件：系统将从源文件中加载原始的 safetensors 权重索引，以作为后续操作的基础。
 - 构建量化模块：基于指定的 PTQ参数，系统会构建用于量化处理的 block 模块。
@@ -216,7 +216,7 @@ python -m amct_pytorch.ptq \
 - 管理未替换权重：在量化过程中未被处理的原始权重将被重新分片，并存储在 `rest_*.safetensors` 文件中以供恢复或进一步使用。
 - 更新配置文件：完成操作后，系统将更新核心配置文件 `model.safetensors.index.json` 和 `config.json`，以确保文件的完整性以及一致性。
 
-**输出**：部署模型目录，包括 `layer_*.safetensors`、`rest_*.safetensors`、更新后的 `model.safetensors.index.json` 和 `config.json`。
+**输出**：部署模型目录。blockwise 导出包括 `layer_*.safetensors`、`rest_*.safetensors`、更新后的 `model.safetensors.index.json` 和 `config.json`；tensorwise 导出保留源权重分片布局并刷新权重索引，`deploy_format=ascend` 时还会生成 `quant_model_description.json` 和 `deployment_validation.json`。
 
 **约束**：
 
@@ -245,6 +245,24 @@ python -m amct_pytorch.deploy \
 
 参数详细解释请参见[参数说明](#参数说明)。
 
+#### Tensorwise 部署导出
+
+`granularity=tensor` 支持以下两类流程：
+
+- 纯反量化：将 FP8/FP4 等源权重转换为 BF16，不需要 `quant_target`、`bit_config` 或 `quant_layers_config`，具体能力由模型适配器提供。
+- 直转量化：通过 `quant_layers_config` 显式选择需要量化和忽略的 checkpoint 模块，并通过 `bit_config` 指定位宽策略。当前通用路径支持 INT W8A8。
+
+`quant_layers_config` 是 JSON 文件，模块名使用 checkpoint 中不含最终参数后缀的完整路径，并支持大小写敏感的 glob：
+
+```json
+{
+  "quant_layers": ["model.layers.*.self_attn.o_proj"],
+  "ignore_layers": ["model.layers.2.*"]
+}
+```
+
+`deploy_format=legacy` 输出 AMCT 既有部署格式；`deploy_format=ascend` 输出 vLLM-Ascend ModelSlim 兼容的 W8A8 动态量化权重和描述文件。DeepSeek V4.1 的 A3/Ascend 950 输入要求、完整命令及产物说明请参见 [DeepSeek V4.1 部署说明](../../examples/models/deepseekv4.1/README.md)。
+
 ## 参数说明
 
 ### 通用参数
@@ -261,6 +279,16 @@ python -m amct_pytorch.deploy \
 | `--seq_len` | `4096` | 校准和评估时使用的输入序列长度。用于确定模型在处理多长文本时的表现（尤其在量化校准阶段很重要）。 可选值：`1024`、`2048`、`4096`|
 | `--data_dir` | 空字符串（`ptq` / `extract_ptq_data` **必填**） | PTQ 中间数据保存/读取目录：`extract_ptq_data` 的输出目录，`ptq` 从中读取。 |
 | `--output_dir` | `./outputs` | 输出目录，存放日志文件、PTQ 参数配置、最终部署模型等所有生成内容。 |
+
+### 部署参数
+
+以下参数仅用于 `deploy` 子命令：
+
+| 参数 | 默认值 | 含义 |
+|------|------|------|
+| `--deploy_platform` | `None` | 目标部署硬件。DeepSeek V4.1 必填，支持 `A3` 和 `ascend950`；其他模型由对应适配器决定是否使用。 |
+| `--deploy_format` | `legacy` | 部署产物格式。`legacy` 使用 AMCT 既有格式；`ascend` 生成 vLLM-Ascend ModelSlim 兼容的 W8A8 动态量化产物。 |
+| `--quant_layers_config` | `None` | Tensorwise 直转量化的 JSON 配置路径，通过 `quant_layers` 和 `ignore_layers` glob 选择 checkpoint 模块；显式选择路径会替代 `quant_target`。 |
 
 ### PPL 评估参数
 
