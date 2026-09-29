@@ -45,6 +45,7 @@ from amct_pytorch.common.models.llm.common.deploy_export import (
 from amct_pytorch.common.models.llm.common.deploy_selection import (
     build_tensor_deploy_plan,
     log_mtp_selection,
+    requires_tensor_deploy_config,
     validate_ascend_deploy_args,
     validate_ascend_deploy_plan,
     validate_tensor_deploy_args,
@@ -142,14 +143,21 @@ class LlmDeployWorkflow:
         finally:
             logger.remove(sink_id)
 
+    def _uses_tensor_deploy_plan(self):
+        return (
+            getattr(self.args, "deploy_format", "legacy") == "ascend"
+            or requires_tensor_deploy_config(self.args)
+        )
+
     def setup(self):
         if self.granularity != "tensor":
             os.makedirs(self.output_dir, exist_ok=True)
             ensure_log_dir(self.args)
         self._register_components()
         self.pipeline = self._build_pipeline()
-        if self.granularity == "tensor":
+        if self.granularity == "tensor" and self._uses_tensor_deploy_plan():
             self._prepare_tensor_deploy_plan()
+        if self.granularity == "tensor":
             os.makedirs(self.output_dir, exist_ok=True)
             ensure_log_dir(self.args)
         sink_id, _ = setup_run_logging(self.args, "deploy")
@@ -362,6 +370,9 @@ class LlmDeployWorkflow:
         }
 
     def _run_tensorwise(self):
+        if not self._uses_tensor_deploy_plan():
+            return self._run_legacy_tensorwise()
+
         is_ascend = getattr(self.args, "deploy_format", "legacy") == "ascend"
         original_index = self._load_weight_index()
         if not hasattr(self, "deploy_plan"):
@@ -450,6 +461,38 @@ class LlmDeployWorkflow:
             "index_path": index_path,
             "num_output_files": len(set(updated_weight_map.values())),
             **extra_results,
+        }
+
+    def _run_legacy_tensorwise(self):
+        self._copy_support_files()
+        original_index = self._load_weight_index()
+        original_weight_map = dict(original_index.get("weight_map", {}))
+        quant_layers = self.pipeline.generate_tensorwise_quant_layers()
+        quant_ignore_layers = self.pipeline.generate_tensorwise_ignore_layers()
+        weights_by_file = defaultdict(list)
+        for weight_name, file_name in original_weight_map.items():
+            weights_by_file[file_name].append(weight_name)
+
+        updated_weight_map = {}
+        model_dir = Path(self.model_path)
+        loaded_files = {}
+        for source_file in tqdm(sorted(weights_by_file), desc="Tensor convert..."):
+            updated_weight_map.update(
+                self._convert_tensorwise_shard(
+                    source_file,
+                    model_dir,
+                    original_weight_map,
+                    quant_layers,
+                    loaded_files,
+                )
+            )
+        index_path = self._refresh_weight_index(original_index, updated_weight_map)
+        self._refresh_config(quant_ignore_layers)
+        logger.info("Exported tensor-converted model to {}", self.output_dir)
+        logger.info("Refreshed weight index at {}", index_path)
+        return {
+            "index_path": index_path,
+            "num_output_files": len(set(updated_weight_map.values())),
         }
 
     def _prepare_tensor_deploy_plan(self, original_index=None):

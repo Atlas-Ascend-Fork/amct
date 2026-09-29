@@ -827,6 +827,62 @@ def test_run_tensorwise_copies_and_rewrites_weight_index(monkeypatch, tmp_path):
     assert refreshed[QUANTIZATION_CONFIG]["ignore"] == []
 
 
+def test_non_configured_tensor_model_uses_legacy_adapter_selection(
+    monkeypatch, tmp_path
+):
+    from amct_pytorch.quantization.bit_policy import BitPolicy
+
+    src = tmp_path / "src"
+    dst = tmp_path / "dst"
+    src.mkdir()
+    weight_name = "model.layers.0.mlp.up_proj.weight"
+    save_file(
+        {weight_name: torch.ones(2, 3, dtype=torch.bfloat16)},
+        str(src / MODEL_SAFETENSORS),
+    )
+    (src / CONFIG_JSON).write_text("{}")
+
+    pipeline = SimpleNamespace(
+        generate_tensorwise_quant_layers=lambda: {},
+        generate_tensorwise_ignore_layers=lambda: ["lm_head"],
+        get_scale_name=lambda name: ("_scale_inv", "missing_scale_inv"),
+        block_size=lambda weight: 128,
+        cache_scheme=lambda: {},
+        bits_scheme=lambda: None,
+    )
+    wf = _make_workflow(str(src), str(dst), quant_dtype="bf16")
+    wf.granularity = wf.args.granularity = "tensor"
+    wf.model_name = wf.args.model_name = "qwen3_5"
+    wf.args.deploy_format = "legacy"
+    wf.args.quant_layers_config = None
+    wf.args.bit_policy = BitPolicy()
+    wf._register_components = lambda: None
+    wf._build_pipeline = lambda: pipeline
+
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.setup_run_logging",
+        lambda args, command: (1, None),
+    )
+    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.logger", MagicMock())
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.tqdm",
+        lambda iterable, desc="": iterable,
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.convert_state_dict",
+        lambda weight, *args, **kwargs: weight,
+    )
+
+    result = wf.run()
+
+    output_index = json.loads((dst / SAFETENSORS_INDEX_JSON).read_text())
+    output_config = json.loads((dst / CONFIG_JSON).read_text())
+    assert result["num_output_files"] == 1
+    assert output_index["weight_map"] == {weight_name: MODEL_SAFETENSORS}
+    assert output_config[QUANTIZATION_CONFIG]["ignore"] == ["lm_head"]
+    assert not hasattr(wf, "deploy_plan")
+
+
 # ---- Task 14: _convert_tensor / _refresh_config_tensor --------------------
 
 
@@ -1243,7 +1299,7 @@ def test_json_tensor_export_two_shards_preserves_float_bias_and_metadata(
     (src / SAFETENSORS_INDEX_JSON).write_text(json.dumps({"weight_map": weight_map}))
     args = SimpleNamespace(
         model=str(src),
-        model_name="unused",
+        model_name="glm5_2",
         seed=42,
         granularity="tensor",
         quant_dtype="int",
@@ -1340,6 +1396,7 @@ def test_ascend_tensor_run_preserves_source_config(
     )
     index = {"weight_map": {name + ".weight": MODEL_SAFETENSORS}}
     wf = _make_workflow(str(src), str(dst), "int")
+    wf.args.model_name = "hy_v3"
     wf.args.deploy_format = "ascend"
     wf.pipeline = SimpleNamespace(
         get_scale_name=lambda key: ("_scale_inv", "missing_scale_inv")
