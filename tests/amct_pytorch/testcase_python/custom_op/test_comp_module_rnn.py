@@ -97,3 +97,32 @@ class TestCompModuleRNN(unittest.TestCase):
         comp_module.comp_algs.append('quant')
         inputs = torch.randn(1, 10, 10)
         comp_module.forward(inputs, self.h0)
+
+    def test_ulq_retrain_initializes_rnn_weight_scales(self):
+        inputs = torch.randn(2, 1, 10)
+        test_cases = (
+            (
+                {**self.comp_args, 'module': torch.nn.LSTM(10, 20, 1)},
+                (self.h0, self.c0),
+            ),
+            (
+                {**self.gru_comp_args, 'module': torch.nn.GRU(10, 20, 1)},
+                self.h0,
+            ),
+        )
+
+        for comp_args, hx in test_cases:
+            with self.subTest(module=comp_args['module']._get_name()):
+                comp_args = {
+                    **comp_args,
+                    'wts_config': {**comp_args['wts_config'], 'algo': 'ulq_retrain'},
+                }
+                comp_module = CompModuleRNN(**comp_args)
+                comp_module.comp_algs.append('quant')
+
+                output, _ = comp_module(inputs, hx)
+
+                self.assertTrue(torch.isfinite(output).all())
+                self.assertTrue(torch.isfinite(comp_module.wts_scales).all())
+                self.assertTrue(torch.isfinite(comp_module.rec_wts_scales).all())
+                self.assertEqual(comp_module.cur_batch.item(), 1)

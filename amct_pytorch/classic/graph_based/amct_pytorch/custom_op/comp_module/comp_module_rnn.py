@@ -136,11 +136,11 @@ class CompModuleRNN(nn.Module):
         self.common_config['process_group'] = process_group
         self.common_config['world_size'] = world_size
 
-        if self.cur_batch < 100:
-            self.cur_batch += 1
-
         with torch.enable_grad():
             output = self.for_loop_rnncell_forward(inputs, hx)
+
+        if self.cur_batch < 100:
+            self.cur_batch += 1
 
         return output
 
