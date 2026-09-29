@@ -286,7 +286,7 @@ python -m amct_pytorch.deploy \
 
 | 参数 | 默认值 | 含义 |
 |------|------|------|
-| `--deploy_platform` | `None` | 目标部署硬件。DeepSeek V4.1 必填，支持 `A3` 和 `ascend950`；其他模型由对应适配器决定是否使用。 |
+| `--deploy_platform` | `None` | 目标部署硬件。DeepSeek V4.1 必填，支持 `A3` 和 `ascend950`（`ascend950` 上 `--quant_dtype` 取 `mxfp` 保留源位宽、取 `hifp` 将注意力 Linear 重编码为 HiFloat8）；其他模型由对应适配器决定是否使用。 |
 | `--deploy_format` | `legacy` | 部署产物格式。`legacy` 使用 AMCT 既有格式；`ascend` 生成 vLLM-Ascend ModelSlim 兼容的 W8A8 动态量化产物。 |
 | `--quant_layers_config` | `None` | Tensorwise 直转量化的 JSON 配置路径，通过 `quant_layers` 和 `ignore_layers` glob 选择 checkpoint 模块；显式选择路径会替代 `quant_target`。 |
 
@@ -312,7 +312,7 @@ python -m amct_pytorch.deploy \
 
 | 参数 | 默认值 | 含义 |
 |------|------|------|
-| `--quant_dtype` | 空字符串（`deploy` 的 blockwise 导出**必填**；`eval_mode=quant` 时需显式指定） | 量化后数据的类型，取值 `int` / `mxfp` / `hifp`。`deploy` blockwise 导出时必须显式指定，以保证 `config.json` 中的量化声明与 PTQ 产物一致；`eval_mode=quant` 时构建量化模块需按该参数选择量化数据类型实现，缺失会在运行期报错；`granularity=tensor` 时纯反量化不使用该参数，tensorwise 直转量化（部分模型族）仍需指定（当前支持 `int` / `mxfp`）。 |
+| `--quant_dtype` | 空字符串（`deploy` 的 blockwise 导出**必填**；`eval_mode=quant` 时需显式指定） | 量化后数据的类型，取值 `int` / `mxfp` / `hifp`。`deploy` blockwise 导出时必须显式指定，以保证 `config.json` 中的量化声明与 PTQ 产物一致；`eval_mode=quant` 时构建量化模块需按该参数选择量化数据类型实现，缺失会在运行期报错；`granularity=tensor` 时纯反量化不使用该参数，tensorwise 直转量化（部分模型族）仍需指定（当前支持 `int` / `mxfp` / `hifp`）。 |
 | `--bit_config` | `None` | YAML 格式的配置文件路径，该文件定义了具体的位宽策略。如果不提供此参数，则使用默认的 `W16A16` 配置。 |
 | `--algos` | `[]` | 启用的量化算法列表，算法会根据其注册的 `target` 自动应用到模型的权重（weight）、激活值（activation）或结构（structure）上。 |
 | `--is_per_tensor` | `False` | 对于LAC（Learned Activation Clipping，学习式激活裁剪）算法，是否使用 per-tensor统计信息来确定裁剪范围。 |

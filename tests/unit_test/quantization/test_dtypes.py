@@ -457,13 +457,23 @@ def test_hifp_forward_bits16_is_passthrough():
 
 
 def test_hifp_deploy_and_export_deploy_are_unsupported():
-    qdq = QuantDequantHifp(bits=8)
+    qdq = QuantDequantHifp(bits=16)
     x = torch.randn(2, 8, dtype=torch.bfloat16)
 
     with pytest.raises(NotImplementedError, match="export_deploy is not supported"):
         qdq.export_deploy(x)
     with pytest.raises(NotImplementedError, match="deploy is not supported"):
         qdq.deploy(x)
+
+
+def test_hifp_bits8_export_deploy_returns_codes_and_row_scales():
+    qdq = QuantDequantHifp(bits=8)
+    payload = qdq.export_deploy(torch.randn(2, 8, dtype=torch.bfloat16))
+
+    assert payload["qweight"].dtype == torch.uint8
+    assert payload["qweight"].shape == (2, 8)
+    assert payload["scale"].dtype == torch.float32
+    assert payload["scale"].shape == (2, 1)
 
 
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16, torch.float32])

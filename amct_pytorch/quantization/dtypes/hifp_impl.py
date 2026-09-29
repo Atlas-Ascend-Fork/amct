@@ -523,3 +523,144 @@ def _hifx_three_level_quantize(x, qdim, *, prims, k=None, v=None):
 def _hif4_reference_quantize(x, qdim):
     """Bit-exact quant_hifx three-level block quantization on padded fp32 input."""
     return _hifx_three_level_quantize(x, qdim, prims=_EXACT_PRIMS)
+
+
+# ---- HiF8 encode / pack ------------------------------------------------
+# HiFloat8 is tapered: a leading dot field picks the width of the exponent field
+# per code, so decoding needs this table rather than one shift and mask. Rows are
+# (exponent_width, prefix_mask, prefix_value, mantissa_bits) and mirror the
+# layout table in the hifloat8_cast kernel.
+HIF8_LAYOUTS = (
+    (0, 0x78, 0x08, 3),
+    (1, 0x70, 0x10, 3),
+    (2, 0x60, 0x20, 3),
+    (3, 0x60, 0x40, 2),
+    (4, 0x60, 0x60, 1),
+)
+HIF8_NAN = 0x80
+HIF8_POSITIVE_INF = 0x6F
+HIF8_MAX_NORMAL_CODE = 0x6E
+HIF8_OVERFLOW_THRESHOLD = (2.0**15) * 1.25
+HIF8_DENORMAL_EXP_BIAS = 23
+# The HiFloat8 magnitude a row maximum maps to, as in QUANT_SCOPE[HIFLOAT8].
+HIF8_WEIGHT_SCOPE = 16.0
+
+_HIF8_CODEBOOK = {}
+
+
+def _hif8_band(payload, width, mantissa_bits):
+    mantissa = (payload & ((1 << mantissa_bits) - 1)).astype(np.float32)
+    significand = np.float32(1.0) + mantissa / np.float32(1 << mantissa_bits)
+    if width == 0:
+        return significand
+    exp_payload = payload >> mantissa_bits
+    sign_exp = (exp_payload >> (width - 1)) & 1
+    magnitude = (1 << (width - 1)) | (exp_payload & ((1 << (width - 1)) - 1))
+    exponent = np.where(sign_exp == 0, magnitude, -magnitude).astype(np.float32)
+    return np.power(np.float32(2.0), exponent) * significand
+
+
+@functools.lru_cache(maxsize=1)
+def hif8_code_values():
+    """Return the float32 value of each of the 256 HiFloat8 codes, by code."""
+    bits = np.arange(256, dtype=np.uint8).astype(np.int16)
+    payload = bits & 0x7F
+    sign = (bits & 0x80) != 0
+    out = np.zeros(bits.shape, dtype=np.float32)
+    out[bits == HIF8_NAN] = np.nan
+    is_inf = payload == HIF8_POSITIVE_INF
+    out[is_inf] = np.where(sign[is_inf], -np.inf, np.inf)
+    # The lowest codes are powers of two counting down from 2 ** -23.
+    low = (payload <= 0x07) & (payload != 0)
+    out[low] = np.power(
+        np.float32(2.0), payload[low].astype(np.float32) - HIF8_DENORMAL_EXP_BIAS
+    )
+    for width, prefix_mask, prefix_value, mantissa_bits in HIF8_LAYOUTS:
+        band = ((payload & prefix_mask) == prefix_value) & ~is_inf
+        out[band] = _hif8_band(payload[band], width, mantissa_bits)
+    negative = sign & np.isfinite(out) & (out != 0.0)
+    out[negative] = -out[negative]
+    return out
+
+
+def _hif8_codebook(device):
+    """Return finite non-negative HiFloat8 magnitudes and codes, ascending."""
+    key = str(device)
+    if key not in _HIF8_CODEBOOK:
+        values = hif8_code_values()[:128]
+        finite = np.isfinite(values)
+        codes = np.arange(128, dtype=np.uint8)[finite]
+        values = values[finite]
+        order = np.argsort(values)
+        _HIF8_CODEBOOK[key] = (
+            torch.from_numpy(values[order]).to(device),
+            torch.from_numpy(codes[order]).to(device),
+        )
+    return _HIF8_CODEBOOK[key]
+
+
+@torch.no_grad()
+def hif8_encode(x):
+    """Encode a float tensor to saturating HiFloat8 codes held in uint8.
+
+    Nearest neighbour over the 128 finite magnitudes with ties resolved upward,
+    which is what npu_dtype_cast to torch_npu.hifloat8 does. Pure torch, so the
+    codes match on NPU and on CPU and the conversion is testable without a device.
+    """
+    values = x.to(torch.float32)
+    out = torch.zeros(values.shape, dtype=torch.uint8, device=values.device)
+    out[torch.isnan(values)] = HIF8_NAN
+    out[values == float("inf")] = HIF8_MAX_NORMAL_CODE
+    out[values == float("-inf")] = HIF8_MAX_NORMAL_CODE | 0x80
+    finite = torch.isfinite(values)
+    if not bool(finite.any()):
+        return out
+    magnitude = values[finite].abs()
+    scope, codes = _hif8_codebook(values.device)
+    upper = torch.searchsorted(scope, magnitude)
+    hi = upper.clamp(max=scope.numel() - 1)
+    lo = (upper - 1).clamp(min=0)
+    rounded = torch.where(
+        (scope[hi] - magnitude).abs() <= (scope[lo] - magnitude).abs(),
+        codes[hi],
+        codes[lo],
+    )
+    rounded = torch.where(
+        magnitude >= HIF8_OVERFLOW_THRESHOLD,
+        torch.full_like(rounded, HIF8_MAX_NORMAL_CODE),
+        rounded,
+    )
+    negative = (values[finite] < 0) & (rounded != 0)
+    out[finite] = torch.where(negative, rounded | 0x80, rounded)
+    return out
+
+
+@torch.no_grad()
+def hif8_decode(codes):
+    """Decode HiFloat8 uint8 codes to float32 on whichever device holds them.
+
+    A lookup table, because no cast reads uint8 back as HiFloat8:
+    npu_dtype_cast(uint8, bfloat16) converts the code as an integer and returns
+    8.0 for code 0x08 where HiFloat8 reads 1.0.
+    """
+    table = torch.from_numpy(hif8_code_values()).to(codes.device)
+    return table[codes.reshape(-1).long()].reshape(codes.shape)
+
+
+@torch.no_grad()
+def hif8_pack(x, weight_range=HIF8_WEIGHT_SCOPE):
+    """Pack a 2-D weight to HiFloat8 codes and one float32 scale per row.
+
+    weight_range is the HiFloat8 magnitude a row maximum maps to. The bfloat16
+    rounding between the divide and the encode is part of the contract shared
+    with the runtime HiFloat8 Linear: dropping it, or reordering the two steps,
+    changes the codes.
+    """
+    if x.dim() != 2:
+        raise RuntimeError(
+            "hif8_pack: input must be 2-D [n_rows, n_cols], got {} dims".format(x.dim())
+        )
+    values = x.detach().to(torch.float32)
+    scale = values.abs().amax(dim=1, keepdim=True).clamp_min(1e-12) / weight_range
+    scaled = (values / scale).to(torch.bfloat16)
+    return hif8_encode(scaled), scale.to(torch.float32)
