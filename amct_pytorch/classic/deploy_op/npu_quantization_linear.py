@@ -86,11 +86,9 @@ class NpuQuantizationLinear(torch.nn.Module):
             quant_x = x
             if pertoken_scale is not None:
                 matmul_token_scale = pertoken_scale.reshape(-1).to(torch.float32)
-        elif self.act_granularity == 'token' and (
-            self.dynamic is True or self.act_type != INT8
-        ):
-            # Dynamic input scales are local to this call; static token scales
-            # continue to use the calibrated position-wise parameters.
+        elif self.act_granularity == 'token' and self.dynamic is True:
+            # Dynamic input scales are local to this call; all static token
+            # scales, regardless of dtype, use calibrated parameters.
             if self.act_type == HIFLOAT8:
                 quant_x, pertoken_scale = torch_npu.npu_dynamic_quant(
                     x, dst_type=self.npu_quantize_act_type, dst_type_max=15
