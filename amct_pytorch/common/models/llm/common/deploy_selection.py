@@ -27,6 +27,15 @@ import yaml
 from amct_pytorch.quantization.bit_policy import BitPolicy
 
 
+# Transitional allowlist while adapters migrate to JSON tensor deployment.
+TENSOR_DEPLOY_CONFIG_MODELS = frozenset({"deepseek_v4_1", "glm5_2", "qwen3_6_moe"})
+
+
+def requires_tensor_deploy_config(args):
+    """Return whether the model uses the JSON tensor deployment contract."""
+    return getattr(args, "model_name", None) in TENSOR_DEPLOY_CONFIG_MODELS
+
+
 @dataclass(frozen=True)
 class DeploySelection:
     """Case-sensitive checkpoint module globs, without the .weight suffix."""
@@ -146,6 +155,8 @@ def _validate_model_deploy_args(args):
 
 def validate_tensor_deploy_args(args):
     """Preflight for both CLI and programmatic tensor workflows."""
+    if not requires_tensor_deploy_config(args):
+        return
     if _validate_model_deploy_args(args):
         return
     if getattr(args, "quant_dtype", None) != "int":

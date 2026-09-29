@@ -98,7 +98,8 @@ def test_granularity_accepts_tensor_for_deploy(tmp_path):
     bits.write_text("w_bits: 8\na_bits: 8\n")
     argv = [
         "amct",
-        *REQUIRED_ARGV["deploy"],
+        "--model_name",
+        "qwen3_6_moe",
         "--granularity",
         "tensor",
         "--quant_dtype",
@@ -145,7 +146,7 @@ def test_deploy_accepts_multiple_quant_targets():
     assert args.quant_target == ["mlp", "attn-linear"]
 
 
-def test_deploy_tensor_path_requires_quant_dtype():
+def test_legacy_tensor_model_takes_no_quant_args():
     argv = [
         "amct",
         "--model_name",
@@ -156,6 +157,17 @@ def test_deploy_tensor_path_requires_quant_dtype():
         "--eval_mode",
         "bf16",
     ]
+    with patch.object(sys, "argv", argv):
+        args = parser_gen(command="deploy")
+
+    assert args.granularity == "tensor"
+    assert args.quant_dtype == ""
+    assert args.quant_layers_config is None
+
+
+@pytest.mark.parametrize("model_name", ["glm5_2", "qwen3_6_moe"])
+def test_configured_tensor_model_requires_quant_dtype(model_name):
+    argv = ["amct", "--model_name", model_name, "--granularity", "tensor"]
     with (
         patch.object(sys, "argv", argv),
         pytest.raises(ValueError, match="quant_dtype int"),
@@ -289,7 +301,8 @@ def test_tensor_cli_rejects_invalid_bits_before_json_read(
         "argv",
         [
             "amct",
-            *REQUIRED_ARGV["deploy"],
+            "--model_name",
+            "qwen3_6_moe",
             "--granularity",
             "tensor",
             "--quant_dtype",

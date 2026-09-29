@@ -1302,7 +1302,7 @@ def test_tensor_invalid_bits_fails_before_setup(tmp_path, monkeypatch):
 
     args = SimpleNamespace(
         model="missing",
-        model_name="unused",
+        model_name="glm5_2",
         seed=42,
         granularity="tensor",
         quant_dtype="int",

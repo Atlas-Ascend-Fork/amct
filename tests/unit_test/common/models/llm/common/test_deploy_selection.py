@@ -27,8 +27,14 @@ from amct_pytorch.common.models.llm.common.deploy_selection import (
     load_deploy_selection,
     match_deploy_modules,
     validate_ascend_deploy_args,
+    validate_tensor_deploy_args,
 )
 from amct_pytorch.quantization.bit_policy import BitPolicy
+
+
+def test_tensor_validation_skips_model_without_json_deploy_config():
+    args = SimpleNamespace(model_name="deepseek_v4", quant_dtype="")
+    validate_tensor_deploy_args(args)
 
 
 def test_load_defaults_and_deduplicates(tmp_path):

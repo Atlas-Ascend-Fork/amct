@@ -20,8 +20,9 @@ import argparse
 import os
 
 from amct_pytorch.common.models.llm.common.deploy_selection import (
-    validate_tensor_deploy_args,
+    requires_tensor_deploy_config,
     validate_ascend_deploy_args,
+    validate_tensor_deploy_args,
 )
 from amct_pytorch.quantization.bit_policy import BitPolicy
 
@@ -192,7 +193,11 @@ def parser_gen(command=None):
 
     args = parser.parse_args()
 
-    if command == "deploy" and args.granularity == "tensor":
+    if (
+        command == "deploy"
+        and args.granularity == "tensor"
+        and requires_tensor_deploy_config(args)
+    ):
         validate_tensor_deploy_args(args)
     elif args.bit_config:
         args.bit_policy = BitPolicy.from_yaml(args.bit_config)
