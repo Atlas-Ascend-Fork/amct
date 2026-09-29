@@ -12,7 +12,7 @@ AMCT Agent 的目标是将上述过程编排为可追踪的自动化工作流：
 
 ## 2. Agent 工作流与模块架构
 
-![AMCT Agent 模块关系图](assets/agent-workflow.png)
+<img src="assets/agent-workflow.png" alt="AMCT Agent 模块关系图" width="70%">
 
 ### 2.1 Model Adapter
 
@@ -76,7 +76,7 @@ AisBench 精度评测
 
 离线转换过程中，权重文件逐个读取，仅转换需要量化的权重，其余权重原样写回。核心逻辑包括模型转换、HiFloat8 量化、配置转换和端到端自测。该流程通过以下模板填报，可基于AMCT-Agent工作流自动化执行。
 
-![Agent工作流用户输入模板](assets/inp_template.png)
+<img src="assets/inp_template.png" alt="Agent工作流用户输入模板" width="70%">
 
 ### 4.2 部署适配
 
