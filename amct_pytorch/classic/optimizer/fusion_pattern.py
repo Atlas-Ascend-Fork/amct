@@ -14,12 +14,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-'''Pattern-whitelist based shared-input fusion group discovery.'''
+'''Explicit whitelist for pre-op calibration and local deployment adapters.'''
 
 from dataclasses import dataclass
 
+from amct_pytorch.classic.quantize_op import MinMaxQuant, SmoothQuant
+
+from amct_pytorch.classic.optimizer.layer_norm_quant import LayerNormQuantSpec
 from amct_pytorch.common.utils.log import LOGGER
-from amct_pytorch.classic.optimizer.fusion_group import FusionGroup, FusionRegistry
 
 
 @dataclass(frozen=True)
@@ -31,8 +33,9 @@ class FusionGroupPattern:
     '''
 
     pre_op: str
-    members: tuple[str, ...]
+    members: tuple[str | tuple[str, ...], ...]
     group_type: str
+    adapter: str
 
 
 @dataclass(frozen=True)
@@ -42,7 +45,6 @@ class FusionLayerPattern:
     name: str
     required_attrs: tuple[str, ...]
     groups: tuple[FusionGroupPattern, ...]
-    dynamic_layer: str
     layer_types: tuple[str, ...]
 
 
@@ -78,14 +80,15 @@ FUSION_PATTERNS.register(
                     'self_attn.v_proj',
                 ),
                 group_type='norm',
+                adapter='qwen3_attention',
             ),
             FusionGroupPattern(
                 pre_op='post_attention_layernorm',
                 members=('mlp.up_proj', 'mlp.gate_proj'),
                 group_type='norm',
+                adapter='qwen3_mlp',
             ),
         ),
-        dynamic_layer='decoder_layer',
         layer_types=('transformers.models.qwen3.modeling_qwen3.Qwen3DecoderLayer',),
     )
 )
@@ -102,135 +105,112 @@ FUSION_PATTERNS.register(
                     ('attention.v_proj', 'attention.attention.value'),
                 ),
                 group_type='norm',
+                adapter='vit_attention',
             ),
             FusionGroupPattern(
                 pre_op='layernorm_after',
                 members=(('mlp.fc1', 'intermediate.dense'),),
                 group_type='norm',
+                adapter='vit_mlp',
             ),
         ),
-        dynamic_layer='encoder_layer',
         layer_types=('transformers.models.vit.modeling_vit.ViTLayer',),
     )
 )
 
 
-def build_fusion_groups_from_patterns(model, patterns=None):
-    '''Build fusion groups directly from the pattern whitelist.
-
-    This function is intentionally static: it does not run a forward, register
-    hooks, capture tensors, or infer structure from tensor identity.
-    '''
-    registry = FusionRegistry()
+def build_layer_norm_quant_specs(model, patterns=None):
+    '''Build LayerNormQuant installation specs from the whitelist.'''
+    specs = []
     if patterns is None:
         patterns = FUSION_PATTERNS.patterns()
-
     used_members = set()
     for layer_name, module in model.named_modules():
         for pattern in patterns:
             module_type = f'{type(module).__module__}.{type(module).__qualname__}'
             if module_type not in pattern.layer_types:
                 continue
-            if not all(hasattr(module, attr) for attr in pattern.required_attrs):
-                continue
             for group_pattern in pattern.groups:
-                _build_group(
+                spec = _build_layer_norm_quant_spec(
                     model,
-                    registry,
                     layer_name,
                     group_pattern,
                     used_members,
-                    pattern.dynamic_layer,
                 )
-    return registry
+                if spec is not None:
+                    specs.append(spec)
+    return specs
 
 
-def _build_group(
+def _build_layer_norm_quant_spec(
     model,
-    registry,
     layer_name,
     group_pattern,
     used_members,
-    dynamic_layer,
 ):
     pre_ref = _join_ref(layer_name, group_pattern.pre_op)
-    resolved_members = [
-        _resolve_member(model, layer_name, member) for member in group_pattern.members
-    ]
-    member_refs = [ref for ref, _ in resolved_members]
     try:
         pre_op = model.get_submodule(pre_ref)
-        members = [module for _, module in resolved_members]
+        resolved_members = [
+            _resolve_member(model, layer_name, member)
+            for member in group_pattern.members
+        ]
     except AttributeError as exc:
         LOGGER.logw(
-            f'Skip fusion group {pre_ref} -> {member_refs}: module path is missing '
-            f'({exc})',
-            'FusionGroup',
+            f'Skip LayerNormQuant {pre_ref}: {exc}. Keep independent quantization.',
+            'LayerNormQuant',
         )
-        return
-
-    if group_pattern.group_type == 'norm' and not _is_norm(pre_op):
-        LOGGER.logw(
-            f'Skip fusion group {pre_ref}: pre_op is not a supported Norm',
-            'FusionGroup',
-        )
-        return
-
-    signatures = [_config_signature(member) for member in members]
-    first = signatures[0] if signatures else None
-    if not first or any(signature != first for signature in signatures[1:]):
-        LOGGER.logw(
-            f'Skip fusion candidates {member_refs}: quant configs are inconsistent',
-            'FusionGroup',
-        )
-        return
-
+        return None
+    if not _is_norm(pre_op) or getattr(pre_op, 'weight', None) is None:
+        return None
+    member_refs = [ref for ref, _ in resolved_members]
+    members = [module for _, module in resolved_members]
     if not all(_is_quant_module(member) for member in members):
         LOGGER.logw(
-            f'Skip fusion candidates {member_refs}: members are not all quantized',
-            'FusionGroup',
+            f'Skip LayerNormQuant {pre_ref}: members={member_refs} include unsupported or unquantized projections. Keep independent quantization.',
+            'LayerNormQuant',
         )
-        return
+        return None
+    signatures = [_config_signature(member) for member in members]
+    first = signatures[0]
+    if any(signature != first for signature in signatures[1:]):
+        LOGGER.logw(
+            f'Skip LayerNormQuant {pre_ref}: members={member_refs} have inconsistent quant configs {signatures}. Keep independent quantization.',
+            'LayerNormQuant',
+        )
+        return None
     if any(ref in used_members for ref in member_refs):
-        LOGGER.logw(
-            f'Skip fusion candidates {member_refs}: quant module belongs to another group',
-            'FusionGroup',
-        )
-        return
+        return None
     if first['algorithm'] == 'minmax' and len(members) < 2:
-        LOGGER.logw(
-            f'Skip fusion candidate {member_refs}: minmax single-member group has no gain',
-            'FusionGroup',
-        )
-        return
-
-    group = FusionGroup(
-        group_id=registry.next_group_id(),
-        group_type=group_pattern.group_type,
-        pre_op_ref=pre_ref,
-        scaling_layer_refs=member_refs,
-        algorithm=first['algorithm'],
-        fusion_rule=group_pattern.group_type,
-    )
-    group.dynamic_per_token = first['strategy'] == 'token' and first['dynamic'] is True
-    if group.dynamic_per_token:
-        if not layer_name:
-            LOGGER.logw(
-                f'Skip dynamic fusion group {pre_ref}: root layer cannot be replaced in place',
-                'FusionGroup',
-            )
-            return
-        group.layer_ref = layer_name
-        group.dynamic_layer = dynamic_layer
-    registry.add_group(group)
+        return None
+    if first['strategy'] not in ('tensor', 'token'):
+        return None
+    if first['dynamic'] and (first['strategy'] != 'token' or not first['symmetric']):
+        return None
+    weights = [member.weight for member in members]
+    if any(
+        w.ndim != 2
+        or w.shape[-1] != pre_op.weight.numel()
+        or w.device != pre_op.weight.device
+        or w.dtype != pre_op.weight.dtype
+        for w in weights
+    ):
+        return None
+    if any(
+        w.device != weights[0].device or w.dtype != weights[0].dtype for w in weights
+    ):
+        return None
+    target_ref = member_refs[0].rsplit('.', 1)[0]
     used_members.update(member_refs)
-    for ref, member in zip(member_refs, members):
-        member.fusion_group = group
-        group.bind_member(member)
-    LOGGER.logd(
-        f'Built fusion group {group.group_id}: pre_op={pre_ref}, '
-        f'scaling_layers={member_refs}',
-        'FusionGroup',
+    return LayerNormQuantSpec(
+        pre_op_ref=pre_ref,
+        member_refs=tuple(member_refs),
+        target_ref=target_ref,
+        adapter=group_pattern.adapter,
+        algorithm=first['algorithm'],
+        act_granularity=first['strategy'],
+        batch_num=first['batch_num'],
+        dynamic_per_token=first['strategy'] == 'token' and first['dynamic'] is True,
     )
 
 
@@ -254,27 +234,21 @@ def _join_ref(layer_name, relative_ref):
 
 
 def _is_quant_module(module):
-    return hasattr(module, 'batch_num') or hasattr(module, 'act_type')
-
-
-def _module_config(module):
-    cfg = getattr(module, 'quant_config', None)
-    if cfg is not None:
-        return cfg
-    return {
-        'algorithm': getattr(module, 'algorithm', None),
-        'batch_num': getattr(module, 'batch_num', None),
-        'inputs_cfg': {
-            'quant_type': getattr(module, 'act_type', None),
-            'symmetric': getattr(module, 'act_symmetric', None),
-            'strategy': getattr(module, 'act_granularity', None),
-            'dynamic': getattr(module, 'dynamic', None),
-        },
-    }
+    if type(module) not in (MinMaxQuant, SmoothQuant):
+        return False
+    inputs = module.quant_config.get('inputs_cfg', {})
+    return (
+        inputs.get('enable_quant', True) is not False
+        and module.act_type == 'int8'
+        and module.wts_type in ('int8', 'int4')
+        and module.ori_module_type == 'Linear'
+        and isinstance(module.batch_num, int)
+        and module.batch_num > 0
+    )
 
 
 def _config_signature(module):
-    cfg = _module_config(module)
+    cfg = module.quant_config
     inputs = cfg.get('inputs_cfg', {})
     signature = {
         'algorithm': cfg.get('algorithm'),

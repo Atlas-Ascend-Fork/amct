@@ -1,0 +1,267 @@
+# -*- coding: UTF-8 -*-
+# ----------------------------------------------------------------------------
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
+'''Pre-op module owning shared-input activation quantization parameters.'''
+
+import copy
+import weakref
+from dataclasses import dataclass
+
+import torch
+from torch import nn
+from amct_pytorch.common.utils.model_util import ModuleHelper
+
+from amct_pytorch.classic.quantize_op.utils import calculate_scale_offset
+from amct_pytorch.common.utils.log import LOGGER
+
+
+@dataclass(frozen=True)
+class LayerNormQuantSpec:
+    '''Installation spec for one shared-input pre_op.'''
+
+    pre_op_ref: str
+    member_refs: tuple[str, ...]
+    target_ref: str
+    adapter: str
+    algorithm: str
+    act_granularity: str
+    batch_num: int
+    dynamic_per_token: bool
+
+
+def install_layer_norm_quants(model, patterns=None):
+    '''Replace whitelisted pre_ops with LayerNormQuant modules.'''
+    from amct_pytorch.classic.optimizer.fusion_pattern import (
+        build_layer_norm_quant_specs,
+    )
+
+    specs = build_layer_norm_quant_specs(model, patterns)
+
+    modules = []
+    for spec in specs:
+        pre_op = model.get_submodule(spec.pre_op_ref)
+        module = LayerNormQuant(
+            pre_op=pre_op,
+            model=model,
+            member_refs=spec.member_refs,
+            target_ref=spec.target_ref,
+            adapter=spec.adapter,
+            algorithm=spec.algorithm,
+            act_granularity=spec.act_granularity,
+            batch_num=spec.batch_num,
+            dynamic_per_token=spec.dynamic_per_token,
+        )
+        ModuleHelper.replace_module_by_name(model, spec.pre_op_ref, module)
+        modules.append(module)
+        LOGGER.logd(
+            f'Installed LayerNormQuant {spec.pre_op_ref}, '
+            f'members={list(spec.member_refs)}, '
+            f'dynamic_per_token={spec.dynamic_per_token}',
+            'LayerNormQuant',
+        )
+    return modules
+
+
+class LayerNormQuant(nn.Module):
+    '''Wrap a Norm pre_op and calibrate one shared-input quantization group.
+
+    The wrapper owns only the original pre_op. Scaling-layer modules stay in
+    their original model positions; this class stores their paths and resolves
+    them on demand.
+    '''
+
+    def __init__(
+        self,
+        pre_op,
+        model,
+        member_refs,
+        target_ref,
+        adapter,
+        algorithm,
+        act_granularity,
+        batch_num,
+        dynamic_per_token=False,
+    ):
+        super().__init__()
+        self.pre_op = pre_op
+        self.member_refs = tuple(member_refs)
+        self.target_ref = target_ref
+        self.adapter = adapter
+        self.algorithm = algorithm
+        self.act_granularity = act_granularity
+        self.batch_num = batch_num
+        self.dynamic_per_token = dynamic_per_token
+        self._model_ref = weakref.ref(model)
+
+        self.register_buffer('act_max', None, persistent=False)
+        self.register_buffer('act_min', None, persistent=False)
+        self.register_buffer('token_max', None, persistent=False)
+        self.register_buffer('token_min', None, persistent=False)
+        self.register_buffer('smooth_factor', None)
+        self.register_buffer('activation_scale', None)
+        self.register_buffer('activation_offset', None)
+        self.batch_count = 0
+        self.status = 'pending'
+        self.training = pre_op.training
+        for member in self.members():
+            member.shared_param_mode = 'pending'
+
+    def __deepcopy__(self, memo):
+        # weakref itself is not copied by Python. Rebind it to the copied root
+        # so calibration never writes parameters into the source model.
+        result = type(self).__new__(type(self))
+        memo[id(self)] = result
+        for key, value in self.__dict__.items():
+            if key == '_model_ref':
+                result.__dict__[key] = weakref.ref(copy.deepcopy(value(), memo))
+            else:
+                result.__dict__[key] = copy.deepcopy(value, memo)
+        return result
+
+    def forward(self, x):
+        out = self.pre_op(x)
+        if self.status == 'pending':
+            self.update_activation_stat(out)
+            if self.batch_count == self.batch_num:
+                self.finalize_quant_params()
+        return out
+
+    def members(self):
+        """Resolve scaling layers without registering them as children."""
+        model = self._model_ref()
+        if model is None:
+            raise RuntimeError('LayerNormQuant calibration model is unavailable')
+        return [model.get_submodule(ref) for ref in self.member_refs]
+
+    @torch.no_grad()
+    def update_activation_stat(self, inputs):
+        if self.status != 'pending':
+            return
+        inputs = inputs.detach()
+        if self.algorithm == 'minmax' and self.dynamic_per_token:
+            self.batch_count += 1
+            return
+        if self.algorithm == 'minmax' and self.act_granularity == 'token':
+            axes = tuple(axis for axis in range(inputs.ndim) if axis != inputs.ndim - 2)
+            batch_max = inputs.amax(axes, keepdim=True)
+            batch_min = inputs.amin(axes, keepdim=True)
+            if self.act_max is not None and self.act_max.shape != batch_max.shape:
+                raise ValueError(
+                    'static per-token calibration requires matching token shapes'
+                )
+        else:
+            batch_max = inputs.reshape(-1, inputs.shape[-1]).amax(dim=0, keepdim=True)
+            batch_min = inputs.reshape(-1, inputs.shape[-1]).amin(dim=0, keepdim=True)
+        self.act_max = (
+            batch_max
+            if self.act_max is None
+            else torch.maximum(self.act_max, batch_max)
+        )
+        self.act_min = (
+            batch_min
+            if self.act_min is None
+            else torch.minimum(self.act_min, batch_min)
+        )
+        if (
+            self.algorithm == 'smoothquant'
+            and self.act_granularity == 'token'
+            and not self.dynamic_per_token
+        ):
+            # Keep token/channel extrema, never the complete batch input. Smooth
+            # is positive, so reducing batches before dividing is equivalent.
+            axes = tuple(range(inputs.ndim - 2))
+            token_max = inputs.amax(axes, keepdim=True) if axes else inputs.clone()
+            token_min = inputs.amin(axes, keepdim=True) if axes else inputs.clone()
+            if self.token_max is not None and token_max.shape != self.token_max.shape:
+                raise ValueError(
+                    'static per-token calibration requires matching token shapes'
+                )
+            self.token_max = (
+                token_max
+                if self.token_max is None
+                else torch.maximum(self.token_max, token_max)
+            )
+            self.token_min = (
+                token_min
+                if self.token_min is None
+                else torch.minimum(self.token_min, token_min)
+            )
+        self.batch_count += 1
+
+    @torch.no_grad()
+    def finalize_quant_params(self):
+        if self.status == 'calibrated':
+            return True
+        if self.batch_count < self.batch_num:
+            return False
+        members = self.members()
+        first = members[0]
+        if self.algorithm == 'smoothquant':
+            act_max = torch.maximum(self.act_max.abs(), self.act_min.abs())
+            wts_max = members[0].weight.detach().abs().amax(dim=0, keepdim=True)
+            for member in members[1:]:
+                wts_max = torch.maximum(
+                    wts_max, member.weight.detach().abs().amax(dim=0, keepdim=True)
+                )
+            alpha = first.quant_config['algorithm']['smoothquant']['smooth_strength']
+            self.smooth_factor = _safe_smooth_factor(act_max, wts_max, alpha).to(
+                first.weight.dtype
+            )
+        if not self.dynamic_per_token:
+            maximum, minimum = self.act_max, self.act_min
+            if self.act_granularity == 'token' and self.algorithm == 'smoothquant':
+                maximum, minimum = self.token_max, self.token_min
+            if self.smooth_factor is not None:
+                maximum = maximum / self.smooth_factor
+                minimum = minimum / self.smooth_factor
+            if self.act_granularity == 'token':
+                maximum = maximum.amax(dim=-1, keepdim=True)
+                minimum = minimum.amin(dim=-1, keepdim=True)
+            else:
+                maximum, minimum = maximum.max().reshape(-1), minimum.min().reshape(-1)
+            self.activation_scale, self.activation_offset = calculate_scale_offset(
+                maximum, minimum, first.act_symmetric, first.act_type
+            )
+        mode = 'dynamic' if self.dynamic_per_token else 'static'
+        for member in members:
+            member.accept_shared_params(
+                mode,
+                smooth_factor=self.smooth_factor,
+                activation_scale=self.activation_scale,
+                activation_offset=self.activation_offset,
+            )
+        self.status = 'calibrated'
+        self.act_max = self.act_min = self.token_max = self.token_min = None
+        LOGGER.logd(
+            f'LayerNormQuant finalized: members={list(self.member_refs)}, '
+            f'batch_count={self.batch_count}',
+            'LayerNormQuant',
+        )
+        return True
+
+
+def _safe_smooth_factor(act_max, wts_max, alpha):
+    factor = ((act_max.float() ** alpha) / (wts_max.float() ** (1 - alpha))).to(
+        act_max.dtype
+    )
+    invalid = ~torch.isfinite(factor) | (factor < torch.finfo(act_max.dtype).eps)
+    if invalid.any():
+        factor = torch.where(
+            invalid,
+            torch.ones_like(factor),
+            factor,
+        )
+    return factor

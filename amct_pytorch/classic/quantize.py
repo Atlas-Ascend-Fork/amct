@@ -24,16 +24,13 @@ from amct_pytorch.classic.optimizer import (
     ModelOptimizer,
     ReplaceNpuQuantModulePass,
 )
-from amct_pytorch.classic.optimizer.fusion_pattern import (
-    build_fusion_groups_from_patterns,
-)
 from amct_pytorch.classic.optimizer.apply_scaling_fusion_pass import (
     ApplyScalingFusionPass,
 )
+from amct_pytorch.classic.optimizer.layer_norm_quant import install_layer_norm_quants
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.common.config import parse_config, set_default_config
 from amct_pytorch.common.utils.check_params import check_params
-from amct_pytorch.common.utils.log import LOGGER
 
 
 @check_params(model=nn.Module, config=(dict, type(None)))
@@ -52,22 +49,7 @@ def quantize(model, config=None):
     optimizer = ModelOptimizer()
     optimizer.add_pass(InsertQuantizeModulePass(layer_config))
     optimizer.do_optimizer(model)
-    model._amct_fusion_registry = _build_fusion_registry_safely(model)
-
-
-def _build_fusion_registry_safely(model):
-    """Build fusion groups; a discovery failure must never break quantize."""
-    try:
-        return build_fusion_groups_from_patterns(model)
-    except Exception as exc:  # pylint: disable=broad-except
-        LOGGER.logw(
-            f'Unable to build fusion groups: {exc}. '
-            'Skip group optimization and keep the existing flow.',
-            'FusionGroup',
-        )
-        from amct_pytorch.classic.optimizer.fusion_group import FusionRegistry
-
-        return FusionRegistry()
+    install_layer_norm_quants(model)
 
 
 @check_params(model=nn.Module)

@@ -55,6 +55,7 @@ class MinMaxQuant(BaseQuantizeModule):
         """
         super().__init__(ori_module, layer_name, quant_config)
         self.algorithm = 'minmax'
+        self.quant_config = quant_config
         self.ori_module_type = type(ori_module).__name__
         self.weight = ori_module.weight
         self.bias = ori_module.bias
@@ -66,6 +67,8 @@ class MinMaxQuant(BaseQuantizeModule):
         self.scale_w2 = None
 
         self.batch_num = quant_config.get('batch_num')
+        self.shared_param_mode = None
+        self.shared_activation_ready = False
         enable_quant = quant_config.get('inputs_cfg').get('enable_quant')
         if enable_quant is None or enable_quant:
             self.weight_compress_only = False
@@ -120,6 +123,10 @@ class MinMaxQuant(BaseQuantizeModule):
             return self.fake_quant_forward(inputs)
 
         self.cur_batch += 1
+        if self.shared_param_mode is not None:
+            if self.cur_batch > self.batch_num:
+                return self.fake_quant_forward(inputs)
+            return fp_out
         if self.cur_batch > self.batch_num:
             return self.fake_quant_forward(inputs)
         if self.act_granularity == 'tensor':
@@ -138,19 +145,6 @@ class MinMaxQuant(BaseQuantizeModule):
         self.data_max = torch.where(batch_max > self.data_max, batch_max, self.data_max)
         self.data_min = torch.where(batch_min < self.data_min, batch_min, self.data_min)
 
-        group = getattr(self, 'fusion_group', None)
-        if group is not None:
-            # Group members report the same calibration batch index; the
-            # group counts and reduces each shared input once.
-            group.update_activation_stat(inputs, self.cur_batch)
-            if group.status == 'calibrated':
-                group.writeback_if_pending(self)
-                return fp_out
-            if group.finalize_if_ready(self):
-                return fp_out
-            if group.status != 'skipped':
-                return fp_out
-
         if self.cur_batch == self.batch_num:
             self.scale_d, self.offset_d = calculate_scale_offset(
                 self.data_max, self.data_min, self.act_symmetric, self.act_type
@@ -163,6 +157,22 @@ class MinMaxQuant(BaseQuantizeModule):
                 'MinMaxQuant',
             )
         return fp_out
+
+    def accept_shared_params(
+        self,
+        mode,
+        smooth_factor=None,
+        activation_scale=None,
+        activation_offset=None,
+    ):
+        '''Receive parameters calculated from the shared-input pre_op.'''
+        self.shared_param_mode = mode
+        self.scale_d = activation_scale
+        self.offset_d = activation_offset
+        self.shared_activation_ready = mode == 'static'
+        self.fake_quant_cache_ready = False
+        self.data_max = None
+        self.data_min = None
 
     @torch.no_grad()
     def fake_quant_forward(self, inputs):
@@ -193,15 +203,17 @@ class MinMaxQuant(BaseQuantizeModule):
             self.cached_bias = bias
             self.fake_quant_cache_ready = True
 
-        group = getattr(self, 'fusion_group', None)
-        if group is not None and group.dynamic_per_token:
-            scale_d, offset_d = calculate_scale_offset(
-                inputs.amax(dim=-1, keepdim=True),
-                inputs.amin(dim=-1, keepdim=True),
-                self.act_symmetric,
-                self.act_type,
-            )
-            dq_x = quant_dequant_tensor(inputs, self.act_type, scale_d, offset_d)
+        if (
+            not self.weight_compress_only
+            and self.dynamic is True
+            and self.act_granularity == 'token'
+            and self.act_type == INT8
+        ):
+            # npu_dynamic_quant uses max(abs(x))/127, unlike static MinMax's
+            # sign-dependent 127/128 bound. Zero rows quantize to zero.
+            scale_d = inputs.float().abs().amax(dim=-1, keepdim=True) / 127
+            scale_d = torch.where(scale_d == 0, torch.ones_like(scale_d), scale_d)
+            dq_x = quant_dequant_tensor(inputs, self.act_type, scale_d, None)
         elif self.scale_d is not None:
             dq_x = quant_dequant_tensor(
                 inputs, self.act_type, self.scale_d, self.offset_d

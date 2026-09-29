@@ -89,6 +89,9 @@ class SmoothQuant(BaseQuantizeModule):
         self.batch_input = None
         self.scale_w1 = None
         self.scale_w2 = None
+        self.shared_param_mode = None
+        self.shared_smooth_ready = False
+        self.shared_activation_ready = False
 
     @torch.no_grad()
     def forward(self, inputs):
@@ -102,17 +105,15 @@ class SmoothQuant(BaseQuantizeModule):
         output = F.linear(inputs, self.weight, self.bias)
 
         self.cur_batch += 1
+        if self.shared_param_mode is not None:
+            if self.cur_batch > self.batch_num:
+                return self.fake_quant_forward(inputs)
+            return output
         if self.cur_batch > self.batch_num:
-            group = getattr(self, 'fusion_group', None)
-            if group is not None:
-                group.writeback_if_pending(self)
             return self.fake_quant_forward(inputs)
         batch_max = inputs.reshape(-1, inputs.shape[-1]).amax(dim=0, keepdim=True)
         batch_min = inputs.reshape(-1, inputs.shape[-1]).amin(dim=0, keepdim=True)
-        group = getattr(self, 'fusion_group', None)
-        if self.act_granularity == 'token' and (
-            group is None or group.status == 'skipped'
-        ):
+        if self.act_granularity == 'token':
             if self.batch_input is None:
                 self.batch_input = inputs.cpu()
             else:
@@ -124,59 +125,44 @@ class SmoothQuant(BaseQuantizeModule):
         self.data_max = torch.where(batch_max > self.data_max, batch_max, self.data_max)
         self.data_min = torch.where(batch_min < self.data_min, batch_min, self.data_min)
 
-        group = getattr(self, 'fusion_group', None)
-        if group is not None:
-            # Group members report the same calibration batch index; the
-            # group counts and reduces each shared input once.
-            group.update_activation_stat(inputs, self.cur_batch)
-            group.update_weight_stat(self)
-            if group.status == 'calibrated':
-                group.writeback_if_pending(self)
-                # Continue to the parameter branch if this member still needs
-                # its own weight scale; otherwise use the fake-quant forward.
-                if self.cur_batch != self.batch_num:
-                    return output
-                if (
-                    getattr(self, 'scale_w', None) is not None
-                    or getattr(self, 'scale_w1', None) is not None
-                ):
-                    return self.fake_quant_forward(inputs)
-            elif group.finalize_if_ready(self):
-                # finalize writes the shared activation parameters to this
-                # member. Continue below so this member computes its own
-                # weight scale, including the progressive FP8 x FP4 path.
-                pass
-            elif group.status != 'skipped':
-                return output
-
         if self.cur_batch == self.batch_num:
             act_max = torch.max(self.data_max.abs(), self.data_min.abs())
-            if group is not None and group.status == 'calibrated':
-                # FusionGroup has already written the common activation-side
-                # scale to this member.
-                smooth_factor = self.scale
-            else:
-                smooth_factor = self.calculate_smooth(act_max)
-            self.scale = smooth_factor
+            self.scale = self.calculate_smooth(act_max)
             self.finalize_weight_params()
-
-            if group is None or group.status == 'skipped':
-                if self.act_granularity == 'tensor':
-                    scale_d, offset_d = self._calculate_per_tensor_params(smooth_factor)
-                elif self.act_granularity == 'token':
-                    scale_d, offset_d = self._calculate_per_token_params(smooth_factor)
-
-                self.scale_d = scale_d
-                self.offset_d = offset_d
-                self.scale = smooth_factor
-
+            if self.act_granularity == 'tensor':
+                self.scale_d, self.offset_d = self._calculate_per_tensor_params(
+                    self.scale
+                )
+            elif self.act_granularity == 'token':
+                self.scale_d, self.offset_d = self._calculate_per_token_params(
+                    self.scale
+                )
             LOGGER.logd(
-                "Calculate smooth quant params of layer '{}' success!".format(
-                    self.layer_name
-                ),
+                f"Calculate smooth quant params of layer '{self.layer_name}' success!",
                 'SmoothQuant',
             )
         return output
+
+    def accept_shared_params(
+        self,
+        mode,
+        smooth_factor=None,
+        activation_scale=None,
+        activation_offset=None,
+    ):
+        '''Receive parameters calculated from the shared-input pre_op.'''
+        self.shared_param_mode = mode
+        if smooth_factor is not None:
+            self.scale = smooth_factor.to(self.weight.dtype)
+            self.shared_smooth_ready = True
+            self.finalize_weight_params()
+        self.scale_d = activation_scale
+        self.offset_d = activation_offset
+        self.shared_activation_ready = mode == 'static'
+        self.fake_quant_cache_ready = False
+        self.data_max = None
+        self.data_min = None
+        self.batch_input = None
 
     @torch.no_grad()
     def finalize_weight_params(self):
@@ -272,15 +258,16 @@ class SmoothQuant(BaseQuantizeModule):
 
         smooth_x = self.scale.to(device=inputs.device, dtype=inputs.dtype)
         x = inputs / smooth_x
-        group = getattr(self, 'fusion_group', None)
-        if group is not None and group.dynamic_per_token:
-            scale_d, offset_d = calculate_scale_offset(
-                x.amax(dim=-1, keepdim=True),
-                x.amin(dim=-1, keepdim=True),
-                self.act_symmetric,
-                self.act_type,
-            )
-            dq_x = quant_dequant_tensor(x, self.act_type, scale_d, offset_d)
+        if (
+            self.dynamic is True
+            and self.act_granularity == 'token'
+            and self.act_type == INT8
+        ):
+            # npu_dynamic_quant uses max(abs(x))/127, unlike static MinMax's
+            # sign-dependent 127/128 bound. Zero rows quantize to zero.
+            scale_d = x.float().abs().amax(dim=-1, keepdim=True) / 127
+            scale_d = torch.where(scale_d == 0, torch.ones_like(scale_d), scale_d)
+            dq_x = quant_dequant_tensor(x, self.act_type, scale_d, None)
         elif self.scale_d is not None:
             dq_x = quant_dequant_tensor(x, self.act_type, self.scale_d, self.offset_d)
         else:

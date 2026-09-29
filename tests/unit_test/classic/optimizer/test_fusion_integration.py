@@ -23,8 +23,6 @@ import torch
 from torch import nn
 
 from amct_pytorch.classic.quantize import quantize
-from amct_pytorch.classic.optimizer.fusion_group import FusionGroup
-from amct_pytorch.classic.quantize_op import SmoothQuant
 
 
 class TinyQwenLayer(nn.Module):
@@ -75,12 +73,15 @@ def test_real_minmax_group_is_identified_and_calibrated_after_first_forward():
     quantize(model, _config('minmax'))
     model(torch.randn(2, 3, 8, dtype=torch.float16))
 
-    groups = model._amct_fusion_registry.groups
-    assert len(groups) == 2
-    group = groups[0]
-    assert group.algorithm == 'minmax'
-    assert group.status == 'calibrated'
-    assert group.batch_count == 1
+    norms = [
+        model.layers[0].input_layernorm,
+        model.layers[0].post_attention_layernorm,
+    ]
+    assert len(norms) == 2
+    assert model.layers[0].self_attn.q_proj.shared_param_mode == 'static'
+    assert model.layers[0].self_attn.q_proj.scale_d is not None
+    assert model.layers[0].mlp.up_proj.shared_param_mode == 'static'
+    assert model.layers[0].mlp.up_proj.scale_d is not None
 
 
 def test_real_smoothquant_group_uses_string_algorithm_and_calibrates_after_two_forwards():
@@ -89,200 +90,17 @@ def test_real_smoothquant_group_uses_string_algorithm_and_calibrates_after_two_f
     model(torch.randn(2, 3, 8, dtype=torch.float16))
     model(torch.randn(2, 3, 8, dtype=torch.float16))
 
-    groups = model._amct_fusion_registry.groups
-    assert len(groups) == 2
-    group = groups[0]
-    assert group.algorithm == 'smoothquant'
-    assert group.status == 'calibrated'
-    assert group.batch_count == 2
-    assert group.smooth_factor is not None
-
-
-def test_smoothquant_finalize_waits_for_all_member_weight_stats():
-    members = [
-        SmoothQuant(
-            nn.Linear(8, 8),
-            f'm{i}',
-            {
-                'algorithm': {'smoothquant': {'smooth_strength': 0.5}},
-                'batch_num': 1,
-                'inputs_cfg': {
-                    'enable_quant': True,
-                    'quant_type': 'int8',
-                    'symmetric': True,
-                    'strategy': 'tensor',
-                },
-                'weights_cfg': {
-                    'quant_type': 'int8',
-                    'symmetric': True,
-                    'strategy': 'channel',
-                },
-            },
-        )
-        for i in range(3)
+    norms = [
+        model.layers[0].input_layernorm,
+        model.layers[0].post_attention_layernorm,
     ]
-    group = FusionGroup(
-        'g', 'norm', 'norm', [f'm{i}' for i in range(3)], 'smoothquant', 'norm'
-    )
-    for member in members:
-        member.fusion_group = group
-        group.bind_member(member)
-
-    x = torch.randn(2, 8)
-    group.update_activation_stat(x)
-    group.update_weight_stat(members[0])
-    assert group.finalize_if_ready(members[0]) is False
-    assert group.status == 'pending'
-
-    group.update_weight_stat(members[1])
-    group.update_weight_stat(members[2])
-    assert group.finalize_if_ready(members[2]) is True
-    assert group.status == 'calibrated'
+    assert len(norms) == 2
+    assert model.layers[0].self_attn.q_proj.shared_param_mode == 'static'
+    assert model.layers[0].self_attn.q_proj.scale is not None
+    assert model.layers[0].mlp.up_proj.shared_param_mode == 'static'
+    assert model.layers[0].mlp.up_proj.scale is not None
 
 
-class RealWeightMember(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.weight = nn.Parameter(torch.randn(8, 8))
-        self.act_type = 'int8'
-
-
-def _smooth_group(pre_ref, members, dynamic=False):
-    group = FusionGroup('static-g', 'norm', pre_ref, members, 'smoothquant', 'norm')
-    group.status = 'calibrated'
-    group.smooth_factor = torch.tensor([[1.0, 2.0, 4.0, 8.0, 1.0, 2.0, 4.0, 8.0]])
-    group.activation_scale = torch.tensor([0.1])
-    group.dynamic_per_token = dynamic
-    if dynamic:
-        group.dynamic_layer = 'decoder_layer'
-        group.layer_ref = 'layer'
-    return group
-
-
-def test_real_weight_smoothquant_static_group_fuses_without_linear_attribute():
-    from amct_pytorch.classic.optimizer.apply_scaling_fusion_pass import (
-        ApplyScalingFusionPass,
-    )
-    from amct_pytorch.classic.optimizer.fusion_group import FusionRegistry
-
-    class Model(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.norm = nn.LayerNorm(8)
-            self.q_proj = RealWeightMember()
-            self.k_proj = RealWeightMember()
-            self.v_proj = RealWeightMember()
-
-        def forward(self, x):
-            return x
-
-    model = Model()
-    group = _smooth_group('norm', ['q_proj', 'k_proj', 'v_proj'])
-    registry = FusionRegistry()
-    registry.add_group(group)
-    model._amct_fusion_registry = registry
-    group._writeback_done = {
-        id(model.get_submodule(ref)): True for ref in group.scaling_layer_refs
-    }
-    ApplyScalingFusionPass().run(model)
-    assert group.status == 'fused'
-
-
-def test_dynamic_smoothquant_group_fuses_scaling_before_layer_replacement():
-    from amct_pytorch.classic.optimizer.apply_scaling_fusion_pass import (
-        ApplyScalingFusionPass,
-    )
-    from amct_pytorch.classic.optimizer.fusion_group import FusionRegistry
-
-    class DynamicLayer(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.input_layernorm = nn.LayerNorm(8)
-            self.self_attn = nn.Module()
-            self.self_attn.q_proj = RealWeightMember()
-            self.self_attn.k_proj = RealWeightMember()
-            self.self_attn.v_proj = RealWeightMember()
-            self.post_attention_layernorm = nn.LayerNorm(8)
-            self.mlp = nn.Module()
-            self.mlp.up_proj = RealWeightMember()
-            self.mlp.gate_proj = RealWeightMember()
-
-        def forward(self, x):
-            return x
-
-    class Model(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.layer = DynamicLayer()
-
-        def forward(self, x):
-            return x
-
-    model = Model()
-    group = _smooth_group(
-        'layer.input_layernorm',
-        [
-            'layer.self_attn.q_proj',
-            'layer.self_attn.k_proj',
-            'layer.self_attn.v_proj',
-        ],
-        dynamic=True,
-    )
-    registry = FusionRegistry()
-    registry.add_group(group)
-    model._amct_fusion_registry = registry
-    old_norm = model.layer.input_layernorm.weight.detach().clone()
-    old_weight = model.layer.self_attn.q_proj.weight.detach().clone()
-
-    group._writeback_done = {
-        id(model.get_submodule(ref)): True for ref in group.scaling_layer_refs
-    }
-    ApplyScalingFusionPass().run(model)
-    assert group.status == 'fused'
-    assert not torch.allclose(model.layer.input_layernorm.weight, old_norm)
-    assert not torch.allclose(model.layer.self_attn.q_proj.weight, old_weight)
-    assert model.layer.self_attn.q_proj.smooth_scale_skipped is True
-
-
-def test_qwen3_fused_layer_single_quantizer_constructor():
-    import importlib.util
-    from pathlib import Path
-
-    from amct_pytorch.classic.deploy_op.shared_quantize import SharedDynamicQuantize
-
-    spec = importlib.util.spec_from_file_location(
-        'amct_qwen3_fused_layer_integration',
-        Path(__file__).resolve().parents[4]
-        / 'amct_pytorch/common/models/llm/qwen/qwen3/fused_layer.py',
-    )
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    Qwen3FusedDecoderLayer = module.Qwen3FusedDecoderLayer
-
-    class Layer(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.input_layernorm = nn.LayerNorm(8)
-            self.self_attn = nn.Module()
-            self.self_attn.q_proj = nn.Linear(8, 8)
-            self.self_attn.k_proj = nn.Linear(8, 8)
-            self.self_attn.v_proj = nn.Linear(8, 8)
-            self.post_attention_layernorm = nn.LayerNorm(8)
-            self.mlp = nn.Module()
-            self.mlp.up_proj = nn.Linear(8, 8)
-            self.mlp.gate_proj = nn.Linear(8, 8)
-
-        def forward(self, x):
-            return x
-
-    layer = Qwen3FusedDecoderLayer(Layer(), SharedDynamicQuantize())
-    assert layer._shared_by_pre_op['_default'] is not None
-
-
-# Stub structures are explicitly registered for these unit tests only.
-
-
-@pytest.fixture(autouse=True)
 def register_test_patterns(monkeypatch):
     patterns = dict(FUSION_PATTERNS._patterns)
     patterns['qwen3'] = replace(
@@ -290,3 +108,74 @@ def register_test_patterns(monkeypatch):
         layer_types=(f'{TinyQwenLayer.__module__}.{TinyQwenLayer.__qualname__}',),
     )
     monkeypatch.setattr(FUSION_PATTERNS, '_patterns', patterns)
+
+
+register_test_patterns = pytest.fixture(autouse=True)(register_test_patterns)
+
+
+@pytest.mark.parametrize('reason', ['partial', 'config', 'missing'])
+def test_invalid_candidate_keeps_independent_members_and_other_group(reason):
+    from amct_pytorch.classic.optimizer.layer_norm_quant import (
+        LayerNormQuant,
+        install_layer_norm_quants,
+    )
+    from amct_pytorch.classic.optimizer import InsertQuantizeModulePass
+    from amct_pytorch.common.config import parse_config
+    from amct_pytorch.algorithms import AlgorithmRegistry
+
+    model = TinyModel().half()
+    config = _config('smoothquant')
+    if reason == 'partial':
+        config['skip_layers'] = {'k_proj'}
+    InsertQuantizeModulePass(parse_config(model, config, AlgorithmRegistry)).run(model)
+    if reason == 'config':
+        import copy
+
+        model.layers[0].self_attn.k_proj.quant_config = copy.deepcopy(
+            model.layers[0].self_attn.k_proj.quant_config
+        )
+        model.layers[0].self_attn.k_proj.quant_config['algorithm']['smoothquant'][
+            'smooth_strength'
+        ] = 0.3
+    if reason == 'missing':
+        del model.layers[0].self_attn.k_proj
+    install_layer_norm_quants(model)
+    assert not isinstance(model.layers[0].input_layernorm, LayerNormQuant)
+    assert isinstance(model.layers[0].post_attention_layernorm, LayerNormQuant)
+    assert model.layers[0].self_attn.q_proj.shared_param_mode is None
+
+
+def test_unregistered_structure_is_not_wrapped(monkeypatch):
+    from amct_pytorch.classic.optimizer.layer_norm_quant import LayerNormQuant
+
+    monkeypatch.setattr(FUSION_PATTERNS, '_patterns', {})
+    model = TinyModel().half()
+    quantize(model, _config('minmax'))
+    model(torch.randn(2, 3, 8, dtype=torch.float16))
+    assert not any(isinstance(m, LayerNormQuant) for m in model.modules())
+    assert model.layers[0].self_attn.q_proj.scale_d is not None
+
+
+def test_non_int8_activation_candidate_is_not_wrapped():
+    from amct_pytorch.classic.optimizer.layer_norm_quant import (
+        LayerNormQuant,
+        install_layer_norm_quants,
+    )
+    from amct_pytorch.classic.optimizer import InsertQuantizeModulePass
+    from amct_pytorch.common.config import parse_config
+    from amct_pytorch.algorithms import AlgorithmRegistry
+
+    model = TinyModel().half()
+    InsertQuantizeModulePass(
+        parse_config(model, _config('minmax'), AlgorithmRegistry)
+    ).run(model)
+    for member in (
+        model.layers[0].self_attn.q_proj,
+        model.layers[0].self_attn.k_proj,
+        model.layers[0].self_attn.v_proj,
+    ):
+        member.act_type = 'hifloat8'
+        member.quant_config['inputs_cfg']['quant_type'] = 'hifloat8'
+    install_layer_norm_quants(model)
+    assert not isinstance(model.layers[0].input_layernorm, LayerNormQuant)
+    assert isinstance(model.layers[0].post_attention_layernorm, LayerNormQuant)

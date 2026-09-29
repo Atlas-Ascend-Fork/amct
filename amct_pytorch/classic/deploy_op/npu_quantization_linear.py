@@ -79,14 +79,18 @@ class NpuQuantizationLinear(torch.nn.Module):
         if hasattr(self, 'scale_factor') and not self.input_quant_disabled:
             x = x * self.scale_factor
 
+        matmul_token_scale = self.pertoken_scale
         if self.input_quant_disabled:
+            if self.dynamic is True and pertoken_scale is None:
+                raise ValueError('shared dynamic input requires pertoken_scale')
             quant_x = x
             if pertoken_scale is not None:
-                self.pertoken_scale = pertoken_scale.reshape(-1).to(torch.float32)
-        elif self.act_granularity == 'token':
-            # per-token activation quant is inherently dynamic: the token dim equals
-            # batch * seqlen and changes per input, so the scale must be computed at
-            # runtime. HIF8 needs dst_type_max=15; INT8 uses the default range.
+                matmul_token_scale = pertoken_scale.reshape(-1).to(torch.float32)
+        elif self.act_granularity == 'token' and (
+            self.dynamic is True or self.act_type != INT8
+        ):
+            # Dynamic input scales are local to this call; static token scales
+            # continue to use the calibrated position-wise parameters.
             if self.act_type == HIFLOAT8:
                 quant_x, pertoken_scale = torch_npu.npu_dynamic_quant(
                     x, dst_type=self.npu_quantize_act_type, dst_type_max=15
@@ -95,7 +99,7 @@ class NpuQuantizationLinear(torch.nn.Module):
                 quant_x, pertoken_scale = torch_npu.npu_dynamic_quant(
                     x, dst_type=self.npu_quantize_act_type
                 )
-            self.pertoken_scale = pertoken_scale.reshape(-1).to(torch.float32)
+            matmul_token_scale = pertoken_scale.reshape(-1).to(torch.float32)
         else:
             quant_x = torch_npu.npu_quantize(
                 x,
@@ -106,7 +110,6 @@ class NpuQuantizationLinear(torch.nn.Module):
                 div_mode=False,
             )
         ori_shape = quant_x.shape
-        matmul_token_scale = self.pertoken_scale
         flatten_input = self.act_granularity == 'token' or (
             self.is_new_torch_npu
             and self.act_type == FLOAT8_E4M3FN
@@ -114,7 +117,7 @@ class NpuQuantizationLinear(torch.nn.Module):
         )
         if (
             self.act_granularity == 'token'
-            and self.input_quant_disabled
+            and self.dynamic is not True
             and pertoken_scale is None
         ):
             # Static token scales share sequence positions across batches.

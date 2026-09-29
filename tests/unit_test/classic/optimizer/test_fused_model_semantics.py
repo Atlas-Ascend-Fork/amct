@@ -30,8 +30,7 @@ with patch('transformers.utils.is_torchaudio_available', return_value=False):
     from transformers.models.vit.modeling_vit import ViTLayer
 
 from amct_pytorch.classic.optimizer.apply_scaling_fusion_pass import (
-    _load_qwen3_fused_layer,
-    _load_vit_fused_layer,
+    _build_dynamic_target,
 )
 
 
@@ -59,14 +58,11 @@ def _fuse_qwen(layer):
         setattr(layer.self_attn, name, Projection(getattr(layer.self_attn, name)))
     for name in ('up_proj', 'gate_proj'):
         setattr(layer.mlp, name, Projection(getattr(layer.mlp, name)))
-    return _load_qwen3_fused_layer().from_shared_map(
-        layer,
-        {
-            'model.layers.0.input_layernorm': IdentityQuant(),
-            'model.layers.0.post_attention_layernorm': IdentityQuant(),
-        },
-        'model.layers.0',
-    )
+    layer.self_attn = _build_dynamic_target(layer.self_attn, 'qwen3_attention', 'int8')
+    layer.mlp = _build_dynamic_target(layer.mlp, 'qwen3_mlp', 'int8')
+    layer.self_attn.shared_quantize = IdentityQuant()
+    layer.mlp.shared_quantize = IdentityQuant()
+    return layer
 
 
 def _set_vit_projection(attn, role, module):
@@ -112,14 +108,29 @@ def _fuse_vit(layer):
     for role in ('q', 'k', 'v'):
         _set_vit_projection(layer.attention, role, Projection)
     _set_vit_mlp_input(layer, Projection)
-    return _load_vit_fused_layer().from_shared_map(
-        layer,
-        {
-            'layer.layernorm_before': IdentityQuant(),
-            'layer.layernorm_after': IdentityQuant(),
-        },
-        'layer',
-    )
+    if hasattr(layer.attention, 'q_proj'):
+        layer.attention = _build_dynamic_target(
+            layer.attention, 'vit_attention', 'int8'
+        )
+        attn = layer.attention
+        layer.mlp = _build_dynamic_target(layer.mlp, 'vit_mlp', 'int8')
+        mlp = layer.mlp
+    else:
+        layer.attention.attention = _build_dynamic_target(
+            layer.attention.attention, 'vit_attention', 'int8'
+        )
+        attn = layer.attention.attention
+        layer.intermediate = _build_dynamic_target(
+            layer.intermediate, 'vit_mlp', 'int8'
+        )
+        mlp = layer.intermediate
+    attn.shared_quantize = IdentityQuant()
+    mlp.shared_quantize = IdentityQuant()
+    return layer
+
+
+def _shared_quantizers(layer):
+    return [m for m in layer.modules() if isinstance(m, IdentityQuant)]
 
 
 def _qwen(backend, sliding=False):
@@ -220,23 +231,19 @@ def test_vit_positional_mask_and_dropout_match(training, backend):
     torch.testing.assert_close(actual, expected)
     assert fused.training == original.training
     fused.double()
-    assert all(
-        q.marker.dtype == torch.float64 for q in fused._shared_by_pre_op.values()
-    )
+    assert all(q.marker.dtype == torch.float64 for q in _shared_quantizers(fused))
 
 
 def test_qwen_all_shared_quantizers_are_registered():
     fused = _fuse_qwen(_qwen('eager').model.layers[0])
     fused.double()
-    assert all(
-        q.marker.dtype == torch.float64 for q in fused._shared_by_pre_op.values()
-    )
-    assert all(q in list(fused.modules()) for q in fused._shared_by_pre_op.values())
+    assert all(q.marker.dtype == torch.float64 for q in _shared_quantizers(fused))
+    assert all(q in list(fused.modules()) for q in _shared_quantizers(fused))
 
 
 def test_qwen_shared_quantizers_are_not_aliased_in_module_tree():
     fused = _fuse_qwen(_qwen('eager').model.layers[0])
-    quantizers = list(fused._shared_by_pre_op.values())
+    quantizers = list(_shared_quantizers(fused))
     shared_modules = [
         module for module in fused.modules() if isinstance(module, IdentityQuant)
     ]
@@ -270,4 +277,139 @@ def test_vit_fused_layer_preserves_layer_type_and_output_capture():
 def test_qwen_fused_layer_requires_position_embeddings():
     layer = _fuse_qwen(_qwen('eager').model.layers[0])
     with pytest.raises(ValueError, match='position_embeddings'):
-        layer(torch.randn(1, 2, 16))
+        layer.self_attn(torch.randn(1, 2, 16))
+
+
+@pytest.fixture
+def cpu_quant_kernels(monkeypatch):
+    import torch_npu
+    from types import SimpleNamespace
+
+    counts = {'static': 0, 'dynamic': 0}
+
+    def quantize(x, scale, offset, *, dtype, axis, div_mode):
+        counts['static'] += 1
+        shape = [1] * x.ndim
+        shape[axis] = -1
+        return (
+            (x * scale.reshape(shape) + offset.reshape(shape))
+            .round()
+            .clamp(-128, 127)
+            .to(dtype)
+        )
+
+    def dynamic(x, **kwargs):
+        counts['dynamic'] += 1
+        scale = x.abs().amax(-1).clamp_min(1e-10) / 127
+        return (x / scale.unsqueeze(-1)).round().clamp(-128, 127).to(torch.int8), scale
+
+    def matmul(x, weight, *, scale, pertoken_scale, bias, output_dtype):
+        result = x.float() @ weight.float()
+        if bias is not None and bias.dtype == torch.int32:
+            result = result + bias
+        result = result * scale
+        if pertoken_scale is not None:
+            result = result * pertoken_scale.reshape(-1, 1)
+        if bias is not None and bias.dtype != torch.int32:
+            result = result + bias
+        return result.to(output_dtype)
+
+    matmul._schemas = {'default': SimpleNamespace(arguments=[])}
+    monkeypatch.setattr(torch_npu, 'npu_quantize', quantize)
+    monkeypatch.setattr(torch_npu, 'npu_dynamic_quant', dynamic)
+    monkeypatch.setattr(torch_npu, 'npu_quant_matmul', matmul)
+    monkeypatch.setattr(torch_npu, 'npu_trans_quant_param', lambda scale: scale)
+    return counts
+
+
+@pytest.mark.parametrize('family', ['qwen3', 'vit'])
+@pytest.mark.parametrize('algorithm', ['minmax', 'smoothquant'])
+@pytest.mark.parametrize('mode', ['tensor', 'static_token', 'dynamic_token'])
+def test_quantize_calibrate_convert_real_model(
+    family, algorithm, mode, cpu_quant_kernels
+):
+    from amct_pytorch.classic.quantize import quantize, convert
+    from amct_pytorch.classic.optimizer.layer_norm_quant import LayerNormQuant
+    from amct_pytorch.classic.deploy_op.shared_quantize import SharedDynamicQuantize
+
+    torch.manual_seed(79)
+    if family == 'qwen3':
+        model = _qwen('eager')
+        x = torch.tensor([[1, 2, 3, 4]])
+        layer = model.model.layers[0]
+        skip = {'lm_head', 'o_proj', 'down_proj'}
+    else:
+        config = ViTConfig(hidden_size=16, intermediate_size=32, num_attention_heads=4)
+        config._attn_implementation = 'eager'
+        model = ViTLayer(config).eval()
+        layer = model
+        x = torch.randn(2, 4, 16, dtype=torch.float16)
+        skip = {'fc2', 'o_proj', 'output.dense'}
+    original_type = type(layer)
+    model.half()
+    cfg = {
+        'batch_num': 2,
+        'quant_cfg': {
+            'weights': {'type': 'int8', 'symmetric': True, 'strategy': 'channel'},
+            'inputs': {
+                'type': 'int8',
+                'symmetric': True,
+                'strategy': 'tensor' if mode == 'tensor' else 'token',
+                'dynamic': (None if mode == 'tensor' else mode == 'dynamic_token'),
+            },
+        },
+        'algorithm': {
+            algorithm: {'smooth_strength': 0.5} if algorithm == 'smoothquant' else {}
+        },
+        'skip_layers': skip,
+    }
+    quantize(model, cfg)
+    # Quantize accepts FP16/BF16 models. Promote this CPU algebra comparison
+    # after insertion to isolate scaling correctness from FP16 norm rounding.
+    model.float()
+    if x.is_floating_point():
+        x = x.float()
+    wrappers = [m for m in model.modules() if isinstance(m, LayerNormQuant)]
+    assert len(wrappers) == (1 if family == 'vit' and algorithm == 'minmax' else 2)
+    with torch.no_grad():
+        model(x)
+        model(x)
+        expected = model(x)
+    for wrapper in wrappers:
+        assert wrapper.status == 'calibrated'
+        for member in wrapper.members():
+            assert member.scale_w is not None
+            assert (member.scale_d is None) == (mode == 'dynamic_token')
+    convert(model)
+    assert type(layer) is original_type
+    assert not any(isinstance(m, LayerNormQuant) for m in model.modules())
+    assert not hasattr(model, '_amct_fusion_registry')
+    cpu_quant_kernels.update(static=0, dynamic=0)
+    with torch.no_grad():
+        actual = model(x)
+    if family == 'qwen3':
+        actual, expected = actual.logits, expected.logits
+    torch.testing.assert_close(actual, expected, atol=1e-5, rtol=1e-4)
+    if mode == 'dynamic_token':
+        assert cpu_quant_kernels['dynamic'] == 2
+        assert cpu_quant_kernels['static'] == 0
+        assert len(
+            [m for m in model.modules() if isinstance(m, SharedDynamicQuantize)]
+        ) == len(wrappers)
+        deploy_members = [
+            model.get_submodule(ref) for w in wrappers for ref in w.member_refs
+        ]
+        assert all(m.pertoken_scale is None for m in deploy_members)
+    elif family == 'qwen3':
+        assert cpu_quant_kernels == {'static': 2, 'dynamic': 0}
+
+
+def test_local_vit_adapters_compile_without_graph_breaks():
+    config = ViTConfig(hidden_size=16, intermediate_size=32, num_attention_heads=4)
+    config._attn_implementation = 'eager'
+    model = _fuse_vit(ViTLayer(config).eval())
+    x = torch.randn(2, 4, 16)
+    with torch.no_grad():
+        expected = model(x)
+        actual = torch.compile(model, backend='eager', fullgraph=True)(x)
+    torch.testing.assert_close(actual, expected)

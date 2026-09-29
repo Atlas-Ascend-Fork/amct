@@ -14,251 +14,156 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-'''Apply shared-input scaling fusion before deployment replacement.'''
+"""Fuse calibrated pre-op parameters before replacing deployment projections."""
 
+import importlib.util
 import sys
+from functools import lru_cache
+from pathlib import Path
+
+import torch
 
 from amct_pytorch.common.utils.log import LOGGER
 from amct_pytorch.common.utils.model_util import ModuleHelper
-from amct_pytorch.classic.deploy_op.shared_quantize import (
-    FusedPreOp,
-    SharedDynamicQuantize,
-    SharedQuantize,
-)
+from amct_pytorch.classic.optimizer.layer_norm_quant import LayerNormQuant
+from amct_pytorch.classic.deploy_op.shared_quantize import FusedPreOp, SharedQuantize
 
 
-def _load_qwen3_fused_layer():
-    '''Load the Qwen3 fused layer replica by direct file access.
-
-    Going through the package import would execute the model registry
-    __init__ (register_llm_models -> transformers and optional heavy deps);
-    the replica itself only needs torch, so load the file directly and cache
-    the module in sys.modules.
-    '''
-    cache_key = 'amct_qwen3_fused_layer'
-    cached = sys.modules.get(cache_key)
-    if cached is not None:
-        return cached.Qwen3FusedDecoderLayer
-    import importlib.util
-    from pathlib import Path
-
-    module_path = (
-        Path(__file__).resolve().parents[2]
-        / 'common/models/llm/qwen/qwen3/fused_layer.py'
-    )
-    spec = importlib.util.spec_from_file_location(cache_key, module_path)
+@lru_cache(maxsize=None)
+def _load_adapter(adapter):
+    # Avoid importing model package initializers and their optional dependencies.
+    locations = {
+        'qwen3_attention': (
+            'llm/qwen/qwen3/fused_attention.py',
+            'Qwen3FusedAttention',
+            'from_attention',
+        ),
+        'qwen3_mlp': ('llm/qwen/qwen3/fused_mlp.py', 'Qwen3FusedMLP', 'from_mlp'),
+        'vit_attention': (
+            'vit/fused_attention.py',
+            'ViTFusedAttention',
+            'from_attention',
+        ),
+        'vit_mlp': ('vit/fused_mlp.py', 'ViTFusedMLP', 'from_mlp'),
+    }
+    if adapter not in locations:
+        raise ValueError(f'unsupported dynamic adapter: {adapter}')
+    relative, class_name, method = locations[adapter]
+    path = Path(__file__).resolve().parents[2] / 'common/models' / relative
+    spec = importlib.util.spec_from_file_location(f'amct_{adapter}', path)
     module = importlib.util.module_from_spec(spec)
-    sys.modules[cache_key] = module
     spec.loader.exec_module(module)
-    return module.Qwen3FusedDecoderLayer
+    # Dynamo resolves a traced function's globals through its module name.
+    # Register only after execution succeeds, so an unavailable adapter cannot
+    # leave a partially initialized module in the import table.
+    sys.modules[spec.name] = module
+    return getattr(getattr(module, class_name), method)
 
 
-def _load_vit_fused_layer():
-    '''Load the ViT fused layer replica without importing transformers.'''
-    import importlib.util
-    from pathlib import Path
-
-    cache_key = 'amct_vit_fused_layer'
-    cached = sys.modules.get(cache_key)
-    if cached is not None:
-        return cached.ViTFusedLayer
-    module_path = (
-        Path(__file__).resolve().parents[2] / 'common/models/vit/fused_layer.py'
-    )
-    spec = importlib.util.spec_from_file_location(cache_key, module_path)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[cache_key] = module
-    spec.loader.exec_module(module)
-    return module.ViTFusedLayer
+def _build_dynamic_target(target, adapter, act_type):
+    return _load_adapter(adapter)(target, act_type)
 
 
-def _member_weight(member):
-    '''Return the member's linear weight (real modules expose it directly,
-    wrapped members keep the original nn.Linear under .linear).'''
-    weight = getattr(member, 'weight', None)
-    if weight is None:
-        weight = member.linear.weight
-    return weight
+def _same_parameter(actual, expected):
+    if actual is None or expected is None:
+        return actual is expected
+    return actual.shape == expected.shape and torch.equal(actual, expected)
 
 
 class ApplyScalingFusionPass:
-    '''Fuse group parameters and insert shared activation quantization.'''
+    """Prepare each local replacement fully before modifying model parameters."""
 
+    @torch.no_grad()
     def run(self, model):
-        registry = getattr(model, '_amct_fusion_registry', None)
-        if registry is None:
-            return
-
-        # The last member can finalize a one-batch group after earlier members
-        # have returned. Complete their parameters before changing any weights.
-        for group in registry.groups:
-            if group.status == 'calibrated':
-                for ref in group.scaling_layer_refs:
-                    group.writeback_if_pending(model.get_submodule(ref))
-
-        # Dynamic per-token groups that share one decoder layer must be fused
-        # into a single layer replacement: replacing the layer once per group
-        # would nest wrappers and replay the layer forward twice (B2).
-        dynamic_by_layer = {}
-        for group in registry.groups:
-            if group.status == 'fused':
-                LOGGER.logd(
-                    f'Skip repeated fusion for group {group.group_id}',
-                    'ScalingFusion',
+        modules = [
+            (name, module)
+            for name, module in model.named_modules()
+            if isinstance(module, LayerNormQuant)
+        ]
+        # A partially calibrated model must not be converted into a partly
+        # fused model. Check all calibration states before committing any group.
+        for name, module in modules:
+            if module.status != 'calibrated':
+                raise RuntimeError(
+                    f'LayerNormQuant {name} has not finished calibration'
                 )
-                continue
-            if group.status != 'calibrated':
-                continue
-            if getattr(group, 'dynamic_per_token', False):
-                dynamic_by_layer.setdefault(group.layer_ref, []).append(group)
-
-        for group in registry.groups:
-            if group.status == 'fused':
-                continue
-            if group.status != 'calibrated':
-                continue
-            if getattr(group, 'dynamic_per_token', False):
-                continue
+        for name, module in modules:
+            members = [model.get_submodule(ref) for ref in module.member_refs]
             try:
-                self._apply_group(model, group)
-                group.status = 'fused'
-                LOGGER.logd(
-                    f'Fused group {group.group_id}: pre_op={group.pre_op_ref}, '
-                    f'scaling_layers={group.scaling_layer_refs}',
-                    'ScalingFusion',
-                )
-            except (ValueError, RuntimeError) as exc:
-                group.status = 'skipped'
-                group.skip_reason = str(exc)
-                LOGGER.logw(
-                    f'Skip fusion group {group.group_id}: {exc}',
-                    'ScalingFusion',
-                )
-
-        for layer_ref, groups in dynamic_by_layer.items():
-            pending = [g for g in groups if g.status == 'calibrated']
-            if not pending:
-                continue
-            try:
-                self._apply_dynamic_layer(model, layer_ref, pending)
-                for group in pending:
-                    group.status = 'fused'
-                    LOGGER.logd(
-                        f'Fused dynamic group {group.group_id}: '
-                        f'layer={layer_ref}, '
-                        f'scaling_layers={group.scaling_layer_refs}',
-                        'ScalingFusion',
-                    )
+                replacement, target, updates = self._prepare(model, module, members)
             except (ValueError, RuntimeError, OSError, AttributeError) as exc:
-                for group in pending:
-                    group.status = 'skipped'
-                    group.skip_reason = str(exc)
-                LOGGER.logw(
-                    f'Skip dynamic groups {[g.group_id for g in pending]} '
-                    f'on layer {layer_ref}: {exc}',
-                    'ScalingFusion',
-                )
-
-    def _apply_group(self, model, group):
-        pre_op = model.get_submodule(group.pre_op_ref)
-        members = [model.get_submodule(name) for name in group.scaling_layer_refs]
-        self._fuse_scaling(group, pre_op, members)
-
-        if len(members) >= 2:
-            output_dtype = _member_weight(members[0]).dtype
-            shared = SharedQuantize(
-                group.activation_scale,
-                group.activation_offset,
-                act_type=members[0].act_type,
-                output_dtype=output_dtype,
-                act_granularity=group.act_granularity or 'tensor',
-            ).to(_member_weight(members[0]).device)
-            fused = FusedPreOp(pre_op, shared)
-            ModuleHelper.replace_module_by_name(model, group.pre_op_ref, fused)
+                # No parameter has changed. Members can still deploy with their
+                # calibrated common parameters and independent input quantization.
+                ModuleHelper.replace_module_by_name(model, name, module.pre_op)
+                LOGGER.logw(f'Skip scaling fusion {name}: {exc}', 'LayerNormQuant')
+                continue
+            for parameter, value in updates:
+                parameter.copy_(value)
+            if target is not None:
+                ModuleHelper.replace_module_by_name(model, module.target_ref, target)
+            ModuleHelper.replace_module_by_name(model, name, replacement)
             for member in members:
-                member.input_quant_disabled = True
+                member.smooth_scale_skipped = module.algorithm == 'smoothquant'
+                member.input_quant_disabled = (
+                    module.dynamic_per_token or len(members) > 1
+                )
+            module.status = 'fused'
+            LOGGER.logd(
+                f'Fused pre_op {name}, members={list(module.member_refs)}, '
+                f'dynamic_per_token={module.dynamic_per_token}',
+                'LayerNormQuant',
+            )
 
     @staticmethod
-    def _fuse_scaling(group, pre_op, members):
-        if group.algorithm == 'smoothquant':
-            smooth = group.smooth_factor
+    def _prepare(model, module, members):
+        for member in members:
+            values = [
+                (member.scale_d, module.activation_scale),
+                (member.offset_d, module.activation_offset),
+            ]
+            if module.algorithm == 'smoothquant':
+                values.append((member.scale, module.smooth_factor))
+            if any(
+                not _same_parameter(actual, expected) for actual, expected in values
+            ):
+                raise ValueError(
+                    'member parameters differ from calibrated pre_op parameters'
+                )
+        target = None
+        replacement = module.pre_op
+        if module.dynamic_per_token:
+            target = _build_dynamic_target(
+                model.get_submodule(module.target_ref),
+                module.adapter,
+                members[0].act_type,
+            )
+        elif len(members) > 1:
+            if module.activation_scale is None:
+                raise ValueError('activation_scale is missing')
+            shared = SharedQuantize(
+                module.activation_scale,
+                module.activation_offset,
+                act_type=members[0].act_type,
+                output_dtype=members[0].weight.dtype,
+                act_granularity=module.act_granularity,
+            ).to(members[0].weight.device)
+            replacement = FusedPreOp(module.pre_op, shared)
+            replacement.train(module.training)
+        updates = []
+        if module.algorithm == 'smoothquant':
+            smooth = module.smooth_factor
             if smooth is None:
                 raise ValueError('smooth_factor is missing')
-            if group.group_type == 'norm':
-                ApplyScalingFusionPass._fuse_norm(pre_op, smooth)
-            elif group.group_type == 'linear':
-                ApplyScalingFusionPass._fuse_linear(pre_op, smooth)
-            else:
-                raise ValueError(f'unsupported pre_op type: {group.group_type}')
+            factor = smooth.reshape(-1)
+            norm = module.pre_op
+            if norm.weight is None or norm.weight.numel() != factor.numel():
+                raise ValueError('norm channels do not match smooth factor')
+            for parameter in (norm.weight, getattr(norm, 'bias', None)):
+                if parameter is not None:
+                    value = parameter.float() / factor.to(parameter.device)
+                    updates.append((parameter, value.to(parameter.dtype)))
             for member in members:
-                weight = _member_weight(member)
-                weight.data.copy_(
-                    (weight.data.float() * smooth.float()).to(weight.dtype)
-                )
-                member.smooth_scale_skipped = True
-        elif group.algorithm == 'minmax':
-            return
-        else:
-            raise ValueError(f'unsupported algorithm: {group.algorithm}')
-
-    @staticmethod
-    def _apply_dynamic_layer(model, layer_ref, groups):
-        if not isinstance(layer_ref, str) or not layer_ref:
-            raise ValueError('dynamic fusion requires a non-root layer path')
-        layer = model.get_submodule(layer_ref)
-        adapters = {group.dynamic_layer for group in groups}
-        if adapters == {'decoder_layer'}:
-            fused_layer_cls = _load_qwen3_fused_layer()
-        elif adapters == {'encoder_layer'}:
-            fused_layer_cls = _load_vit_fused_layer()
-        else:
-            raise ValueError(f'unsupported dynamic layer adapters: {adapters}')
-
-        # One shared quantizer per pre_op: the attention group shares the
-        # input_layernorm output, the mlp group shares
-        # post_attention_layernorm. Each takes act_type from its members.
-        shared_by_pre_op = {}
-        for group in groups:
-            pre_op = model.get_submodule(group.pre_op_ref)
-            members = [model.get_submodule(name) for name in group.scaling_layer_refs]
-            ApplyScalingFusionPass._fuse_scaling(group, pre_op, members)
-            first_member = model.get_submodule(group.scaling_layer_refs[0])
-            shared_by_pre_op[group.pre_op_ref] = SharedDynamicQuantize(
-                first_member.act_type
-            )
-
-        fused_layer = fused_layer_cls.from_shared_map(
-            layer, shared_by_pre_op, layer_ref
-        )
-        ModuleHelper.replace_module_by_name(model, layer_ref, fused_layer)
-        for group in groups:
-            for member_name in group.scaling_layer_refs:
-                model.get_submodule(member_name).input_quant_disabled = True
-
-    @staticmethod
-    def _fuse_norm(pre_op, smooth):
-        if hasattr(pre_op, 'weight'):
-            factor = smooth.reshape(-1).to(pre_op.weight.device)
-            if factor.numel() != pre_op.weight.numel():
-                raise ValueError('norm pre_op channels do not match smooth factor')
-            pre_op.weight.data.copy_(
-                (pre_op.weight.data.float() / factor).to(pre_op.weight.dtype)
-            )
-        if hasattr(pre_op, 'bias') and pre_op.bias is not None:
-            factor = smooth.reshape(-1).to(pre_op.bias.device)
-            pre_op.bias.data.copy_(
-                (pre_op.bias.data.float() / factor).to(pre_op.bias.dtype)
-            )
-
-    @staticmethod
-    def _fuse_linear(pre_op, smooth):
-        factor = smooth.reshape(-1)
-        if factor.numel() != pre_op.weight.shape[0]:
-            raise ValueError('linear pre_op output channels do not match smooth factor')
-        pre_op.weight.data.copy_(
-            (pre_op.weight.data.float() / factor[:, None]).to(pre_op.weight.dtype)
-        )
-        if pre_op.bias is not None:
-            pre_op.bias.data.copy_(
-                (pre_op.bias.data.float() / factor).to(pre_op.bias.dtype)
-            )
+                weight = member.weight
+                value = weight.float() * smooth.to(weight.device).float()
+                updates.append((weight, value.to(weight.dtype)))
+        return replacement, target, updates
