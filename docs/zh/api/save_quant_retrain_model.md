@@ -123,8 +123,8 @@ amct.save_quant_retrain_model(
                config_json_file,
                model, 
                record_file,
-               save_path="./results/model"
-               input_data,
+               save_path="./results/model",
+               input_data=input_data,
                input_names=['input'],
                output_names=['output'],
                dynamic_axes={'input':{0: 'batch_size'},
