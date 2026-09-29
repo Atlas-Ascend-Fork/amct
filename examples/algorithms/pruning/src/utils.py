@@ -205,13 +205,14 @@ def load_model(
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     tokenizer = AutoTokenizer.from_pretrained(
-        model_path, trust_remote_code=trust_remote_code
+        model_path, trust_remote_code=trust_remote_code, local_files_only=True
     )
     model = AutoModelForCausalLM.from_pretrained(
         model_path,
         torch_dtype=torch_dtype,
         trust_remote_code=trust_remote_code,
         device_map=device_map,
+        local_files_only=True,
     ).eval()
     return model, tokenizer
 

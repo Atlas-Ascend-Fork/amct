@@ -258,8 +258,9 @@ def main():
         tokenizer, n_samples=args.calib_samples, seq_len=args.calib_seq_len
     )
     # prune_diagnose()'s dry-run forwards calibration batches without moving
-    # them, so align them with the model device here (calib_nll's .to() makes
-    # this a no-op for the real prune).
+    # them, so align them with the model device here (the real prune's
+    # run_calibration_epoch moves batches via move_batch_to_device, making
+    # this a no-op there).
     calib_batches = to_device_batches(calib_batches, args.device)
     eval_batches = build_wikitext2_batches(tokenizer, seq_len=args.seq_len)
     eval_batches = eval_batches[: args.eval_batches]
