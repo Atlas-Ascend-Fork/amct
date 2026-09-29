@@ -202,52 +202,6 @@ def test_shared_buffers_follow_deployment_member_device():
     assert model.pre.shared.act_offset.device.type == 'meta'
 
 
-def test_static_token_activation_uses_dynamic_flag_not_dtype(monkeypatch):
-    import sys
-    from amct_pytorch.classic.deploy_op.npu_quantization_linear import (
-        NpuQuantizationLinear,
-    )
-
-    calls = {'static': 0, 'dynamic': 0}
-
-    def quantize(x, scale, offset, **kwargs):
-        calls['static'] += 1
-        return torch.ones_like(x, dtype=torch.int8)
-
-    def dynamic_quant(x, **kwargs):
-        calls['dynamic'] += 1
-        return torch.ones_like(x, dtype=torch.int8), torch.ones_like(x[..., 0])
-
-    def matmul(x, weight, **kwargs):
-        return torch.ones((x.shape[0], weight.shape[1]), dtype=torch.float16)
-
-    torch_npu = sys.modules['torch_npu']
-    monkeypatch.setattr(torch_npu, 'npu_quantize', quantize)
-    monkeypatch.setattr(torch_npu, 'npu_dynamic_quant', dynamic_quant)
-    monkeypatch.setattr(torch_npu, 'npu_quant_matmul', matmul)
-
-    deploy = NpuQuantizationLinear.__new__(NpuQuantizationLinear)
-    torch.nn.Module.__init__(deploy)
-    deploy.act_type = 'hifloat8'
-    deploy.output_dtype = torch.float16
-    deploy.act_granularity = 'token'
-    deploy.dynamic = False
-    deploy.input_quant_disabled = False
-    deploy.is_new_torch_npu = False
-    deploy.quantize_axis = -2
-    deploy.npu_quantize_act_type = torch.int8
-    deploy.act_scale = torch.ones(1, 2, 1)
-    deploy.act_offset = torch.zeros(1, 2, 1)
-    deploy.pertoken_scale = torch.ones(1, 2, 1)
-    deploy.quantized_weight = torch.ones(4, 3)
-    deploy.deq_scale = torch.ones(3)
-    deploy.bias = None
-
-    deploy(torch.randn(2, 2, 4))
-
-    assert calls == {'static': 1, 'dynamic': 0}
-
-
 def test_shared_dynamic_quantize_rejects_unsupported_dtype(monkeypatch):
     import sys
     from types import SimpleNamespace

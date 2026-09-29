@@ -86,9 +86,8 @@ class NpuQuantizationLinear(torch.nn.Module):
             quant_x = x
             if pertoken_scale is not None:
                 matmul_token_scale = pertoken_scale.reshape(-1).to(torch.float32)
-        elif self.act_granularity == 'token' and self.dynamic is True:
-            # Dynamic input scales are local to this call; all static token
-            # scales, regardless of dtype, use calibrated parameters.
+        elif self.act_granularity == 'token':
+            # Preserve the legacy non-shared per-token deployment behavior.
             if self.act_type == HIFLOAT8:
                 quant_x, pertoken_scale = torch_npu.npu_dynamic_quant(
                     x, dst_type=self.npu_quantize_act_type, dst_type_max=15
@@ -111,12 +110,13 @@ class NpuQuantizationLinear(torch.nn.Module):
         # Keep the original tensor rank. Per-token scales remain the legacy
         # one-dimensional vector used by the deploy operator.
         if (
-            self.act_granularity == 'token'
+            self.input_quant_disabled
+            and self.act_granularity == 'token'
             and self.dynamic is not True
             and pertoken_scale is None
         ):
-            # Static token scales are calibrated per sequence position and are
-            # shared by batches at deployment time.
+            # Shared static token scales are calibrated per sequence position
+            # and are shared by batches at deployment time.
             matmul_token_scale = (
                 self.pertoken_scale.reshape(-1, 1)
                 .expand(*ori_shape[:-1], 1)
