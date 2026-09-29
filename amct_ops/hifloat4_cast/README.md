@@ -1,6 +1,6 @@
 # hifloat4_cast — HiFloat4 数据类型转换算子
 
-HiFloat4 数据类型转换算子，支持 FP16/BF16 → HiFloat4 → FP16/BF16 fake-quant 仿真（64 元素块缩放，S1P2 尾数）。
+HiFloat4 数据类型转换算子，支持 FP16/BF16/FP32 → HiFloat4 → FP16/BF16/FP32 fake-quant 仿真（64 元素块缩放，S1P2 尾数）。
 
 ## 功能介绍
 
@@ -14,16 +14,17 @@ HiFloat4（HiF4）是一种 4-bit 块缩放浮点格式：每个元素采用 S1P
 | -------- | ------------------ | ----------------------------------------------------------------- |
 | BF16     | `hifx_kernel_bf16` | 输入加载后转换为 fp32，仅在指定计算位置（scale factor、倒数、组内值）进行 bf16 舍入，输出时转换回 bf16 |
 | FP16     | `hifx_kernel`      | Host 侧先转换为 fp32，计算完成后将输出转换回 fp16                                  |
+| FP32     | `hifx_kernel`      | Host 侧直接以 fp32 调用 kernel，输出保持 fp32                                      |
 
 ## 接口说明
 
 ### hifloat4_fake_quant(x: Tensor, qdim: int = -1) -> Tensor
 
-将 FP16/BF16 张量沿 `qdim` 维度进行分块，每 64 个元素共享一个 scale 块，并执行一次 FP → HiF4 → FP 的 fake-quant 仿真。
+将 FP16/BF16/FP32 张量沿 `qdim` 维度进行分块，每 64 个元素共享一个 scale 块，并执行一次 FP → HiF4 → FP 的 fake-quant 仿真。
 
 参数：
 
-* `x`：输入张量，位于 NPU 设备上，dtype 为 `torch.float16` 或 `torch.bfloat16`，支持任意非空 shape
+* `x`：输入张量，位于 NPU 设备上，dtype 为 `torch.float16`、`torch.bfloat16` 或 `torch.float32`，支持任意非空 shape
 * `qdim`：分块维度，默认值为 `-1`，即最后一维
 
 返回：
@@ -32,7 +33,7 @@ HiFloat4（HiF4）是一种 4-bit 块缩放浮点格式：每个元素采用 S1P
 
 异常：
 
-* `RuntimeError`：输入 dtype 不是 float16 / bfloat16，或输入张量不在 NPU 设备上
+* `RuntimeError`：输入 dtype 不属于 float16 / bfloat16 / float32，或输入张量不在 NPU 设备上
 * `RuntimeError`：`qdim` 维度长度不是 64 的倍数
 
 示例：
@@ -145,7 +146,7 @@ import torch
 import torch_npu
 from amct_ops.hifloat4_cast import hifloat4_fake_quant
 
-# Fake-quant 仿真（FP16/BF16 → HiF4 → FP16/BF16）
+# Fake-quant 仿真（FP16/BF16/FP32 → HiF4 → FP16/BF16/FP32）
 x = torch.randn(1024, 256, dtype=torch.bfloat16, device='npu')
 y = hifloat4_fake_quant(x)                     # shape [1024, 256], dtype bfloat16
 
