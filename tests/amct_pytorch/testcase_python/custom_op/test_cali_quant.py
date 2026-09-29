@@ -59,14 +59,15 @@ class TestCaliQuantRNN(unittest.TestCase):
         hx = (h0, torch.randn_like(h0)) if rnn_type is torch.nn.LSTM else h0
 
         outputs = cali_quant(inputs, hx)
+        hidden_inputs = cali_quant.hidden_inputs
         if batch_first:
-            expected = torch.cat((h0.permute(1, 0, 2), outputs[0][:, :-1, :]), dim=1)
+            torch.testing.assert_close(hidden_inputs[:, :1, :], h0.permute(1, 0, 2))
+            torch.testing.assert_close(hidden_inputs[:, 1:, :], outputs[0][:, :-1, :])
         else:
-            expected = torch.cat((h0, outputs[0][:-1, :, :]), dim=0)
-
-        torch.testing.assert_close(cali_quant.hidden_inputs, expected)
+            torch.testing.assert_close(hidden_inputs[:1], h0)
+            torch.testing.assert_close(hidden_inputs[1:], outputs[0][:-1])
         self.assertEqual(
-            tuple(cali_quant.hidden_inputs.shape),
+            tuple(hidden_inputs.shape),
             tuple(inputs.shape[:-1]) + (hidden_size,),
         )
 
