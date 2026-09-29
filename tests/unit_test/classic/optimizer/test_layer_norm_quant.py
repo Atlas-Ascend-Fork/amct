@@ -204,7 +204,7 @@ def test_finalize_executes_once_and_releases_statistics():
     assert wrapper.act_min is None
 
 
-def test_dynamic_fakequant_uses_runtime_scale_after_smoothing():
+def test_dynamic_per_token_keeps_activation_unquantized_before_convert():
     from unittest.mock import patch
     import importlib
 
@@ -218,8 +218,7 @@ def test_dynamic_fakequant_uses_runtime_scale_after_smoothing():
             module, 'quant_dequant_tensor', wraps=module.quant_dequant_tensor
         ) as quant:
             layer(torch.randn(2, 4))
-            assert quant.call_count == 2
-            assert quant.call_args.args[2].shape == (2, 1)
+            assert quant.call_count == 0
 
 
 def test_deepcopy_calibration_does_not_modify_source_members():

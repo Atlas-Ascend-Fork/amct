@@ -203,18 +203,7 @@ class MinMaxQuant(BaseQuantizeModule):
             self.cached_bias = bias
             self.fake_quant_cache_ready = True
 
-        if (
-            not self.weight_compress_only
-            and self.dynamic is True
-            and self.act_granularity == 'token'
-            and self.act_type == INT8
-        ):
-            # npu_dynamic_quant uses max(abs(x))/127, unlike static MinMax's
-            # sign-dependent 127/128 bound. Zero rows quantize to zero.
-            scale_d = inputs.float().abs().amax(dim=-1, keepdim=True) / 127
-            scale_d = torch.where(scale_d == 0, torch.ones_like(scale_d), scale_d)
-            dq_x = quant_dequant_tensor(inputs, self.act_type, scale_d, None)
-        elif self.scale_d is not None:
+        if self.scale_d is not None:
             dq_x = quant_dequant_tensor(
                 inputs, self.act_type, self.scale_d, self.offset_d
             )
