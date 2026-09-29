@@ -135,7 +135,7 @@ optimizer = torch.optim.AdamW(compress_model.parameters(), lr=0.1)
 # 蒸馏
 distill_model = amct.distill(
                 model,
-                compress_model
+                compress_model,
                 config_json_file,
                 train_loader,
                 epochs=1,

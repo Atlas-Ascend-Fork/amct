@@ -122,7 +122,7 @@ import amct_pytorch as amct
 # 建立待进行组合压缩的网络图结构
 model = build_model()
 input_data = tuple(torch.randn(input_shape))
-save_pth_path = /your/path/to/save/tmp.pth
+save_pth_path = "/your/path/to/save/tmp.pth"
 
 record_file = os.path.join(TMP, 'compressed_record.txt')
 config_defination = './compressed_cfg.cfg'

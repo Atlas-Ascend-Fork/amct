@@ -18,7 +18,8 @@
 
 ```python
 class ModelEvaluator(AutoCalibrationEvaluatorBase):
-def __init__(self, data_dir, input_shape, data_types):
+    def __init__(self, data_dir, input_shape, data_types):
+        ...
 ```
 
 ## 参数说明<a name="zh-cn_topic_0240187994_zh-cn_topic_0122830089_section795991810344"></a>
