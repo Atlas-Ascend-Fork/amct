@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-"""Qwen3 attention with explicit shared dynamic activation parameters."""
+"""Qwen3 attention and MLP adapters for shared dynamic quantization."""
 
 from amct_pytorch.classic.deploy_op.local_dynamic import make_local_adapter
 
@@ -22,10 +22,10 @@ from amct_pytorch.classic.deploy_op.local_dynamic import make_local_adapter
 class Qwen3FusedAttention:
     @staticmethod
     def from_attention(attention, act_type='int8'):
-        return make_local_adapter(attention, _forward, act_type)
+        return make_local_adapter(attention, _attention_forward, act_type)
 
 
-def _forward(
+def _attention_forward(
     self,
     hidden_states,
     position_embeddings=None,
@@ -69,3 +69,16 @@ def _forward(
     )
     output = output.reshape(*input_shape, -1).contiguous()
     return self.o_proj(output), weights
+
+
+class Qwen3FusedMLP:
+    @staticmethod
+    def from_mlp(mlp, act_type='int8'):
+        return make_local_adapter(mlp, _mlp_forward, act_type)
+
+
+def _mlp_forward(self, hidden_states):
+    quantized, scale = self.shared_quantize(hidden_states)
+    gate = self.act_fn(self.gate_proj(quantized, scale))
+    up = self.up_proj(quantized, scale)
+    return self.down_proj(gate * up)

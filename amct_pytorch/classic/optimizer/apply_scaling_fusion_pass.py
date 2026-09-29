@@ -29,35 +29,41 @@ from amct_pytorch.classic.optimizer.layer_norm_quant import LayerNormQuant
 from amct_pytorch.classic.deploy_op.shared_quantize import FusedPreOp, SharedQuantize
 
 
-@lru_cache(maxsize=None)
 def _load_adapter(adapter):
     # Avoid importing model package initializers and their optional dependencies.
     locations = {
         'qwen3_attention': (
-            'llm/qwen/qwen3/fused_attention.py',
+            'llm/qwen/qwen3/fused_modules.py',
             'Qwen3FusedAttention',
             'from_attention',
         ),
-        'qwen3_mlp': ('llm/qwen/qwen3/fused_mlp.py', 'Qwen3FusedMLP', 'from_mlp'),
+        'qwen3_mlp': ('llm/qwen/qwen3/fused_modules.py', 'Qwen3FusedMLP', 'from_mlp'),
         'vit_attention': (
-            'vit/fused_attention.py',
+            'vit/fused_modules.py',
             'ViTFusedAttention',
             'from_attention',
         ),
-        'vit_mlp': ('vit/fused_mlp.py', 'ViTFusedMLP', 'from_mlp'),
+        'vit_mlp': ('vit/fused_modules.py', 'ViTFusedMLP', 'from_mlp'),
     }
     if adapter not in locations:
         raise ValueError(f'unsupported dynamic adapter: {adapter}')
     relative, class_name, method = locations[adapter]
+    module = _load_adapter_module(relative)
+    return getattr(getattr(module, class_name), method)
+
+
+@lru_cache(maxsize=None)
+def _load_adapter_module(relative):
     path = Path(__file__).resolve().parents[2] / 'common/models' / relative
-    spec = importlib.util.spec_from_file_location(f'amct_{adapter}', path)
+    module_name = 'amct_' + relative.removesuffix('.py').replace('/', '_')
+    spec = importlib.util.spec_from_file_location(module_name, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     # Dynamo resolves a traced function's globals through its module name.
     # Register only after execution succeeds, so an unavailable adapter cannot
     # leave a partially initialized module in the import table.
     sys.modules[spec.name] = module
-    return getattr(getattr(module, class_name), method)
+    return module
 
 
 def _build_dynamic_target(target, adapter, act_type):

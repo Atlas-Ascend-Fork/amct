@@ -17,7 +17,7 @@
 """Insert shared-input pre-op calibration modules after projection quantization."""
 
 from amct_pytorch.classic.optimizer.base_module_fusion_pass import BaseModuleFusionPass
-from amct_pytorch.classic.optimizer.fusion_pattern import build_layer_norm_quant_specs
+from amct_pytorch.classic.optimizer.model_structure import build_layer_norm_quant_specs
 from amct_pytorch.classic.optimizer.layer_norm_quant import LayerNormQuant
 from amct_pytorch.common.utils.log import LOGGER
 from amct_pytorch.common.utils.model_util import ModuleHelper
@@ -26,15 +26,15 @@ from amct_pytorch.common.utils.model_util import ModuleHelper
 class InsertLayerNormQuantPass(BaseModuleFusionPass):
     """Match whitelisted pre-ops and replace them with calibration modules."""
 
-    def __init__(self, patterns=None):
+    def __init__(self, structures=None):
         super().__init__()
-        self.patterns = patterns
+        self.structures = structures
         self.specs = {}
 
     def run(self, model):
         self.specs = {
             spec.pre_op_ref: spec
-            for spec in build_layer_norm_quant_specs(model, self.patterns)
+            for spec in build_layer_norm_quant_specs(model, self.structures)
         }
         super().run(model)
 

@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-"""Local dynamic quantization for modern and legacy ViT attention."""
+"""ViT attention and MLP adapters for shared dynamic quantization."""
 
 from amct_pytorch.classic.deploy_op.local_dynamic import make_local_adapter
 
@@ -22,7 +22,11 @@ from amct_pytorch.classic.deploy_op.local_dynamic import make_local_adapter
 class ViTFusedAttention:
     @staticmethod
     def from_attention(attention, act_type='int8'):
-        forward = _forward if hasattr(attention, 'q_proj') else _legacy_forward
+        forward = (
+            _attention_forward
+            if hasattr(attention, 'q_proj')
+            else _legacy_attention_forward
+        )
         return make_local_adapter(attention, forward, act_type)
 
 
@@ -47,7 +51,7 @@ def _attention(self, query, key, value, mask, dropout, **kwargs):
     )
 
 
-def _forward(self, hidden_states, attention_mask=None, **kwargs):
+def _attention_forward(self, hidden_states, attention_mask=None, **kwargs):
     input_shape = hidden_states.shape[:-1]
     shape = (*input_shape, -1, self.head_dim)
     quantized, scale = self.shared_quantize(hidden_states)
@@ -61,7 +65,7 @@ def _forward(self, hidden_states, attention_mask=None, **kwargs):
     return self.o_proj(output), weights
 
 
-def _legacy_forward(self, hidden_states, **kwargs):
+def _legacy_attention_forward(self, hidden_states, **kwargs):
     shape = (
         hidden_states.shape[0],
         -1,
@@ -85,3 +89,20 @@ def _legacy_forward(self, hidden_states, **kwargs):
     return output.reshape(
         hidden_states.shape[0], -1, self.all_head_size
     ).contiguous(), weights
+
+
+class ViTFusedMLP:
+    @staticmethod
+    def from_mlp(mlp, act_type='int8'):
+        forward = _mlp_forward if hasattr(mlp, 'fc1') else _legacy_mlp_forward
+        return make_local_adapter(mlp, forward, act_type)
+
+
+def _mlp_forward(self, hidden_states):
+    quantized, scale = self.shared_quantize(hidden_states)
+    return self.fc2(self.activation_fn(self.fc1(quantized, scale)))
+
+
+def _legacy_mlp_forward(self, hidden_states):
+    quantized, scale = self.shared_quantize(hidden_states)
+    return self.intermediate_act_fn(self.dense(quantized, scale))

@@ -17,7 +17,7 @@
 # ----------------------------------------------------------------------------
 import pytest
 from dataclasses import replace
-from amct_pytorch.classic.optimizer.fusion_pattern import FUSION_PATTERNS
+from amct_pytorch.classic.optimizer.model_structure import MODEL_STRUCTURES
 
 import torch
 from torch import nn
@@ -68,7 +68,7 @@ def _config(algorithm, batch_num=1):
     }
 
 
-def test_real_minmax_group_is_identified_and_calibrated_after_first_forward():
+def test_real_minmax_relation_is_identified_and_calibrated_after_first_forward():
     model = TinyModel().to(torch.float16)
     quantize(model, _config('minmax'))
     model(torch.randn(2, 3, 8, dtype=torch.float16))
@@ -84,7 +84,7 @@ def test_real_minmax_group_is_identified_and_calibrated_after_first_forward():
     assert model.layers[0].mlp.up_proj.scale_d is not None
 
 
-def test_real_smoothquant_group_uses_string_algorithm_and_calibrates_after_two_forwards():
+def test_real_smoothquant_relation_uses_string_algorithm_and_calibrates_after_two_forwards():
     model = TinyModel().to(torch.float16)
     quantize(model, _config('smoothquant', batch_num=2))
     model(torch.randn(2, 3, 8, dtype=torch.float16))
@@ -101,20 +101,20 @@ def test_real_smoothquant_group_uses_string_algorithm_and_calibrates_after_two_f
     assert model.layers[0].mlp.up_proj.scale is not None
 
 
-def register_test_patterns(monkeypatch):
-    patterns = dict(FUSION_PATTERNS._patterns)
-    patterns['qwen3'] = replace(
-        patterns['qwen3'],
+def register_test_structures(monkeypatch):
+    structures = dict(MODEL_STRUCTURES._structures)
+    structures['qwen3'] = replace(
+        structures['qwen3'],
         layer_types=(f'{TinyQwenLayer.__module__}.{TinyQwenLayer.__qualname__}',),
     )
-    monkeypatch.setattr(FUSION_PATTERNS, '_patterns', patterns)
+    monkeypatch.setattr(MODEL_STRUCTURES, '_structures', structures)
 
 
-register_test_patterns = pytest.fixture(autouse=True)(register_test_patterns)
+register_test_structures = pytest.fixture(autouse=True)(register_test_structures)
 
 
 @pytest.mark.parametrize('reason', ['partial', 'config', 'missing'])
-def test_invalid_candidate_keeps_independent_members_and_other_group(reason):
+def test_invalid_candidate_keeps_independent_members_and_other_relation(reason):
     from amct_pytorch.classic.optimizer.layer_norm_quant import (
         LayerNormQuant,
     )
@@ -150,7 +150,7 @@ def test_invalid_candidate_keeps_independent_members_and_other_group(reason):
 def test_unregistered_structure_is_not_wrapped(monkeypatch):
     from amct_pytorch.classic.optimizer.layer_norm_quant import LayerNormQuant
 
-    monkeypatch.setattr(FUSION_PATTERNS, '_patterns', {})
+    monkeypatch.setattr(MODEL_STRUCTURES, '_structures', {})
     model = TinyModel().half()
     quantize(model, _config('minmax'))
     model(torch.randn(2, 3, 8, dtype=torch.float16))

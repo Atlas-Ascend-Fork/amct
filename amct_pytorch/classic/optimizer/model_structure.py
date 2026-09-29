@@ -38,92 +38,86 @@ class LayerNormQuantSpec:
 
 
 @dataclass(frozen=True)
-class FusionGroupPattern:
-    '''One pre_op and the relative member paths of its shared-input group.
+class PreOpRelation:
+    '''Relative paths from one pre_op to projections sharing its output.
 
-    A member can declare multiple candidate paths because upstream model
+    A projection can declare multiple candidate paths because upstream model
     implementations may expose equivalent projections at different locations.
     '''
 
     pre_op: str
-    members: tuple[str | tuple[str, ...], ...]
-    group_type: str
+    scaling_layers: tuple[str | tuple[str, ...], ...]
     adapter: str
 
 
 @dataclass(frozen=True)
-class FusionLayerPattern:
-    '''Relative paths inside a model layer.'''
+class ModelStructure:
+    '''Registered model layer types and their pre-op/projection relations.'''
 
     name: str
-    required_attrs: tuple[str, ...]
-    groups: tuple[FusionGroupPattern, ...]
+    relations: tuple[PreOpRelation, ...]
     layer_types: tuple[str, ...]
 
 
-class FusionPatternRegistry:
-    '''Registry for explicitly supported layer patterns.'''
+class ModelStructureRegistry:
+    '''Registry for explicitly supported model structures.'''
 
     def __init__(self):
-        self._patterns = {}
+        self._structures = {}
 
-    def register(self, pattern):
-        if pattern.name in self._patterns:
-            raise ValueError(f'Fusion pattern {pattern.name!r} is already registered')
-        self._patterns[pattern.name] = pattern
+    def register(self, structure):
+        if structure.name in self._structures:
+            raise ValueError(
+                f'Model structure {structure.name!r} is already registered'
+            )
+        self._structures[structure.name] = structure
 
     def get(self, name):
-        return self._patterns[name]
+        return self._structures[name]
 
-    def patterns(self):
-        return tuple(self._patterns.values())
+    def structures(self):
+        return tuple(self._structures.values())
 
 
-FUSION_PATTERNS = FusionPatternRegistry()
-FUSION_PATTERNS.register(
-    FusionLayerPattern(
+MODEL_STRUCTURES = ModelStructureRegistry()
+MODEL_STRUCTURES.register(
+    ModelStructure(
         name='qwen3',
-        required_attrs=('input_layernorm', 'post_attention_layernorm'),
-        groups=(
-            FusionGroupPattern(
+        relations=(
+            PreOpRelation(
                 pre_op='input_layernorm',
-                members=(
+                scaling_layers=(
                     'self_attn.q_proj',
                     'self_attn.k_proj',
                     'self_attn.v_proj',
                 ),
-                group_type='norm',
                 adapter='qwen3_attention',
             ),
-            FusionGroupPattern(
+            PreOpRelation(
                 pre_op='post_attention_layernorm',
-                members=('mlp.up_proj', 'mlp.gate_proj'),
-                group_type='norm',
+                scaling_layers=('mlp.up_proj', 'mlp.gate_proj'),
                 adapter='qwen3_mlp',
             ),
         ),
         layer_types=('transformers.models.qwen3.modeling_qwen3.Qwen3DecoderLayer',),
     )
 )
-FUSION_PATTERNS.register(
-    FusionLayerPattern(
+MODEL_STRUCTURES.register(
+    ModelStructure(
         name='vit',
-        required_attrs=('layernorm_before', 'layernorm_after'),
-        groups=(
-            FusionGroupPattern(
+        relations=(
+            PreOpRelation(
                 pre_op='layernorm_before',
-                members=(
+                scaling_layers=(
                     ('attention.q_proj', 'attention.attention.query'),
                     ('attention.k_proj', 'attention.attention.key'),
                     ('attention.v_proj', 'attention.attention.value'),
                 ),
-                group_type='norm',
                 adapter='vit_attention',
             ),
-            FusionGroupPattern(
+            PreOpRelation(
                 pre_op='layernorm_after',
-                members=(('mlp.fc1', 'intermediate.dense'),),
-                group_type='norm',
+                scaling_layers=(('mlp.fc1', 'intermediate.dense'),),
                 adapter='vit_mlp',
             ),
         ),
@@ -132,22 +126,22 @@ FUSION_PATTERNS.register(
 )
 
 
-def build_layer_norm_quant_specs(model, patterns=None):
+def build_layer_norm_quant_specs(model, structures=None):
     '''Build LayerNormQuant installation specs from the whitelist.'''
     specs = []
-    if patterns is None:
-        patterns = FUSION_PATTERNS.patterns()
+    if structures is None:
+        structures = MODEL_STRUCTURES.structures()
     used_members = set()
     for layer_name, module in model.named_modules():
-        for pattern in patterns:
+        for structure in structures:
             module_type = f'{type(module).__module__}.{type(module).__qualname__}'
-            if module_type not in pattern.layer_types:
+            if module_type not in structure.layer_types:
                 continue
-            for group_pattern in pattern.groups:
+            for relation in structure.relations:
                 spec = _build_layer_norm_quant_spec(
                     model,
                     layer_name,
-                    group_pattern,
+                    relation,
                     used_members,
                 )
                 if spec is not None:
@@ -158,15 +152,15 @@ def build_layer_norm_quant_specs(model, patterns=None):
 def _build_layer_norm_quant_spec(
     model,
     layer_name,
-    group_pattern,
+    relation,
     used_members,
 ):
-    pre_ref = _join_ref(layer_name, group_pattern.pre_op)
+    pre_ref = _join_ref(layer_name, relation.pre_op)
     try:
         pre_op = model.get_submodule(pre_ref)
         resolved_members = [
             _resolve_member(model, layer_name, member)
-            for member in group_pattern.members
+            for member in relation.scaling_layers
         ]
     except AttributeError as exc:
         LOGGER.logw(
@@ -219,7 +213,7 @@ def _build_layer_norm_quant_spec(
         pre_op_ref=pre_ref,
         member_refs=tuple(member_refs),
         target_ref=target_ref,
-        adapter=group_pattern.adapter,
+        adapter=relation.adapter,
         algorithm=first['algorithm'],
         act_granularity=first['strategy'],
         batch_num=first['batch_num'],
