@@ -108,23 +108,23 @@ class NpuQuantizationLinear(torch.nn.Module):
                 div_mode=False,
             )
         ori_shape = quant_x.shape
-        flatten_input = self.act_granularity == 'token' or (
-            self.is_new_torch_npu
-            and self.act_type == FLOAT8_E4M3FN
-            and self.wts_type == FLOAT4_E2M1
-        )
+        # Keep the original tensor rank. Per-token scales remain the legacy
+        # one-dimensional vector used by the deploy operator.
         if (
             self.act_granularity == 'token'
             and self.dynamic is not True
             and pertoken_scale is None
         ):
-            # Static token scales share sequence positions across batches.
-            # Keep the calibrated vector unchanged for subsequent forwards.
+            # Static token scales are calibrated per sequence position and are
+            # shared by batches at deployment time.
             matmul_token_scale = (
                 self.pertoken_scale.reshape(-1, 1)
                 .expand(*ori_shape[:-1], 1)
                 .reshape(-1)
             )
+        flatten_input = self.is_new_torch_npu and (
+            self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1
+        )
         if flatten_input:
             quant_x = quant_x.reshape(-1, ori_shape[-1])
         if self.is_new_torch_npu:

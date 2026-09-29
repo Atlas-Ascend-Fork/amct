@@ -303,7 +303,9 @@ def cpu_quant_kernels(monkeypatch):
             result = result + bias
         result = result * scale
         if pertoken_scale is not None:
+            result = result.reshape(-1, result.shape[-1])
             result = result * pertoken_scale.reshape(-1, 1)
+            result = result.reshape(x.shape[:-1] + (weight.shape[1],))
         if bias is not None and bias.dtype != torch.int32:
             result = result + bias
         return result.to(output_dtype)

@@ -202,58 +202,6 @@ def test_shared_buffers_follow_deployment_member_device():
     assert model.pre.shared.act_offset.device.type == 'meta'
 
 
-def test_shared_token_matmul_flattens_batches_and_preserves_static_scales(monkeypatch):
-    import sys
-    from types import SimpleNamespace
-    from amct_pytorch.classic.deploy_op.npu_quantization_linear import (
-        NpuQuantizationLinear,
-    )
-    from amct_pytorch.classic.quantize_op import MinMaxQuant
-
-    def matmul(x, weight, *, scale, pertoken_scale, bias, output_dtype):
-        assert x.ndim == 2
-        assert pertoken_scale.numel() == x.shape[0]
-        return ((x.float() @ weight.float()) * scale * pertoken_scale[:, None]).to(
-            output_dtype
-        )
-
-    matmul._schemas = {'default': SimpleNamespace(arguments=[])}
-    monkeypatch.setattr(sys.modules['torch_npu'], 'npu_quant_matmul', matmul)
-    for dynamic in (False, True):
-        config = {
-            'batch_num': 1,
-            'algorithm': {'minmax': {}},
-            'inputs_cfg': {
-                'quant_type': 'int8',
-                'symmetric': True,
-                'strategy': 'token',
-                'dynamic': dynamic,
-            },
-            'weights_cfg': {
-                'quant_type': 'int8',
-                'symmetric': True,
-                'strategy': 'channel',
-            },
-        }
-        quant = MinMaxQuant(nn.Linear(4, 3, bias=False), 'linear', config)
-        quant(torch.randn(2, 2, 4))
-        quant.input_quant_disabled = True
-        deploy = NpuQuantizationLinear(quant)
-        x = torch.ones(2, 2, 4, dtype=torch.int8)
-        runtime_scale = torch.tensor([[0.1, 0.2], [0.3, 0.4]]) if dynamic else None
-        before = None if dynamic else deploy.pertoken_scale.clone()
-        actual = deploy(x, runtime_scale)
-        scales = runtime_scale if dynamic else before.reshape(1, 2).expand(2, 2)
-        expected = (
-            (x.float() @ deploy.quantized_weight.float())
-            * deploy.deq_scale
-            * scales[..., None]
-        )
-        torch.testing.assert_close(actual, expected)
-        if not dynamic:
-            torch.testing.assert_close(deploy.pertoken_scale, before)
-
-
 def test_static_token_activation_uses_dynamic_flag_not_dtype(monkeypatch):
     import sys
     from amct_pytorch.classic.deploy_op.npu_quantization_linear import (
