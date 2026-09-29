@@ -242,7 +242,17 @@ def parse_args():
         default=None,
         help="Optional cap on WikiText2 4096-token batches; omit to use the full test split",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    # Reject invalid values up front: an empty calibration set silently skips
+    # pruning (only a warning in the report) and an out-of-range ratio would
+    # otherwise surface after the full baseline evaluation has already run.
+    if not 0.0 <= args.prune_ratio < 1.0:
+        parser.error("--prune-ratio must be in [0.0, 1.0)")
+    if not 0.0 <= args.preview_prune_ratio < 1.0:
+        parser.error("--preview-prune-ratio must be in [0.0, 1.0)")
+    if args.calib_samples < 1:
+        parser.error("--calib-samples must be a positive integer (>= 1)")
+    return args
 
 
 def main():
