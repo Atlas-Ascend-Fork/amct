@@ -77,8 +77,10 @@ BF16_BIT_CONFIG = REPO_ROOT / "amct_pytorch/configs/bf16.yaml"
 W8A8_BIT_CONFIG = REPO_ROOT / "amct_pytorch/configs/w4a8.yaml"
 
 MLP_MOE_PARAM_DIR = OUTPUT_ROOT / "ptq_params" / MODEL_NAME / "mlp_moe"
+ATTN_LINEAR_PARAM_DIR = OUTPUT_ROOT / "ptq_params" / MODEL_NAME / "attn-linear"
+ATTN_CACHE_PARAM_DIR = OUTPUT_ROOT / "ptq_params" / MODEL_NAME / "attn-cache"
 
-for path in [OUTPUT_ROOT, EXPORT_DIR, MLP_MOE_PARAM_DIR]:
+for path in [OUTPUT_ROOT, EXPORT_DIR, MLP_MOE_PARAM_DIR, ATTN_LINEAR_PARAM_DIR, ATTN_CACHE_PARAM_DIR]:
     path.mkdir(parents=True, exist_ok=True)
 
 

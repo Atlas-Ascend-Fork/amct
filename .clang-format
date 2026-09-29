@@ -28,7 +28,7 @@ AccessModifierOffset: -4
 AlignAfterOpenBracket: DontAlign
 
 # If true, aligns consecutive C/C++ preprocessor macros.
-# This will align C/C++ preprocessor macros of consecutive lines. 
+# This will align C/C++ preprocessor macros of consecutive lines.
 # 对齐预处理宏定义
 AlignConsecutiveMacros: false
 
@@ -93,7 +93,7 @@ AlignArrayOfStructures: Right
 #              d);
 AllowAllArgumentsOnNextLine: true
 
-# If a constructor definition with a member initializer list doesn’t fit on a single line, 
+# If a constructor definition with a member initializer list doesn’t fit on a single line,
 # allow putting all member initializers onto the next line, if `ConstructorInitializerAllOnOneLineOrOnePerLine` is true. Note that this parameter has no effect if `ConstructorInitializerAllOnOneLineOrOnePerLine` is false.
 # true:
 # MyClass::MyClass() :
@@ -167,14 +167,14 @@ AlwaysBreakAfterDefinitionReturnType: None
 # TopLevel: Always break after the return types of top-level functions. without class method
 # AllDefinitions: Always break after the return type of function definitions. with class method
 # TopLevelDefinitions: Always break after the return type of top-level definitions.
-# 总是在返回类型后换行: 
-#   None, All, TopLevel(顶级函数，不包括在类中的函数), 
+# 总是在返回类型后换行:
+#   None, All, TopLevel(顶级函数，不包括在类中的函数),
 #   AllDefinitions(所有的定义，不包括声明),
 #   TopLevelDefinitions(所有的顶级函数的定义)
 AlwaysBreakAfterReturnType: None
 
 # If true, always break before multiline string literals.
-# This flag is mean to make cases where there are multiple multiline strings in a file look more consistent. 
+# This flag is mean to make cases where there are multiple multiline strings in a file look more consistent.
 # Thus, it will only take effect if wrapping the string at that point leads to it being indented ContinuationIndentWidth spaces from the start of the line.
 
 # 如果为true，则始终在多行字符串文字之前断行。
@@ -475,9 +475,9 @@ PointerAlignment: Right
 
 # Defines hints for detecting supported languages code blocks in raw strings.
 # Defines hints for detecting supported languages code blocks in raw strings.
-# A raw string with a matching delimiter or a matching enclosing function name will be reformatted assuming the specified 
-# language based on the style for that language defined in the .clang-format file. If no style has been defined in the 
-# .clang-format file for the specific language, a predefined style given by ‘BasedOnStyle’ is used. 
+# A raw string with a matching delimiter or a matching enclosing function name will be reformatted assuming the specified
+# language based on the style for that language defined in the .clang-format file. If no style has been defined in the
+# .clang-format file for the specific language, a predefined style given by ‘BasedOnStyle’ is used.
 # If ‘BasedOnStyle’ is not found, the formatting is based on llvm style. A matching delimiter takes precedence over a matching
 # enclosing function name for determining the language of the raw string contents.
 # If a canonical delimiter is specified, occurrences of other delimiters for the same language will be updated to the canonical if possible.
@@ -632,4 +632,3 @@ TabWidth: 4
 #   Never, ForIndentation, Always
 UseTab: Never
 ...
-

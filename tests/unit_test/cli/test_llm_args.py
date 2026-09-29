@@ -91,8 +91,24 @@ def test_granularity_accepts_model_for_eval():
     assert args.granularity == "model"
 
 
-def test_granularity_accepts_tensor_for_deploy():
-    argv = ["amct", "--granularity", "tensor"] + REQUIRED_ARGV["deploy"]
+def test_granularity_accepts_tensor_for_deploy(tmp_path):
+    config = tmp_path / "layers.json"
+    config.write_text('{"quant_layers": ["model.layers.*.self_attn.o_proj"]}')
+    bits = tmp_path / "bits.yaml"
+    bits.write_text("w_bits: 8\na_bits: 8\n")
+    argv = [
+        "amct",
+        "--model_name",
+        "qwen3_6_moe",
+        "--granularity",
+        "tensor",
+        "--quant_dtype",
+        "int",
+        "--quant_layers_config",
+        str(config),
+        "--bit_config",
+        str(bits),
+    ]
     with patch.object(sys, "argv", argv):
         args = parser_gen(command="deploy")
 
@@ -130,9 +146,7 @@ def test_deploy_accepts_multiple_quant_targets():
     assert args.quant_target == ["mlp", "attn-linear"]
 
 
-def test_deploy_tensor_path_takes_no_quant_args():
-    # The tensor-wise path (e.g. FP8/FP4 -> BF16 conversion, see the
-    # DeepSeek-V4-Flash walkthrough) runs without quant_target/quant_dtype.
+def test_legacy_tensor_model_takes_no_quant_args():
     argv = [
         "amct",
         "--model_name",
@@ -147,8 +161,18 @@ def test_deploy_tensor_path_takes_no_quant_args():
         args = parser_gen(command="deploy")
 
     assert args.granularity == "tensor"
-    assert args.quant_target == []
     assert args.quant_dtype == ""
+    assert args.quant_layers_config is None
+
+
+@pytest.mark.parametrize("model_name", ["glm5_2", "qwen3_6_moe"])
+def test_configured_tensor_model_requires_quant_dtype(model_name):
+    argv = ["amct", "--model_name", model_name, "--granularity", "tensor"]
+    with (
+        patch.object(sys, "argv", argv),
+        pytest.raises(ValueError, match="quant_dtype int"),
+    ):
+        parser_gen(command="deploy")
 
 
 def test_optional_args_stay_optional_for_eval():
@@ -170,3 +194,124 @@ def test_command_specific_args_not_enforced_without_command():
     assert args.quant_target == []
     assert args.data_dir == ""
     assert args.quant_dtype == ""
+
+
+def test_deploy_format_defaults_to_legacy(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["amct", *REQUIRED_ARGV["deploy"]])
+    args = parser_gen(command="deploy")
+    assert args.deploy_format == "legacy"
+    assert args.quant_layers_config is None
+    assert args.deploy_selection is None
+
+
+@pytest.mark.parametrize("command", [None, "eval", "ptq", "extract_ptq_data"])
+@pytest.mark.parametrize("option", ["--deploy_format", "--quant_layers_config"])
+def test_deploy_options_unavailable_elsewhere(monkeypatch, command, option):
+    monkeypatch.setattr(
+        sys, "argv", ["amct", *REQUIRED_ARGV[command], option, "ascend"]
+    )
+    with pytest.raises(SystemExit) as exc:
+        parser_gen(command=command)
+    assert exc.value.code == 2
+
+
+def test_ascend_cli_loads_selection(monkeypatch, tmp_path):
+    config = tmp_path / "layers.json"
+    config.write_text('{"quant_layers": ["model.layers.*.self_attn.q_a_proj"]}')
+    bits = tmp_path / "bits.yaml"
+    bits.write_text("w_bits: 8\na_bits: 8\n")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "amct",
+            "--deploy_format",
+            "ascend",
+            "--model_name",
+            "glm5_2",
+            "--granularity",
+            "tensor",
+            "--quant_dtype",
+            "int",
+            "--quant_layers_config",
+            str(config),
+            "--bit_config",
+            str(bits),
+        ],
+    )
+    args = parser_gen(command="deploy")
+    assert args.deploy_selection.quant_layers == ("model.layers.*.self_attn.q_a_proj",)
+    assert args.deploy_selection.ignore_layers == ()
+
+
+def test_legacy_rejects_selection_instead_of_ignoring_it(monkeypatch):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["amct", *REQUIRED_ARGV["deploy"], "--quant_layers_config", "layers.json"],
+    )
+    with pytest.raises(ValueError, match="quant_layers_config"):
+        parser_gen(command="deploy")
+
+
+@pytest.mark.parametrize("deploy_format", ["legacy", "ascend"])
+def test_tensor_cli_module_bits_and_json(monkeypatch, tmp_path, deploy_format):
+    config = tmp_path / "layers.json"
+    config.write_text('{"quant_layers": ["model.layers.*.self_attn.o_proj"]}')
+    bits = tmp_path / "bits.yaml"
+    bits.write_text("attn-linear:\n  w_bits: 8\n  a_bits: 8\n")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "amct",
+            "--granularity",
+            "tensor",
+            "--quant_dtype",
+            "int",
+            "--model_name",
+            "glm5_2",
+            "--deploy_format",
+            deploy_format,
+            "--quant_layers_config",
+            str(config),
+            "--bit_config",
+            str(bits),
+        ],
+    )
+    args = parser_gen(command="deploy")
+    assert args.deploy_selection.quant_layers == ("model.layers.*.self_attn.o_proj",)
+
+
+@pytest.mark.parametrize(
+    "bits_text, message",
+    [
+        ("moe:\n  w_bits: 4\n  a_bits: 8\n", "W8A8"),
+        ("moe:\n  w_bit: 8\n  a_bits: 8\n", "w_bit"),
+        ("moe:\n  w_bits: 16\n  a_bits: 16\n", "W8A8"),
+    ],
+)
+def test_tensor_cli_rejects_invalid_bits_before_json_read(
+    monkeypatch, tmp_path, bits_text, message
+):
+    bits = tmp_path / "bits.yaml"
+    bits.write_text(bits_text)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "amct",
+            "--model_name",
+            "qwen3_6_moe",
+            "--granularity",
+            "tensor",
+            "--quant_dtype",
+            "int",
+            "--quant_layers_config",
+            "does-not-exist.json",
+            "--bit_config",
+            str(bits),
+        ],
+    )
+    with pytest.raises(ValueError, match=message):
+        parser_gen(command="deploy")

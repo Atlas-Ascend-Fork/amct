@@ -18,7 +18,7 @@
 
 class ModuleHelper:
     """
-    Funtion: Helper for torch.nn.module
+    Function: Helper for torch.nn.module
     APIS: get_module, get_parent_module
     """
 

@@ -137,9 +137,10 @@ python3 -c "import amct_pytorch as amct; print('successfully installed AMCT')"
 - **PR 模板**：`.gitcode/PULL_REQUEST_TEMPLATE.zh-CN.md`
 - **Issue 模板**（位于 `.gitcode/ISSUE_TEMPLATE/`，按类型选择）：
   - `bug_report.yaml` — Bug 报告
-  - `feature_requeset.yaml` — 新特性需求
-  - `documentaion.yaml` — 文档问题
+  - `feature_request.yaml` — 新特性需求
+  - `documentation.yaml` — 文档问题
   - `question.yaml` — 使用咨询/提问
+  - `experience_request.yaml` — 体验需求
 
 ### 许可证
 - Apache 2.0 协议，需在代码中标注版权信息
