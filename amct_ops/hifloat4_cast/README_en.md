@@ -1,6 +1,6 @@
 # hifloat4_cast — HiFloat4 Data Type Conversion Operator
 
-HiFloat4 data type conversion operator, supporting FP16/BF16 → HiFloat4 → FP16/BF16 fake-quant simulation (64-element block scaling, S1P2 mantissa).
+HiFloat4 data type conversion operator, supporting FP16/BF16/FP32 → HiFloat4 → FP16/BF16/FP32 fake-quant simulation (64-element block scaling, S1P2 mantissa).
 
 ## Feature Introduction
 
@@ -14,22 +14,23 @@ The corresponding underlying kernel is invoked based on the input dtype; both ke
 |-------------|-------------------|---------------------|
 | BF16 | `hifx_kernel_bf16` | fp32: converted to fp32 after loading, bf16 rounding only at the specified computation points (scale factor, reciprocal, in-group value), converted back to bf16 on output |
 | FP16 | `hifx_kernel` | fp32: converted to fp32 on the host side first, output converted back to fp16 after computation |
+| FP32 | `hifx_kernel` | Input is passed to the kernel as fp32; output remains fp32 |
 
 ## Interface Description
 
 ### hifloat4_fake_quant(x: Tensor, qdim: int = -1) -> Tensor
 
-Blocks the FP16/BF16 tensor along `qdim`, with one shared scale per 64 elements, and performs a single FP → HiF4 → FP fake-quant simulation.
+Blocks the FP16/BF16/FP32 tensor along `qdim`, with one shared scale per 64 elements, and performs a single FP → HiF4 → FP fake-quant simulation.
 
 Parameters:
-- `x`: Input tensor on an NPU device, dtype is `torch.float16` or `torch.bfloat16`, any non-empty shape
+- `x`: Input tensor on an NPU device, dtype is `torch.float16`, `torch.bfloat16`, or `torch.float32`, any non-empty shape
 - `qdim`: Block dimension, default `-1` (the last dimension)
 
 Returns:
 - Tensor with the same shape and dtype, containing HiFloat4 quantization error
 
 Exceptions:
-- `RuntimeError`: dtype is not float16 / bfloat16, or input tensor is not on an NPU device
+- `RuntimeError`: dtype is not one of float16, bfloat16, or float32, or input tensor is not on an NPU device
 - `RuntimeError`: the `qdim` length is not a multiple of 64
 
 Example:
@@ -140,7 +141,7 @@ import torch
 import torch_npu
 from amct_ops.hifloat4_cast import hifloat4_fake_quant
 
-# Fake-quant simulation (FP16/BF16 → HiF4 → FP16/BF16)
+# Fake-quant simulation (FP16/BF16/FP32 → HiF4 → FP16/BF16/FP32)
 x = torch.randn(1024, 256, dtype=torch.bfloat16, device='npu')
 y = hifloat4_fake_quant(x)                     # shape [1024, 256], dtype bfloat16
 

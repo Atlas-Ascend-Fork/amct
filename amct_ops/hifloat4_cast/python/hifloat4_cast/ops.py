@@ -27,7 +27,7 @@ def hifloat4_fake_quant(x: torch.Tensor, qdim: int = -1) -> torch.Tensor:
     is the same shape and dtype as the input, not real packed 4-bit.
 
     Args:
-        x: Input tensor on NPU, dtype float16 or bfloat16 (device/dtype are enforced by the op).
+        x: Input tensor on NPU, dtype float16, bfloat16, or float32 (device/dtype are enforced by the op).
         qdim: Reduction/quant dim along which 64-element blocks are formed (default: last).
               Its length must be a multiple of 64, otherwise the op raises RuntimeError.
               The op moves it to the last axis internally.
