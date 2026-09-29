@@ -16,9 +16,6 @@
 # ----------------------------------------------------------------------------
 '''Pre-op module owning shared-input activation quantization parameters.'''
 
-import copy
-import weakref
-
 import torch
 from torch import nn
 
@@ -30,14 +27,14 @@ class LayerNormQuant(nn.Module):
     '''Wrap a Norm pre_op and calibrate one shared-input quantization group.
 
     The wrapper owns only the original pre_op. Scaling-layer modules stay in
-    their original model positions; this class stores their paths and resolves
-    them on demand.
+    their original model positions. A plain tuple holds references without
+    registering them as children; paths are kept for conversion and logging.
     '''
 
     def __init__(
         self,
         pre_op,
-        model,
+        scaling_layers,
         member_refs,
         target_ref,
         adapter,
@@ -48,6 +45,9 @@ class LayerNormQuant(nn.Module):
     ):
         super().__init__()
         self.pre_op = pre_op
+        # Do not use ModuleList: projections belong to their attention/MLP.
+        # Whole-model deepcopy preserves these aliases through its shared memo.
+        self.scaling_layers = tuple(scaling_layers)
         self.member_refs = tuple(member_refs)
         self.target_ref = target_ref
         self.adapter = adapter
@@ -55,7 +55,6 @@ class LayerNormQuant(nn.Module):
         self.act_granularity = act_granularity
         self.batch_num = batch_num
         self.dynamic_per_token = dynamic_per_token
-        self._model_ref = weakref.ref(model)
 
         self.register_buffer('act_max', None, persistent=False)
         self.register_buffer('act_min', None, persistent=False)
@@ -67,20 +66,8 @@ class LayerNormQuant(nn.Module):
         self.batch_count = 0
         self.status = 'pending'
         self.training = pre_op.training
-        for member in self.members():
+        for member in self.scaling_layers:
             member.shared_param_mode = 'pending'
-
-    def __deepcopy__(self, memo):
-        # weakref itself is not copied by Python. Rebind it to the copied root
-        # so calibration never writes parameters into the source model.
-        result = type(self).__new__(type(self))
-        memo[id(self)] = result
-        for key, value in self.__dict__.items():
-            if key == '_model_ref':
-                result.__dict__[key] = weakref.ref(copy.deepcopy(value(), memo))
-            else:
-                result.__dict__[key] = copy.deepcopy(value, memo)
-        return result
 
     def forward(self, x):
         out = self.pre_op(x)
@@ -89,13 +76,6 @@ class LayerNormQuant(nn.Module):
             if self.batch_count == self.batch_num:
                 self.finalize_quant_params()
         return out
-
-    def members(self):
-        """Resolve scaling layers without registering them as children."""
-        model = self._model_ref()
-        if model is None:
-            raise RuntimeError('LayerNormQuant calibration model is unavailable')
-        return [model.get_submodule(ref) for ref in self.member_refs]
 
     @torch.no_grad()
     def update_activation_stat(self, inputs):
@@ -158,7 +138,7 @@ class LayerNormQuant(nn.Module):
             return True
         if self.batch_count < self.batch_num:
             return False
-        members = self.members()
+        members = self.scaling_layers
         first = members[0]
         if self.algorithm == 'smoothquant':
             act_max = torch.maximum(self.act_max.abs(), self.act_min.abs())

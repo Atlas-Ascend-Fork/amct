@@ -162,7 +162,7 @@ def test_shared_buffers_follow_deployment_member_device():
 
     model.pre = LayerNormQuant(
         pre_op=model.pre,
-        model=model,
+        scaling_layers=(model.m0, model.m1),
         member_refs=('m0', 'm1'),
         target_ref='m0',
         adapter='qwen3_attention',

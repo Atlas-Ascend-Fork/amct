@@ -73,7 +73,7 @@ def _dynamic_norm_quant(model, norm_name, members, target_ref, adapter):
         model.get_submodule(ref).scale_d = None
     return LayerNormQuant(
         pre_op=old_norm,
-        model=model,
+        scaling_layers=tuple(model.get_submodule(ref) for ref in members),
         member_refs=members,
         target_ref=target_ref,
         adapter=adapter,
@@ -123,7 +123,7 @@ def test_static_fusion_keeps_fused_pre_op_and_disables_member_inputs():
     model = Model()
     model.layer.input_layernorm = LayerNormQuant(
         pre_op=model.layer.input_layernorm,
-        model=model,
+        scaling_layers=(model.layer.self_attn.q_proj, model.layer.self_attn.k_proj),
         member_refs=('layer.self_attn.q_proj', 'layer.self_attn.k_proj'),
         target_ref='layer.self_attn',
         adapter='qwen3_attention',
@@ -175,7 +175,7 @@ def test_single_member_static_smooth_retains_input_quantization():
     model = Model()
     model.layer.input_layernorm = LayerNormQuant(
         model.layer.input_layernorm,
-        model,
+        (model.layer.self_attn.q_proj,),
         ('layer.self_attn.q_proj',),
         'layer.self_attn',
         'qwen3_attention',
@@ -202,7 +202,7 @@ def test_smooth_fusion_preserves_norm_bias_and_projection_algebra():
     expected = [member(original_norm(x)).detach() for member in members]
     model.layer.input_layernorm = LayerNormQuant(
         original_norm,
-        model,
+        members,
         ('layer.self_attn.q_proj', 'layer.self_attn.k_proj'),
         'layer.self_attn',
         'qwen3_attention',

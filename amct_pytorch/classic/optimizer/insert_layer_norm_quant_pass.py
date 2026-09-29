@@ -45,7 +45,7 @@ class InsertLayerNormQuantPass(BaseModuleFusionPass):
         spec = self.specs[object_name]
         module = LayerNormQuant(
             pre_op=object_module,
-            model=model,
+            scaling_layers=tuple(model.get_submodule(ref) for ref in spec.member_refs),
             member_refs=spec.member_refs,
             target_ref=spec.target_ref,
             adapter=spec.adapter,

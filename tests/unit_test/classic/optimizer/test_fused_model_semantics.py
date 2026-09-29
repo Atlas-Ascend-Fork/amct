@@ -377,7 +377,7 @@ def test_quantize_calibrate_convert_real_model(
         expected = model(x)
     for wrapper in wrappers:
         assert wrapper.status == 'calibrated'
-        for member in wrapper.members():
+        for member in wrapper.scaling_layers:
             assert member.scale_w is not None
             assert (member.scale_d is None) == (mode == 'dynamic_token')
     convert(model)

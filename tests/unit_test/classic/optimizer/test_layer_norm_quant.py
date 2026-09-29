@@ -64,7 +64,7 @@ class TinyLayer(nn.Module):
 def _layer_norm_quant(layer, algorithm='smoothquant', strategy='tensor', dynamic=None):
     return LayerNormQuant(
         pre_op=layer.input_layernorm,
-        model=layer,
+        scaling_layers=(layer.self_attn.q_proj, layer.self_attn.k_proj),
         member_refs=('self_attn.q_proj', 'self_attn.k_proj'),
         target_ref='self_attn',
         adapter='qwen3_attention',
@@ -84,7 +84,10 @@ def test_layer_norm_quant_does_not_register_members_as_children():
         'self_attn.q_proj',
         'self_attn.k_proj',
     )
-    assert 'self_attn' not in dict(layer.input_layernorm.named_children())
+    assert set(dict(layer.input_layernorm.named_children())) == {'pre_op'}
+    assert set(layer.input_layernorm.state_dict()) == {'pre_op.weight', 'pre_op.bias'}
+    assert layer.input_layernorm.scaling_layers[0] is layer.self_attn.q_proj
+    assert layer.input_layernorm.scaling_layers[1] is layer.self_attn.k_proj
 
 
 def test_shared_smooth_and_activation_params_are_written_to_members():
@@ -164,13 +167,13 @@ def test_shared_static_token_extrema_match_all_calibration_inputs():
     wrapper = _layer_norm_quant(layer, strategy='token')
     wrapper.batch_num = 2
     layer.input_layernorm = wrapper
-    for member in wrapper.members():
+    for member in wrapper.scaling_layers:
         member.batch_num = 2
     inputs = [torch.randn(2, 3, 4, requires_grad=True) for _ in range(2)]
     outputs = [wrapper.pre_op(x).detach() for x in inputs]
     layer(inputs[0])
     assert wrapper.act_max.grad_fn is None
-    assert all(m.batch_input is None for m in wrapper.members())
+    assert all(m.batch_input is None for m in wrapper.scaling_layers)
     layer(inputs[1])
     scaled = torch.cat([x / wrapper.smooth_factor for x in outputs], dim=0)
     scale, offset = calculate_scale_offset(
@@ -230,7 +233,10 @@ def test_deepcopy_calibration_does_not_modify_source_members():
     assert copied.self_attn.q_proj.scale is not None
     assert source.input_layernorm.status == 'pending'
     assert source.self_attn.q_proj.scale is None
-    assert copied.input_layernorm.members()[0] is copied.self_attn.q_proj
+    assert copied.input_layernorm.scaling_layers[0] is copied.self_attn.q_proj
+    assert copied.input_layernorm.scaling_layers[1] is copied.self_attn.k_proj
+    assert copied.self_attn.k_proj.scale is not None
+    assert source.self_attn.k_proj.scale is None
 
 
 def test_common_smooth_uses_maximum_of_all_member_weights():
