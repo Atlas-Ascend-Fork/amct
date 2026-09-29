@@ -31,15 +31,8 @@ class ApplyScalingFusionPass(BaseModuleFusionPass):
 
     @torch.no_grad()
     def run(self, model):
-        wrappers = [
-            (name, module)
-            for name, module in model.named_modules()
-            if isinstance(module, LayerNormQuant)
-        ]
-        # Refuse conversion before any local group is changed if any group is
-        # still uncalibrated; otherwise the model would be only partly fused.
-        for name, module in wrappers:
-            if module.status != 'calibrated':
+        for name, module in model.named_modules():
+            if isinstance(module, LayerNormQuant) and module.status != 'calibrated':
                 raise RuntimeError(
                     f'LayerNormQuant {name} has not finished calibration'
                 )
@@ -52,7 +45,9 @@ class ApplyScalingFusionPass(BaseModuleFusionPass):
     def do_pass(self, model, object_module, object_name):
         members = [model.get_submodule(ref) for ref in object_module.member_refs]
         try:
-            replacement, target, updates = self._prepare(model, object_module, members)
+            self._check_shared_parameters(object_module, members)
+            replacement, target = self._build_replacement(model, object_module, members)
+            updates = self._build_smooth_updates(object_module, members)
         except (ValueError, RuntimeError, OSError, AttributeError) as exc:
             ModuleHelper.replace_module_by_name(
                 model, object_name, object_module.pre_op
@@ -78,76 +73,71 @@ class ApplyScalingFusionPass(BaseModuleFusionPass):
             'LayerNormQuant',
         )
 
-    @staticmethod
-    def _prepare(model, module, members):
-        _check_member_parameters(module, members)
-        target = (
-            build_local_adapter(
+    def _check_shared_parameters(self, module, members):
+        for member in members:
+            pairs = [
+                (member.scale_d, module.activation_scale),
+                (member.offset_d, module.activation_offset),
+            ]
+            if module.algorithm == 'smoothquant':
+                pairs.append((member.scale, module.smooth_factor))
+            for actual, expected in pairs:
+                if actual is None or expected is None:
+                    if actual is not expected:
+                        raise ValueError(
+                            'member parameters differ from calibrated pre_op parameters'
+                        )
+                elif actual.shape != expected.shape or not torch.equal(
+                    actual, expected
+                ):
+                    raise ValueError(
+                        'member parameters differ from calibrated pre_op parameters'
+                    )
+
+    def _build_replacement(self, model, module, members):
+        if module.dynamic_per_token:
+            target = build_local_adapter(
                 module.adapter,
                 model.get_submodule(module.target_ref),
                 members[0].act_type,
             )
-            if module.dynamic_per_token
-            else None
-        )
-        return _build_pre_op(module, members), target, _build_updates(module, members)
+            return module.pre_op, target
 
+        if len(members) == 1:
+            return module.pre_op, None
+        if module.activation_scale is None:
+            raise ValueError('activation_scale is missing')
 
-def _check_member_parameters(module, members):
-    for member in members:
-        pairs = [
-            (member.scale_d, module.activation_scale),
-            (member.offset_d, module.activation_offset),
-        ]
-        if module.algorithm == 'smoothquant':
-            pairs.append((member.scale, module.smooth_factor))
-        if any(not _same_parameter(actual, expected) for actual, expected in pairs):
-            raise ValueError(
-                'member parameters differ from calibrated pre_op parameters'
-            )
+        shared = SharedQuantize(
+            module.activation_scale,
+            module.activation_offset,
+            act_type=members[0].act_type,
+            output_dtype=members[0].weight.dtype,
+            act_granularity=module.act_granularity,
+        ).to(members[0].weight.device)
+        replacement = FusedPreOp(module.pre_op, shared)
+        replacement.train(module.training)
+        return replacement, None
 
+    def _build_smooth_updates(self, module, members):
+        if module.algorithm != 'smoothquant':
+            return []
 
-def _build_pre_op(module, members):
-    if module.dynamic_per_token or len(members) == 1:
-        return module.pre_op
-    if module.activation_scale is None:
-        raise ValueError('activation_scale is missing')
-    shared = SharedQuantize(
-        module.activation_scale,
-        module.activation_offset,
-        act_type=members[0].act_type,
-        output_dtype=members[0].weight.dtype,
-        act_granularity=module.act_granularity,
-    ).to(members[0].weight.device)
-    replacement = FusedPreOp(module.pre_op, shared)
-    replacement.train(module.training)
-    return replacement
+        smooth = module.smooth_factor
+        if smooth is None:
+            raise ValueError('smooth_factor is missing')
+        factor = smooth.reshape(-1)
+        norm = module.pre_op
+        if norm.weight is None or norm.weight.numel() != factor.numel():
+            raise ValueError('norm channels do not match smooth factor')
 
-
-def _build_updates(module, members):
-    if module.algorithm != 'smoothquant':
-        return []
-    smooth = module.smooth_factor
-    if smooth is None:
-        raise ValueError('smooth_factor is missing')
-    factor = smooth.reshape(-1)
-    norm = module.pre_op
-    if norm.weight is None or norm.weight.numel() != factor.numel():
-        raise ValueError('norm channels do not match smooth factor')
-
-    updates = []
-    for parameter in (norm.weight, getattr(norm, 'bias', None)):
-        if parameter is not None:
-            value = parameter.float() / factor.to(parameter.device)
-            updates.append((parameter, value.to(parameter.dtype)))
-    for member in members:
-        weight = member.weight
-        value = weight.float() * smooth.to(weight.device).float()
-        updates.append((weight, value.to(weight.dtype)))
-    return updates
-
-
-def _same_parameter(actual, expected):
-    if actual is None or expected is None:
-        return actual is expected
-    return actual.shape == expected.shape and torch.equal(actual, expected)
+        updates = []
+        for parameter in (norm.weight, getattr(norm, 'bias', None)):
+            if parameter is not None:
+                value = parameter.float() / factor.to(parameter.device)
+                updates.append((parameter, value.to(parameter.dtype)))
+        for member in members:
+            weight = member.weight
+            value = weight.float() * smooth.to(weight.device).float()
+            updates.append((weight, value.to(weight.dtype)))
+        return updates
