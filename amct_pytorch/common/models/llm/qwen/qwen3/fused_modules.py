@@ -19,10 +19,8 @@
 from amct_pytorch.classic.deploy_op.local_dynamic import make_local_adapter
 
 
-class Qwen3FusedAttention:
-    @staticmethod
-    def from_attention(attention, act_type='int8'):
-        return make_local_adapter(attention, _attention_forward, act_type)
+def qwen3_attention(attention, act_type='int8'):
+    return make_local_adapter(attention, _attention_forward, act_type)
 
 
 def _attention_forward(
@@ -71,10 +69,8 @@ def _attention_forward(
     return self.o_proj(output), weights
 
 
-class Qwen3FusedMLP:
-    @staticmethod
-    def from_mlp(mlp, act_type='int8'):
-        return make_local_adapter(mlp, _mlp_forward, act_type)
+def qwen3_mlp(mlp, act_type='int8'):
+    return make_local_adapter(mlp, _mlp_forward, act_type)
 
 
 def _mlp_forward(self, hidden_states):

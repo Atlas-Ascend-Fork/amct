@@ -19,15 +19,13 @@
 from amct_pytorch.classic.deploy_op.local_dynamic import make_local_adapter
 
 
-class ViTFusedAttention:
-    @staticmethod
-    def from_attention(attention, act_type='int8'):
-        forward = (
-            _attention_forward
-            if hasattr(attention, 'q_proj')
-            else _legacy_attention_forward
-        )
-        return make_local_adapter(attention, forward, act_type)
+def vit_attention(attention, act_type='int8'):
+    forward = (
+        _attention_forward
+        if hasattr(attention, 'q_proj')
+        else _legacy_attention_forward
+    )
+    return make_local_adapter(attention, forward, act_type)
 
 
 def _attention(self, query, key, value, mask, dropout, **kwargs):
@@ -91,11 +89,9 @@ def _legacy_attention_forward(self, hidden_states, **kwargs):
     ).contiguous(), weights
 
 
-class ViTFusedMLP:
-    @staticmethod
-    def from_mlp(mlp, act_type='int8'):
-        forward = _mlp_forward if hasattr(mlp, 'fc1') else _legacy_mlp_forward
-        return make_local_adapter(mlp, forward, act_type)
+def vit_mlp(mlp, act_type='int8'):
+    forward = _mlp_forward if hasattr(mlp, 'fc1') else _legacy_mlp_forward
+    return make_local_adapter(mlp, forward, act_type)
 
 
 def _mlp_forward(self, hidden_states):

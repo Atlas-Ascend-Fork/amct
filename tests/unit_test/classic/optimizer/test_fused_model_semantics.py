@@ -116,7 +116,7 @@ def _fuse_vit(layer):
             'vit_attention', layer.attention.attention, 'int8'
         )
         attn = layer.attention.attention
-        layer.intermediate = build_local_adapter(layer.intermediate, 'vit_mlp', 'int8')
+        layer.intermediate = build_local_adapter('vit_mlp', layer.intermediate, 'int8')
         mlp = layer.intermediate
     attn.shared_quantize = IdentityQuant()
     mlp.shared_quantize = IdentityQuant()

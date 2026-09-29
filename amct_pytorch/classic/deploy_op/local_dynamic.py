@@ -25,25 +25,24 @@ from pathlib import Path
 from amct_pytorch.classic.deploy_op.shared_quantize import SharedDynamicQuantize
 
 
-_ADAPTORS = {
+_ADAPTER_BUILDERS = {
     'qwen3_attention': (
         'llm/qwen/qwen3/fused_modules.py',
-        'Qwen3FusedAttention',
-        'from_attention',
+        'qwen3_attention',
     ),
-    'qwen3_mlp': ('llm/qwen/qwen3/fused_modules.py', 'Qwen3FusedMLP', 'from_mlp'),
-    'vit_attention': ('vit/fused_modules.py', 'ViTFusedAttention', 'from_attention'),
-    'vit_mlp': ('vit/fused_modules.py', 'ViTFusedMLP', 'from_mlp'),
+    'qwen3_mlp': ('llm/qwen/qwen3/fused_modules.py', 'qwen3_mlp'),
+    'vit_attention': ('vit/fused_modules.py', 'vit_attention'),
+    'vit_mlp': ('vit/fused_modules.py', 'vit_mlp'),
 }
 
 
 def build_local_adapter(adapter, original, act_type):
     '''Build a registered attention or MLP adapter for dynamic deployment.'''
-    if adapter not in _ADAPTORS:
+    if adapter not in _ADAPTER_BUILDERS:
         raise ValueError(f'unsupported dynamic adapter: {adapter}')
-    relative, class_name, method = _ADAPTORS[adapter]
-    adapter_class = getattr(_load_adapter_module(relative), class_name)
-    return getattr(adapter_class, method)(original, act_type)
+    relative, builder_name = _ADAPTER_BUILDERS[adapter]
+    builder = getattr(_load_adapter_module(relative), builder_name)
+    return builder(original, act_type)
 
 
 def make_local_adapter(original, forward, act_type):
