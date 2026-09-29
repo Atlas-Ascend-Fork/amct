@@ -18,6 +18,7 @@
 __all__ = [
     'BaseModuleFusionPass',
     'InsertQuantizeModulePass',
+    'InsertLayerNormQuantPass',
     'ModelOptimizer',
     'ReplaceNpuQuantModulePass',
 ]
@@ -25,6 +26,9 @@ __all__ = [
 from amct_pytorch.classic.optimizer.base_module_fusion_pass import BaseModuleFusionPass
 from amct_pytorch.classic.optimizer.insert_quantize_op_pass import (
     InsertQuantizeModulePass,
+)
+from amct_pytorch.classic.optimizer.insert_layer_norm_quant_pass import (
+    InsertLayerNormQuantPass,
 )
 from amct_pytorch.classic.optimizer.model_optimizer import ModelOptimizer
 from amct_pytorch.classic.optimizer.replace_npu_quant_pass import (

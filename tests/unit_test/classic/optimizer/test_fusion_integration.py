@@ -117,9 +117,11 @@ register_test_patterns = pytest.fixture(autouse=True)(register_test_patterns)
 def test_invalid_candidate_keeps_independent_members_and_other_group(reason):
     from amct_pytorch.classic.optimizer.layer_norm_quant import (
         LayerNormQuant,
-        install_layer_norm_quants,
     )
-    from amct_pytorch.classic.optimizer import InsertQuantizeModulePass
+    from amct_pytorch.classic.optimizer import (
+        InsertQuantizeModulePass,
+        InsertLayerNormQuantPass,
+    )
     from amct_pytorch.common.config import parse_config
     from amct_pytorch.algorithms import AlgorithmRegistry
 
@@ -139,7 +141,7 @@ def test_invalid_candidate_keeps_independent_members_and_other_group(reason):
         ] = 0.3
     if reason == 'missing':
         del model.layers[0].self_attn.k_proj
-    install_layer_norm_quants(model)
+    InsertLayerNormQuantPass().run(model)
     assert not isinstance(model.layers[0].input_layernorm, LayerNormQuant)
     assert isinstance(model.layers[0].post_attention_layernorm, LayerNormQuant)
     assert model.layers[0].self_attn.q_proj.shared_param_mode is None
@@ -159,9 +161,11 @@ def test_unregistered_structure_is_not_wrapped(monkeypatch):
 def test_non_int8_activation_candidate_is_not_wrapped():
     from amct_pytorch.classic.optimizer.layer_norm_quant import (
         LayerNormQuant,
-        install_layer_norm_quants,
     )
-    from amct_pytorch.classic.optimizer import InsertQuantizeModulePass
+    from amct_pytorch.classic.optimizer import (
+        InsertQuantizeModulePass,
+        InsertLayerNormQuantPass,
+    )
     from amct_pytorch.common.config import parse_config
     from amct_pytorch.algorithms import AlgorithmRegistry
 
@@ -176,6 +180,6 @@ def test_non_int8_activation_candidate_is_not_wrapped():
     ):
         member.act_type = 'hifloat8'
         member.quant_config['inputs_cfg']['quant_type'] = 'hifloat8'
-    install_layer_norm_quants(model)
+    InsertLayerNormQuantPass().run(model)
     assert not isinstance(model.layers[0].input_layernorm, LayerNormQuant)
     assert isinstance(model.layers[0].post_attention_layernorm, LayerNormQuant)

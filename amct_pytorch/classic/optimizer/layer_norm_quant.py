@@ -18,61 +18,12 @@
 
 import copy
 import weakref
-from dataclasses import dataclass
 
 import torch
 from torch import nn
-from amct_pytorch.common.utils.model_util import ModuleHelper
 
 from amct_pytorch.classic.quantize_op.utils import calculate_scale_offset
 from amct_pytorch.common.utils.log import LOGGER
-
-
-@dataclass(frozen=True)
-class LayerNormQuantSpec:
-    '''Installation spec for one shared-input pre_op.'''
-
-    pre_op_ref: str
-    member_refs: tuple[str, ...]
-    target_ref: str
-    adapter: str
-    algorithm: str
-    act_granularity: str
-    batch_num: int
-    dynamic_per_token: bool
-
-
-def install_layer_norm_quants(model, patterns=None):
-    '''Replace whitelisted pre_ops with LayerNormQuant modules.'''
-    from amct_pytorch.classic.optimizer.fusion_pattern import (
-        build_layer_norm_quant_specs,
-    )
-
-    specs = build_layer_norm_quant_specs(model, patterns)
-
-    modules = []
-    for spec in specs:
-        pre_op = model.get_submodule(spec.pre_op_ref)
-        module = LayerNormQuant(
-            pre_op=pre_op,
-            model=model,
-            member_refs=spec.member_refs,
-            target_ref=spec.target_ref,
-            adapter=spec.adapter,
-            algorithm=spec.algorithm,
-            act_granularity=spec.act_granularity,
-            batch_num=spec.batch_num,
-            dynamic_per_token=spec.dynamic_per_token,
-        )
-        ModuleHelper.replace_module_by_name(model, spec.pre_op_ref, module)
-        modules.append(module)
-        LOGGER.logd(
-            f'Installed LayerNormQuant {spec.pre_op_ref}, '
-            f'members={list(spec.member_refs)}, '
-            f'dynamic_per_token={spec.dynamic_per_token}',
-            'LayerNormQuant',
-        )
-    return modules
 
 
 class LayerNormQuant(nn.Module):

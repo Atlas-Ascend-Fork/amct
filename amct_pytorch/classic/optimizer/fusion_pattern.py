@@ -20,8 +20,21 @@ from dataclasses import dataclass
 
 from amct_pytorch.classic.quantize_op import MinMaxQuant, SmoothQuant
 
-from amct_pytorch.classic.optimizer.layer_norm_quant import LayerNormQuantSpec
 from amct_pytorch.common.utils.log import LOGGER
+
+
+@dataclass(frozen=True)
+class LayerNormQuantSpec:
+    '''Installation spec for one shared-input pre_op.'''
+
+    pre_op_ref: str
+    member_refs: tuple[str, ...]
+    target_ref: str
+    adapter: str
+    algorithm: str
+    act_granularity: str
+    batch_num: int
+    dynamic_per_token: bool
 
 
 @dataclass(frozen=True)
