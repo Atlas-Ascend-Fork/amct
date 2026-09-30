@@ -84,9 +84,9 @@ model.load_state_dict(torch.load(state_dict_path))
 input_data = tuple([torch.randn(input_shape)])
  
 # 生成蒸馏配置文件
-amct.create_distill_config(config_file="./configs/config.json",
-                           model,
+amct.create_distill_config(model,
                            input_data,
+                           config_file="./configs/config.json",
                            config_defination="./configs/distill.cfg")
 ```
 
