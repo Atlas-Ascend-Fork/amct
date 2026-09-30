@@ -18,7 +18,7 @@ _昇腾模型压缩工具_
 
 ## 🔥 最新动态
 
-- **[2026/09/29]** 新增DeepSeekV4.1-Flash网络量化，并提供 [DeepSeekV4.1-Flash-HiFloat8量化Agent实践](./examples/models/deepseekv4.1/DeepSeekV4.1-Flash-Quantization-Agent.md) 样例
+- **[2026/09/29]** 新增DeepSeekV4.1-Flash网络量化，并提供 [AMCT 低精度量化Agent量化实践](./examples/models/deepseekv4.1/DeepSeekV4.1-Flash-Quantization-Agent.md) 样例
 - **[2026/08/07]** 新增结构化剪枝（`amct_pytorch.pruning`），支持 MoE 专家 / Dense FFN / CNN 通道剪枝，并提供 [Qwen3.6-MoE 结构化剪枝](./examples/models/qwen3.6/Qwen3.6-Moe-Pruning.md) 的一站式单卡样例
 - **[2026/05/28]** 新增当前主流 LLM 网络量化、PTQ 算法支持，并提供 [DeepSeek-V4](./examples/models/deepseekv4/DeepSeekV4-Flash-Walkthrough.md) 和 [Qwen3.6-MoE](./examples/models/qwen3.6/Qwen3.6-Moe.md) 的一站式样例
 - **[2026/04/24]** 新增 [DeepSeek-V4](./amct_pytorch/experimental/deepseek-v4/README.md) 模型 INT8 量化支持

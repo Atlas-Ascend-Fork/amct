@@ -1,4 +1,4 @@
-# DeepSeekV4.1-Flash-HiFloat8 量化Agent实践
+# AMCT 低精度量化Agent量化实践
 
 AMCT面向昇腾平台提供从模型接入、量化方案选择、量化实验、精度验证到部署权重导出的完整流程。通过 Agent 工作流，AMCT可以结合已有 Casebook 自动推荐方案、调用量化工具执行实验，并将方案与过程沉淀为可复用资产。
 

@@ -18,7 +18,7 @@ English | [简体中文](./README.md)
 
 ## 🔥 Latest Updates
 
-- **[2026/09/29]** Added DeepSeekV4.1-Flash network quantization, with a [DeepSeekV4.1-Flash-HiFloat8 Quantization Agent Practice](./examples/models/deepseekv4.1/DeepSeekV4.1-Flash-Quantization-Agent_en.md) sample
+- **[2026/09/29]** Added DeepSeekV4.1-Flash network quantization, with a [AMCT Low-Precision Quantization Agent Quantization Practice](./examples/models/deepseekv4.1/DeepSeekV4.1-Flash-Quantization-Agent_en.md) sample
 - **[2026/08/07]** Added structured pruning (`amct_pytorch.pruning`) for MoE experts / dense FFN / CNN channels, with a [Qwen3.6-MoE structured pruning](./examples/models/qwen3.6/Qwen3.6-Moe-Pruning_en.md) one-stop single-card sample
 - **[2026/05/28]** Added current mainstream LLM network quantization, PTQ algorithm support, and provided [DeepSeek-V4](./examples/models/deepseekv4/DeepSeekV4-Flash-Walkthrough.md) and [Qwen3.6-MoE](./examples/models/qwen3.6/Qwen3.6-Moe.md) one-stop samples
 - **[2026/04/24]** Added [DeepSeek-V4](./amct_pytorch/experimental/deepseek-v4/README.md) model INT8 quantization support
