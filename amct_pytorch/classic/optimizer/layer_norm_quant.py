@@ -44,6 +44,11 @@ class LayerNormQuant(nn.Module):
         dynamic_per_token=False,
     ):
         super().__init__()
+        if act_granularity == 'token' and not dynamic_per_token:
+            raise ValueError(
+                'static per-token quantization is unsupported: deployment scales '
+                'depend on runtime batch and sequence length'
+            )
         self.pre_op = pre_op
         # Do not use ModuleList: projections belong to their attention/MLP.
         # Whole-model deepcopy preserves these aliases through its shared memo.
@@ -58,8 +63,6 @@ class LayerNormQuant(nn.Module):
 
         self.register_buffer('act_max', None, persistent=False)
         self.register_buffer('act_min', None, persistent=False)
-        self.register_buffer('token_max', None, persistent=False)
-        self.register_buffer('token_min', None, persistent=False)
         self.register_buffer('smooth_factor', None)
         self.register_buffer('activation_scale', None)
         self.register_buffer('activation_offset', None)
@@ -85,17 +88,8 @@ class LayerNormQuant(nn.Module):
         if self.algorithm == 'minmax' and self.dynamic_per_token:
             self.batch_count += 1
             return
-        if self.algorithm == 'minmax' and self.act_granularity == 'token':
-            axes = tuple(axis for axis in range(inputs.ndim) if axis != inputs.ndim - 2)
-            batch_max = inputs.amax(axes, keepdim=True)
-            batch_min = inputs.amin(axes, keepdim=True)
-            if self.act_max is not None and self.act_max.shape != batch_max.shape:
-                raise ValueError(
-                    'static per-token calibration requires matching token shapes'
-                )
-        else:
-            batch_max = inputs.reshape(-1, inputs.shape[-1]).amax(dim=0, keepdim=True)
-            batch_min = inputs.reshape(-1, inputs.shape[-1]).amin(dim=0, keepdim=True)
+        batch_max = inputs.reshape(-1, inputs.shape[-1]).amax(dim=0, keepdim=True)
+        batch_min = inputs.reshape(-1, inputs.shape[-1]).amin(dim=0, keepdim=True)
         self.act_max = (
             batch_max
             if self.act_max is None
@@ -106,30 +100,6 @@ class LayerNormQuant(nn.Module):
             if self.act_min is None
             else torch.minimum(self.act_min, batch_min)
         )
-        if (
-            self.algorithm == 'smoothquant'
-            and self.act_granularity == 'token'
-            and not self.dynamic_per_token
-        ):
-            # Keep token/channel extrema, never the complete batch input. Smooth
-            # is positive, so reducing batches before dividing is equivalent.
-            axes = tuple(range(inputs.ndim - 2))
-            token_max = inputs.amax(axes, keepdim=True) if axes else inputs.clone()
-            token_min = inputs.amin(axes, keepdim=True) if axes else inputs.clone()
-            if self.token_max is not None and token_max.shape != self.token_max.shape:
-                raise ValueError(
-                    'static per-token calibration requires matching token shapes'
-                )
-            self.token_max = (
-                token_max
-                if self.token_max is None
-                else torch.maximum(self.token_max, token_max)
-            )
-            self.token_min = (
-                token_min
-                if self.token_min is None
-                else torch.minimum(self.token_min, token_min)
-            )
         self.batch_count += 1
 
     @torch.no_grad()
@@ -153,16 +123,10 @@ class LayerNormQuant(nn.Module):
             )
         if not self.dynamic_per_token:
             maximum, minimum = self.act_max, self.act_min
-            if self.act_granularity == 'token' and self.algorithm == 'smoothquant':
-                maximum, minimum = self.token_max, self.token_min
             if self.smooth_factor is not None:
                 maximum = maximum / self.smooth_factor
                 minimum = minimum / self.smooth_factor
-            if self.act_granularity == 'token':
-                maximum = maximum.amax(dim=-1, keepdim=True)
-                minimum = minimum.amin(dim=-1, keepdim=True)
-            else:
-                maximum, minimum = maximum.max().reshape(-1), minimum.min().reshape(-1)
+            maximum, minimum = maximum.max().reshape(-1), minimum.min().reshape(-1)
             self.activation_scale, self.activation_offset = calculate_scale_offset(
                 maximum, minimum, first.act_symmetric, first.act_type
             )
@@ -175,7 +139,7 @@ class LayerNormQuant(nn.Module):
                 activation_offset=self.activation_offset,
             )
         self.status = 'calibrated'
-        self.act_max = self.act_min = self.token_max = self.token_min = None
+        self.act_max = self.act_min = None
         LOGGER.logd(
             f'LayerNormQuant finalized: members={list(self.member_refs)}, '
             f'batch_count={self.batch_count}',

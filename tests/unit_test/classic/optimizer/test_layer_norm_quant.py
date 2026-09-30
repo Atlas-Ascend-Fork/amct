@@ -288,3 +288,11 @@ def test_static_token_does_not_build_shared_group():
 
     layer = TinyLayer(strategy='token', dynamic=False)
     assert build_layer_norm_quant_specs(layer) == []
+
+
+def test_static_token_layer_norm_quant_is_rejected():
+    import pytest
+
+    layer = TinyLayer(strategy='token', dynamic=False)
+    with pytest.raises(ValueError, match='static per-token quantization'):
+        _layer_norm_quant(layer, strategy='token', dynamic=False)
