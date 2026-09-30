@@ -1,26 +1,19 @@
-# -*- coding: UTF-8 -*-
-# ----------------------------------------------------------------------------
-# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
-#
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
+# http://www.apache.org/licenses/LICENSE-2.0
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# ----------------------------------------------------------------------------
 
 """Rewrite one safetensors shard in place of load_file plus save_file.
 
-save_file needs every tensor of a shard resident at once. DeepSeek V4.1 ships
-two 94.6 GiB shards whose engram table dwarfs the 0.15 GiB a conversion touches,
-so tensors that are not replaced are copied byte range to byte range here and
-never become torch objects.
+save_file needs every tensor of a shard resident at once, and DeepSeek V4.1 ships
+two 94.6 GiB shards whose engram table dwarfs the 0.15 GiB a conversion touches.
+Tensors that are not replaced are copied byte range to byte range instead.
 """
 
 import json
