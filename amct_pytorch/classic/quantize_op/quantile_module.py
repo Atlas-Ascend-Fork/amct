@@ -126,7 +126,8 @@ class QuantileQuant(BaseQuantizeModule):
             scale: HIF8 scale factor
         """
         if tensor_max is not None:
-            return (tensor_max / QUANT_SCOPE[HIFLOAT8]).to(torch.float32)
+            scale = (tensor_max / QUANT_SCOPE[HIFLOAT8]).to(torch.float32)
+            return torch.where(scale == 0, torch.ones_like(scale), scale)
         else:
             return tensor_max
 

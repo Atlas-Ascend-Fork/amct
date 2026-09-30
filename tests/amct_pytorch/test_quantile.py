@@ -60,6 +60,53 @@ class TestQuantileQuant(unittest.TestCase):
     def tearDown(self):
         del sys.modules['torch_npu']
 
+    def test_zero_weight_and_activation_scales_keep_fake_quant_finite(self):
+        for case in ('zero_channel', 'zero_activation', 'control'):
+            zero_channel = case == 'zero_channel'
+            zero_activation = case == 'zero_activation'
+            model = nn.Sequential(nn.Linear(4, 3, bias=False).to(torch.bfloat16))
+            with torch.no_grad():
+                model[0].weight.fill_(1.0)
+                if zero_channel:
+                    model[0].weight[0].zero_()
+            cfg = {
+                'batch_num': 1,
+                'quant_cfg': {
+                    'weights': {
+                        'type': 'hifloat8',
+                        'symmetric': True,
+                        'strategy': 'channel' if zero_channel else 'tensor',
+                    },
+                    'inputs': {
+                        'type': 'hifloat8',
+                        'symmetric': True,
+                        'strategy': 'tensor',
+                    },
+                },
+                'algorithm': {'quantile'},
+            }
+            quantize(model, cfg)
+            inputs = torch.zeros(2, 4, dtype=torch.bfloat16)
+            if not zero_activation:
+                inputs.fill_(1.0)
+
+            with patch.object(
+                quant_util, 'hifloat8_fake_quant', side_effect=lambda tensor: tensor
+            ):
+                model(inputs)
+                output = model(inputs)
+
+            self.assertTrue(torch.isfinite(output).all())
+            if zero_channel:
+                expected = torch.tensor([[0.0, 4.0, 4.0]], dtype=output.dtype).expand(
+                    2, -1
+                )
+            elif zero_activation:
+                expected = torch.zeros_like(output)
+            else:
+                expected = torch.full_like(output, 4.0)
+            torch.testing.assert_close(output, expected)
+
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch(
