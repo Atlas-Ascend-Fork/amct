@@ -58,7 +58,9 @@ if __name__ == '__main__':
 
     logger = create_logger()
     seed_everything()
-    os.makedirs(os.path.dirname(args.flat_matrix_path), exist_ok=True)
+    flat_matrix_dir = os.path.dirname(args.flat_matrix_path)
+    if flat_matrix_dir:
+        os.makedirs(flat_matrix_dir, exist_ok=True)
 
     # Phase0: choose model && data
     model = get_llama(args.model_path)
