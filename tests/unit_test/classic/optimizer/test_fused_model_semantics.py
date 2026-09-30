@@ -365,15 +365,16 @@ def test_quantize_calibrate_convert_real_model(
     if x.is_floating_point():
         x = x.float()
     wrappers = [m for m in model.modules() if isinstance(m, LayerNormQuant)]
-    assert len(wrappers) == (1 if family == 'vit' and algorithm == 'minmax' else 2)
+    expected_wrapper_count = (
+        0
+        if mode == 'static_token'
+        else (1 if family == 'vit' and algorithm == 'minmax' else 2)
+    )
+    assert len(wrappers) == expected_wrapper_count
     with torch.no_grad():
         model(x)
         model(x)
-        expected = (
-            None
-            if (mode == 'dynamic_token' or (family == 'vit' and mode == 'static_token'))
-            else model(x)
-        )
+        expected = None if mode != 'tensor' else model(x)
     for wrapper in wrappers:
         assert wrapper.status == 'calibrated'
         for member in wrapper.scaling_layers:
@@ -394,15 +395,15 @@ def test_quantize_calibrate_convert_real_model(
         assert torch.isfinite(actual).all()
     else:
         torch.testing.assert_close(actual, expected, atol=1e-5, rtol=1e-4)
-    if mode == 'dynamic_token':
-        assert cpu_quant_kernels['dynamic'] == 2
-        assert cpu_quant_kernels['static'] == 0
-    elif family == 'vit' and mode == 'static_token':
-        # ViT fc1 is a single-member group. It keeps its own legacy token
-        # deployment path, while the Q/K/V group uses shared static quant.
-        assert cpu_quant_kernels == {'static': 1, 'dynamic': 1}
-    elif family == 'qwen3':
+    if mode == 'tensor':
         assert cpu_quant_kernels == {'static': 2, 'dynamic': 0}
+    else:
+        # Issue #139: per-token deployment stays runtime dynamic. Dynamic groups
+        # share one call per group; static-token groups are not built.
+        expected_dynamic = (
+            2 if mode == 'dynamic_token' else (5 if family == 'qwen3' else 4)
+        )
+        assert cpu_quant_kernels == {'static': 0, 'dynamic': expected_dynamic}
 
 
 def test_local_vit_adapters_compile_without_graph_breaks():

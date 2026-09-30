@@ -160,34 +160,6 @@ def test_minmax_dynamic_group_only_marks_shared_mode():
     assert layer.self_attn.k_proj.scale_d is None
 
 
-def test_shared_static_token_extrema_match_all_calibration_inputs():
-    from amct_pytorch.classic.quantize_op.utils import calculate_scale_offset
-
-    layer = TinyLayer(strategy='token')
-    wrapper = _layer_norm_quant(layer, strategy='token')
-    wrapper.batch_num = 2
-    layer.input_layernorm = wrapper
-    for member in wrapper.scaling_layers:
-        member.batch_num = 2
-    inputs = [torch.randn(2, 3, 4, requires_grad=True) for _ in range(2)]
-    outputs = [wrapper.pre_op(x).detach() for x in inputs]
-    layer(inputs[0])
-    assert wrapper.act_max.grad_fn is None
-    assert all(m.batch_input is None for m in wrapper.scaling_layers)
-    layer(inputs[1])
-    scaled = torch.cat([x / wrapper.smooth_factor for x in outputs], dim=0)
-    scale, offset = calculate_scale_offset(
-        scaled.amax((0, 2), keepdim=True),
-        scaled.amin((0, 2), keepdim=True),
-        True,
-        'int8',
-    )
-    torch.testing.assert_close(wrapper.activation_scale, scale)
-    torch.testing.assert_close(wrapper.activation_offset, offset)
-    assert wrapper.token_max is None
-    assert wrapper.token_min is None
-
-
 def test_finalize_executes_once_and_releases_statistics():
     from unittest.mock import patch
 
@@ -300,18 +272,6 @@ def test_convert_incomplete_calibration_does_not_partially_fuse():
     assert isinstance(layer.input_layernorm, LayerNormQuant)
 
 
-def test_minmax_static_token_keeps_only_token_extrema():
-    layer = TinyLayer('minmax', 'token', False)
-    layer.input_layernorm = _layer_norm_quant(layer, 'minmax', 'token', False)
-    wrapper = layer.input_layernorm
-    wrapper.batch_num = 2
-    wrapper(torch.randn(2, 3, 4))
-    assert wrapper.token_max is None
-    assert wrapper.token_min is None
-    assert wrapper.act_max.shape == (1, 3, 1)
-    assert wrapper.act_min.shape == (1, 3, 1)
-
-
 def test_weight_only_minmax_retains_fakequant_forward():
     config = _config('minmax')
     config['inputs_cfg'] = {'enable_quant': False}
@@ -319,3 +279,12 @@ def test_weight_only_minmax_retains_fakequant_forward():
     result = module(torch.randn(2, 4))
     assert result.shape == (2, 3)
     assert torch.isfinite(result).all()
+
+
+def test_static_token_does_not_build_shared_group():
+    from amct_pytorch.classic.optimizer.model_structure import (
+        build_layer_norm_quant_specs,
+    )
+
+    layer = TinyLayer(strategy='token', dynamic=False)
+    assert build_layer_norm_quant_specs(layer) == []

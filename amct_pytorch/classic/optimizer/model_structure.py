@@ -192,6 +192,10 @@ def _build_layer_norm_quant_spec(
         return None
     if first['strategy'] not in ('tensor', 'token'):
         return None
+    # Per-token deployment scales depend on batch * seqlen and must be computed
+    # at runtime (issue #139). Only explicitly dynamic token groups are fused.
+    if first['strategy'] == 'token' and first['dynamic'] is not True:
+        return None
     if first['dynamic'] and (first['strategy'] != 'token' or not first['symmetric']):
         return None
     weights = [member.weight for member in members]
