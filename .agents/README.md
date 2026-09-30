@@ -4,6 +4,7 @@ amct 仓的 Agent Skills 基础设施（`.agents/`），以 skill 为单元封�
 
 当前内置：
 - **quant-workflow**：LLM 量化全流程编排主入口（方案推荐 → PTQ → 部署导出，见下文）
+- **amct-coder**：AMCT 源码级编码辅助入口（实现规划 / 改代码 / 行为诊断 / 代码 review；编排外独立工具）
 - **amct-ops-dev**：NPU 算子开发（编排外独立工具）
 - **gitcode-pr / gitcode-issue**：GitCode 仓库协作操作
 
@@ -36,10 +37,16 @@ clone 本仓即可直接使用，Agent Skills 自动加载（机制见 [docs/arc
 | 「达标了，导出权重 + 写交付文档」 | `deploy-export` 导出 + `deploy_quantization.md` |
 | 「deploy 目录有了，就差交付文档」 | `deploy-export`（阶段 5 补文档）|
 | 「量化后 PPL 比 BF16 还低，正常吗」 | `quant-workflow` 先查链路再判定 |
+| 「`llm_deploy.py` 的 index 刷新逻辑有 bug，帮我改」/「给 `--quant_dtype` 加一个取值」 | `amct-coder` 源码级编码（改实现代码）|
+| 「PTQ 日志说参数更新了但 PPL 没动，从代码上帮我查为什么」 | `amct-coder` 行为诊断（沿源码链路取证，不跑实验）|
+| 「这个改动落点对不对」/「帮我 review 一下这次 diff 有没有越层」 | `amct-coder` 落点与契约 review |
+| 「新增一个 fp8 dtype 并接进 CLI」 | `amct-coder` 主手册 `quant-dtype-module`（命中门禁对象 → 契约状态表逐项过）|
 | 「在 amct_ops 里加一个 mxfp4 cast 算子」/「照 hifloat8_cast 模板写个新 NPU 算子」 | `amct-ops-dev` 算子开发 |
 | 「ops_build.sh 怎么按 A2/A3/A5 切 NPU_ARCH」/「torch.compile 报 no Meta kernel 怎么补」 | `amct-ops-dev` 构建/调试 |
 
 整句覆盖全流程 → 走完整编排；只说其中一段 → 直接分流到对应叶子，不强行走完整流程。`amct-ops-dev` 属编排外的独立 NPU 算子开发工具，按需直接点名，不进 `quant-workflow`。
+
+`amct-coder` 同样是编排外的独立工具，与编排链的分界按**动作**判断、不按关键词：「跑 eval/deploy 拿结果」属编排链（`quant-workflow` 及其叶子），「改 eval/deploy 的实现代码、诊断其行为」属 `amct-coder`。它与 `amct-ops-dev` 的分工是按层：`amct-coder` 管 `amct_pytorch` 源码（CLI / workflow / solver / quant module / dtype / algorithm / adapter / deploy / public API），`amct-ops-dev` 管 `amct_ops` 里的 NPU 算子实现；`amct-coder` 遇到算子内部实现会转 `amct-ops-dev`，只管上层接入与 fallback。`amct-coder` 自身也按职责委派（细则见其 `references/delegation.md`）：结构性模型适配转 `quant-tools/model-adapter`，实际跑命令转 `quant-tools/quant-run`，精度/收益判读转 `direct-quant-eval` 或 `algorithm-validation`，NPU 算子实现转 `amct-ops-dev`。
 
 编排顺序：适配（未适配时）→ 方案 → 直转（`delta ≤ 0.2` 可直接导出）→ 超阈则升级 PTQ → 导出。
 
@@ -74,6 +81,7 @@ clone 本仓即可直接使用，Agent Skills 自动加载（机制见 [docs/arc
 │   ├── quant-workflow/    # LLM 量化流程入口（调度）
 │   ├── quant-tools/       # 被调度的量化叶子技能（含 model-adapter + references 共享）
 │   │  # 编排外的独立 skill（用户直接点名调用）
+│   ├── amct-coder/        # AMCT 源码级编码 / 行为诊断 / 代码 review
 │   ├── amct-ops-dev/      # NPU 算子开发
 │   ├── gitcode-pr/        # PR 创建 / 评论
 │   ├── gitcode-issue/     # issue 读取
