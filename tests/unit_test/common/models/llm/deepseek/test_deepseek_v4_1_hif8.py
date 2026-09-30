@@ -77,7 +77,9 @@ def _hif8_model(tmp_path):
     rows = GROUPS * RANK
     tensors = {UNTOUCHED: torch.ones(COLUMNS, dtype=torch.bfloat16)}
     for name in (PLAIN, WO_A):
-        tensors[f"{name}.weight"] = torch.ones((rows, COLUMNS), dtype=torch.float8_e4m3fn)
+        tensors[f"{name}.weight"] = torch.ones(
+            (rows, COLUMNS), dtype=torch.float8_e4m3fn
+        )
         tensors[f"{name}.scale"] = torch.full(
             (rows // 32, COLUMNS // 32), 127, dtype=torch.uint8
         ).view(torch.float8_e8m0fnu)
