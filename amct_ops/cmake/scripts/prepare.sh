@@ -88,8 +88,8 @@ done
 
 function clean() {
     if [ -n "${PATH_TO_BUILD}" ];then
-        rm -rf ${PATH_TO_BUILD}
-        mkdir -p ${PATH_TO_BUILD}
+        rm -rf -- "${PATH_TO_BUILD}"
+        mkdir -p -- "${PATH_TO_BUILD}"
     fi
 }
 
@@ -110,7 +110,7 @@ function set_env() {
 }
 
 function build() {
-    cd ${PATH_TO_BUILD}
+    cd -- "${PATH_TO_BUILD}"
     cmake ${PATH_TO_SOURCE} \
         -DBUILD_OPEN_PROJECT=${BUILD_OPEN_PROJECT} \
         -DPREPARE_BUILD=ON \
