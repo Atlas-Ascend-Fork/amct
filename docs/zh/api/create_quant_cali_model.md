@@ -93,7 +93,7 @@ model.load_state_dict(torch.load(state_dict_path))
 record_file = os.path.join(TMP, 'kv_cache.txt')
 # 插入量化API，生成量化校准模型
 calibration_model = amct.create_quant_cali_model(
-                    config_file="./configs/config.json",  # 生成的量化因子记录文件
-                    record_file,                   
-                    model)
+                    record_file,
+                    model,
+                    config_file="./configs/config.json")  # 生成的量化因子记录文件
 ```
