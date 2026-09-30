@@ -57,11 +57,20 @@ def make_local_adapter(original, forward, act_type):
     return fused
 
 
+def _register_adapter_type(adapter_type):
+    # torch.save serializes a module by its class's module and qualname. Keep
+    # dynamically generated adapters in this importable namespace so a saved
+    # deployment model can be restored in a fresh process.
+    setattr(sys.modules[__name__], adapter_type.__name__, adapter_type)
+    return adapter_type
+
+
 @lru_cache(maxsize=None)
 def _adapter_type(original_type, forward):
-    return type(
+    adapter_type = type(
         f'Fused{original_type.__name__}', (original_type,), {'forward': forward}
     )
+    return _register_adapter_type(adapter_type)
 
 
 @lru_cache(maxsize=None)

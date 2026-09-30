@@ -259,6 +259,19 @@ def test_qwen_fused_layer_preserves_layer_type_and_output_capture():
     assert len(actual.hidden_states) == len(expected.hidden_states)
 
 
+def test_dynamic_adapters_are_serializable(tmp_path):
+    layer = _qwen('eager').model.layers[0]
+    fused = _fuse_qwen(layer)
+    path = tmp_path / 'fused-qwen3.pt'
+
+    torch.save(fused, path)
+    loaded = torch.load(path, weights_only=False)
+
+    assert isinstance(loaded.self_attn, type(fused.self_attn))
+    assert isinstance(loaded.mlp, type(fused.mlp))
+    assert isinstance(loaded.self_attn.shared_quantize, IdentityQuant)
+
+
 def test_vit_fused_layer_preserves_layer_type_and_output_capture():
     config = ViTConfig(hidden_size=16, intermediate_size=32, num_attention_heads=4)
     config._attn_implementation = 'eager'
