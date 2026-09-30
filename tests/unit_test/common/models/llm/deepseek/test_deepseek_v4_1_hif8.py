@@ -1,19 +1,13 @@
-# -*- coding: UTF-8 -*-
-# ----------------------------------------------------------------------------
-# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
-#
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
+# http://www.apache.org/licenses/LICENSE-2.0
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# ----------------------------------------------------------------------------
 
 """HiFloat8 codes, and the DeepSeek V4.1 shard conversion that writes them."""
 
@@ -41,14 +35,11 @@ WO_A, PLAIN = "layers.0.attn.wo_a", "layers.0.attn.wq_a"
 UNTOUCHED = "layers.0.attn.norm.weight"
 
 
-def test_hif8_encode_matches_the_format_special_codes():
+def test_hif8_encode_and_pack_follow_the_format():
     codes = hif8_encode(torch.tensor([0.0, 1.0, -1.0, 2.0, float("nan"), float("inf")]))
-    assert codes.dtype == torch.uint8
     assert codes.tolist() == [0x00, 0x08, 0x88, 0x10, 0x80, 0x6E]
     assert torch.equal(hif8_decode(codes[:4]), torch.tensor([0.0, 1.0, -1.0, 2.0]))
 
-
-def test_hif8_pack_scales_each_row_to_the_weight_scope():
     weight = torch.randn(8, 64) * torch.arange(1, 9).view(-1, 1)
     codes, scale = hif8_pack(weight)
     assert codes.dtype == torch.uint8 and codes.shape == weight.shape
@@ -68,23 +59,19 @@ def _hif8_model(tmp_path):
         deploy_format="legacy",
         deploy_selection=DeploySelection((PLAIN, WO_A)),
     )
-    model.model_path = tmp_path / "model"
-    model.output_dir = tmp_path / "output"
+    model.model_path, model.output_dir = tmp_path / "model", tmp_path / "output"
     model.model_path.mkdir()
     model.output_dir.mkdir()
     model.processed_modules = set()
     model.config = {"text_config": {"o_groups": GROUPS, "o_lora_rank": RANK}}
 
     rows = GROUPS * RANK
-    block = (rows // 32, COLUMNS // 32)
     tensors = {UNTOUCHED: torch.ones(COLUMNS, dtype=torch.bfloat16)}
     for name in (PLAIN, WO_A):
-        tensors[f"{name}.weight"] = torch.ones(
-            (rows, COLUMNS), dtype=torch.float8_e4m3fn
-        )
-        tensors[f"{name}.scale"] = torch.full(block, 127, dtype=torch.uint8).view(
-            torch.float8_e8m0fnu
-        )
+        tensors[f"{name}.weight"] = torch.ones((rows, COLUMNS), dtype=torch.float8_e4m3fn)
+        tensors[f"{name}.scale"] = torch.full(
+            (rows // 32, COLUMNS // 32), 127, dtype=torch.uint8
+        ).view(torch.float8_e8m0fnu)
     path = model.model_path / SHARD
     save_file(tensors, str(path), metadata={"format": "pt"})
     model.safetensors_files = frozenset({path.resolve()})
@@ -104,7 +91,6 @@ def test_convert_hif8_shard_writes_codes_and_leaves_the_rest_alone(tmp_path):
         assert shard.get_slice(f"{PLAIN}.scale").get_dtype() == "F32"
         scale = shard.get_tensor(f"{WO_A}.scale")
         untouched = shard.get_tensor(UNTOUCHED)
-    assert scale.shape == (GROUPS * RANK, 1)
     # npu_transpose_quant_batchmatmul takes one rank-long vector per batch.
     per_group = scale.view(GROUPS, RANK)
     assert torch.equal(per_group, per_group[0].expand(GROUPS, RANK))

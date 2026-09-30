@@ -605,7 +605,7 @@ def hif8_encode(x):
 
     Nearest neighbour over the 128 finite magnitudes with ties resolved upward,
     which is what npu_dtype_cast to torch_npu.hifloat8 does. Pure torch, so the
-    codes match on NPU and on CPU and the conversion is testable without a device.
+    codes match on NPU and CPU and are testable without a device.
     """
     values = x.to(torch.float32)
     out = torch.zeros(values.shape, dtype=torch.uint8, device=values.device)
@@ -640,8 +640,7 @@ def hif8_decode(codes):
     """Decode HiFloat8 uint8 codes to float32 on whichever device holds them.
 
     A lookup table, because no cast reads uint8 back as HiFloat8:
-    npu_dtype_cast(uint8, bfloat16) converts the code as an integer and returns
-    8.0 for code 0x08 where HiFloat8 reads 1.0.
+    npu_dtype_cast(uint8, bfloat16) reads code 0x08 as 8.0, not 1.0.
     """
     table = torch.from_numpy(hif8_code_values()).to(codes.device)
     return table[codes.reshape(-1).long()].reshape(codes.shape)
@@ -652,9 +651,8 @@ def hif8_pack(x, weight_range=HIF8_WEIGHT_SCOPE):
     """Pack a 2-D weight to HiFloat8 codes and one float32 scale per row.
 
     weight_range is the HiFloat8 magnitude a row maximum maps to. The bfloat16
-    rounding between the divide and the encode is part of the contract shared
-    with the runtime HiFloat8 Linear: dropping it, or reordering the two steps,
-    changes the codes.
+    rounding between the divide and the encode is part of the contract shared with
+    the runtime HiFloat8 Linear: dropping or reordering it changes the codes.
     """
     if x.dim() != 2:
         raise RuntimeError(

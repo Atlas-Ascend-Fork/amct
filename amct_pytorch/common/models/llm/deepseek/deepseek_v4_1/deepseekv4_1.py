@@ -422,12 +422,10 @@ class DeepseekV41:
     def _export_hif8_payload(self, weight_name, weight, bit):
         """HiFloat8 codes plus one float32 scale per output channel.
 
-        wo_a is block diagonal, [o_groups * o_lora_rank, group_in], and
-        npu_transpose_quant_batchmatmul takes a single o_lora_rank-long
-        per-channel vector for the whole batch. Its rows are regrouped so that
-        one rank row shares a scale across every group, then put back: the codes
-        go to disk in the checkpoint's flat 2-D layout because the runtime Linear
-        declares a 2-D parameter and narrows it along output_dim 0.
+        wo_a is block diagonal and npu_transpose_quant_batchmatmul takes a single
+        o_lora_rank-long vector for the whole batch, so its rows are regrouped to
+        share a scale across groups, then put back: the codes go to disk in the
+        checkpoint's flat 2-D layout the runtime Linear narrows along output_dim 0.
         """
         register_dtype()
         module_name = weight_name.removesuffix(".weight")
