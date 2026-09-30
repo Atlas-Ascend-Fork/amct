@@ -41,7 +41,6 @@ from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY, register_dtype
 from amct_pytorch.quantization.dtypes.hifp_impl import HIF8_WEIGHT_SCOPE
 
 BLOCK = 32
-# wo_a is block diagonal; its scale is shared across groups, see _export_hif8_payload.
 GROUPED_SUFFIX = "attn.wo_a"
 
 
@@ -75,9 +74,6 @@ class DeepseekV41:
     @staticmethod
     def _validate_platform(args):
         platform = getattr(args, "deploy_platform", None)
-        # ascend950 takes a second dtype: mxfp keeps the source bit widths for
-        # cann-recipes-infer, hifp re-encodes the attention Linears to HiFloat8
-        # for vLLM-Ascend. Both are legacy-format tensorwise passes.
         expected = {"A3": ("int",), "ascend950": ("mxfp", "hifp")}
         if platform not in expected:
             raise ValueError("DeepSeek V4.1 requires --deploy_platform A3 or ascend950")
@@ -89,7 +85,6 @@ class DeepseekV41:
         return platform
 
     def _is_hif8(self):
-        """True on the HiFloat8 arm of the ascend950 platform."""
         return getattr(self.args, "quant_dtype", None) == "hifp"
 
     @classmethod
@@ -229,8 +224,6 @@ class DeepseekV41:
             raise ValueError(
                 f"FP8 32x32 modules not selected by JSON: {sorted(missing)}"
             )
-        # HiFloat8 re-encodes the elements, so every selected module must be a
-        # source block-FP8 weight this adapter knows how to decode first.
         if hif8 and (missing := selected - candidates):
             raise ValueError(
                 f"Selected HiFloat8 modules are not 32x32 block FP8: {sorted(missing)}"
@@ -381,7 +374,6 @@ class DeepseekV41:
     def _convert_tensorwise_shard_hif8(
         self, source_file, model_dir, original_weight_map, quant_layers, loaded_files
     ):
-        """Re-encode the selected block-FP8 weights to HiFloat8, copy the rest."""
         path = resolve_safetensors_path(model_dir, source_file, self.safetensors_files)
         tensors = load_file(str(path), device="cpu")
         processed = set()
@@ -410,7 +402,6 @@ class DeepseekV41:
 
     @staticmethod
     def _dequantize_block_fp8(weight, scale):
-        """Undo the 32x32 UE8M0 block scaling; the e8m0 to float32 cast is exact."""
         rows, columns = weight.shape
         dense = scale.to(torch.float32)
         dense = dense.repeat_interleave(BLOCK, dim=0)[:rows]
@@ -418,18 +409,12 @@ class DeepseekV41:
         return weight.to(torch.float32) * dense
 
     def _export_hif8_payload(self, weight_name, weight, bit):
-        """HiFloat8 codes plus one float32 scale per output channel.
-
-        wo_a is block diagonal and npu_transpose_quant_batchmatmul takes a single
-        o_lora_rank-long vector for the whole batch, so its rows are regrouped to
-        share a scale across groups, then put back: the codes go to disk in the
-        checkpoint's flat 2-D layout the runtime Linear narrows along output_dim 0.
-        """
         register_dtype()
         module_name = weight_name.removesuffix(".weight")
         text_config = self.config.get("text_config", self.config)
         grouped = module_name.endswith(GROUPED_SUFFIX)
         if grouped:
+            # npu_transpose_quant_batchmatmul needs wo_a groups to share one scale.
             groups = text_config["o_groups"]
             rank = text_config["o_lora_rank"]
             rows, columns = weight.shape
@@ -584,12 +569,6 @@ class DeepseekV41:
         os.replace(temporary, self.output_dir / "config.json")
 
     def _refresh_config_hif8(self, quant_ignore_layers, *, tensor_plan=None):
-        """Keep the source contract and record what the HiFloat8 pass changed.
-
-        quant_method and weight_block_size stay as shipped and stay correct: the
-        experts, main_proj and the engram table were not re-encoded, and the
-        HiFloat8 Linears are found by their uint8 weights.
-        """
         config = copy.deepcopy(self.config)
         text_config = config.get("text_config", config)
         quant_config = config.get("quantization_config", {})

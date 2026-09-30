@@ -9,8 +9,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""HiFloat8 codes, and the DeepSeek V4.1 shard conversion that writes them."""
-
 import json
 from types import SimpleNamespace
 
@@ -44,10 +42,6 @@ requires_hifloat8_npu = pytest.mark.skipif(
 
 @pytest.fixture
 def fake_hifloat8_cast(monkeypatch):
-    """Stand in for the torch_npu HiFloat8 cast so the export path runs anywhere.
-
-    The codes are placeholders; the real encoding is checked on NPU below.
-    """
     import torch_npu
 
     def cast(tensor, dtype, **kwargs):
@@ -144,7 +138,6 @@ def test_convert_hif8_shard_writes_codes_and_leaves_the_rest_alone(
         scale = shard.get_tensor(f"{WO_A}.scale")
         unselected = shard.get_tensor(f"{UNSELECTED}.weight")
         untouched = shard.get_tensor(UNTOUCHED)
-    # npu_transpose_quant_batchmatmul takes one rank-long vector per batch.
     per_group = scale.view(GROUPS, RANK)
     assert torch.equal(per_group, per_group[0].expand(GROUPS, RANK))
     assert unselected.dtype == torch.float8_e4m3fn
@@ -175,7 +168,6 @@ def test_prepare_hif8_plan_keeps_only_selected_modules(tmp_path):
     model, source = _hif8_model(tmp_path)
     plan = model.prepare_tensor_deploy_plan(dict.fromkeys(source, SHARD))
 
-    # Unlike mxfp, an unselected block-FP8 module is left as it is.
     assert plan.selected_modules == {PLAIN, WO_A}
     assert UNSELECTED in plan.unselected_weight_modules
 

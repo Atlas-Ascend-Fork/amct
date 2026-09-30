@@ -83,7 +83,7 @@ During conversion, eligible scales are expanded from `[N/32, K/32]` to `[N, K/32
 
 ## Atlas A5 (Ascend 950) HiFloat8 Deployment
 
-The HiFloat8 path targets vLLM-Ascend on Atlas A5. It dequantizes the selected attention Linears from 32x32 block FP8 and re-encodes them to HiFloat8, stored as uint8 with one float32 scale per output channel. Tensors that are not selected are copied byte for byte, so the MXFP4 experts, the MXFP8 shared experts and the Engram table are untouched.
+The HiFloat8 path targets vLLM-Ascend on Atlas A5. It dequantizes the selected attention Linears from 32x32 block FP8 and re-encodes them to HiFloat8; all other tensors are left unchanged.
 
 For the full practice on this path, including accuracy results, see [DeepSeekV4.1-Flash-HiFloat8 Quantization Agent Practice](./DeepSeekV4.1-Flash-Quantization-Agent_en.md).
 
@@ -105,9 +105,7 @@ Key arguments:
 - `--quant_dtype hifp`: enables the HiFloat8 re-encoding, alongside the bit-width preserving `mxfp` path.
 - `--quant_layers_config`: selects `wq_a`/`wkv`/`wq_b`/`wo_a`/`wo_b` under attn, `wq_b` under the indexer, `wkv` under engram, and the same Linears in the MTP blocks.
 
-For a selected layer the weight changes from `F8_E4M3 [out, in]` to `U8 [out, in]` with the shape unchanged, and the scale from `F8_E8M0 [out/32, in/32]` to `F32 [out, 1]`. The row scale is `max|row| / 16`, the same weight scope the HiFloat8 Linear uses. `config.json` keeps the source `quantization_config` and adds `hif8_weight_range`, `hif8_o_groups` and `hif8_o_lora_rank`.
-
-`attn.wo_a` is block diagonal. Its rows are regrouped before quantization so that one rank row shares a scale across every group, which is what `npu_transpose_quant_batchmatmul` requires; the codes are still written in the flat 2-D layout and regrouped at load time.
+After conversion, a selected layer has a `U8 [out, in]` weight and an `F32 [out, 1]` scale; `config.json` adds `hif8_weight_range`, `hif8_o_groups` and `hif8_o_lora_rank`.
 
 ## Limitations
 

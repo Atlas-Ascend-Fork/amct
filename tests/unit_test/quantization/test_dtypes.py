@@ -467,7 +467,6 @@ def test_hifp_deploy_and_export_deploy_are_unsupported():
 
 
 def test_hifp_bits8_export_deploy_returns_codes_and_row_scales(monkeypatch):
-    # Stand in for the torch_npu HiFloat8 cast; the codes are placeholders.
     import torch_npu
 
     monkeypatch.setattr(hifp_impl, "is_native_hifloat8_cast_available", lambda: True)

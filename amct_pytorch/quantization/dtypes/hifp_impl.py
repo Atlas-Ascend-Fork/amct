@@ -526,20 +526,12 @@ def _hif4_reference_quantize(x, qdim):
 
 
 # ---- HiF8 pack ---------------------------------------------------------
-# The HiFloat8 magnitude a row maximum maps to, as in QUANT_SCOPE[HIFLOAT8].
 HIF8_WEIGHT_SCOPE = 16.0
 
 
 @torch.no_grad()
 def hif8_pack(x, weight_range=HIF8_WEIGHT_SCOPE):
-    """Pack a 2-D weight to HiFloat8 codes and one float32 scale per row.
-
-    Encodes with the native npu_dtype_cast to torch_npu.hifloat8, so an NPU is
-    required. weight_range is the HiFloat8 magnitude a row maximum maps to. The
-    bfloat16 rounding between the divide and the encode is part of the contract
-    shared with the runtime HiFloat8 Linear: dropping or reordering it changes
-    the codes. Codes and scale are returned on the host.
-    """
+    """Pack a 2-D weight to HiFloat8 uint8 codes and one float32 scale per row."""
     if x.dim() != 2:
         raise RuntimeError(
             "hif8_pack: input must be 2-D [n_rows, n_cols], got {} dims".format(x.dim())
@@ -553,6 +545,5 @@ def hif8_pack(x, weight_range=HIF8_WEIGHT_SCOPE):
     values = x.detach().npu().to(torch.float32)
     scale = values.abs().amax(dim=1, keepdim=True).clamp_min(1e-12) / weight_range
     scaled = (values / scale).to(torch.bfloat16)
-    # torch_npu holds HiFloat8 in uint8 storage, so these are the codes as is.
     codes = torch_npu.npu_dtype_cast(scaled, torch_npu.hifloat8)
     return codes.cpu(), scale.cpu()

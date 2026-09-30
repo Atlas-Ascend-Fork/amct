@@ -83,7 +83,7 @@ python -m amct_pytorch.cli.llm.deploy \
 
 ## Atlas A5（Ascend 950）HiFloat8 部署
 
-HiFloat8 路径面向 Atlas A5 上的 vLLM-Ascend。它把配置选中的注意力 Linear 从 32x32 块 FP8 反量化后重新编码为 HiFloat8，以 uint8 落盘并配一个逐输出通道的 float32 scale；未选中的张量逐字节保留，MXFP4 专家、MXFP8 shared experts 和 engram 表都不受影响。
+HiFloat8 路径面向 Atlas A5 上的 vLLM-Ascend。它把配置选中的注意力 Linear 从 32x32 块 FP8 反量化后重新编码为 HiFloat8，其余张量保持不变。
 
 这条链路的完整实践与精度结果见 [DeepSeekV4.1-Flash-HiFloat8 量化Agent实践](./DeepSeekV4.1-Flash-Quantization-Agent.md)。
 
@@ -105,9 +105,7 @@ python -m amct_pytorch.cli.llm.deploy \
 - `--quant_dtype hifp`：启用 HiFloat8 重编码，与 `mxfp` 的保位宽路径并列。
 - `--quant_layers_config`：选中 attn 的 `wq_a`/`wkv`/`wq_b`/`wo_a`/`wo_b`、indexer 的 `wq_b`、engram 的 `wkv`，以及 MTP 块的同名 Linear。
 
-选中层的 weight 由 `F8_E4M3 [out, in]` 变为 `U8 [out, in]`，形状不变；scale 由 `F8_E8M0 [out/32, in/32]` 变为 `F32 [out, 1]`。逐行 scale 取 `max|row| / 16`，与 HiFloat8 Linear 的权重量化范围一致。`config.json` 保留源 `quantization_config`，并新增 `hif8_weight_range`、`hif8_o_groups`、`hif8_o_lora_rank`。
-
-`attn.wo_a` 是块对角权重，量化前按 rank 行重排，使同一 rank 行跨所有组共享一个 scale，这是 `npu_transpose_quant_batchmatmul` 的要求；码字仍按扁平 2-D 落盘，重排在加载时完成。
+转换后选中层的 weight 为 `U8 [out, in]`，scale 为 `F32 [out, 1]`；`config.json` 新增 `hif8_weight_range`、`hif8_o_groups`、`hif8_o_lora_rank`。
 
 ## 使用限制
 

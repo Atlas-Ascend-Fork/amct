@@ -75,7 +75,6 @@ class QuantDequantHifp(torch.nn.Module):
             scale, value = hif4_pack(mat)
             return value.contiguous().cpu(), scale.contiguous().cpu()
         if self.bits == 8:
-            # One float32 scale per output channel; HiFloat8 has no block scale.
             value, scale = hif8_pack(mat)
             return value.contiguous().cpu(), scale.contiguous().cpu()
         raise NotImplementedError(f"HiFloat-{self.bits} deploy is not supported yet.")
