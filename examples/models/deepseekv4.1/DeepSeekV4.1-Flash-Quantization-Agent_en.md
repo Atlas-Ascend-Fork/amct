@@ -1,4 +1,4 @@
-# DeepSeekV4.1-Flash-HiFloat8 Quantization Agent Practice
+# AMCT Low-Precision Quantization Agent Quantization Practice
 
 AMCT provides an end-to-end workflow for the Ascend platform, covering model onboarding, quantization scheme selection, quantization experiments, accuracy validation, and deployment weight export. Through its Agent workflow, AMCT can recommend schemes based on the existing Casebook, invoke quantization tools to run experiments, and preserve schemes and process data as reusable assets.
 
