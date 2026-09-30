@@ -466,11 +466,18 @@ def test_hifp_deploy_and_export_deploy_are_unsupported():
         qdq.deploy(x)
 
 
-@pytest.mark.skipif(
-    not hifp_impl.is_native_hifloat8_cast_available(),
-    reason="HiFloat8 deploy requires native HiFloat8 cast support in torch_npu",
-)
-def test_hifp_bits8_export_deploy_returns_codes_and_row_scales():
+def test_hifp_bits8_export_deploy_returns_codes_and_row_scales(monkeypatch):
+    # Stand in for the torch_npu HiFloat8 cast; the codes are placeholders.
+    import torch_npu
+
+    monkeypatch.setattr(hifp_impl, "is_native_hifloat8_cast_available", lambda: True)
+    monkeypatch.setattr(
+        torch_npu,
+        "npu_dtype_cast",
+        lambda tensor, dtype, **kwargs: tensor.abs().to(torch.uint8),
+        raising=False,
+    )
+    monkeypatch.setattr(torch.Tensor, "npu", lambda self, *a, **k: self, raising=False)
     qdq = QuantDequantHifp(bits=8)
     payload = qdq.export_deploy(torch.randn(2, 8, dtype=torch.bfloat16))
 
