@@ -24,9 +24,8 @@ from amct_pytorch.common.models.llm.deepseek.deepseek_v4_1.deepseekv4_1 import (
 )
 from amct_pytorch.quantization.dtypes.hifp_impl import (
     HIF8_WEIGHT_SCOPE,
-    hif8_decode,
-    hif8_encode,
     hif8_pack,
+    is_native_hifloat8_cast_available,
 )
 
 SHARD = "model.safetensors"
@@ -34,19 +33,29 @@ GROUPS, RANK, COLUMNS = 2, 32, 64
 WO_A, PLAIN = "layers.0.attn.wo_a", "layers.0.attn.wq_a"
 UNTOUCHED = "layers.0.attn.norm.weight"
 
+requires_hifloat8_npu = pytest.mark.skipif(
+    not is_native_hifloat8_cast_available(),
+    reason="HiFloat8 pack requires native HiFloat8 cast support in torch_npu",
+)
 
-def test_hif8_encode_and_pack_follow_the_format():
-    codes = hif8_encode(torch.tensor([0.0, 1.0, -1.0, 2.0, float("nan"), float("inf")]))
-    assert codes.tolist() == [0x00, 0x08, 0x88, 0x10, 0x80, 0x6E]
-    assert torch.equal(hif8_decode(codes[:4]), torch.tensor([0.0, 1.0, -1.0, 2.0]))
+
+@requires_hifloat8_npu
+def test_hif8_pack_returns_codes_and_row_scales():
+    import torch_npu
 
     weight = torch.randn(8, 64) * torch.arange(1, 9).view(-1, 1)
     codes, scale = hif8_pack(weight)
     assert codes.dtype == torch.uint8 and codes.shape == weight.shape
     assert scale.dtype == torch.float32 and scale.shape == (8, 1)
-    peak = hif8_decode(codes).abs().amax(dim=1)
+    decoded = torch_npu.npu_dtype_cast(
+        codes.npu(), torch.float32, input_dtype=torch_npu.hifloat8
+    ).cpu()
+    peak = decoded.abs().amax(dim=1)
     assert torch.allclose(peak, torch.full((8,), HIF8_WEIGHT_SCOPE), rtol=0.1)
-    assert torch.allclose(hif8_decode(codes) * scale, weight, rtol=0.1, atol=1e-3)
+    assert torch.allclose(decoded * scale, weight, rtol=0.1, atol=1e-3)
+
+
+def test_hif8_pack_rejects_non_2d_input():
     with pytest.raises(RuntimeError, match="2-D"):
         hif8_pack(torch.ones(4))
 
@@ -78,6 +87,7 @@ def _hif8_model(tmp_path):
     return model, tensors
 
 
+@requires_hifloat8_npu
 def test_convert_hif8_shard_writes_codes_and_leaves_the_rest_alone(tmp_path):
     model, source = _hif8_model(tmp_path)
     routing = model._convert_tensorwise_shard_hif8(
