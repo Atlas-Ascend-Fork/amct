@@ -33,7 +33,6 @@ from amct_pytorch.common.models.llm.common.deploy_export import (
     make_ascend_description,
     quant_payload,
 )
-from amct_pytorch.common.models.llm.common.shard_rewrite import rewrite_shard
 from amct_pytorch.common.models.llm.common.weight_path_validation import (
     collect_safetensors_files,
     resolve_safetensors_path,
@@ -383,35 +382,31 @@ class DeepseekV41:
         self, source_file, model_dir, original_weight_map, quant_layers, loaded_files
     ):
         """Re-encode the selected block-FP8 weights to HiFloat8, copy the rest."""
-        source_path = resolve_safetensors_path(
-            model_dir, source_file, self.safetensors_files
-        )
-        replacements = {}
+        path = resolve_safetensors_path(model_dir, source_file, self.safetensors_files)
+        tensors = load_file(str(path), device="cpu")
         processed = set()
-        with safe_open(str(source_path), framework="pt", device="cpu") as shard:
-            keys = set(shard.keys())
-            for module_name in sorted(quant_layers):
-                weight_name = module_name + ".weight"
-                scale_name = module_name + ".scale"
-                if weight_name not in keys:
-                    continue
-                if scale_name not in keys:
-                    raise ValueError(f"Missing source scale tensor: {scale_name}")
-                weight = self._dequantize_block_fp8(
-                    shard.get_tensor(weight_name), shard.get_tensor(scale_name)
+        for module_name in sorted(quant_layers):
+            weight_name = module_name + ".weight"
+            scale_name = module_name + ".scale"
+            if weight_name not in tensors:
+                continue
+            if scale_name not in tensors:
+                raise ValueError(f"Missing source scale tensor: {scale_name}")
+            weight = self._dequantize_block_fp8(
+                tensors[weight_name], tensors[scale_name]
+            )
+            tensors.update(
+                self._export_hif8_payload(
+                    weight_name, weight, quant_layers[module_name]
                 )
-                replacements.update(
-                    self._export_hif8_payload(
-                        weight_name, weight, quant_layers[module_name]
-                    )
-                )
-                processed.add(module_name)
-                del weight
-        names = rewrite_shard(
-            str(source_path), str(self.output_dir / source_file), replacements
-        )
+            )
+            processed.add(module_name)
+        destination = self.output_dir / source_file
+        temporary = destination.with_name(f".{destination.name}.tmp")
+        save_file(tensors, str(temporary), metadata={"format": "pt"})
+        os.replace(temporary, destination)
         self.processed_modules.update(processed)
-        return {name: source_file for name in names}
+        return {name: source_file for name in tensors}
 
     @staticmethod
     def _dequantize_block_fp8(weight, scale):
