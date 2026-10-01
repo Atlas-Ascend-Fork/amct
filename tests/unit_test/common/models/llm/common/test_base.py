@@ -352,7 +352,7 @@ def test_save_block_hook_inputs_uses_quant_target_for_non_attn(monkeypatch):
         quant_target=[QUANT_TARGET_MLP], args=SimpleNamespace(data_dir="/d")
     )
     stub.save_block_hook_inputs({}, hook_name="hook", layer_idx=2)
-    assert captured.get("args")[2] == QUANT_TARGET_MLP  # noqa: E1111
+    assert captured.get("args")[2] == QUANT_TARGET_MLP
 
 
 # ---- load_selected_layer_ptq_params --------------------------------------
@@ -374,7 +374,7 @@ def test_load_selected_layer_ptq_params_warns_on_missing_dir(monkeypatch):
     results = stub.load_selected_layer_ptq_params(0, block=nn.Module())  # pylint: disable=assignment-from-no-return
     assert results == {QUANT_TARGET_MLP: {"loaded": [], "missing": []}}
     # Original quant_target preserved after the temporary swap.
-    assert stub.quant_target == [QUANT_TARGET_MLP]  # noqa: E1111
+    assert stub.quant_target == [QUANT_TARGET_MLP]
 
 
 def test_load_selected_layer_ptq_params_routes_to_store_per_target():
@@ -458,7 +458,7 @@ def test_iter_ptq_units_moe_uses_expert_modules_fallback():
         "E", (), {"expert_modules": [nn.Linear(4, 4), nn.Linear(4, 4)]}
     )()
     units = list(stub.iter_ptq_units(layer_idx=0, block=block))
-    assert [u.name for u in units] == ["expert_0", "expert_1"]  # noqa: E1111
+    assert [u.name for u in units] == ["expert_0", "expert_1"]
 
 
 def test_iter_ptq_units_moe_uses_iter_ptq_expert_modules():
@@ -498,7 +498,7 @@ def test_load_selected_layer_ptq_params_attn_cache_target():
     results = stub.load_selected_layer_ptq_params(5, block=nn.Module())  # pylint: disable=assignment-from-no-return
     assert QUANT_TARGET_ATTN_CACHE in results
     assert seen[0][1] == "/cache_params"
-    assert stub.quant_target == [QUANT_TARGET_ATTN_CACHE]  # noqa: E1111
+    assert stub.quant_target == [QUANT_TARGET_ATTN_CACHE]
 
 
 def test_load_selected_layer_ptq_params_moe_target():
@@ -667,7 +667,7 @@ def test_build_block_for_forward_calls_build_quant_block_when_quant():
     stub = _StubModel(quant_target=[QUANT_TARGET_MLP])
     captured = {}
 
-    def _fake_quant_block(idx):  # noqa: E1111
+    def _fake_quant_block(idx):
         captured["quant_idx"] = idx
         mod = nn.Linear(4, 4)
         return mod
@@ -677,7 +677,7 @@ def test_build_block_for_forward_calls_build_quant_block_when_quant():
     def load_selected_layer_ptq_params(idx, block, strict):
         return {}
 
-    stub.load_selected_layer_ptq_params = load_selected_layer_ptq_params  # noqa: E1111
+    stub.load_selected_layer_ptq_params = load_selected_layer_ptq_params
     stub._build_block_for_forward(3, use_quant_block=True)
     assert captured["quant_idx"] == 3
 
