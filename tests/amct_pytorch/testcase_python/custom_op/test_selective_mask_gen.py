@@ -72,7 +72,7 @@ class TestSelectiveMaskGen(unittest.TestCase):
             PRUNE_SIZE: 2,
             PRUNE_AXIS_KEY: prune_axis,
         }
-        logger.info('ori_data:', tensor_input.type())
+        logger.info('ori_data: %s', tensor_input.type())
         logger.info(tensor_input[0])
         # call seletive_mask_gen_op
         prune_mask = selective_mask_gen(
@@ -100,7 +100,7 @@ class TestSelectiveMaskGen(unittest.TestCase):
             PRUNE_SIZE: 2,
             PRUNE_AXIS_KEY: prune_axis,
         }
-        logger.info('ori_data:', tensor_input.type())
+        logger.info('ori_data: %s', tensor_input.type())
         logger.info(tensor_input[0])
         # call seletive_mask_gen_op
         prune_mask = selective_mask_gen(
@@ -138,7 +138,7 @@ class TestSelectiveMaskGen(unittest.TestCase):
             PRUNE_SIZE: 2,
             PRUNE_AXIS_KEY: prune_axis,
         }
-        logger.info('ori_data:', tensor_input.type())
+        logger.info('ori_data: %s', tensor_input.type())
         logger.info(tensor_input[0])
         # call seletive_mask_gen_op
         prune_mask = selective_mask_gen(
@@ -176,7 +176,7 @@ class TestSelectiveMaskGen(unittest.TestCase):
             PRUNE_SIZE: 2,
             PRUNE_AXIS_KEY: prune_axis,
         }
-        logger.info('ori_data:', tensor_input.type())
+        logger.info('ori_data: %s', tensor_input.type())
         logger.info(tensor_input[0])
         # call seletive_mask_gen_op
         prune_mask = selective_mask_gen(
@@ -214,7 +214,7 @@ class TestSelectiveMaskGen(unittest.TestCase):
             PRUNE_SIZE: 2,
             PRUNE_AXIS_KEY: prune_axis,
         }
-        logger.info('ori_data:', tensor_input.type())
+        logger.info('ori_data: %s', tensor_input.type())
         logger.info(tensor_input[0])
         # call seletive_mask_gen_op
         prune_mask = selective_mask_gen(
@@ -253,7 +253,7 @@ class TestSelectiveMaskGen(unittest.TestCase):
             PRUNE_AXIS_KEY: prune_axis,
             'is_refresh': True,
         }
-        logger.info('ori_data:', tensor_input.type())
+        logger.info('ori_data: %s', tensor_input.type())
         logger.info(tensor_input[0])
         # call seletive_mask_gen_op
         prune_mask = selective_mask_gen(
@@ -291,7 +291,7 @@ class TestSelectiveMaskGen(unittest.TestCase):
             PRUNE_SIZE: 2,
             PRUNE_AXIS_KEY: prune_axis,
         }
-        logger.info('ori_data:', tensor_input.type())
+        logger.info('ori_data: %s', tensor_input.type())
         logger.info(tensor_input[0])
         # call seletive_mask_gen_op
         prune_mask = selective_mask_gen(
