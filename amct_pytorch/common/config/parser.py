@@ -271,7 +271,9 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
             )
             return False
 
-    group_size = quant_config.quant_cfg.weights_cfg.group_size
+    layer_quant_cfg = quant_config.get_layer_config(layer_name)
+    weights_cfg = layer_quant_cfg.get('weights_cfg') if layer_quant_cfg else None
+    group_size = weights_cfg.get('group_size') if weights_cfg else None
     if group_size is None:
         return True
 

@@ -21,6 +21,7 @@ import pytest
 import torch
 import torch.nn as nn
 
+from amct_pytorch import quantize
 from amct_pytorch.algorithms import AlgorithmRegistry
 from amct_pytorch.common.config.config import INT8_MINMAX_WEIGHT_QUANT_CFG
 from amct_pytorch.common.config.fields import QuantConfig
@@ -540,6 +541,51 @@ def test_parse_config_returns_detail():
         assert "batch_num" in result[name]
         assert "weights_cfg" in result[name]
         assert "algorithm" in result[name]
+
+
+def test_quantize_applies_fuzzy_group_size_before_shape_constraint():
+    class _GroupSizeModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.small = nn.Linear(64, 64, bias=False, dtype=torch.bfloat16)
+            self.large = nn.Linear(96, 64, bias=False, dtype=torch.bfloat16)
+
+    global_weights = {
+        "type": "int8",
+        "symmetric": True,
+        "strategy": "group",
+        "group_size": 64,
+    }
+    small_weights = dict(global_weights, group_size=32)
+    model = _GroupSizeModel()
+    quantize(
+        model,
+        {
+            "quant_cfg": {
+                "weights": global_weights,
+                "*small.weights": small_weights,
+            },
+            "algorithm": {MINMAX: {}},
+        },
+    )
+
+    assert type(model.small).__name__ == "MinMaxQuant"
+    assert model.small.group_size == 32
+    assert type(model.large).__name__ == "MinMaxQuant"
+    assert model.large.group_size == 64
+
+    control_model = _GroupSizeModel()
+    quantize(
+        control_model,
+        {
+            "quant_cfg": {"weights": dict(global_weights, group_size=32)},
+            "algorithm": {MINMAX: {}},
+        },
+    )
+    assert type(control_model.small).__name__ == "MinMaxQuant"
+    assert type(control_model.large).__name__ == "MinMaxQuant"
+    assert control_model.small.group_size == 32
+    assert control_model.large.group_size == 32
 
 
 def test_check_quant_op_constraint_group_size_valid_returns_true():
