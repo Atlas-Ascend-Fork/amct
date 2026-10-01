@@ -10,7 +10,7 @@ English | [简体中文](./README.md)
 [![CANN](https://img.shields.io/badge/CANN-%E2%89%A58.5.0-green.svg)](docs/zh/quick_install.md)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.1.0%20%7C%202.7.1-orange.svg)](requirements.txt)
 
-[Quick Start](#-quick-start) · [Features](#-core-features) · [Samples](#-documentation-samples) · [FAQ](#-faq) · [Contribution](#-participate-in-contribution)
+[Quick Start](#quick-start) · [Features](#core-features) · [Samples](#documentation-samples) · [FAQ](#faq) · [Contribution](#participate-in-contribution)
 
 </div>
 
