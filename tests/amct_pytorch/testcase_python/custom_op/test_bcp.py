@@ -65,7 +65,7 @@ class TestBcp(unittest.TestCase):
         tensor_list = [torch.randn([160, 4, 3, 3])]
         prune_axises = [0]
         algo_param = {'prune_ratio': 0.3, 'ascend_optimized': True, 'prune_group': 1}
-        logger.info('ori_data:', tensor_list[0].type())
+        logger.info('ori_data: %s', tensor_list[0].type())
         logger.info(tensor_list[0][0])
         # call bcp_op
         prune_mask = bcp(
@@ -215,14 +215,14 @@ class TestBcp(unittest.TestCase):
         prune_mask_list = BcpFaker(tensor_list, prune_axises, algo_param).do()
         # compare
         is_equal = (prune_mask_list == prune_mask.cpu().numpy()).all()
-        logger.info('prune_mask_list', prune_mask_list)
-        logger.info('prune_mask', prune_mask)
-        logger.info('equal:', prune_mask_list == prune_mask.cpu().numpy())
+        logger.info('prune_mask_list: %s', prune_mask_list)
+        logger.info('prune_mask: %s', prune_mask)
+        logger.info('equal: %s', prune_mask_list == prune_mask.cpu().numpy())
         logger.info(
-            'numpy_num', sum(prune_mask_list[0:80]), sum(prune_mask_list[80:160])
+            'numpy_num: %s %s', sum(prune_mask_list[0:80]), sum(prune_mask_list[80:160])
         )
         logger.info(
-            'op_num',
+            'op_num: %s %s',
             prune_mask.cpu().numpy()[0:80].sum(),
             prune_mask.cpu().numpy()[80:160].sum(),
         )
