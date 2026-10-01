@@ -546,4 +546,10 @@ def hif8_pack(x, weight_range=HIF8_WEIGHT_SCOPE):
     scale = values.abs().amax(dim=1, keepdim=True).clamp_min(1e-12) / weight_range
     scaled = (values / scale).to(torch.bfloat16)
     codes = torch_npu.npu_dtype_cast(scaled, torch_npu.hifloat8)
+    if codes.dtype != torch.uint8:
+        raise RuntimeError(
+            "hif8_pack expects uint8 HiFloat8 codes from npu_dtype_cast, got {}".format(
+                codes.dtype
+            )
+        )
     return codes.cpu(), scale.cpu()

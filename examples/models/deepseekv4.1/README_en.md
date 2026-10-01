@@ -114,7 +114,7 @@ After conversion, a selected layer has a `U8 [out, in]` weight and an `F32 [out,
   - A3: `--deploy_platform A3 --deploy_format ascend --quant_dtype int`.
   - A5: `--deploy_platform ascend950 --deploy_format legacy --quant_dtype mxfp`.
   - A5 HiFloat8: `--deploy_platform ascend950 --deploy_format legacy --quant_dtype hifp`.
-- The A5 `mxfp` path preserves the source bit widths and does not accept `--bit_config`.
+- Neither the A5 `mxfp` nor the `hifp` path accepts `--bit_config`.
 - Every layer selected by the HiFloat8 path must be a 32x32 block FP8 weight; no other layer is re-encoded.
-- Neither path accepts `--algos`, `--attn_linear_param_dir`, `--attn_cache_param_dir`, or `--moe_mlp_param_dir`.
-- The A5 configuration must cover every eligible 32x32 FP8 layer in the checkpoint. This prevents partial scale conversion from being combined with a global MXFP configuration.
+- None of these paths accepts `--algos`, `--attn_linear_param_dir`, `--attn_cache_param_dir`, or `--moe_mlp_param_dir`.
+- The A5 mxfp configuration must cover every eligible 32x32 FP8 layer in the checkpoint. This prevents partial scale conversion from being combined with a global MXFP configuration.

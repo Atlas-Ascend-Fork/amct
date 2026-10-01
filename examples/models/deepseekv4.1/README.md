@@ -114,7 +114,7 @@ python -m amct_pytorch.cli.llm.deploy \
   - A3：`--deploy_platform A3 --deploy_format ascend --quant_dtype int`。
   - A5：`--deploy_platform ascend950 --deploy_format legacy --quant_dtype mxfp`。
   - A5 HiFloat8：`--deploy_platform ascend950 --deploy_format legacy --quant_dtype hifp`。
-- A5 `mxfp` 路径保留源位宽，不接受 `--bit_config`。
+- A5 的 `mxfp` 和 `hifp` 路径均不接受 `--bit_config`。
 - HiFloat8 路径选中的层必须是 32x32 块 FP8，其余层不做重编码。
-- 两条路径均不接受 `--algos`、`--attn_linear_param_dir`、`--attn_cache_param_dir` 或 `--moe_mlp_param_dir`。
-- A5 配置必须覆盖 checkpoint 中所有符合条件的 32x32 FP8 层，避免只转换部分 scale 却写入全局 MXFP 配置。
+- 以上路径均不接受 `--algos`、`--attn_linear_param_dir`、`--attn_cache_param_dir` 或 `--moe_mlp_param_dir`。
+- A5 mxfp 路径的配置必须覆盖 checkpoint 中所有符合条件的 32x32 FP8 层，避免只转换部分 scale 却写入全局 MXFP 配置。

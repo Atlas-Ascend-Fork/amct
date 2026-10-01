@@ -131,13 +131,9 @@ class DeepseekV41:
             raise ValueError("DeepSeek V4.1 A3 requires --deploy_format ascend")
         if platform == "ascend950" and deploy_format != "legacy":
             raise ValueError("DeepSeek V4.1 ascend950 requires --deploy_format legacy")
-        if (
-            platform == "ascend950"
-            and getattr(args, "quant_dtype", None) == "mxfp"
-            and getattr(args, "bit_config", None)
-        ):
+        if platform == "ascend950" and getattr(args, "bit_config", None):
             raise ValueError(
-                "DeepSeek V4.1 950 preserves source bits; --bit_config is not supported"
+                "DeepSeek V4.1 ascend950 (mxfp/hifp) does not support --bit_config"
             )
         for key in (
             "algos",

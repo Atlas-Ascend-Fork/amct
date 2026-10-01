@@ -82,6 +82,14 @@ def test_hif8_pack_rejects_non_2d_input():
         hif8_pack(torch.ones(4))
 
 
+def test_hif8_pack_rejects_non_uint8_codes(fake_hifloat8_cast, monkeypatch):
+    import torch_npu
+
+    monkeypatch.setattr(torch_npu, "npu_dtype_cast", lambda t, d, **k: t)
+    with pytest.raises(RuntimeError, match="uint8"):
+        hif8_pack(torch.ones(2, 2))
+
+
 def test_hif8_pack_requires_native_cast(monkeypatch):
     monkeypatch.setattr(hifp_impl, "is_native_hifloat8_cast_available", lambda: False)
     with pytest.raises(RuntimeError, match="torch_npu"):
@@ -201,3 +209,15 @@ def test_validate_platform_accepts_hifp_on_ascend950():
     args.quant_dtype = "int"
     with pytest.raises(ValueError, match="requires --quant_dtype mxfp or hifp"):
         DeepseekV41._validate_platform(args)
+
+
+def test_validate_deploy_args_rejects_bit_config_on_hifp():
+    args = SimpleNamespace(
+        deploy_platform="ascend950",
+        quant_dtype="hifp",
+        granularity="tensor",
+        deploy_format="legacy",
+        bit_config="bits.yaml",
+    )
+    with pytest.raises(ValueError, match="bit_config"):
+        DeepseekV41.validate_deploy_args(args)
