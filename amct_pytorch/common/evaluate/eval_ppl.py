@@ -47,40 +47,42 @@ def wikitext2_ppl(logits_iter, samples, device, seq_len=4096):
         raise ValueError("samples must not be empty")
 
     iterator = iter(logits_iter)
-    nll_sum = None
-    consumed = 0
-    loss_fct = nn.CrossEntropyLoss()
-    with tqdm(
-        total=nsamples,
-        desc="PPL Evaluating...",
-    ) as progress:
-        for shift_logits in iterator:
-            if consumed >= nsamples:
-                raise ValueError("logits count exceeds samples count")
-            if not _same_device(shift_logits.device, device):
-                raise ValueError(
-                    f"logits are on {shift_logits.device}; expected device {device}"
+    try:
+        nll_sum = None
+        consumed = 0
+        loss_fct = nn.CrossEntropyLoss()
+        with tqdm(
+            total=nsamples,
+            desc="PPL Evaluating...",
+        ) as progress:
+            for shift_logits in iterator:
+                if consumed >= nsamples:
+                    raise ValueError("logits count exceeds samples count")
+                if not _same_device(shift_logits.device, device):
+                    raise ValueError(
+                        f"logits are on {shift_logits.device}; expected device {device}"
+                    )
+                shift_labels = samples[consumed][:, 1:].to(
+                    device=shift_logits.device,
+                    dtype=torch.long,
                 )
-            shift_labels = samples[consumed][:, 1:].to(
-                device=shift_logits.device,
-                dtype=torch.long,
-            )
-            loss = loss_fct(
-                shift_logits.reshape(-1, shift_logits.size(-1)),
-                shift_labels.reshape(-1),
-            )
-            nll = loss.float() * seq_len
-            nll_sum = nll if nll_sum is None else nll_sum + nll
-            consumed += 1
-            del shift_logits, shift_labels, loss, nll
-            progress.update(1)
+                loss = loss_fct(
+                    shift_logits.reshape(-1, shift_logits.size(-1)),
+                    shift_labels.reshape(-1),
+                )
+                nll = loss.float() * seq_len
+                nll_sum = nll if nll_sum is None else nll_sum + nll
+                consumed += 1
+                del shift_logits, shift_labels, loss, nll
+                progress.update(1)
 
-    if consumed != nsamples:
-        raise ValueError(
-            f"logits count {consumed} does not match samples count {nsamples}"
-        )
+        if consumed != nsamples:
+            raise ValueError(
+                f"logits count {consumed} does not match samples count {nsamples}"
+            )
 
-    ppl_value = torch.exp(nll_sum / (nsamples * seq_len)).item()
-    logger.info("PPL evaluation completed: {:.6f}", ppl_value)
-    _cleanup_ppl_resources(iterator, device)
-    return ppl_value
+        ppl_value = torch.exp(nll_sum / (nsamples * seq_len)).item()
+        logger.info("PPL evaluation completed: {:.6f}", ppl_value)
+        return ppl_value
+    finally:
+        _cleanup_ppl_resources(iterator, device)
