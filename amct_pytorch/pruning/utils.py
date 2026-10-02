@@ -434,5 +434,9 @@ def solve_least_squares(gram: torch.Tensor, rhs: torch.Tensor) -> torch.Tensor:
 
 def ridge_solve(gram: torch.Tensor, rhs: torch.Tensor, ridge: float) -> torch.Tensor:
     """Add a ridge to gram's diagonal (in place) and solve (with CPU fallback)."""
-    gram.diagonal().add_(ridge * gram.diagonal().mean())
+    scale = gram.diagonal().mean()
+    # All-zero activations still need a positive ridge: multiplying by their
+    # zero diagonal mean would leave the system singular.
+    scale = torch.where(scale == 0, torch.ones_like(scale), scale)
+    gram.diagonal().add_(ridge * scale)
     return solve_least_squares(gram, rhs)
