@@ -384,20 +384,37 @@ def test_algorithm_field_single_minmax():
     assert "minmax" in v["algorithm"]
 
 
-def test_algorithm_field_multiple_algos(monkeypatch):
+def test_algorithm_field_multiple_algos():
+    """两个算法各自负责不同的 src_op 时，配置合法且都保留。"""
     fake_algo_a = type("AlgoA", (), {"keys": lambda self: ["Linear"]})()
     fake_algo_b = type("AlgoB", (), {"keys": lambda self: ["Conv2d"]})()
     fake_reg = type(
         "FakeReg", (), {"algo": {ALGO_A: fake_algo_a, ALGO_B: fake_algo_b}}
     )()
-    monkeypatch.setattr(
-        "amct_pytorch.common.config.fields.AlgorithmRegistry",
-        fake_reg,
-    )
     f = AlgorithmField({ALGO_A: {}, ALGO_B: {}}, fake_reg)
     v = f.get_value()
     assert ALGO_A in v["algorithm"]
     assert ALGO_B in v["algorithm"]
+
+
+def test_algorithm_field_duplicate_src_op_raises():
+    """两个算法认领同一个 src_op 时必须报错，不能静默选一个。"""
+    fake_algo_a = type("AlgoA", (), {"keys": lambda self: ["Linear"]})()
+    fake_algo_b = type("AlgoB", (), {"keys": lambda self: ["Linear"]})()
+    fake_reg = type(
+        "FakeReg", (), {"algo": {ALGO_A: fake_algo_a, ALGO_B: fake_algo_b}}
+    )()
+    with pytest.raises(ValueError, match="One src_op only support one algorithm"):
+        AlgorithmField({ALGO_A: {}, ALGO_B: {}}, fake_reg)
+
+
+def test_algorithm_field_duplicate_src_op_uses_passed_registry():
+    """查重必须读传入的 registry，而不是全局 AlgorithmRegistry。"""
+    fake_algo = type("AlgoA", (), {"keys": lambda self: ["OpOnlyInFakeReg"]})()
+    fake_reg = type("FakeReg", (), {"algo": {ALGO_A: fake_algo}})()
+    # ALGO_A 只存在于 fake_reg；若实现误读全局表会抛 AttributeError
+    f = AlgorithmField({ALGO_A: {}}, fake_reg)
+    assert ALGO_A in f.names
 
 
 def test_algorithm_field_unknown_algo_raises():
@@ -609,11 +626,6 @@ def test_algorithm_field_custom_algo():
         assert MY_UNIQUE_ALGO in f.names
     finally:
         del AlgorithmRegistry.algo[MY_UNIQUE_ALGO]
-
-
-def test_algorithm_field_check_invalid_input():
-    with pytest.raises(ValueError, match="Algorithm only support 1 str"):
-        AlgorithmField.check({"a": "b", "c": "d"})
 
 
 def test_quant_config_get_layer_config_inputs_fallback_enable_false():
