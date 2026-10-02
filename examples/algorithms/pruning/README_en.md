@@ -715,3 +715,64 @@ for the API usage) or recovery training (see [section 6.6](#66-recovery-fine-tun
 to mitigate.
 
 > After pruning, to export the model as a torchair offline model (.air) for ATC-to-om conversion and on-board inference, refer to [AMCT large-model offline torchair model export](../export/README_en.md).
+
+## 8 Community Task Sample: Qwen3-0.6B Dense FFN Pruning (`reconstruct` + `finetune`, Task 17)
+
+This section corresponds to issue 183 task 17: dense FFN intermediate-dim `reconstruct`
+(least-squares recovery) with a fixed `prune_ratio=0.5`, followed by recovery finetune.
+
+### 8.1 Run Instructions
+
+- Calibration set: Pileval, `8` samples, `seq_len=2048` (16384 calibration tokens in total; the
+  least-squares recovery of `reconstruct` requires calibration rows >= kept neurons, otherwise it
+  falls back to naive slicing and logs a warning)
+- Evaluation set: WikiText2 test split, fixed `seq_len=4096`, full test split (73 batches)
+- Finetune set: WikiText2 train split, 300 non-overlapping contiguous 512-token blocks
+  (the test split is never used for training)
+- Finetune setup: momentum-free SGD (lr=1e-2), warmup=20, 300 steps, grad_clip=1.0,
+  gradient checkpointing
+- The output directory is a placeholder relative path; the script saves `PruneReport`, diagnosis
+  summary and runtime arguments (full arguments are printed at startup). To also save the finetuned
+  model weights, append the optional `--save-model` flag to the run command
+- Model loading: `trust_remote_code` defaults to `False` and `local_files_only=True` is enforced
+  (strictly offline from the local directory; Qwen3 is natively supported by transformers, so no
+  custom model code is executed). If truly needed, pass `--trust-remote-code` explicitly — the
+  script prints a security warning
+
+Run:
+
+```bash
+python3 src/run_qwen3_0_6b_pruning_reconstruct_ratio_finetune.py \
+  --model-path ./path/to/Qwen3-0.6B \
+  --save-dir ./outputs/qwen3_0_6b_reconstruct_ratio_finetune/r0_5 \
+  --prune-ratio 0.5
+```
+
+Pass `--no-finetune` to skip the recovery finetune; `--preview-prune-ratio` only affects the
+`prune_diagnose()` dry-run (default `0.1`); `--eval-batches` only truncates the evaluation set
+for quick checks — omit it to use the full WikiText2 test split.
+
+### 8.2 Diagnostics and Report
+
+`prune_diagnose()` identifies 28 prunable dense targets (28 FFN layers) on a single 910B3 card
+and the fixed-ratio dry-run is available; `PruneReport` reports the parameter change; the pruned
+model `config` has its `intermediate_size` narrowed accordingly and can round-trip through
+`save_pretrained/from_pretrained` directly.
+
+### 8.3 Results Table
+
+Measured on a single Ascend 910B3 (64 GiB); evaluation on the full WikiText2 test split with
+`seq_len=4096` (73 batches, one forward per batch); calibration on Pileval with 8 samples,
+`seq_len=2048`.
+
+| Model | Method | Setup | Baseline PPL | Pruned PPL | Post-process PPL | Params (before -> after) | Param cut | Prune time (min) |
+| --- | --- | --- | ---: | ---: | ---: | --- | ---: | ---: |
+| Qwen3-0.6B | `reconstruct` + `finetune` | `prune_ratio=0.5` | 19.157549 | 74.244453 | 31.369858 | 596049920 -> 463929344 | 22.17% | 0.06 |
+
+> Post-process PPL is measured after the recovery finetune, which starts from the pruned model
+> (pruning is not re-executed). Relative to the pruned model, PPL drops by `42.874595` in absolute
+> terms (about 77.8% of the pruning-caused PPL increase is recovered); the recovered PPL is still
+> `12.212309` above the original model. Prune time (0.06 min) is the `amct.prune` call itself,
+> excluding data preparation and evaluation.
+
+> After pruning, to export the model as a torchair offline model (.air) for ATC-to-om conversion and on-board inference, refer to [AMCT large-model offline torchair model export](../export/README_en.md).

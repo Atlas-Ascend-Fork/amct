@@ -199,8 +199,13 @@ def load_model(
     torch_dtype=torch.bfloat16,
     trust_remote_code=False,
     device_map=None,
+    low_cpu_mem_usage=False,
 ):
-    """Load a causal LM (e.g. Qwen3-0.6B) with its tokenizer."""
+    """Load a causal LM (e.g. Qwen3-0.6B) with its tokenizer.
+
+    ``low_cpu_mem_usage`` is opt-in so existing samples keep their current
+    loading path; samples loading multi-GB checkpoints can enable it.
+    """
     _disable_torchaudio_for_transformers()
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -213,6 +218,7 @@ def load_model(
         trust_remote_code=trust_remote_code,
         device_map=device_map,
         local_files_only=True,
+        low_cpu_mem_usage=low_cpu_mem_usage,
     ).eval()
     return model, tokenizer
 
