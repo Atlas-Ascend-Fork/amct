@@ -48,7 +48,6 @@ def _quant_args(algos=None, quant_target=("attn-linear",)):
         weight_decay=0.0,
         momentum=0.9,
         lr_scheduler="cosine",
-        min_lr=0.0,
         lr_step_size=1,
         lr_gamma=0.1,
         epochs=1,

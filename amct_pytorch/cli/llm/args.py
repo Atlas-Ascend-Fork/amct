@@ -146,7 +146,6 @@ def parser_gen(command=None):
     parser.add_argument('--weight_decay', type=float, default=0.0)
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--lr_scheduler', type=str, default='cosine')
-    parser.add_argument('--min_lr', type=float, default=0.0)
     parser.add_argument('--lr_step_size', type=int, default=1)
     parser.add_argument('--lr_gamma', type=float, default=0.1)
     parser.add_argument(
@@ -171,9 +170,6 @@ def parser_gen(command=None):
         default=False,
         help='Use per-tensor statistics in activation clipping.',
     )
-    parser.add_argument(
-        '--k_size', type=int, default=128, help='Learnable hadamard-like matrix size.'
-    )
 
     parser.add_argument("--start_block_idx", type=int, default=0)
     parser.add_argument("--end_block_idx", type=int, default=61)
@@ -189,7 +185,6 @@ def parser_gen(command=None):
     parser.add_argument('--attn_linear_param_dir', default="")
     parser.add_argument('--attn_cache_param_dir', default="")
     parser.add_argument('--moe_mlp_param_dir', default="")
-    parser.add_argument('--wikitext_final_out', default="")
 
     args = parser.parse_args()
 
