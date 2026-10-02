@@ -1198,15 +1198,15 @@ AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模
       input_data = ori_model_input_data
       record_file = './tmp/record.txt'
       config_defination = './prune_cfg.cfg'
-      save_pth_path = /your/path/to/save/tmp.pth
-      model.load_state_dict(torch.load(state_dict_path))
-      prune_retrain_model = amct.restore_prune_retrain_model(model=ori_model,
-                                                             input_data=ori_model_input_data,
-                                                             record_file=record_file,
-                                                             config_defination='./prune_cfg.cfg',
-                                                             save_pth_path=/your/path/to/save/tmp.pth,
-                                                             'state_dict')
-      ```
+      pth_file = '/your/path/to/save/tmp.pth'
+      prune_retrain_model = amct.restore_prune_retrain_model(
+          model=model,
+          input_data=input_data,
+          record_file=record_file,
+          config_defination=config_defination,
+          pth_file=pth_file,
+          state_dict_name='state_dict')
+```
 
    2. （由用户补充处理）使用修改后的模型，恢复断点，创建反向梯度，在训练集上做训练。
       1. 从稀疏后训练中断的checkpoint恢复模型参数。
@@ -1371,15 +1371,15 @@ prune_retrain_model = amct.save_prune_retrain_model(
       input_data = ori_model_input_data
       record_file = './tmp/record.txt'
       config_defination = './prune_cfg.cfg'
-      save_pth_path = /your/path/to/save/tmp.pth
-      model.load_state_dict(torch.load(state_dict_path))
-      prune_retrain_model = amct.restore_prune_retrain_model(model=ori_model,
-                                                             input_data=ori_model_input_data,
-                                                             record_file=record_file,
-                                                             config_defination='./prune_cfg.cfg',
-                                                             save_pth_path=/your/path/to/save/tmp.pth,
-                                                             'state_dict')
-      ```
+      pth_file = '/your/path/to/save/tmp.pth'
+      prune_retrain_model = amct.restore_prune_retrain_model(
+          model=model,
+          input_data=input_data,
+          record_file=record_file,
+          config_defination=config_defination,
+          pth_file=pth_file,
+          state_dict_name='state_dict')
+```
 
    2. （由用户补充处理）使用修改后的模型，恢复断点，创建反向梯度，在训练集上做训练。
       1. 从稀疏后训练中断的checkpoint恢复模型参数。
