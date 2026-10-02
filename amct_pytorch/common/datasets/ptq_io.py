@@ -22,14 +22,18 @@ from loguru import logger
 
 def save_ptq_kwargs(position_ids, position_embeddings, attention_mask, data_dir):
     os.makedirs(data_dir, exist_ok=True)
-    if position_ids is not None:
-        torch.save(position_ids, os.path.join(data_dir, "position_ids.pkl"))
-    if position_embeddings is not None:
-        torch.save(
-            position_embeddings, os.path.join(data_dir, "position_embeddings.pkl")
-        )
-    if attention_mask is not None:
-        torch.save(attention_mask, os.path.join(data_dir, "attention_mask.pkl"))
+    # This directory represents the current extraction, including absent
+    # optional kwargs. Do not reload metadata left by a previous run.
+    for name, value in (
+        ("position_ids", position_ids),
+        ("position_embeddings", position_embeddings),
+        ("attention_mask", attention_mask),
+    ):
+        path = os.path.join(data_dir, f"{name}.pkl")
+        if value is not None:
+            torch.save(value, path)
+        elif os.path.exists(path):
+            os.remove(path)
 
 
 def save_ptq_inps(act_stat, hook_name, quant_target, layer_idx, data_dir):
