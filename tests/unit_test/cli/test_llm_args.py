@@ -20,6 +20,7 @@ from unittest.mock import patch
 
 import pytest
 
+from amct_pytorch.cli.llm import args as llm_args
 from amct_pytorch.cli.llm.args import parser_gen
 
 
@@ -315,3 +316,83 @@ def test_tensor_cli_rejects_invalid_bits_before_json_read(
     )
     with pytest.raises(ValueError, match=message):
         parser_gen(command="deploy")
+
+
+# ---------------------------------------------------------------------------
+# Deprecated-but-tolerated flags (--min_lr / --k_size / --wikitext_final_out)
+# They stay accepted for compatibility with released docs and user scripts,
+# but their values are ignored and a warning is emitted.
+# ---------------------------------------------------------------------------
+
+DEPRECATED_FLAGS = [
+    ("--min_lr", "1e-4", 0.0),
+    ("--k_size", "64", 128),
+    ("--wikitext_final_out", "/tmp/wikitext", ""),
+]
+
+
+class _WarningRecorder:
+    """Stand-in for the loguru logger capturing formatted warning messages."""
+
+    def __init__(self):
+        self.messages = []
+
+    def warning(self, message, *args, **kwargs):
+        self.messages.append(message.format(*args, **kwargs))
+
+
+@pytest.mark.parametrize("flag, value, legacy_default", DEPRECATED_FLAGS)
+def test_deprecated_flag_accepted_and_ignored_with_warning(
+    monkeypatch, flag, value, legacy_default
+):
+    recorder = _WarningRecorder()
+    monkeypatch.setattr(llm_args, "logger", recorder)
+    dest = flag.lstrip("-")
+    monkeypatch.setattr(sys, "argv", ["amct", *REQUIRED_ARGV["ptq"], flag, value])
+
+    args = parser_gen(command="ptq")
+
+    assert getattr(args, dest) == legacy_default
+    assert len(recorder.messages) == 1
+    assert flag in recorder.messages[0]
+    assert "deprecated" in recorder.messages[0]
+
+
+@pytest.mark.parametrize("flag, value, legacy_default", DEPRECATED_FLAGS)
+def test_deprecated_flag_silent_when_not_passed(
+    monkeypatch, flag, value, legacy_default
+):
+    recorder = _WarningRecorder()
+    monkeypatch.setattr(llm_args, "logger", recorder)
+    dest = flag.lstrip("-")
+    monkeypatch.setattr(sys, "argv", ["amct", *REQUIRED_ARGV["ptq"]])
+
+    args = parser_gen(command="ptq")
+
+    assert getattr(args, dest) == legacy_default
+    assert recorder.messages == []
+
+
+@pytest.mark.parametrize("command", ["ptq", "eval", "extract_ptq_data", "deploy", None])
+def test_deprecated_flags_accepted_by_every_command(monkeypatch, command):
+    recorder = _WarningRecorder()
+    monkeypatch.setattr(llm_args, "logger", recorder)
+    argv = ["amct", *REQUIRED_ARGV[command]]
+    for flag, value, _ in DEPRECATED_FLAGS:
+        argv += [flag, value]
+    monkeypatch.setattr(sys, "argv", argv)
+
+    args = parser_gen(command=command)
+
+    assert (args.min_lr, args.k_size, args.wikitext_final_out) == (0.0, 128, "")
+    assert len(recorder.messages) == len(DEPRECATED_FLAGS)
+
+
+def test_deprecated_flags_still_listed_in_help(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["amct", "--help"])
+    with pytest.raises(SystemExit):
+        parser_gen(command="ptq")
+
+    help_text = capsys.readouterr().out
+    for flag, _, _ in DEPRECATED_FLAGS:
+        assert flag in help_text

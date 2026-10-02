@@ -19,12 +19,53 @@
 import argparse
 import os
 
+from loguru import logger
+
 from amct_pytorch.common.models.llm.common.deploy_selection import (
     requires_tensor_deploy_config,
     validate_ascend_deploy_args,
     validate_tensor_deploy_args,
 )
 from amct_pytorch.quantization.bit_policy import BitPolicy
+
+# Sentinel telling "the flag was not passed on the command line". Deprecated
+# flags use it as their argparse default so an explicit value can be told
+# apart from a missing one.
+_UNSET = object()
+
+# Deprecated flags that are still documented in released user guides and still
+# appear in existing user scripts, so dropping them would turn those
+# invocations into an argparse error. They have no consumer anywhere in the
+# eval / extract_ptq_data / ptq / deploy chain: the passed value is ignored and
+# reset to the legacy default, and a warning is emitted so users stop relying
+# on it.
+# Format: (dest, flag, legacy default kept on the namespace)
+_DEPRECATED_IGNORED_ARGS = (
+    ('min_lr', '--min_lr', 0.0),
+    ('k_size', '--k_size', 128),
+    ('wikitext_final_out', '--wikitext_final_out', ""),
+)
+
+_DEPRECATED_HELP = (
+    '[DEPRECATED] No effect: not consumed by any workflow. '
+    'Kept for compatibility with existing scripts and ignored with a warning.'
+)
+
+
+def _ignore_deprecated_args(args):
+    """Warn about deprecated flags and reset them to their legacy defaults."""
+    for dest, flag, legacy_default in _DEPRECATED_IGNORED_ARGS:
+        value = getattr(args, dest, _UNSET)
+        if value is _UNSET:
+            setattr(args, dest, legacy_default)
+            continue
+        logger.warning(
+            "{} is deprecated and has no effect: the passed value {!r} is "
+            "ignored. Please remove it from your command line.",
+            flag,
+            value,
+        )
+        setattr(args, dest, legacy_default)
 
 
 def _validate_eval_mode(args):
@@ -146,7 +187,7 @@ def parser_gen(command=None):
     parser.add_argument('--weight_decay', type=float, default=0.0)
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--lr_scheduler', type=str, default='cosine')
-    parser.add_argument('--min_lr', type=float, default=0.0)
+    parser.add_argument('--min_lr', type=float, default=_UNSET, help=_DEPRECATED_HELP)
     parser.add_argument('--lr_step_size', type=int, default=1)
     parser.add_argument('--lr_gamma', type=float, default=0.1)
     parser.add_argument(
@@ -171,9 +212,7 @@ def parser_gen(command=None):
         default=False,
         help='Use per-tensor statistics in activation clipping.',
     )
-    parser.add_argument(
-        '--k_size', type=int, default=128, help='Learnable hadamard-like matrix size.'
-    )
+    parser.add_argument('--k_size', type=int, default=_UNSET, help=_DEPRECATED_HELP)
 
     parser.add_argument("--start_block_idx", type=int, default=0)
     parser.add_argument("--end_block_idx", type=int, default=61)
@@ -189,9 +228,11 @@ def parser_gen(command=None):
     parser.add_argument('--attn_linear_param_dir', default="")
     parser.add_argument('--attn_cache_param_dir', default="")
     parser.add_argument('--moe_mlp_param_dir', default="")
-    parser.add_argument('--wikitext_final_out', default="")
+    parser.add_argument('--wikitext_final_out', default=_UNSET, help=_DEPRECATED_HELP)
 
     args = parser.parse_args()
+
+    _ignore_deprecated_args(args)
 
     if (
         command == "deploy"
