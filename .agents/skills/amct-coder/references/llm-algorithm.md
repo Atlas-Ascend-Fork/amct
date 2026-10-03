@@ -30,28 +30,28 @@ CLI --algos -> ALGO_REGISTRY/targets -> quant module 分流
 - 上游：算法由 CLI `--algos` 传入，经 `ALGO_REGISTRY`、`register_algorithms()` 和 `build_algorithms_by_target()` 构建。
 - 平级：算法只通过 quantizer hook、module buffer/parameter 或 structure transform 影响量化，不直接读取 dataset 或 workflow。
 - 下游：`llm-solving-lifecycle` 消费 `trainable_params()`、buffer 和 PTQ 参数导出；`llm-deploy` 消费算法的 `export_deploy()` 或已回载状态。
-- 算法影响 dtype、solver、workflow、CLI 或 deploy 时，先用本手册列出的源码和测试确认真实跨契约影响，再按“跨契约扩张门”选择 owner；不要因题面同时出现多个层名就一次性读取多份 Reference。
+- 算法影响 dtype、solver、workflow、CLI 或 deploy 时，先用本手册列出的源码和测试确认真实跨端影响，再按“跨端扩张门”选择 owner；不要因题面同时出现多个层名就一次性读取多份 Reference。
 
 ## 执行步骤
 
 1. 明确算法作用域：`weight`、`activation`、`structure` 中的一个或多个；不要用宽泛 target 掩盖实现不匹配。
-2. 冻结核心契约：数值变换、状态 shape/初始化/约束、与其它算法的组合关系、保存回载格式，以及 fake/real quant 或 deploy 是否需要自定义 hook。
+2. 冻结核心约定：数值变换、状态 shape/初始化/约束、与其它算法的组合关系、保存回载格式，以及 fake/real quant 或 deploy 是否需要自定义 hook。
 3. 查现有同类算法的构造签名、状态保存和测试口径，优先沿用本地基类/辅助函数。
-4. 核心契约冻结后实现最小可用算法，再用 `@ALGO_REGISTRY.register(...)` 注册，并确保 `amct_pytorch/algorithms/quant/__init__.py` 导入。
+4. 核心约定冻结后实现最小可用算法，再用 `@ALGO_REGISTRY.register(...)` 注册，并确保 `amct_pytorch/algorithms/quant/__init__.py` 导入。
 5. 接入 quantizer 或 structure transform，检查同一位置是否已有互斥 hook。
 6. 对训练型算法实现 `trainable_params()`；对统计型算法实现 buffer、`export_ptq_params()`、`load_ptq_params()`。
 7. 若 eval/deploy 需要复现训练态，检查 `--algos`、参数文件和回载路径是否能构建出相同模块结构。
 8. 补 registry、算法本体、quantizer 分流、solver 或 deploy 的最小测试。
 
-## 可查事实与跨契约扩张门
+## 可查事实与跨端扩张门
 
 算法名称、业务目标和搜索命中不能替代当前调用链事实。形成方案前，先从源码、调用方和直接测试核对 registry import、`targets`、构造签名、quantizer hook、`trainable_params()`、observe/finalize caller、保存 caller 和 CLI 实际参数。能够从当前仓库查明的项目不得继续写成“待用户确认”；只有目标数值语义、产品选择或兼容策略等源码无法决定的内容才保持条件式。
 
 helper、hook 或导出函数存在但找不到 caller 时，明确记为“源码存在但当前未接通”。不能据此声称 solver 会驱动统计、训练结果会递归保存，或 eval/deploy 已能消费状态。
 
-主手册和首轮源码定位提示仍不能回答问题时，按未解决契约选择一份 owner Reference：
+主手册和首轮源码定位提示仍不能回答问题时，按未解决约定选择一份 owner Reference：
 
-| 未解决契约 | owner Reference |
+| 未解决约定 | owner Reference |
 | --- | --- |
 | 数值格式、packing 或 real quant dtype 语义 | `quant-dtype-module` |
 | 样本遍历、trainable 参数、finalize、保存或回载 | `llm-solving-lifecycle` |
@@ -59,7 +59,7 @@ helper、hook 或导出函数存在但找不到 caller 时，明确记为“源�
 | deploy payload、index、config 或下游消费 | `llm-deploy` |
 | CLI 公开值、配置兼容性或用户可见接口 | `validation.md` 的公共接口检查 |
 
-默认先只加载最阻塞的一份辅助 Reference。读取前记录：未解决契约、已经核对的源码/测试和该 owner 的职责。只有第一份辅助资料与新增源码证据仍无法回答另一个会改变方案的问题时，才考虑加载第二份，并说明触发扩张的冲突或缺失证据。其它受影响面只标记 `affected` 或条件式验证，不为列全链路而全文预读。
+默认先只加载最阻塞的一份辅助 Reference。读取前记录：未解决约定、已经核对的源码/测试和该 owner 的职责。只有第一份辅助资料与新增源码证据仍无法回答另一个会改变方案的问题时，才考虑加载第二份，并说明触发扩张的冲突或缺失证据。其它受影响面只标记 `affected` 或条件式验证，不为列全链路而全文预读。
 
 达到以下条件后停止扩张：算法体系与 target 已确认；执行形态已确定或明确保持 `pending`；数据驱动者、完成动作和活跃保存/消费链已有证据或明确标为未接通；剩余未知项已能用条件分支表达。只读规划默认输出这些结论和最小验证，不重复枚举全部算法实现、测试目录或跨层文件清单。
 
@@ -93,14 +93,14 @@ helper、hook 或导出函数存在但找不到 caller 时，明确记为“源�
 1. score 的原始输入；activation error 必须说明浮点/量化成对输出如何取得，Hessian/Fisher 必须说明统计或梯度来源。
 2. 一个 unit 内多个 algorithm、transform 或 linear 的聚合规则，以及 layer/model 范围内阈值、排序或预算的作用域。
 3. 决策结果的数据结构、确定性、分布式一致性和保存/回载格式。
-4. 决策的执行者；algorithm 产生统计或决策状态，solver 不按模型结构自行猜测 unit，workflow 只有在通用 skip 契约冻结后才执行。
+4. 决策的执行者；algorithm 产生统计或决策状态，solver 不按模型结构自行猜测 unit，workflow 只有在通用 skip 约定冻结后才执行。
 5. “跳过”的数值语义：保持浮点、回退 direct quant、跳过 PTQ 优化但仍量化，三者不能混写。
 
-只有方案真实改变 skip/partial result 的文件、续跑或 strict load 语义时，才按“跨契约扩张门”读取 `llm-solving-lifecycle`；eval/deploy 只在对应产物或消费契约变化时追加 owner。契约冻结前只给条件式计划，不发明通用阈值参数或把“跳过 `solver.solve()`”表述为跳过量化。
+只有方案真实改变 skip/partial result 的文件、续跑或 strict load 语义时，才按“跨端扩张门”读取 `llm-solving-lifecycle`；eval/deploy 只在对应产物或消费约定变化时追加 owner。跨端约定冻结前只给条件式计划，不发明通用阈值参数或把“跳过 `solver.solve()`”表述为跳过量化。
 
-## 契约未冻结时的早停
+## 约定未冻结时的早停
 
-新算法的名称和业务目标不等于实现契约。下列算法领域契约任一未冻结且会改变实现时触发：
+新算法的名称和业务目标不等于实现约定。下列算法领域约定任一未冻结且会改变实现时触发：
 
 - 参数或统计状态的 shape、初始化、约束和 dtype/device 语义。
 - 算法对输入的具体数值变换，以及关闭算法时的等价基线。
@@ -121,7 +121,7 @@ LLM CLI path 只认 `ALGO_REGISTRY`：
 - 通过 `targets=("weight",)`、`("activation",)`、`("structure",)` 分流。
 - `WeightQuantizer` / `ActivationQuantizer` / structure transform 按 target 构建。
 
-本 skill 只覆盖 LLM CLI path 的 `ALGO_REGISTRY`；classic/graph_based 暂不在支持范围内，不要混用其算法注册机制。
+不混用 classic `AlgorithmRegistry` 的算法注册机制。
 
 ## 实现规则
 
@@ -137,20 +137,20 @@ LLM CLI path 只认 `ALGO_REGISTRY`：
 ## 禁止项
 
 - 新算法没有 `@ALGO_REGISTRY.register(...)`。
-- 核心数值/状态契约未冻结，却先注册 no-op 算法并暴露给 `--algos`。
+- 核心数值/状态约定未冻结，却先注册 no-op 算法并暴露给 `--algos`。
 - registry metadata 没有 `targets`。
 - `targets` 与实际作用域不一致。
-- 未命名的新算法继承了前序任务的具体名称、状态或 payload 契约。
+- 未命名的新算法继承了前序任务的具体名称、状态或 payload 约定。
 - 可由源码核对的 registry、CLI、caller 或保存链事实仍被留作开放问题，或使用当前不存在的参数形成计划。
 - 仅因 helper/hook 存在就声称 observe、finalize、保存或 eval/deploy 已接通。
-- 没有形成未解决契约和 owner 依据，就同时读取 dtype、solver、workflow、deploy 或 public API 等多份辅助 Reference。
+- 没有形成未解决约定和 owner 依据，就同时读取 dtype、solver、workflow、deploy 或 public API 等多份辅助 Reference。
 - `register_algorithms()` 没导入，导致运行时不可选。
 - 有 trainable 参数但 `trainable_params()` 返回空。
 - observe-only / observe-then-finalize 算法没有明确的数据驱动者、observe 开关或完成 hook，却假设现有 solver 会遍历数据并触发优化。
 - GT 生成阶段会更新统计或权重，但没有证明该副作用不会污染目标或重复计数。
 - 保存了 PTQ 参数但没有 `load_ptq_params()`。
 - 统计 buffer 没进入 `export_ptq_params()`，eval/deploy 无法复现训练态。
-- 敏感度 score 没有输入与聚合契约，或把跳过 solver 等同于保持浮点。
+- 敏感度 score 没有输入与聚合约定，或把跳过 solver 等同于保持浮点。
 
 ## 自验
 

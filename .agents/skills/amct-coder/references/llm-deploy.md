@@ -2,11 +2,11 @@
 
 ## 简介
 
-解决量化模型导出代码应该怎样修改和验证的问题，确保模型权重、分片索引、量化配置及导出文档彼此一致，并同时覆盖分块导出和逐张量导出路径。本子能力只处理导出功能的编码与审查，不负责实际运行导出任务。
+解决量化模型导出代码应该怎样修改和验证的问题，确保模型权重、分片索引、量化配置及导出文档彼此一致，并同时覆盖分块导出和逐张量导出路径。
 
 ## 职责边界
 
-本文件只负责导出实现与 review；实际运行 deploy 命令并生成交付目录转 `deploy-export` skill。
+本文件覆盖导出实现代码的修改与 review。
 
 ## 真实导出链
 
@@ -31,7 +31,7 @@ deploy CLI -> LlmDeployWorkflow -> adapter/dtype/algorithm 状态
 
 | 当前动作 | 搜索定义及调用方 | 确认影响后再读 |
 | --- | --- | --- |
-| index metadata、单/多 shard、剩余权重 | `_load_weight_index()`、`_refresh_weight_index()` | `_write_remaining_original_weights()`、下游 loader 契约 |
+| index metadata、单/多 shard、剩余权重 | `_load_weight_index()`、`_refresh_weight_index()` | `_write_remaining_original_weights()`、下游 loader 约定 |
 | `config.json` / `quantization_config` | `_refresh_config()`、`generate_quant_config()` | adapter `cache_scheme()` / `bits_scheme()`；公开字段成立时按 `validation.md` 的公共接口检查 |
 | blockwise payload/binding | `_run_blockwise()`、`export_block_deploy()`、`QuantLinear.export_deploy()` | 命中 adapter 的 `iter_deploy_bindings()`、PTQ 参数回载；payload 变化时读 `quant-dtype-module` 或 `llm-algorithm` |
 | tensorwise 转换 | `_run_tensorwise()`、`convert_state_dict()`、`quant_payload()` | 命中 adapter 的 `generate_tensorwise_*()`、`get_scale_name()`、`block_size()` |
@@ -66,8 +66,8 @@ tensorwise：
 3. 字段要求同时写 index 和 config 时，先确认两处是否表达同一语义以及谁是权威来源，避免复制后漂移。
 4. 修改已有 helper 前必须反查所有调用方；无调用 helper 不能作为当前行为依据。
 5. 新 dtype payload 先确认 `export_deploy()` 字段和 `quant_payload()`/`export_block_deploy()` 命名规则，再修改 workflow；数值与 packing 留在 dtype。
-6. algorithm 有自定义 `quantize()` 或 `export_deploy()` 时，确认 PTQ 参数已回载且 hook 契约可被 `WeightQuantizer.export_deploy()` 消费。
-7. adapter 只提供 binding、ignore、bits/cache scheme 等模型事实；workflow 不加入模型名分支。需要新增或结构性修改 adapter 时转 `model-adapter` skill。
+6. algorithm 有自定义 `quantize()` 或 `export_deploy()` 时，确认 PTQ 参数已回载且 hook 约定可被 `WeightQuantizer.export_deploy()` 消费。
+7. adapter 只提供 binding、ignore、bits/cache scheme 等模型事实；workflow 不加入模型名分支。
 8. tensorwise 逐 shard 行为要核对 `loaded_files` 生命周期和峰值内存，不把“按 shard 循环”等同于内存已受控。
 
 ## 产物与测试矩阵

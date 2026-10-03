@@ -31,9 +31,9 @@ LLM CLI: eval | extract_ptq_data | ptq | deploy
 | Solver | 消费 unit、batch 和算法参数，优化并返回结果 | 解析模型结构、直接读取离线文件 |
 | 参数存储与导出辅助 | 由 workflow/adapter 调用，衔接 PTQ 状态的保存回载与部署格式 | 重新定义算法或 dtype 语义 |
 
-`PtqUnit` 是 adapter 暴露给 PTQ 的处理单元，不是独立服务；offline data 是阶段产物，不是组件。kwargs 是 forward 附加输入，可能共享也可能逐样本变化；GT 是用于重建损失的参考输出，生成时的量化/observe 状态由 workflow 与模块契约共同约束。
+`PtqUnit` 是 adapter 暴露给 PTQ 的处理单元，不是独立服务；offline data 是阶段产物，不是组件。kwargs 是 forward 附加输入，可能共享也可能逐样本变化；GT 是用于重建损失的参考输出，生成时的量化/observe 状态由 workflow 与模块约定共同约束。
 
-主要入口是 `amct_pytorch/cli/llm/` 和 `amct_pytorch/workflows/`；从 `parser_gen`、`LlmEvalWorkflow`、`LlmExtractPtqDataWorkflow`、`LlmPtqWorkflow`、`LlmDeployWorkflow` 沿调用定位。组件重点搜索 `BaseModel`、`PtqUnit`、`LlmPtqDataProvider`、`BlockwiseSolver`、`PtqParamStore` 和相应 registry；注册定义必须与实际注册入口一起核对。跨 skill 的稳定边界以 [repo-map.md](../../../docs/repo-map.md#分层边界) 为准。
+主要入口是 `amct_pytorch/cli/llm/` 和 `amct_pytorch/workflows/`；从 `parser_gen`、`LlmEvalWorkflow`、`LlmExtractPtqDataWorkflow`、`LlmPtqWorkflow`、`LlmDeployWorkflow` 沿调用定位。组件重点搜索 `BaseModel`、`PtqUnit`、`LlmPtqDataProvider`、`BlockwiseSolver`、`PtqParamStore` 和相应 registry；注册定义必须与实际注册入口一起核对。分层边界以 [repo-map.md](../../../docs/repo-map.md#分层边界) 为准。
 
 ## 一、真实主链
 
@@ -75,9 +75,9 @@ CLI parser_gen
 
 ### 阶段影响检查
 
-阶段只描述 LLM 数据流影响，不决定代码职责归属。仅在修改 LLM CLI/workflow、阶段产物或跨阶段契约时检查；classic、ops 和纯 public API/packaging 标记为“不适用”。
+阶段只描述 LLM 数据流影响，不决定代码职责归属。仅在修改 LLM CLI/workflow、阶段产物或跨阶段约定时检查；classic、ops 和纯 public API/packaging 标记为“不适用”。
 
-只做阶段影响检查时读本节即可，需要逐阶段核对生产者/消费者契约再读下表与其后各节。通用能力可能同时影响多个阶段，不要强行选择单阶段；列出需要闭环的受影响阶段即可。
+只做阶段影响检查时读本节即可，需要逐阶段核对生产者/消费者约定再读下表与其后各节。通用能力可能同时影响多个阶段，不要强行选择单阶段；列出需要闭环的受影响阶段即可。
 
 | 阶段 | 生产者 | 数据/状态 | 消费者 | 开发时必须保持 |
 | --- | --- | --- | --- | --- |
@@ -93,7 +93,7 @@ CLI parser_gen
 3. ptq 按 adapter 的 `iter_ptq_units()` 枚举 unit，provider 根据 unit 的 kind/layer 读取对应输入；attention 目标额外读取 kwargs 文件。
 4. PTQ 当前要求单个 `quant_target`，主流程接通 `block` granularity。输入缺失时 provider 返回缺失状态，workflow/solver 不应静默把它当成功。
 
-### 模型与数据流契约
+### 模型与数据流约定
 
 模型 adapter 是这些数据约定的生产者，workflow/provider 是消费者，修改任一侧都要同步核对：
 
@@ -101,7 +101,7 @@ CLI parser_gen
 - `unit.save_name` 必须与 PTQ 参数文件命名和 eval/deploy 回载结构一致。
 - adapter 的 embedding/block hook 必须保存下游需要的 norm 输入及 `attention_mask`、`position_ids`、`position_embeddings` 等 kwargs。
 - 新增逐样本 kwargs 或复合 unit 时，必须定义字段所有权、shape/dtype、缺失行为和 batch 切分规则。
-- 模型专属的 unit 拆分、输入捕获和 wrapper 逻辑归 `model-adapter` skill，workflow 只消费稳定契约。
+- workflow 只消费稳定约定。
 
 ### ptq -> eval/deploy 的真实细节
 

@@ -1,6 +1,6 @@
 # 子能力：model-adapter-review
 
-本文件用于 `amct-coder` 对已有 LLM adapter/wrapper 做局部非结构修复和契约 review。新增模型注册、`PtqUnit` 拆分、quant block 或 attention/MLP/MoE wrapper 的结构性实现，必须加载并遵循 [model-adapter skill](../../quant-tools/model-adapter/SKILL.md)，适配流程、实验流程和完成标准以该 skill 为准。
+本文件用于对已有 LLM adapter/wrapper 做局部非结构修复和跨端约定 review。
 
 ## 职责边界
 
@@ -14,13 +14,13 @@
 1. 从 `MODEL_REGISTRY` 和目标注册类定位 adapter，确认实际调用方。
 2. 按问题搜索 `build_quant_block`、`iter_ptq_units`、embedding/block forward、`iter_deploy_bindings` 及对应测试。
 3. 局部 bug 沿“捕获端 -> 离线文件 -> adapter 注入 -> block forward -> wrapper 消费”完整核验。
-4. 若需要新增类、改变结构、注册链或 unit 拆分，切换到 `model-adapter` skill；若只改变下游接口，按契约 owner 追加对应 reference。
+4. 若只改变下游接口，按约定 owner 追加对应 reference。
 
-## 跨层契约
+## 跨层约定
 
 修改模型层或其消费者时，至少核对：
 
-| 契约 | 必须一致的两端 |
+| 跨端约定 | 必须一致的两端 |
 | --- | --- |
 | `PtqUnit.kind`、`save_name` | adapter、extract 文件名、PTQ 参数文件和回载逻辑 |
 | hook 与 kwargs | adapter 的 embedding/block forward、`llm-cli-dataflow` 的保存与加载 |
@@ -43,23 +43,21 @@
 
 ### 局部修复完成标准
 
-先用直接断言复现并验证目标 bug，再按实际受影响契约追加下表中的验证；未触及的路径不作为局部修复完成门槛。
+先用直接断言复现并验证目标 bug，再按实际受影响约定追加下表中的验证；未触及的路径不作为局部修复完成门槛。
 
 | 实际影响 | 追加验证 |
 | --- | --- |
 | block 构建或权重加载 | 受影响的 float/quant block 可构建，权重名称、shape 和加载结果符合预期 |
 | forward、mask/position 或量化开关 | 目标 forward 路径正确；关闭量化后与原始 float 行为等价或在明确容差内接近 |
-| 输入捕获、kwargs 或 unit 契约 | 对应捕获、保存、加载、unit 枚举及 GT 路径一致；补相关 workflow mocked 测试 |
+| 输入捕获、kwargs 或 unit 约定 | 对应捕获、保存、加载、unit 枚举及 GT 路径一致；补相关 workflow mocked 测试 |
 | PTQ 参数导出或回载 | 受影响状态经实际保存与加载入口恢复，eval/deploy 中受影响的消费者能使用该状态 |
 | deploy binding | binding 对应正确权重和模块，导出 payload、tensor route 与 index 一致；仅改 binding 不要求额外验证 GT 路径 |
 
-完成说明列出已验证的契约和仍缺失的证据。缺少真实模型或硬件时明确说明验证范围，不把 mocked 测试通过写成完整模型适配通过。
-
-需要新增模型或结构性修改注册链、wrapper、unit 拆分时，转 [model-adapter skill](../../quant-tools/model-adapter/SKILL.md)，按其完整适配标准验证（含 BF16 baseline 与最小 PTQ smoke）。
+完成说明列出已验证的跨端约定和仍缺失的证据。缺少真实模型或硬件时明确说明验证范围，不把 mocked 测试通过写成完整模型适配通过。
 
 ## 禁止项
 
-- 局部修复引入新的 wrapper 类、模型名分支或注册链改动（属结构性实现，转 model-adapter skill）。
+- 局部修复引入新的 wrapper 类、模型名分支或注册链改动。
 - workflow/solver/通用 quant module 中出现模型专属逻辑。
 - 关闭量化后与 float 行为不等价却声称修复完成。
-- unit 契约（`PtqUnit.kind`/`save_name`、hook、deploy binding）单侧改动，未同步另一端。
+- unit 约定（`PtqUnit.kind`/`save_name`、hook、deploy binding）单侧改动，未同步另一端。

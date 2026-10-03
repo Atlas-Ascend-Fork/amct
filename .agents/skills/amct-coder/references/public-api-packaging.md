@@ -1,11 +1,10 @@
 # 子能力：public-api-packaging
 
-解决 public API、安装打包与用户文档承诺的落点、契约和验证问题：新 API 如何导出与懒加载、packaging 清单如何同步、文档示例如何与实现一致。本子能力不实现具体量化能力（那属于 dtype/algorithm 各手册），只负责「用户可见面」的一致性闭环。
+解决 public API、安装打包与用户文档承诺的落点、跨端约定和验证问题：新 API 如何导出与懒加载、packaging 清单如何同步、文档示例如何与实现一致。本子能力负责「用户可见面」的一致性闭环。
 
 ## 职责边界
 
 - 承接：`amct_pytorch/__init__.py` 的导出与懒加载、`setup.py`/`pyproject.toml`/`build.sh`/`package_data`、`requirements.txt`（运行依赖安装入口）、`AMCT_EXPERIMENTAL` 开关、examples 与 `docs/` 中的 API/CLI 承诺、版本兼容声明。
-- 不承接：classic/graph_based；LLM CLI 参数语义（`llm-cli-dataflow`）；具体数值语义（dtype/algorithm 手册）。
 
 ## 实现定位
 
@@ -25,7 +24,7 @@
 
 新增或修改 public API（`__all__` 成员、顶层函数、config 常量）前逐项冻结：
 
-| 契约 | 必须回答的问题 |
+| 跨端约定 | 必须回答的问题 |
 | --- | --- |
 | 导出形态 | 顶层直接 import 还是 `__getattr__` 懒加载；判据是依赖重量（重依赖必须懒加载，避免 LLM-only 用户被迫装 onnx/protobuf） |
 | `__all__` 一致性 | 源模块 `__all__`、顶层 `__all__`、通配符 import、普通 import、顶层属性访问五面一致；懒加载 API 不能只验证属性可达 |

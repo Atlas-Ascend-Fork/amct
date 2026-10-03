@@ -29,8 +29,6 @@
 - 版权：检查新增代码包含仓库既有的 Apache 2.0 版权声明，现有版权头未被删除或破坏。
 - public API：`pytest tests/unit_test/test_public_api.py`（其中 ast 解析的静态检查无需构建环境，import 行为用例在未构建源码树时自动跳过）。
 
-本节只定义修改后的检查动作；代码风格和版权要求见 [coding-rules.md](coding-rules.md)。
-
 ## 验证失败的处理
 
 验证失败按类型分派，处理顺序固定：先判断失败属于哪类，再按对应动作执行，不跳类。
@@ -56,11 +54,11 @@
 | Python 局部实现 | `python -m py_compile <changed .py>` + 命中场景单测 | 若改 public API、workflow 或 solver，再叠加对应集成测试 |
 | CLI/parser/default 行为 | parser 测试、命令 help 或最小 workflow dry-run | 默认值变化按兼容性风险说明 |
 | 保存/加载/文件格式 | producer 和 consumer 双侧单测或 smoke | 只测保存不等于回载闭环 |
-| 构建、packaging、ops 边界 | 对应 build/import 测试；ops 内部实现按 `amct-ops-dev` | 缺 CANN/NPU/protobuf 时明确阻塞 |
+| 构建、packaging、ops 边界 | 对应 build/import 测试 | 缺 CANN/NPU/protobuf 时明确阻塞 |
 
 ## 越界自查
 
-改完按实际调用关系逐个确认改动文件所在层、是否越层以及上下游契约是否闭环。四个高频问题：
+改完按实际调用关系逐个确认改动文件所在层、是否越层以及上下游约定是否闭环。四个高频问题：
 
 1. 改动是否停在声明的架构层，没有顺手改上下游？
 2. 是否先复用了现有抽象（`QuantLinear` / `QuantGatedMLP` / family helper）再新增？
@@ -79,7 +77,7 @@
 
 ## 场景测试索引
 
-这里集中给出测试定位提示与命令。先按实现符号、导入关系或目标行为在 `tests/` 中搜索直接断言，确认文件仍存在并覆盖本次改动，再运行对应测试。下表的目录是搜索范围，不要求整目录执行；文件改名后以搜索结果为准。
+先按实现符号、导入关系或目标行为在 `tests/` 中搜索直接断言，确认文件仍存在并覆盖本次改动，再运行对应测试。
 
 通用执行方式：`pytest <已确认的测试文件>`；需要缩小范围时使用 `pytest <已确认的测试文件> -k <相关测试名>`。新增行为没有直接断言时，在所属测试模块补覆盖，不把邻近测试通过当成该行为已验证。
 
@@ -91,12 +89,12 @@
 | `llm-cli-dataflow` | `tests/unit_test/workflows/`、`tests/unit_test/common/datasets/`、`tests/unit_test/common/evaluate/`；按 workflow、provider/I/O、PPL 行为定位 |
 | `llm-solving-lifecycle` | `tests/unit_test/common/optimization/`、`tests/unit_test/common/models/llm/common/test_ptq_params.py`、`tests/unit_test/workflows/test_llm_ptq.py` |
 | `llm-deploy` | workflow：`tests/unit_test/workflows/test_llm_deploy.py`；helper：`tests/unit_test/common/models/llm/common/test_deploy_export.py` |
-| `amct-ops-dev` 上层接入 | 上层 fallback/import 参考 `tests/amct_pytorch/test_hifloat8_fallback.py`；算子硬件测试在 `tests/amct_ops/`，按 `amct-ops-dev` 执行 |
+| NPU 算子上层接入 | 上层 fallback/import 参考 `tests/amct_pytorch/test_hifloat8_fallback.py`；算子硬件测试在 `tests/amct_ops/` |
 | 公共接口与打包 | `tests/unit_test/test_public_api.py`、`tests/unit_test/test_packaging.py`、`tests/unit_test/cli/test_llm_module_entrypoints.py` |
 
 表中目录是搜索范围，不要求整目录执行；同一文件被多个场景引用时（如 `test_llm_ptq.py` 同时覆盖 `llm-cli-dataflow` 的 ptq 命令和 `llm-solving-lifecycle` 的求解链路）按本次改动选择相关用例，命令详见下节。
 
-常用定向命令，按实际改动选取；与上表重复的文件不再列出第二份清单，以实际改动所属场景和搜索结果为准：
+常用定向命令，按实际改动选取：
 
 - dtype 与 quantizer 分流：`pytest tests/unit_test/quantization/test_dtypes.py tests/unit_test/quantization/modules/test_quant_base.py`。
 - workflow：`pytest tests/unit_test/workflows/test_llm_eval.py tests/unit_test/workflows/test_llm_extract_ptq_data.py tests/unit_test/workflows/test_llm_ptq.py`，只涉及其中一个命令时只选该文件。
@@ -107,7 +105,7 @@
 - public API / packaging：`pytest tests/unit_test/test_public_api.py tests/unit_test/test_packaging.py`。
 - CLI 入口：`pytest tests/unit_test/cli/test_llm_module_entrypoints.py`；parser/default 行为还需确认有相应断言。
 
-算法自身、classic custom algorithm/config、graph pass、quantize/save、prune/distill/retrain/cali 等按符号与领域定位。跨契约任务按生产者和消费者补充上述验证，测试直接 import 未接通模块不证明正常注册入口已接通。
+算法自身、classic custom algorithm/config、graph pass、quantize/save、prune/distill/retrain/cali 等按符号与领域定位。跨端任务按生产者和消费者补充上述验证，测试直接 import 未接通模块不证明正常注册入口已接通。
 
 ## 构建
 

@@ -522,11 +522,11 @@ def self_test() -> int:
                 )
         # 节名引用：漂移必须被检出，精确一致与白名单必须放过
         head = Path(td) / "quoted_head.md"
-        head.write_text("## 契约缺失的处理形态\n\n## 验证\n\n正文。\n", encoding="utf-8")
+        head.write_text("## 跨端约定缺失的处理形态\n\n## 验证\n\n正文。\n", encoding="utf-8")
         quoted_cases = [
             # 历史上真实发生过的漂移：多一个「时」字，锚点检查查不出来
-            ("契约缺失时的处理形态", True),
-            ("契约缺失的处理形态", False),   # 精确一致
+            ("跨端约定缺失时的处理形态", True),
+            ("跨端约定缺失的处理形态", False),   # 精确一致
             ("已验证", False),               # 白名单散文用词（近似标题「验证」）
         ]
         for idx, (ref, expect_issue) in enumerate(quoted_cases):

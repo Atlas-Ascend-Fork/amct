@@ -39,8 +39,8 @@ clone 本仓即可直接使用，Agent Skills 自动加载（机制见 [docs/arc
 | 「量化后 PPL 比 BF16 还低，正常吗」 | `quant-workflow` 先查链路再判定 |
 | 「`llm_deploy.py` 的 index 刷新逻辑有 bug，帮我改」/「给 `--quant_dtype` 加一个取值」 | `amct-coder` 源码级编码（改实现代码）|
 | 「PTQ 日志说参数更新了但 PPL 没动，从代码上帮我查为什么」 | `amct-coder` 行为诊断（沿源码链路取证，不跑实验）|
-| 「这个改动落点对不对」/「帮我 review 一下这次 diff 有没有越层」 | `amct-coder` 落点与契约 review |
-| 「新增一个 fp8 dtype 并接进 CLI」 | `amct-coder` 主手册 `quant-dtype-module`（命中门禁对象 → 契约状态表逐项过）|
+| 「这个改动落点对不对」/「帮我 review 一下这次 diff 有没有越层」 | `amct-coder` 落点与跨端约定 review |
+| 「新增一个 fp8 dtype 并接进 CLI」 | `amct-coder` 主手册 `quant-dtype-module`（命中门禁对象 → 跨端约定状态表逐项过）|
 | 「在 amct_ops 里加一个 mxfp4 cast 算子」/「照 hifloat8_cast 模板写个新 NPU 算子」 | `amct-ops-dev` 算子开发 |
 | 「ops_build.sh 怎么按 A2/A3/A5 切 NPU_ARCH」/「torch.compile 报 no Meta kernel 怎么补」 | `amct-ops-dev` 构建/调试 |
 
