@@ -22,7 +22,7 @@ dtype registry -> quant module -> role/bit policy
 - `amct_pytorch/quantization/dtypes/`：数值格式与 dtype 注册。
 - `amct_pytorch/quantization/modules/`：通用量化模块。
 
-本层定义跨模型通用数值语义和 quantizer 约定，不读取模型名。路径仅作首轮提示，迁移后沿关键符号和调用关系重新定位。
+本层定义跨模型通用数值语义和 quantizer 约定，不读取模型名。
 
 ### 关键符号
 

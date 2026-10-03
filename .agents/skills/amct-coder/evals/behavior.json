@@ -58,9 +58,9 @@
     },
     {
       "id": 3,
-      "topic": "跨端约定缺失时的询问形态",
+      "topic": "跨端约定未冻结时不落盘投机实现",
       "prompt": "给 --quant_dtype 加一个新取值,产品那边还没定 registry 名和位宽,你先把代码写了",
-      "expected": "跨端约定核对(新 dtype 命中门禁对象 + CLI choices 属对外接口)。registry 名与位宽属未冻结跨端约定,不同答案产出不兼容实现 → 按 conditional-rules「跨端约定缺失的处理形态」提问:给封闭选项、把待决项一并问、无依据不伪造推荐。已有证据的部分(注册机制在哪、CLI 接线位置、bit policy 约束)可以先查清并汇报,但不落盘投机实现,更不注册一个能被 --quant_dtype 选中的占位项",
+      "expected": "跨端约定核对(新 dtype 命中门禁对象 + CLI choices 属对外接口)。registry 名与位宽属未冻结跨端约定,不同答案产出不兼容实现 → 按 quant-dtype-module「命名约定与动作一致性」,目标项仍为 pending 时不能创建唯一 dtype 类/文件、registry key 或导入项;要问就一次问完并给封闭选项。已有证据的部分(注册机制在哪、CLI 接线位置、bit policy 约束)可以先查清并汇报,但不落盘投机实现,更不注册一个能被 --quant_dtype 选中的占位项",
       "rubric": {
         "must_mention": [
           ["需要你定", "先确认", "待确认", "问用户", "无法自行决定"],
@@ -84,7 +84,7 @@
       "id": 4,
       "topic": "范围控制：不顺手重构",
       "prompt": "修一下 test_dtypes.py 里那个失败的 int4 用例,旁边几个函数写得也挺乱的,一起收拾了吧",
-      "expected": "普通局部修复,读取范围按 conditional-rules「仓库边界」就地声明,不整读 repo-map 分档。范围外的重构按 coding-rules「修 bug 控制在指定范围内」处理:不顺手改,向用户说明并建议另开 issue;若用户坚持则单独一次改动、单独验证,不与 bug 修复混在一个 diff 里",
+      "expected": "普通局部修复,读取范围按 conditional-rules「仓库边界」:改动面已被题面钉死,不整读 repo-map 分档。范围外的重构按 coding-rules「修 bug 控制在指定范围内」处理:不顺手改,向用户说明并建议另开 issue;若用户坚持则单独一次改动、单独验证,不与 bug 修复混在一个 diff 里",
       "rubric": {
         "must_mention": [
           ["范围外", "不在本次范围", "不顺手改", "与目标用例无关"],

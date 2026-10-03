@@ -19,16 +19,16 @@ description: |
 | 主场景 | [llm-deploy.md](references/llm-deploy.md) | deploy 实现代码：blockwise/tensorwise 导出、分片、index 与 config |
 | 主场景 | [public-api-packaging.md](references/public-api-packaging.md) | public API 导出/懒加载、packaging 清单、experimental 开关与文档承诺的开发/review |
 | 交付验证 | [validation.md](references/validation.md) | 改完读并执行最小验证（含验证失败的处理）；诊断/review 的结论定级读「证据等级」 |
-| 走查 | [walkthrough.md](references/walkthrough.md) | 诊断/review/规划首次进入时读（示范什么时候停止扩张、开始交付）；编码任务不默认读 |
+| 走查 | [walkthrough.md](references/walkthrough.md) | 诊断/review/规划首次进入时读（示范什么时候停止扩张、开始交付）；编码任务不默认读，只在读了很多资料仍未收敛时读一次校准 |
 | 仓内资料 | [casebook](../../docs/casebook/README.md) | 模型结构、checkpoint/config 或模型相关精度异常按 L1 -> L2 -> L3 读取 |
 
 ## 选主手册
 
-多个主场景同时命中时只加载一本；只有真实跨端影响已经成立，才把第二个主场景作为辅助手册加载。主手册选择依赖尚未冻结的关键约定时，按 [conditional-rules「跨端约定缺失的处理形态」](references/conditional-rules.md#跨端约定缺失的处理形态) 处理。
+多个主场景同时命中时只加载一本；只有真实跨端影响已经成立，才把第二个主场景作为辅助手册加载。
 
 命中后按「必读公共节 + 命中场景节」读取主 playbook，不要求整份全文。**必读公共节**：职责边界、禁止项（全局约束不随场景豁免）。**按需节**：实现定位、当前事实、执行步骤、跨端约定状态表、自验等只在对应场景或动作命中时读取；诊断类任务可只读目标节。读到的节即当前任务的活动规则，不因只读部分而豁免。需要核对跨层约定时，可把对应 playbook 作为辅助资料同样读取；不要仅因文件列表相邻而加载。
 
-未命中现有手册时不要强行套入最相近项：以 repo-map 判断落点所属层，据此形成任务规划；关键约定仍缺失时按 [conditional-rules「跨端约定缺失的处理形态」](references/conditional-rules.md#跨端约定缺失的处理形态) 处理。
+未命中现有手册时不要强行套入最相近项：以 repo-map 判断落点所属层，据此形成任务规划。
 
 场景手册里的路径只是当前工作区的提示，可能已失效。
 
@@ -36,9 +36,8 @@ description: |
 
 | 命中条件 | 读哪一节 |
 | --- | --- |
-| 要定 repo-map 读取范围，或判断能否就地声明边界 | [仓库边界](references/conditional-rules.md#仓库边界) |
-| 命中门禁对象或跨端两端，要决定核对做到多重 | [跨端约定核对的做法](references/conditional-rules.md#跨端约定核对的做法)（门禁对象定义、比例原则、校准示例） |
-| 跨端约定查不到、要问用户 | [跨端约定缺失的处理形态](references/conditional-rules.md#跨端约定缺失的处理形态) |
+| 要定 repo-map 读取范围，或判断改动面是否已被题面钉死 | [仓库边界](references/conditional-rules.md#仓库边界) |
+| 命中门禁对象或跨端两端，要决定核对做到多重 | [跨端约定核对的做法](references/conditional-rules.md#跨端约定核对的做法)（门禁对象定义、比例原则） |
 | 要把手册快照当落点依据，或核对命令与断言不符 | [快照与核对命令纪律](references/conditional-rules.md#快照与核对命令纪律) |
 
 ## 交付说明

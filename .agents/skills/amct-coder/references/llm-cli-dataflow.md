@@ -100,7 +100,7 @@ CLI parser_gen
 | PPL 输入 | `amct_pytorch/common/datasets/preproc.py`、`amct_pytorch/common/evaluate/eval_ppl.py` |
 | 导出产物 | `llm_deploy.py` 与 `amct_pytorch/common/models/llm/common/deploy_export.py` |
 
-这些检查点用于当前源码定位，不是永久 API 名单；入口移动后按四个 workflow 和 producer/consumer 关系重定位。
+入口移动后按四个 workflow 和 producer/consumer 关系重定位。
 
 ### 验证入口
 
@@ -137,7 +137,6 @@ CLI parser_gen
 - `PtqUnit.kind` 必须对应 `block_<layer>_<target>_in.pkl` 的命名和 `load_ptq_inps()` 的读取参数。
 - `unit.save_name` 必须与 PTQ 参数文件命名和 eval/deploy 回载结构一致。
 - adapter 的 embedding/block hook 必须保存下游需要的 norm 输入及 `attention_mask`、`position_ids`、`position_embeddings` 等 kwargs。
-- 新增逐样本 kwargs 或复合 unit 时，必须定义字段所有权、shape/dtype、缺失行为和 batch 切分规则。
 - workflow 只消费稳定约定。
 
 ### ptq -> eval/deploy 的真实细节

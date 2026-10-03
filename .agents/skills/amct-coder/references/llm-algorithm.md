@@ -5,7 +5,7 @@
 - 上游：算法由 CLI `--algos` 传入，经 `ALGO_REGISTRY`、`register_algorithms()` 和 `build_algorithms_by_target()` 构建。
 - 平级：算法只通过 quantizer hook、module buffer/parameter 或 structure transform 影响量化，不直接读取 dataset 或 workflow。
 - 下游：`llm-solving-lifecycle` 消费 `trainable_params()`、buffer 和 PTQ 参数导出；`llm-deploy` 消费算法的 `export_deploy()` 或已回载状态。
-- 算法影响 dtype、solver、workflow、CLI 或 deploy 时，先用本手册列出的源码和测试确认真实跨端影响，再按“跨端扩张门”选择 owner；不要因题面同时出现多个层名就一次性读取多份 Reference。
+- 算法影响 dtype、solver、workflow、CLI 或 deploy 时，先用本手册列出的源码和测试确认真实跨端影响，再按“跨端扩张门”选择 owner。
 
 ## 真实算法链
 
@@ -25,8 +25,6 @@ CLI --algos -> ALGO_REGISTRY/targets -> quant module 分流
 ### 关键符号
 
 按当前动作搜索 `ALGO_REGISTRY`、`register_algorithms`、`build_algorithms_by_target`、`trainable_params`、`observe_input`、`export_ptq_params`、`load_ptq_params` 或 `export_deploy`，沿调用方核对构建、执行和保存回载链。
-
-路径仅作首轮提示；路径或符号迁移时，以当前定义、注册与调用关系重新定位。
 
 ### 验证入口
 

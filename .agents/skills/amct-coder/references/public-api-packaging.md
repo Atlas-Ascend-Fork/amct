@@ -10,7 +10,7 @@
 
 - 主要入口：`amct_pytorch/__init__.py`（`__all__`、`__getattr__` PEP 562 懒加载）、`setup.py`、`pyproject.toml`、`build.sh`。
 - 关键符号：`__all__`、`_PRUNING_EXPORTS`、`__getattr__`、`get_package_data()`、`AMCT_EXPERIMENTAL`。
-- 路径仅作首轮提示；迁移后沿符号与打包脚本重定位。
+- 迁移后沿符号与打包脚本重定位。
 
 ## 当前事实
 

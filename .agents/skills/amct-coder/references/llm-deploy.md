@@ -23,11 +23,11 @@ deploy CLI -> LlmDeployWorkflow -> adapter/dtype/algorithm 状态
 - `amct_pytorch/workflows/llm_deploy.py`：导出编排。
 - `amct_pytorch/common/models/llm/common/deploy_export.py`：通用导出辅助。
 
-路径仅作首轮提示。文件移动或拆分后，沿下面的关键符号、调用方和实际产物重新定位；dtype、algorithm 和 adapter 仍负责各自的上游语义。
+文件移动或拆分后，沿下面的关键符号、调用方和实际产物重新定位；dtype、algorithm 和 adapter 仍负责各自的上游语义。
 
 ### 关键符号
 
-以下分支互斥起步，不要全文读取所有路径：
+以下分支互斥起步：
 
 | 当前动作 | 搜索定义及调用方 | 确认影响后再读 |
 | --- | --- | --- |

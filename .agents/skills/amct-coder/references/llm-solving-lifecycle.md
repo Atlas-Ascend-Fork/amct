@@ -26,7 +26,7 @@ workflow -> adapter PtqUnit + provider batch/GT
 
 搜索 `SOLVER_REGISTRY`、`register_solvers`、`BlockwiseSolver`、`trainable_params`、`finalize`、`PtqParamHandler` 和 `PtqParamStore`；沿 `LlmPtqWorkflow` 的调用核对 solver 选择、unit 执行和保存顺序。
 
-路径仅作首轮提示；以当前注册、调用关系和函数体判断通路是否接通，不能由文件或装饰器存在推断可执行。
+以当前注册、调用关系和函数体判断通路是否接通，不能由文件或装饰器存在推断可执行。
 
 ### 验证入口
 
@@ -75,8 +75,7 @@ LlmPtqWorkflow._run_blockwise()
 3. 收集参数时只依赖 module/algorithm 的 `trainable_params()` 或导出 hook。
 4. 训练型算法要验证参数真实进入 optimizer；统计型算法先证明谁驱动样本遍历和 finalize，再验证 buffer 进入保存和回载。
 5. 保存文件名保持 `layer_<idx>_<unit.save_name>.pt`，并确认 target 目录不会混用。
-6. eval/deploy 回载失败时区分“确实可选”和“本应存在却缺失”，避免 `strict=False` 吞错。
-7. 补 solver factory、blockwise solver、参数 store、workflow 或新增 granularity 的最小测试。
+6. 补 solver factory、blockwise solver、参数 store、workflow 或新增 granularity 的最小测试。
 
 ## 新 granularity 语义门禁
 
