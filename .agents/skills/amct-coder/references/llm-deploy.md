@@ -43,7 +43,7 @@ deploy CLI -> LlmDeployWorkflow -> adapter/dtype/algorithm 状态
 
 分别核对 workflow 产物组织与 helper 的 payload/binding 语义。测试定位与命令见 [validation.md](validation.md#场景测试索引)，覆盖目标见本文件“产物与测试矩阵”。
 
-## 当前数据流
+## 当前事实
 
 blockwise：
 

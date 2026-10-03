@@ -1,5 +1,12 @@
 # 子能力：llm-algorithm
 
+## 职责边界
+
+- 上游：算法由 CLI `--algos` 传入，经 `ALGO_REGISTRY`、`register_algorithms()` 和 `build_algorithms_by_target()` 构建。
+- 平级：算法只通过 quantizer hook、module buffer/parameter 或 structure transform 影响量化，不直接读取 dataset 或 workflow。
+- 下游：`llm-solving-lifecycle` 消费 `trainable_params()`、buffer 和 PTQ 参数导出；`llm-deploy` 消费算法的 `export_deploy()` 或已回载状态。
+- 算法影响 dtype、solver、workflow、CLI 或 deploy 时，先用本手册列出的源码和测试确认真实跨端影响，再按“跨端扩张门”选择 owner；不要因题面同时出现多个层名就一次性读取多份 Reference。
+
 ## 真实算法链
 
 ```text
@@ -25,12 +32,13 @@ CLI --algos -> ALGO_REGISTRY/targets -> quant module 分流
 
 按上述符号查找直接断言，核对注册、targets 分流、数值行为及状态回载。测试定位与命令见 [validation.md](validation.md#场景测试索引)，具体覆盖要求见本文件“自验”。
 
-## 上下游依赖
+## 当前事实
 
-- 上游：算法由 CLI `--algos` 传入，经 `ALGO_REGISTRY`、`register_algorithms()` 和 `build_algorithms_by_target()` 构建。
-- 平级：算法只通过 quantizer hook、module buffer/parameter 或 structure transform 影响量化，不直接读取 dataset 或 workflow。
-- 下游：`llm-solving-lifecycle` 消费 `trainable_params()`、buffer 和 PTQ 参数导出；`llm-deploy` 消费算法的 `export_deploy()` 或已回载状态。
-- 算法影响 dtype、solver、workflow、CLI 或 deploy 时，先用本手册列出的源码和测试确认真实跨端影响，再按“跨端扩张门”选择 owner；不要因题面同时出现多个层名就一次性读取多份 Reference。
+本节是快照。每条事实附一行「核对」命令；作为落点依据前先执行对应命令，结果与断言冲突时以命令结果为准。发现不符时不改本节，把差异写进交付说明（判定见 [conditional-rules「快照与核对命令纪律」](conditional-rules.md#快照与核对命令纪律)）。
+
+- `QuantLinear.forward()` 的非 eval 分支会调用 `WeightQuantizer.observe_input()`（核对：`rg -n -B4 -A2 "observe_input" amct_pytorch/quantization/modules/quant_linear.py`，确认命中行位于 `else:` 非 eval 分支内、且与缓存 eval 权重的 `if` 分支互斥）
+- `LlmPtqWorkflow._prepare_unit_batch()` 生成 GT 时关闭量化但开启 observe（核对：`rg -n -A12 "def _prepare_unit_batch" amct_pytorch/workflows/llm_ptq.py`，在函数体内看到 `set_model_to_observe(unit.module, True)` 后紧跟 `materialize_gt` 的 try/finally 结构即证据；上下文不足 12 行看不到 observe 开关时扩大 -A）
+- `BlockwiseSolver.solve()` 在没有 trainable 参数时于遍历 dataloader 前返回（核对：`rg -n -B3 -A2 "param_groups" amct_pytorch/common/optimization/blockwise_solver.py`，`solve()` 开头 `if not param_groups: return` 的早退分支即证据）
 
 ## 执行步骤
 
@@ -84,7 +92,7 @@ helper、hook 或导出函数存在但找不到 caller 时，明确记为“源�
 | 保存 | 活跃 caller 最终取得哪些 buffer/权重/scale/offset；不能只引用未接通 helper |
 | eval/deploy | 用什么 `--algos` 和参数重建结构；回载后哪个 hook 消费状态 |
 
-当前源码需要特别复核三点（快照；作为落点依据前先执行核对命令，冲突时以命令结果为准）：`QuantLinear.forward()` 的非 eval 分支会调用 `WeightQuantizer.observe_input()`（核对：`rg -n -B4 -A2 "observe_input" amct_pytorch/quantization/modules/quant_linear.py`，确认命中行位于 `else:` 非 eval 分支内、且与缓存 eval 权重的 `if` 分支互斥）；`LlmPtqWorkflow._prepare_unit_batch()` 生成 GT 时关闭量化但开启 observe（核对：`rg -n -A12 "def _prepare_unit_batch" amct_pytorch/workflows/llm_ptq.py`，在函数体内看到 `set_model_to_observe(unit.module, True)` 后紧跟 `materialize_gt` 的 try/finally 结构即证据；上下文不足 12 行看不到 observe 开关时扩大 -A）；`BlockwiseSolver.solve()` 在没有 trainable 参数时于遍历 dataloader 前返回（核对：`rg -n -B3 -A2 "param_groups" amct_pytorch/common/optimization/blockwise_solver.py`，`solve()` 开头 `if not param_groups: return` 的早退分支即证据）。因此，一次性统计算法若没有额外已接通的驱动和 finalize 调用，不能声称现有 PTQ 流程能够完成统计优化。
+三处相关源码行为见「当前事实」；一次性统计算法若没有额外已接通的驱动和 finalize 调用，不能声称现有 PTQ 流程能够完成统计优化。
 
 ## 统计与决策型能力
 

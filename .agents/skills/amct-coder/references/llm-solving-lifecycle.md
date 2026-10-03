@@ -1,5 +1,12 @@
 # 子能力：llm-solving-lifecycle
 
+## 职责边界
+
+- 上游：solver 消费 adapter 的 quant block / `PtqUnit`、data provider 的输入/GT、algorithm 的 `trainable_params()` 和 PTQ 参数 hook。
+- 平级：solver 只做优化调度和参数收集，不读取模型名、不解析离线输入文件、不决定 dtype payload。
+- 下游：eval/deploy 通过 `PtqParamHandler` / `PtqParamStore` 回载状态，必须用训练时一致的 target、unit 名和 `--algos`。
+- 若新增 solver 或 granularity，要同时读 `llm-cli-dataflow` 和 `validation.md` 的公共接口检查，同步 CLI 接受值/帮助/默认值、workflow 分支和测试。
+
 ## 真实求解链
 
 ```text
@@ -25,40 +32,7 @@ workflow -> adapter PtqUnit + provider batch/GT
 
 核对参数收集与更新、registry 分派、finalize、保存回载和部分结果处理。测试定位与命令见 [validation.md](validation.md#场景测试索引)，具体覆盖要求见本文件“自验”。
 
-## 上下游依赖
-
-- 上游：solver 消费 adapter 的 quant block / `PtqUnit`、data provider 的输入/GT、algorithm 的 `trainable_params()` 和 PTQ 参数 hook。
-- 平级：solver 只做优化调度和参数收集，不读取模型名、不解析离线输入文件、不决定 dtype payload。
-- 下游：eval/deploy 通过 `PtqParamHandler` / `PtqParamStore` 回载状态，必须用训练时一致的 target、unit 名和 `--algos`。
-- 若新增 solver 或 granularity，要同时读 `llm-cli-dataflow` 和 `validation.md` 的公共接口检查，同步 CLI 接受值/帮助/默认值、workflow 分支和测试。
-
-## 执行步骤
-
-1. 先确认改动是优化循环、solver factory、参数 store，还是算法状态导出回载；新增 solver/granularity 时先冻结下一节的语义约定。
-2. 检查 unit 输入和 GT 来自 provider，不在 solver 内直接读文件或重放模型。
-3. 收集参数时只依赖 module/algorithm 的 `trainable_params()` 或导出 hook。
-4. 训练型算法要验证参数真实进入 optimizer；统计型算法先证明谁驱动样本遍历和 finalize，再验证 buffer 进入保存和回载。
-5. 保存文件名保持 `layer_<idx>_<unit.save_name>.pt`，并确认 target 目录不会混用。
-6. eval/deploy 回载失败时区分“确实可选”和“本应存在却缺失”，避免 `strict=False` 吞错。
-7. 补 solver factory、blockwise solver、参数 store、workflow 或新增 granularity 的最小测试。
-
-## 新 granularity 语义门禁
-
-`block`、`layer`、`model` 等名字不能替代执行语义；语义未冻结时只输出条件分支。`--granularity=layer`、“按层保存”或“介于 block 与 model 之间”都不能单独证明要做整层联合 forward、跨 unit 共享 optimizer、使用 layer 输入/输出或建立 layer 完成标记。用户没有给出优化目标、资源约束或精度语义时，只能并列这些候选及其代价，不推荐其中一种。形成具体类名、构造签名或源码落点前，逐项冻结：
-
-| 跨端约定 | 必须回答的问题 |
-| --- | --- |
-| unit 边界 | 一次 solve 面向单个 `PtqUnit`、一层全部 units，还是完整模型；unit 仍由哪个 adapter 接口枚举 |
-| module 所有权 | solver 持有 unit module、quant block、多个 module 的集合，还是完整模型；forward 实际消费哪一个对象 |
-| batch / GT | provider 返回单 unit batch 还是联合 batch；不同 unit 的 kwargs、shape 和 GT 如何组织与对应 |
-| optimizer 生命周期 | 参数集合在何时一次性收集；optimizer/scheduler 是 per-unit、per-layer 还是全局；共享是否会引入孤立参数或错过计算图 |
-| finalize / 保存 | 谁把 solver 结果拆回各 unit；是否继续沿用现有 unit 参数文件名；eval/deploy 现有 store 能否直接回载 |
-| 断点续跑 | 完成标记属于 unit、layer 还是 model；部分产物存在时恢复、重训或报错的确定语义 |
-| 兼容关系 | 与现有 granularity 是否共享参数目录和产物格式；CLI、registry、workflow、eval/deploy 分别接受、映射还是拒绝新值 |
-
-领域补充：共享 optimizer 只有在 solver 同时持有相关 module、batch/GT 和活跃计算图时才成立。
-
-## 主链状态
+## 当前事实
 
 本节是快照。事实附「核对」命令；作为落点依据前先执行，结果与断言冲突时以命令结果为准。命令失效（符号搜不到）本身即过期信号。发现不符时不改本节，把差异写进交付说明。
 
@@ -93,6 +67,32 @@ LlmPtqWorkflow._run_blockwise()
 - 统计完成但没有 trainable 参数时，solver 返回值和保存结果如何区分“成功统计”与“什么都没做”。
 
 这些语义未冻结时，不新增空 optimizer、伪 trainable 参数或无 caller 的 post-calibration hook 来绕过提前返回。
+
+## 执行步骤
+
+1. 先确认改动是优化循环、solver factory、参数 store，还是算法状态导出回载；新增 solver/granularity 时先冻结下一节的语义约定。
+2. 检查 unit 输入和 GT 来自 provider，不在 solver 内直接读文件或重放模型。
+3. 收集参数时只依赖 module/algorithm 的 `trainable_params()` 或导出 hook。
+4. 训练型算法要验证参数真实进入 optimizer；统计型算法先证明谁驱动样本遍历和 finalize，再验证 buffer 进入保存和回载。
+5. 保存文件名保持 `layer_<idx>_<unit.save_name>.pt`，并确认 target 目录不会混用。
+6. eval/deploy 回载失败时区分“确实可选”和“本应存在却缺失”，避免 `strict=False` 吞错。
+7. 补 solver factory、blockwise solver、参数 store、workflow 或新增 granularity 的最小测试。
+
+## 新 granularity 语义门禁
+
+`block`、`layer`、`model` 等名字不能替代执行语义；语义未冻结时只输出条件分支。`--granularity=layer`、“按层保存”或“介于 block 与 model 之间”都不能单独证明要做整层联合 forward、跨 unit 共享 optimizer、使用 layer 输入/输出或建立 layer 完成标记。用户没有给出优化目标、资源约束或精度语义时，只能并列这些候选及其代价，不推荐其中一种。形成具体类名、构造签名或源码落点前，逐项冻结：
+
+| 跨端约定 | 必须回答的问题 |
+| --- | --- |
+| unit 边界 | 一次 solve 面向单个 `PtqUnit`、一层全部 units，还是完整模型；unit 仍由哪个 adapter 接口枚举 |
+| module 所有权 | solver 持有 unit module、quant block、多个 module 的集合，还是完整模型；forward 实际消费哪一个对象 |
+| batch / GT | provider 返回单 unit batch 还是联合 batch；不同 unit 的 kwargs、shape 和 GT 如何组织与对应 |
+| optimizer 生命周期 | 参数集合在何时一次性收集；optimizer/scheduler 是 per-unit、per-layer 还是全局；共享是否会引入孤立参数或错过计算图 |
+| finalize / 保存 | 谁把 solver 结果拆回各 unit；是否继续沿用现有 unit 参数文件名；eval/deploy 现有 store 能否直接回载 |
+| 断点续跑 | 完成标记属于 unit、layer 还是 model；部分产物存在时恢复、重训或报错的确定语义 |
+| 兼容关系 | 与现有 granularity 是否共享参数目录和产物格式；CLI、registry、workflow、eval/deploy 分别接受、映射还是拒绝新值 |
+
+领域补充：共享 optimizer 只有在 solver 同时持有相关 module、batch/GT 和活跃计算图时才成立。
 
 ## 复合 unit 与联合求解门禁
 
@@ -150,6 +150,20 @@ LlmPtqWorkflow._run_blockwise()
 
 只有保存内容和加载后同一模块状态都已对比，才能把问题收敛到具体导出或回载实现。
 
+## PTQ smoke 健康信号
+
+按算法的实际执行形态选择最小 PTQ 集成 smoke 标准；组合算法分别核对每种形态。适用项不满足时停下排查，不把训练型条件套到纯统计路径。
+
+共同要求：unit 输入加载成功；流程需要 GT 时 materialize 成功且参考输出未被统计或权重更新污染；需要持久化的参数、统计状态或优化结果保存后可回载，并被后续量化或导出消费。
+
+| 执行形态 | 必须取得的健康信号 |
+| --- | --- |
+| trainable | solver 至少跑一个 batch，loss 不是恒 0 或 NaN，目标参数真实更新 |
+| observe-only | 已确认的 GT forward、独立 calibration 或其它 caller 实际遍历样本，统计 buffer 按预期写入，后续量化或导出消费该统计 |
+| observe-then-finalize | 样本遍历与统计写入成功；已接通的 caller 在统计完成后触发 finalize，生成预期的优化权重或状态，后续量化或导出消费该结果 |
+
+纯统计路径不要求 optimizer、训练 loss 或 solver 遍历 batch。统计由 GT forward 驱动时，solver 因无 trainable 参数提前返回可以是预期行为；仍需验证统计次数、GT 不受污染，以及 finalize（若需要）和保存回载链已实际执行。
+
 ## 禁止项
 
 - 新 granularity 的 module、batch/GT、optimizer、保存和续跑语义未冻结，却已确定类名、构造签名或共享 optimizer 方案。
@@ -172,17 +186,3 @@ LlmPtqWorkflow._run_blockwise()
 - 涉及新 granularity：覆盖 registry/CLI/workflow 分派、module 与 batch/GT 所有权、optimizer 参数集合、逐 unit 保存回载和部分产物续跑语义。
 - 涉及复合 unit：覆盖 block 原始输入与 kwargs、全部目标参数收集、finalize 内容、公平分开基线和 eval/deploy 回载。
 - 涉及 skip/partial result：覆盖主动跳过与未执行的区分、断点续跑、strict load 和最终量化开关。
-
-## PTQ smoke 健康信号
-
-按算法的实际执行形态选择最小 PTQ 集成 smoke 标准；组合算法分别核对每种形态。适用项不满足时停下排查，不把训练型条件套到纯统计路径。
-
-共同要求：unit 输入加载成功；流程需要 GT 时 materialize 成功且参考输出未被统计或权重更新污染；需要持久化的参数、统计状态或优化结果保存后可回载，并被后续量化或导出消费。
-
-| 执行形态 | 必须取得的健康信号 |
-| --- | --- |
-| trainable | solver 至少跑一个 batch，loss 不是恒 0 或 NaN，目标参数真实更新 |
-| observe-only | 已确认的 GT forward、独立 calibration 或其它 caller 实际遍历样本，统计 buffer 按预期写入，后续量化或导出消费该统计 |
-| observe-then-finalize | 样本遍历与统计写入成功；已接通的 caller 在统计完成后触发 finalize，生成预期的优化权重或状态，后续量化或导出消费该结果 |
-
-纯统计路径不要求 optimizer、训练 loss 或 solver 遍历 batch。统计由 GT forward 驱动时，solver 因无 trainable 参数提前返回可以是预期行为；仍需验证统计次数、GT 不受污染，以及 finalize（若需要）和保存回载链已实际执行。

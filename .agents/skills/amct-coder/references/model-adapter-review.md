@@ -9,7 +9,7 @@
 - solver 只负责优化和参数生命周期，不读取模型结构或离线输入文件。
 - 通用 quant module 不判断模型身份；模型差异由 adapter 表达。
 
-## 定位步骤
+## 实现定位
 
 1. 从 `MODEL_REGISTRY` 和目标注册类定位 adapter，确认实际调用方。
 2. 按问题搜索 `build_quant_block`、`iter_ptq_units`、embedding/block forward、`iter_deploy_bindings` 及对应测试。
@@ -37,7 +37,14 @@
 
 新增 wrapper 前比较同族实现的初始化、状态和 forward；三者一致就合并，只有模块结构、导出语义、`PtqUnit` 边界或量化路径真实不同才拆分。优先复用 `QuantLinear`、`QuantGatedMLP`、`apply_quant_to_attn()`、`apply_quant_to_moe_mlp()` 和 family helper。packed experts 要确认 PTQ 所需参数已 materialize；shared experts 要和 `build_no_algo_args(args)`、`iter_ptq_units()` 保持一致。`unit.kind` 必须对应 extract 文件，参数必须能保存和回载；loss 为 0 或 NaN 时立即停止检查输入、梯度和 unit 边界。
 
-## 验证
+## 禁止项
+
+- 局部修复引入新的 wrapper 类、模型名分支或注册链改动。
+- workflow/solver/通用 quant module 中出现模型专属逻辑。
+- 关闭量化后与 float 行为不等价却声称修复完成。
+- unit 约定（`PtqUnit.kind`/`save_name`、hook、deploy binding）单侧改动，未同步另一端。
+
+## 自验
 
 局部修复至少运行目标 adapter 的直接单测；涉及输入捕获、unit 或回载时补对应 workflow mocked 测试。验证应分别说明源码调用链、单测覆盖、集成闭环和真实模型/NPU 验证，不能用 import 成功代替模型适配完成。
 
@@ -54,10 +61,3 @@
 | deploy binding | binding 对应正确权重和模块，导出 payload、tensor route 与 index 一致；仅改 binding 不要求额外验证 GT 路径 |
 
 完成说明列出已验证的跨端约定和仍缺失的证据。缺少真实模型或硬件时明确说明验证范围，不把 mocked 测试通过写成完整模型适配通过。
-
-## 禁止项
-
-- 局部修复引入新的 wrapper 类、模型名分支或注册链改动。
-- workflow/solver/通用 quant module 中出现模型专属逻辑。
-- 关闭量化后与 float 行为不等价却声称修复完成。
-- unit 约定（`PtqUnit.kind`/`save_name`、hook、deploy binding）单侧改动，未同步另一端。

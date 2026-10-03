@@ -22,7 +22,7 @@
    - 训练保存链：LlmPtqWorkflow._save_unit_result 的 caller 链
    - 回载侧：eval 的参数加载入口与 strict 行为
    - 直接测试：test_ptq_params.py 中 export_unit/load_unit 断言
-4. 核对快照：执行手册中「主链状态」附带的核对命令（如 export_unit 无非测试
+4. 核对快照：执行手册中「当前事实」附带的核对命令（如 export_unit 无非测试
    caller 的反向 grep），确认快照未过期。
 5. 证据分级并收口：
    - 源码存在：PtqParamHandler.export_unit 定义 ✓

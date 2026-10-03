@@ -12,7 +12,7 @@
 - 关键符号：`__all__`、`_PRUNING_EXPORTS`、`__getattr__`、`get_package_data()`、`AMCT_EXPERIMENTAL`。
 - 路径仅作首轮提示；迁移后沿符号与打包脚本重定位。
 
-## 当前接通事实
+## 当前事实
 
 本节是快照。每条事实附一行「核对」命令；作为落点依据前先执行对应命令，结果与断言冲突时以命令结果为准。发现不符时不改本节，把差异写进交付说明（判定见 [conditional-rules「快照与核对命令纪律」](conditional-rules.md#快照与核对命令纪律)）。
 

@@ -1,8 +1,14 @@
 # 子能力：llm-cli-dataflow
 
-本文直接对应当前 AMCT LLM CLI 源码，用于开发和定位 `extract_ptq_data`、`ptq`、`eval`、`deploy` 的数据问题。它描述当前行为，不把目录存在或未调用的 helper 当成已接通能力。不覆盖 classic eager/graph_based API。
+本文直接对应当前 AMCT LLM CLI 源码，用于开发和定位 `extract_ptq_data`、`ptq`、`eval`、`deploy` 的数据问题。它描述当前行为，不把目录存在或未调用的 helper 当成已接通能力。
 
-## 〇、组件协作
+## 职责边界
+
+- 覆盖 `extract_ptq_data`、`ptq`、`eval`、`deploy` 四个 CLI 阶段的 workflow 编排、阶段产物与跨阶段约定：谁生产、谁消费、改一端要同步另一端。
+- 组件级职责分工见「组件协作」的组件表。
+- 不覆盖 classic eager/graph_based API。
+
+## 组件协作
 
 ```text
 LLM CLI: eval | extract_ptq_data | ptq | deploy
@@ -33,9 +39,7 @@ LLM CLI: eval | extract_ptq_data | ptq | deploy
 
 `PtqUnit` 是 adapter 暴露给 PTQ 的处理单元，不是独立服务；offline data 是阶段产物，不是组件。kwargs 是 forward 附加输入，可能共享也可能逐样本变化；GT 是用于重建损失的参考输出，生成时的量化/observe 状态由 workflow 与模块约定共同约束。
 
-主要入口是 `amct_pytorch/cli/llm/` 和 `amct_pytorch/workflows/`；从 `parser_gen`、`LlmEvalWorkflow`、`LlmExtractPtqDataWorkflow`、`LlmPtqWorkflow`、`LlmDeployWorkflow` 沿调用定位。组件重点搜索 `BaseModel`、`PtqUnit`、`LlmPtqDataProvider`、`BlockwiseSolver`、`PtqParamStore` 和相应 registry；注册定义必须与实际注册入口一起核对。分层边界以 [repo-map.md](../../../docs/repo-map.md#分层边界) 为准。
-
-## 一、真实主链
+## 真实主链
 
 ```text
 CLI parser_gen
@@ -71,7 +75,40 @@ CLI parser_gen
 
 四个 workflow 是独立 CLI 入口，不是强制串行流水线：BF16/直转 eval 不需要 extract 或 ptq；deploy 也不负责重新生成校准数据。
 
-## 二、阶段交接
+## 实现定位
+
+### 主要入口
+
+`amct_pytorch/cli/llm/` 与 `amct_pytorch/workflows/`；阶段级稳定入口只保留 `LlmExtractPtqDataWorkflow`、`LlmPtqWorkflow`、`LlmEvalWorkflow`、`LlmDeployWorkflow`。
+
+### 关键符号
+
+从 `parser_gen`、`LlmEvalWorkflow`、`LlmExtractPtqDataWorkflow`、`LlmPtqWorkflow`、`LlmDeployWorkflow` 沿调用定位。组件重点搜索 `BaseModel`、`PtqUnit`、`LlmPtqDataProvider`、`BlockwiseSolver`、`PtqParamStore` 和相应 registry；注册定义必须与实际注册入口一起核对。分层边界以 [repo-map.md](../../../docs/repo-map.md#分层边界) 为准。
+
+### 易变实现检查点
+
+首轮定位四个入口后，再沿当前调用关系查找：
+
+| 要查的问题 | 当前源码检查方向 |
+| --- | --- |
+| 参数和阶段分派 | `parser_gen`、workflow 的 `run/setup` 和 granularity 分支 |
+| 输入保存/加载 | `amct_pytorch/common/models/llm/common/base.py` 与 `amct_pytorch/common/datasets/ptq_io.py` |
+| 捕获点和 kwargs | `amct_pytorch/common/models/llm/common/capture.py`、adapter 的 embedding/block forward |
+| GT 和 batch | `amct_pytorch/common/datasets/ptq_provider.py`、PTQ workflow 的 unit 准备逻辑 |
+| unit 边界 | adapter 的 `build_quant_block`、`iter_ptq_units`、`PtqUnit` |
+| 参数求解/回载 | `amct_pytorch/common/optimization/`、`ptq_params.py`、eval/deploy 的加载逻辑 |
+| PPL 输入 | `amct_pytorch/common/datasets/preproc.py`、`amct_pytorch/common/evaluate/eval_ppl.py` |
+| 导出产物 | `llm_deploy.py` 与 `amct_pytorch/common/models/llm/common/deploy_export.py` |
+
+这些检查点用于当前源码定位，不是永久 API 名单；入口移动后按四个 workflow 和 producer/consumer 关系重定位。
+
+### 验证入口
+
+测试定位与命令见 [validation.md](validation.md#场景测试索引)，覆盖要求见本文件“自验”。
+
+## 当前事实：阶段交接
+
+本节是快照；作为落点依据前沿下表的生产者/消费者符号现查，与源码冲突时以源码为准（判定见 [conditional-rules「快照与核对命令纪律」](conditional-rules.md#快照与核对命令纪律)）。
 
 ### 阶段影响检查
 
@@ -109,31 +146,7 @@ CLI parser_gen
 2. `DataLoader` 只对输入和 GT 建 batch；当前 provider 传给 solver 的 kwargs 是原对象。新增逐样本 kwargs 时，必须显式设计同步切 batch，不能假定现有逻辑自动完成。
 3. solver 返回的结果由 PTQ workflow 按 unit 保存；eval/deploy 必须用兼容的 adapter、量化模块、算法状态和参数命名回载，不能只检查参数文件存在。
 
-## 三、稳定入口与源码定位
-
-阶段级稳定入口只保留：
-
-- `LlmExtractPtqDataWorkflow`
-- `LlmPtqWorkflow`
-- `LlmEvalWorkflow`
-- `LlmDeployWorkflow`
-
-首轮从 `amct_pytorch/cli/llm/` 和 `amct_pytorch/workflows/` 定位四个入口；再沿当前调用关系查找以下**易变实现检查点**：
-
-| 要查的问题 | 当前源码检查方向 |
-| --- | --- |
-| 参数和阶段分派 | `parser_gen`、workflow 的 `run/setup` 和 granularity 分支 |
-| 输入保存/加载 | `amct_pytorch/common/models/llm/common/base.py` 与 `amct_pytorch/common/datasets/ptq_io.py` |
-| 捕获点和 kwargs | `amct_pytorch/common/models/llm/common/capture.py`、adapter 的 embedding/block forward |
-| GT 和 batch | `amct_pytorch/common/datasets/ptq_provider.py`、PTQ workflow 的 unit 准备逻辑 |
-| unit 边界 | adapter 的 `build_quant_block`、`iter_ptq_units`、`PtqUnit` |
-| 参数求解/回载 | `amct_pytorch/common/optimization/`、`ptq_params.py`、eval/deploy 的加载逻辑 |
-| PPL 输入 | `amct_pytorch/common/datasets/preproc.py`、`amct_pytorch/common/evaluate/eval_ppl.py` |
-| 导出产物 | `llm_deploy.py` 与 `amct_pytorch/common/models/llm/common/deploy_export.py` |
-
-这些检查点用于当前源码定位，不是永久 API 名单；入口移动后按四个 workflow 和 producer/consumer 关系重定位。
-
-## 四、编码规则
+## 编码规则
 
 1. 先确定改动属于四个 workflow 的哪一阶段，再画出受影响的生产者、产物和消费者。
 2. 改 extract 或离线格式，必须同时检查 hook 捕获、文件写入、provider 读取和 unit 命名；只改一端会造成静态可写、运行不可读。
@@ -149,7 +162,21 @@ Wikitext PPL 默认 `seq_len=4096`。历史结果不是同口径时，只能参�
 
 BF16 PPL 异常时第一优先级检查 mask/position/position_embeddings 传递链。
 
-## 五、问题定位顺序
+## 禁止项
+
+- `extract_ptq_data` 与 PTQ 的 `quant_target`、`seq_len`、block 范围或 `data_dir` 不一致。
+- 保存端和加载端的 unit kind/命名不一致，或 unit 输入文件缺失仍继续执行。
+- hook 保存的是 norm 输出，却在完整 block 中再次执行同一 norm。
+- 逐样本 kwargs 未随输入 batch 同步切分。
+- GT 生成时量化未关闭（observe 开启是当前预期行为），或 GT 与量化输出边界不一致。
+- BF16 PPL 异常却未检查 mask/position 传递链。
+- eval/deploy 只发现参数文件存在，未证明 adapter、量化状态和参数结构可回载。
+
+## 自验
+
+测试定位与命令见 [validation.md](validation.md#场景测试索引)；数据流问题按下面的顺序定位。
+
+### 问题定位顺序
 
 ```text
 PPL 异常？
@@ -171,13 +198,3 @@ Deploy 产物异常？
 ```
 
 证据必须分级：源码调用链、单测覆盖、真实离线产物、真实模型/NPU 运行不是同一结论。只有前两级时，应写“静态链路一致”或“建议验证”，不能写“PTQ 已跑通”。
-
-## 六、硬性阻断条件
-
-- `extract_ptq_data` 与 PTQ 的 `quant_target`、`seq_len`、block 范围或 `data_dir` 不一致。
-- 保存端和加载端的 unit kind/命名不一致，或 unit 输入文件缺失仍继续执行。
-- hook 保存的是 norm 输出，却在完整 block 中再次执行同一 norm。
-- 逐样本 kwargs 未随输入 batch 同步切分。
-- GT 生成时量化未关闭（observe 开启是当前预期行为），或 GT 与量化输出边界不一致。
-- BF16 PPL 异常却未检查 mask/position 传递链。
-- eval/deploy 只发现参数文件存在，未证明 adapter、量化状态和参数结构可回载。
