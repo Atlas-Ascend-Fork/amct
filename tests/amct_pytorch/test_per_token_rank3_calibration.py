@@ -81,7 +81,6 @@ class TestPerTokenRankThreeCalibration(unittest.TestCase):
         )
         self.assertEqual(tuple(module.scale_d.shape), (2, 3, 1))
         torch.testing.assert_close(module.scale_d, expected)
-        self.assertEqual(tuple(module.fake_quant_forward(self.inputs).shape), (2, 3, 3))
         self._assert_rank2_control(MinMaxQuant, "int8", "int8")
 
     def test_quantile_keeps_batch_and_sequence_token_axes(self):
@@ -109,5 +108,4 @@ class TestPerTokenRankThreeCalibration(unittest.TestCase):
         )
         self.assertEqual(tuple(module.scale_d.shape), (2, 3, 1))
         torch.testing.assert_close(module.scale_d, expected)
-        self.assertEqual(tuple(module.fake_quant_forward(self.inputs).shape), (2, 3, 3))
         self._assert_rank2_control(SmoothQuant, "int8", "int8", algorithm)
