@@ -1,14 +1,12 @@
 # 子能力：llm-deploy
 
-## 简介
-
 解决量化模型导出代码应该怎样修改和验证的问题，确保模型权重、分片索引、量化配置及导出文档彼此一致，并同时覆盖分块导出和逐张量导出路径。
 
 ## 职责边界
 
 本文件覆盖导出实现代码的修改与 review。
 
-## 真实导出链
+## 调用链
 
 ```text
 deploy CLI -> LlmDeployWorkflow -> adapter/dtype/algorithm 状态
@@ -37,11 +35,11 @@ deploy CLI -> LlmDeployWorkflow -> adapter/dtype/algorithm 状态
 | tensorwise 转换 | `_run_tensorwise()`、`convert_state_dict()`、`quant_payload()` | 命中 adapter 的 `generate_tensorwise_*()`、`get_scale_name()`、`block_size()` |
 | 用户文档或 deploy 产物格式 | 实际产物写入点、`docs/zh/AMCT_Pytorch_LLM.md` 的 deploy 小节 | 命中的 examples 和 `validation.md` 的文档检查 |
 
-先用 `rg` 确认定义和调用方。当前源码中 `_refresh_config_tensor()`、`_convert_tensor()` 只有定义和直接单测，没有运行时调用方；不得把它们描述成当前 bf16/tensorwise 主路径。（快照；核对：`grep -n "self\._convert_tensor\b\|self\._refresh_config_tensor" amct_pytorch/workflows/llm_deploy.py` 应无命中，出现命中即说明已接通、本论断过期）blockwise 与 tensorwise 当前都在结束时调用 `_refresh_config()`。（核对：`rg -n "self\._refresh_config\(" amct_pytorch/workflows/llm_deploy.py`）
+先用 `rg` 确认定义和调用方。当前源码中 `_refresh_config_tensor()`、`_convert_tensor()` 只有定义和直接单测，没有运行时调用方；不得把它们描述成当前 bf16/tensorwise 主路径。（核对：`grep -n "self\._convert_tensor\b\|self\._refresh_config_tensor" amct_pytorch/workflows/llm_deploy.py` 应无命中，出现命中即说明已接通、本论断过期）blockwise 与 tensorwise 当前都在结束时调用 `_refresh_config()`。（核对：`rg -n "self\._refresh_config\(" amct_pytorch/workflows/llm_deploy.py`）
 
 ### 验证入口
 
-分别核对 workflow 产物组织与 helper 的 payload/binding 语义。测试定位与命令见 [validation.md](validation.md#场景测试索引)，覆盖目标见本文件“产物与测试矩阵”。
+分别核对 workflow 产物组织与 helper 的 payload/binding 语义。测试定位与命令见 [validation.md](validation.md#场景测试索引)，覆盖目标见本文件「测试矩阵」。
 
 ## 当前事实
 
@@ -59,10 +57,10 @@ tensorwise：
 2. adapter 给出 quant/ignore layer；当前只对 `quant_dtype in ["int", "mxfp"]` 调 `quant_payload()`。（核对：`rg -n "quant_dtype in" amct_pytorch/workflows/llm_deploy.py`）
 3. 复用原 shard 文件名写新 tensor，刷新 index 和 config。
 
-## 实施门禁
+## 前置检查
 
 1. 先确认 blockwise/tensorwise、单/多 shard、量化或 bf16 转换范围。
-2. 新 metadata/config 字段先冻结字段名、层级、类型、值来源、适用路径、覆盖策略、下游消费者和旧产物兼容性；还未确认时只列候选 helper，不改签名。
+2. 新 metadata/config 字段先确定字段名、层级、类型、值来源、适用路径、覆盖策略、下游消费者和旧产物兼容性；还未确认时只列候选 helper，不改签名。
 3. 字段要求同时写 index 和 config 时，先确认两处是否表达同一语义以及谁是权威来源，避免复制后漂移。
 4. 修改已有 helper 前必须反查所有调用方；无调用 helper 不能作为当前行为依据。
 5. 新 dtype payload 先确认 `export_deploy()` 字段和 `quant_payload()`/`export_block_deploy()` 命名规则，再修改 workflow；数值与 packing 留在 dtype。
@@ -70,7 +68,7 @@ tensorwise：
 7. adapter 只提供 binding、ignore、bits/cache scheme 等模型事实；workflow 不加入模型名分支。
 8. tensorwise 逐 shard 行为要核对 `loaded_files` 生命周期和峰值内存，不把“按 shard 循环”等同于内存已受控。
 
-## 产物与测试矩阵
+## 测试矩阵
 
 | 改动面 | 最小断言 |
 | --- | --- |
@@ -95,6 +93,6 @@ tensorwise：
 
 ## 自验
 
-- 测试定位与命令见 [validation.md](validation.md#场景测试索引)；按上面的产物矩阵选择 workflow 或 helper 验证。
+- 测试定位与命令见 [validation.md](validation.md#场景测试索引)；按上面的测试矩阵选择 workflow 或 helper 验证。
 - 新 dtype/algorithm/adapter：再加跑对应子能力测试。
 - 真实导出需要模型权重和目标运行环境；未执行时明确说明。

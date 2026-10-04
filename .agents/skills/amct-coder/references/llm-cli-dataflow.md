@@ -1,6 +1,6 @@
 # 子能力：llm-cli-dataflow
 
-本文直接对应当前 AMCT LLM CLI 源码，用于开发和定位 `extract_ptq_data`、`ptq`、`eval`、`deploy` 的数据问题。它描述当前行为，不把目录存在或未调用的 helper 当成已接通能力。
+本文直接对应当前 AMCT LLM CLI 源码，用于开发和定位 `extract_ptq_data`、`ptq`、`eval`、`deploy` 的数据问题。
 
 ## 职责边界
 
@@ -39,7 +39,7 @@ LLM CLI: eval | extract_ptq_data | ptq | deploy
 
 `PtqUnit` 是 adapter 暴露给 PTQ 的处理单元，不是独立服务；offline data 是阶段产物，不是组件。kwargs 是 forward 附加输入，可能共享也可能逐样本变化；GT 是用于重建损失的参考输出，生成时的量化/observe 状态由 workflow 与模块约定共同约束。
 
-## 真实主链
+## 调用链
 
 ```text
 CLI parser_gen
@@ -106,9 +106,9 @@ CLI parser_gen
 
 测试定位与命令见 [validation.md](validation.md#场景测试索引)，覆盖要求见本文件“自验”。
 
-## 当前事实：阶段交接
+## 当前事实
 
-本节是快照；作为落点依据前沿下表的生产者/消费者符号现查，与源码冲突时以源码为准（判定见 [conditional-rules「快照与核对命令纪律」](conditional-rules.md#快照与核对命令纪律)）。
+作为判断依据前沿下表的生产者/消费者符号现查，与源码冲突时以源码为准（判定见 [conditional-rules「当前事实与核对命令纪律」](conditional-rules.md#当前事实与核对命令纪律)）。
 
 ### 阶段影响检查
 
@@ -141,17 +141,17 @@ CLI parser_gen
 
 ### ptq -> eval/deploy 的真实细节
 
-1. PTQ 对每个 unit 生成 GT 时关闭量化但开启 observe（`set_model_to_observe(unit.module, True)`），算法的统计副作用会在此阶段发生；随后恢复量化状态交给 solver。GT 是 reconstruction 参考，不是 eval 的 PPL 标签；observe 统计是否污染或复用，按 [llm-algorithm](llm-algorithm.md) 的执行形态核对。
+1. PTQ 对每个 unit 生成 GT 时关闭量化但开启 observe（`set_model_to_observe(unit.module, True)`），算法的统计副作用会在此阶段发生；随后恢复量化状态交给 solver。GT 是 reconstruction 参考，不是 eval 的 PPL 标签；observe 统计是否污染或复用，按 [llm-algorithm](llm-algorithm.md) 的运行方式核对。
 2. `DataLoader` 只对输入和 GT 建 batch；当前 provider 传给 solver 的 kwargs 是原对象。新增逐样本 kwargs 时，必须显式设计同步切 batch，不能假定现有逻辑自动完成。
 3. solver 返回的结果由 PTQ workflow 按 unit 保存；eval/deploy 必须用兼容的 adapter、量化模块、算法状态和参数命名回载，不能只检查参数文件存在。
 
-## 编码规则
+## 实现规则
 
 1. 先确定改动属于四个 workflow 的哪一阶段，再画出受影响的生产者、产物和消费者。
 2. 改 extract 或离线格式，必须同时检查 hook 捕获、文件写入、provider 读取和 unit 命名；只改一端会造成静态可写、运行不可读。
 3. 改 PTQ 数据准备，必须同时核对 unit 枚举、原始输入边界、kwargs、GT 状态、batch 维度和参数保存。
 4. 改 eval，先核对 Wikitext 切分、`seq_len`、BF16/quant 状态和 bit policy；不要用 extract 的 Pileval 产物替代 eval 输入。
-5. 改 deploy，先确认上游参数/dtype/algo payload 已冻结，再检查权重替换、index 和 config 的消费者格式。
+5. 改 deploy，先确认上游参数/dtype/algo payload 已确定，再检查权重替换、index 和 config 的消费者格式。
 6. 不在 workflow 中加入模型专属结构分支；模型输入捕获、norm 名、unit 拆分和 wrapper 逻辑归 adapter。
 7. 新增 kwargs 或复合 unit 时，先定义字段所有权、作用域、shape/dtype、缺失行为和旧目录兼容策略，再改容器或 CLI 参数。
 

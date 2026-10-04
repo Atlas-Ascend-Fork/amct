@@ -1,6 +1,6 @@
 # 编码规范：coding-rules
 
-本文件只约束 Python 代码规范（仓级条目如「依赖与落点」不分语言）。
+本文件只约束 Python 代码规范（仓级条目如「依赖与放置位置」不分语言）。
 
 ## 代码风格与版权
 
@@ -24,7 +24,7 @@
 - 随机性可复现：新引入随机性的路径（初始化、采样、数据 shuffle）必须提供可控种子入口并接入既有传参链；不得在无种子控制的路径上新增随机行为。
 - 资源清理：新建的临时文件/目录、句柄和 device 内存要在失败路径上也可释放。
 
-## 依赖与落点
+## 依赖与放置位置
 
 - 新增第三方依赖按用途落对入口：**运行依赖**进 `requirements.txt`（当前运行依赖的唯一安装入口，README 指引用它安装）；**构建依赖**仅 setuptools/wheel，进 `pyproject.toml` 的 `[build-system]`（该文件当前无 `[project]` 依赖表，不承担运行依赖）。并核对仓内声明支持的环境区间内该依赖可得；只在部分环境可得的依赖走可选依赖路径（`setup.py` 的 `extras_require`），不得静默变成硬依赖。不因新增依赖改变现有打包机制（如把 requirements.txt 迁入 pyproject）。
 - 泛化性未经充分验证的新特性落 `experimental` 目录（如 `amct_pytorch/experimental`），按其 src/doc/README 结构组织；进入正式目录需要先补验证证据。

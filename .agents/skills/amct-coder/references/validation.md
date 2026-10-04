@@ -16,6 +16,8 @@
 3. **集成闭环**：输入、GT、保存、回载等跨模块路径实际跑通。
 4. **真实环境验证**：真实模型、数据集、NPU/CANN 或目标硬件结果已取得。
 
+要断言“集成闭环”，必须同时给出注册、活跃调用方和直接测试证据；找不到调用方的 helper、hook 或导出函数记为“源码存在但当前未接通”，只能停在第 1 级。
+
 计划中的测试写为“建议运行”或“未运行”，不能表述为已经覆盖。「唯一根因」的判定条件是完整相关链路已被证据排除。
 
 ## 最小静态验证
@@ -50,12 +52,6 @@
 | 保存/加载/文件格式 | producer 和 consumer 双侧单测或 smoke | 只测保存不等于回载闭环 |
 | 构建、packaging、ops 边界 | 对应 build/import 测试 | 缺 CANN/NPU/protobuf 时明确阻塞 |
 
-## 高频越界点
-
-1. 是否先复用了现有抽象（`QuantLinear` / `QuantGatedMLP` / family helper）再新增？
-2. 关闭量化时原浮点行为是否保住？
-3. 是否有没必要的框架级重构或 solver 改动？
-
 ## 公共接口与打包检查
 
 用户可见改动需要同时核对源码实现、入口转发、安装包和文档示例：
@@ -76,7 +72,7 @@
 | --- | --- |
 | `quant-dtype-module` | `tests/unit_test/quantization/test_dtypes.py`、`tests/unit_test/quantization/modules/`；按 dtype/quantizer/BitPolicy 符号定位 |
 | `llm-algorithm` | `tests/unit_test/algorithms/`；注册参考 `test_algorithms_registry_factory.py`，分流参考 `tests/unit_test/quantization/modules/test_quant_base.py` |
-| `model-adapter-review` | `tests/unit_test/common/models/llm/`；按目标 adapter、wrapper 或 `PtqUnit` 符号定位，跨层行为再查 mocked workflow 测试 |
+| `model-adapter-review` | `tests/unit_test/common/models/llm/`；按目标 adapter、wrapper 或 `PtqUnit` 符号定位，跨端行为再查 mocked workflow 测试 |
 | `llm-cli-dataflow` | `tests/unit_test/workflows/`、`tests/unit_test/common/datasets/`、`tests/unit_test/common/evaluate/`；按 workflow、provider/I/O、PPL 行为定位 |
 | `llm-solving-lifecycle` | `tests/unit_test/common/optimization/`、`tests/unit_test/common/models/llm/common/test_ptq_params.py`、`tests/unit_test/workflows/test_llm_ptq.py` |
 | `llm-deploy` | workflow：`tests/unit_test/workflows/test_llm_deploy.py`；helper：`tests/unit_test/common/models/llm/common/test_deploy_export.py` |

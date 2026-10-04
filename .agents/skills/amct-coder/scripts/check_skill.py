@@ -22,7 +22,7 @@
   2. 带锚点的链接，锚点在目标文件的标题中可达（GitHub 锚点归一化）；
   3. 纯文本节名引用（「X」）与本 skill 内标题的一致性——没有锚点可查的散文式引用
      一旦标题改名就会静默失效，用 difflib 近似度兜住；
-  4. 快照核对命令：覆盖文中全部「核对：`cmd`」标记，按断言方向判定——
+  4. 核对命令：覆盖文中全部「核对：`cmd`」标记，按断言方向判定——
      必须命中 / 必须无命中 / 命中受路径限制 / 需上下文佐证。
      非 rg|grep 命令显式列为「待人工执行」；rg 不在 PATH 时降级为等价 GNU grep；
      工具完全不可执行、或一条都没判定成（零覆盖）都判失败，不静默跳过。
@@ -96,7 +96,7 @@ SIM_THRESHOLD = 0.72
 QUOTED_WHITELIST = {
     # validation.md「场景测试索引」的表行标签，同名标题是另一节「公共接口与打包检查」
     "公共接口与打包": "表行标签（validation.md 场景测试索引），非节名引用",
-    # 走查示范里的散文措辞
+    # 完整示范（walkthrough.md）里的散文措辞
     "已验证": "散文措辞，与标题「验证」无关",
 }
 
@@ -140,7 +140,7 @@ def check_quoted_refs(files: list[Path]) -> list[str]:
 
 
 # --------------------------------------------------------------------------
-# 4. 快照核对命令
+# 4. 核对命令
 # --------------------------------------------------------------------------
 MARKER_RE = re.compile(r"核对[:：]")
 CMD_SPAN_RE = re.compile(r"`((?:rg|grep|bash|sh)\b[^`]*)`")
@@ -201,7 +201,7 @@ _CTX_FLAGS = frozenset("ABC")
 def _rg_to_grep_flags(flags: list[str]) -> list[str]:
     """rg flags -> GNU grep 等价项：补 `-r -E`（ERE 才认 alternation），`-A8` 拆成 `-A 8`。
 
-    只覆盖快照命令实际用到的 flag（-n / -A / -B / -C）；其余原样透传——真不被 grep
+    只覆盖核对命令实际用到的 flag（-n / -A / -B / -C）；其余原样透传——真不被 grep
     接受时 rc>=2 会被判为「命令执行错误」，不会静默通过。
     """
     out = ["-n", "-r", "-E"]
@@ -349,7 +349,7 @@ def _hit_paths(lines: list[str]) -> list[str]:
     return [ln.split(":", 1)[0] for ln in lines if ":" in ln]
 
 
-def check_snapshot_cmds(
+def check_verify_cmds(
     files: list[Path], verbose: bool = False
 ) -> tuple[list[str], list[str], dict]:
     """执行全部核对命令。返回 (失败项, 跳过项, 统计)。"""
@@ -513,7 +513,7 @@ def self_test() -> int:
         for idx, (name, marker, expect_issue) in enumerate(SELF_TEST_CASES):
             f = Path(td) / f"case{idx}.md"
             f.write_text(f"论断。{marker}\n", encoding="utf-8")
-            issues, skipped, _ = check_snapshot_cmds([f])
+            issues, skipped, _ = check_verify_cmds([f])
             got_issue = bool(issues)
             if got_issue != expect_issue:
                 failures.append(
@@ -541,7 +541,7 @@ def self_test() -> int:
         # 跳过语义单独确认：非 rg/grep 必须进 skipped，不能算通过也不能算失败
         f = Path(td) / "skip.md"
         f.write_text("论断。（核对：`bash build.sh --help`）\n", encoding="utf-8")
-        _, skipped, stats = check_snapshot_cmds([f])
+        _, skipped, stats = check_verify_cmds([f])
         if not skipped or stats["kinds"].get("unsupported") != 1:
             failures.append(
                 f"unsupported 命令未被显式跳过: skipped={skipped}, kinds={stats['kinds']}"
@@ -553,7 +553,7 @@ def self_test() -> int:
             print(f"  - {x}")
         return 1
     print(
-        f"SELF-TEST OK: {len(SELF_TEST_CASES)} 个快照用例 + 3 个节名引用用例"
+        f"SELF-TEST OK: {len(SELF_TEST_CASES)} 个核对命令用例 + 3 个节名引用用例"
         "（含 6 个负向用例均被检出）"
     )
     return 0
@@ -564,7 +564,7 @@ def main() -> int:
     parser.add_argument(
         "--fix-hint",
         action="store_true",
-        help="打印修复提示（快照命令失败时提醒以语义为准先核对是否正常重构）",
+        help="打印修复提示（核对命令失败时提醒以语义为准先核对是否正常重构）",
     )
     parser.add_argument("--verbose", action="store_true", help="逐条打印通过的核对命令")
     parser.add_argument(
@@ -580,8 +580,8 @@ def main() -> int:
     md_files = sorted(SKILL_DIR.rglob("*.md"))
     issues = check_links(md_files)
     issues += check_quoted_refs(md_files)
-    snap_issues, skipped, stats = check_snapshot_cmds(md_files, verbose=args.verbose)
-    issues += snap_issues
+    verify_issues, skipped, stats = check_verify_cmds(md_files, verbose=args.verbose)
+    issues += verify_issues
 
     kinds = " ".join(f"{k}={v}" for k, v in sorted(stats["kinds"].items()))
     # unsupported = 设计上就要人工执行的（如 bash build.sh --help），不计入机器可判定分母
@@ -612,16 +612,16 @@ def main() -> int:
             print(f"  - {i}")
         if args.fix_hint:
             print(
-                "\n提示：快照命令失败时，先核对源码行为与断言语义是否仍一致"
+                "\n提示：核对命令失败时，先核对源码行为与断言语义是否仍一致"
                 "（可能只是正常重构挪动了符号/控制流）——语义一致则以语义为准更新"
-                "命令，不算快照过期；行为变了才更新断言。见 conditional-rules「快照"
-                "与核对命令纪律」的误报处理。反向断言（应无命中）失败说明该 helper "
+                "命令，不算「当前事实」过期；行为变了才更新断言。见 conditional-rules"
+                "「当前事实与核对命令纪律」的误报处理。反向断言（应无命中）失败说明该 helper "
                 "已接通，要改的是手册论断本身。"
             )
         return 1
     print(
         f"OK: {len(md_files)} files；links/anchors/节名引用 全通过；"
-        f"快照断言实际判定 {stats['verified']}/{executable} 条"
+        f"核对断言实际判定 {stats['verified']}/{executable} 条"
         f"（{stats['kinds'].get('unsupported', 0)} 条需人工执行）"
     )
     return 0

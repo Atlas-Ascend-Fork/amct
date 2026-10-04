@@ -7,7 +7,7 @@
 - 下游：eval/deploy 通过 `PtqParamHandler` / `PtqParamStore` 回载状态，必须用训练时一致的 target、unit 名和 `--algos`。
 - 若新增 solver 或 granularity，要同时读 `llm-cli-dataflow` 和 `validation.md` 的公共接口检查，同步 CLI 接受值/帮助/默认值、workflow 分支和测试。
 
-## 真实求解链
+## 调用链
 
 ```text
 workflow -> adapter PtqUnit + provider batch/GT
@@ -26,20 +26,18 @@ workflow -> adapter PtqUnit + provider batch/GT
 
 搜索 `SOLVER_REGISTRY`、`register_solvers`、`BlockwiseSolver`、`trainable_params`、`finalize`、`PtqParamHandler` 和 `PtqParamStore`；沿 `LlmPtqWorkflow` 的调用核对 solver 选择、unit 执行和保存顺序。
 
-以当前注册、调用关系和函数体判断通路是否接通，不能由文件或装饰器存在推断可执行。
-
 ### 验证入口
 
 核对参数收集与更新、registry 分派、finalize、保存回载和部分结果处理。测试定位与命令见 [validation.md](validation.md#场景测试索引)，具体覆盖要求见本文件“自验”。
 
 ## 当前事实
 
-本节是快照。事实附「核对」命令；作为落点依据前先执行，结果与断言冲突时以命令结果为准。命令失效（符号搜不到）本身即过期信号。发现不符时不改本节，把差异写进交付说明。
+事实附「核对」命令；作为判断依据前先执行，结果与断言冲突时以命令结果为准。命令失效（符号搜不到）本身即过期信号。发现不符时不改本节，把差异写进交付说明。
 
 - `global_solver.py` 文件存在且有注册装饰器，但当前 `register_solvers()` 只导入 `BlockwiseSolver`，主流程接通的是 `block`。（核对：`rg -n -A4 "def register_solvers" amct_pytorch/common/optimization/__init__.py`）
 - `llm_ptq.run()` 当前在 granularity 分支前先查 registry。（核对：`rg -n "SOLVER_REGISTRY.get" amct_pytorch/workflows/llm_ptq.py`）
 - `model` 分支虽存在，但 `_run_modelwise()` 仍是占位、无条件抛 `ValueError`，即当前默认值对 ptq 不可用。（核对：`grep -n -A3 "def _run_modelwise" amct_pytorch/workflows/llm_ptq.py`，应看到 `raise ValueError`）
-- CLI 默认值应与已注册且可执行的 `block` 一致；当前 `--granularity` 默认值与已注册 solver 的差距是待核验事实，不是已冻结的约定。（核对：`rg -n -A3 "granularity" amct_pytorch/cli/llm/args.py`）
+- CLI 默认值应与已注册且可执行的 `block` 一致；当前 `--granularity` 默认值与已注册 solver 的差距是待核验事实，不是已确定的约定。（核对：`rg -n -A3 "granularity" amct_pytorch/cli/llm/args.py`）
 
 ### 当前训练保存活跃链
 
@@ -55,31 +53,33 @@ LlmPtqWorkflow._run_blockwise()
 
 `BaseSolver.finalize()` 只在 unit module 自身提供 `export_ptq_params()` 时调用该方法，否则 fallback 到 unit module 的 `requires_grad` 参数。（核对：`rg -n -A8 "def finalize" amct_pytorch/common/optimization/base_solver.py`，应看到 `hasattr` 分派与 requires_grad fallback 两支）`PtqParamHandler.export_unit()` 提供 module 导出、递归子模块导出和 trainable fallback，但当前训练保存链没有调用它；它的存在不能证明任意子 wrapper 会被递归保存。（核对：`grep -rn "\.export_unit(" amct_pytorch/ tests/ | grep -v "def export_unit"` 应只命中 `tests/` 下文件；`amct_pytorch/` 内非定义命中即说明该论断过期——只搜 `amct_pytorch/` 时无输出不能区分「无调用」与「调用都在测试里」，必须含测试目录才有区分力）
 
-任何保存/回载方案必须逐项给出：活跃 caller、传入的 module/unit、result 的真实 key/shape、文件名与 target 目录、加载 caller、strict 行为以及 eval/deploy 的最终消费者。找不到调用方的 helper 标记为“源码存在但未接通”，不能作为集成闭环证据。
+任何保存/回载方案必须逐项给出：活跃 caller、传入的 module/unit、result 的真实 key/shape、文件名与 target 目录、加载 caller、strict 行为以及 eval/deploy 的最终消费者。
 
-### 无 trainable 参数的执行门禁
+### 无 trainable 参数时
 
-当前 `BlockwiseSolver.solve()` 收集不到 trainable 参数时，在遍历 dataloader 前直接返回。（核对：`rg -n -B3 -A2 "param_groups" amct_pytorch/common/optimization/blockwise_solver.py`）统计型或一次性优化算法不能依赖该方法自然完成 observe。新增路径前必须在 `llm-algorithm` 的执行形态基础上确定：
+当前 `BlockwiseSolver.solve()` 收集不到 trainable 参数时，在遍历 dataloader 前直接返回。（核对：`rg -n -B3 -A2 "param_groups" amct_pytorch/common/optimization/blockwise_solver.py`）统计型或一次性优化算法不能依赖该方法自然完成 observe。新增路径前必须在 `llm-algorithm` 的运行方式基础上确定：
 
 - 样本遍历由既有 GT forward、独立 calibration、solver 的统计分支还是其它已定义 caller 驱动。
 - GT forward 的 observe 副作用是否可复用；若不可复用，如何隔离或清空统计。
 - finalize 是 algorithm、module、solver 还是 workflow 的稳定约定，以及重复调用行为。
 - 统计完成但没有 trainable 参数时，solver 返回值和保存结果如何区分“成功统计”与“什么都没做”。
 
-这些语义未冻结时，不新增空 optimizer、伪 trainable 参数或无 caller 的 post-calibration hook 来绕过提前返回。
+这些语义未确定时，不新增空 optimizer、伪 trainable 参数或无 caller 的 post-calibration hook 来绕过提前返回。
 
 ## 执行步骤
 
-1. 先确认改动是优化循环、solver factory、参数 store，还是算法状态导出回载；新增 solver/granularity 时先冻结下一节的语义约定。
+1. 先确认改动是优化循环、solver factory、参数 store，还是算法状态导出回载；新增 solver/granularity 时先确定下一节的语义约定。
 2. 检查 unit 输入和 GT 来自 provider，不在 solver 内直接读文件或重放模型。
 3. 收集参数时只依赖 module/algorithm 的 `trainable_params()` 或导出 hook。
 4. 训练型算法要验证参数真实进入 optimizer；统计型算法先证明谁驱动样本遍历和 finalize，再验证 buffer 进入保存和回载。
 5. 保存文件名保持 `layer_<idx>_<unit.save_name>.pt`，并确认 target 目录不会混用。
 6. 补 solver factory、blockwise solver、参数 store、workflow 或新增 granularity 的最小测试。
 
-## 新 granularity 语义门禁
+## 前置检查
 
-`block`、`layer`、`model` 等名字不能替代执行语义；语义未冻结时只输出条件分支。`--granularity=layer`、“按层保存”或“介于 block 与 model 之间”都不能单独证明要做整层联合 forward、跨 unit 共享 optimizer、使用 layer 输入/输出或建立 layer 完成标记。用户没有给出优化目标、资源约束或精度语义时，只能并列这些候选及其代价，不推荐其中一种。形成具体类名、构造签名或源码落点前，逐项冻结：
+### 新 granularity 语义
+
+`block`、`layer`、`model` 等名字不能替代执行语义；语义未确定时只输出条件分支。`--granularity=layer`、“按层保存”或“介于 block 与 model 之间”都不能单独证明要做整层联合 forward、跨 unit 共享 optimizer、使用 layer 输入/输出或建立 layer 完成标记。用户没有给出优化目标、资源约束或精度语义时，只能并列这些候选及其代价，不推荐其中一种。形成具体类名、构造签名或源码位置前，逐项确定：
 
 | 跨端约定 | 必须回答的问题 |
 | --- | --- |
@@ -93,9 +93,9 @@ LlmPtqWorkflow._run_blockwise()
 
 领域补充：共享 optimizer 只有在 solver 同时持有相关 module、batch/GT 和活跃计算图时才成立。
 
-## 复合 unit 与联合求解门禁
+### 复合 unit 与联合求解
 
-一个 `PtqUnit` 同时承载 attention、MLP 或其它多个子模块时，不等同于新增 granularity，也不自动需要新 solver。形成类名或 workflow 分支前，除“新 granularity 语义门禁”外还要回答：
+一个 `PtqUnit` 同时承载 attention、MLP 或其它多个子模块时，不等同于新增 granularity，也不自动需要新 solver。形成类名或 workflow 分支前，除「新 granularity 语义」外还要回答：
 
 | 跨端约定 | 必须回答的问题 |
 | --- | --- |
@@ -106,20 +106,22 @@ LlmPtqWorkflow._run_blockwise()
 | finalize | 单一结果还是按子 unit 拆分；当前 `BaseSolver.finalize()` 能否真实导出全部状态 |
 | 回载 | 文件名、target 目录、unit 枚举、strict load 和 deploy binding 如何重建相同结构 |
 
-任一项未冻结时，只能把完整 block 或新 solver 列为候选，不能声称通过复用递归 helper 已完成保存闭环。
+任一项未确定时，只能把完整 block 或新 solver 列为候选，不能声称通过复用递归 helper 已完成保存闭环。
 
-## solver 规则
+## 实现规则
+
+### solver
 
 - solver 不写模型名分支。
 - unit 是否枚举或跳过由 adapter 的 `iter_ptq_units()` 或已定义的通用 unit 约定表达，solver 不查看其它 unit 决定过滤策略。
 - 仅服务单个模型族的 unit 过滤参数不能直接加入通用 CLI；只有证明为跨模型通用能力并定义稳定语义后，才同步 CLI/API/workflow 闭环。
 - trainable 参数只从 module 的 `trainable_params()` 收集。
-- 当前训练型 solver 无 trainable 参数时应直接返回，不假装训练；统计型路径的样本驱动与 finalize 按上面的执行门禁单独核对。
+- 当前训练型 solver 无 trainable 参数时应直接返回，不假装训练；统计型路径的样本驱动与 finalize 按上面的前置检查单独核对。
 - reconstruction loss 默认比较 unit output 与 GT。
 - epoch loss 恒为 0 或 NaN 是强失败信号，必须检查输入、GT、梯度和 unit 策略。
 - 新 solver 若要进入主流程，必须更新 `register_solvers()`、CLI 接受值/帮助/默认值、workflow 分支和测试；当前 CLI 没有 `choices` 时，不要把“新增 choices”冒充既有约定，应明确这是兼容性决策。
 
-## 参数规则
+### 参数
 
 - unit 参数文件名默认 `layer_<idx>_<unit.save_name>.pt`；unit 不属于任何层时省略 `layer_<idx>_` 前缀，保存与回载同规则。
 - `PtqParamHandler.export_unit()` 优先 module 自己的 `export_ptq_params()`，再递归子模块，最后 fallback 到 requires_grad 参数；先确认当前 caller 是否实际使用该 helper。
@@ -128,7 +130,7 @@ LlmPtqWorkflow._run_blockwise()
 
 ## skip / partial result 生命周期
 
-跳过一个 unit、layer 或部分算法前，必须冻结并测试：
+跳过一个 unit、layer 或部分算法前，必须确定并测试：
 
 1. 跳过的是优化、统计、fake quant、real quant 还是整个量化；“不调用 solve”不等于保持浮点。
 2. 结果文件是缺失、显式 skip marker、direct-quant 状态还是浮点状态；参数 store 如何区分“尚未运行”和“有意跳过”。
@@ -151,11 +153,11 @@ LlmPtqWorkflow._run_blockwise()
 
 ## PTQ smoke 健康信号
 
-按算法的实际执行形态选择最小 PTQ 集成 smoke 标准；组合算法分别核对每种形态。适用项不满足时停下排查，不把训练型条件套到纯统计路径。
+按算法的实际运行方式选择最小 PTQ 集成 smoke 标准；组合算法分别核对每种方式。适用项不满足时停下排查，不把训练型条件套到纯统计路径。
 
 共同要求：unit 输入加载成功；流程需要 GT 时 materialize 成功且参考输出未被统计或权重更新污染；需要持久化的参数、统计状态或优化结果保存后可回载，并被后续量化或导出消费。
 
-| 执行形态 | 必须取得的健康信号 |
+| 运行方式 | 必须取得的健康信号 |
 | --- | --- |
 | trainable | solver 至少跑一个 batch，loss 不是恒 0 或 NaN，目标参数真实更新 |
 | observe-only | 已确认的 GT forward、独立 calibration 或其它 caller 实际遍历样本，统计 buffer 按预期写入，后续量化或导出消费该统计 |
@@ -165,7 +167,7 @@ LlmPtqWorkflow._run_blockwise()
 
 ## 禁止项
 
-- 新 granularity 的 module、batch/GT、optimizer、保存和续跑语义未冻结，却已确定类名、构造签名或共享 optimizer 方案。
+- 新 granularity 的 module、batch/GT、optimizer、保存和续跑语义未确定，却已确定类名、构造签名或共享 optimizer 方案。
 - 仅凭 `layer` 名称就断言或推荐整层联合训练，并发明 block 级数据文件或完成标记。
 - 复合 unit 没有闭环 adapter 构造、原始输入/kwargs、finalize 拆分和回载结构，却声称现有 solver/helper 可直接复用。
 - 无 trainable 参数时未定义样本驱动与 finalize，却声称统计算法已由 solver 执行。
