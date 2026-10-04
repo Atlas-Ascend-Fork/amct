@@ -243,12 +243,8 @@ class SmoothQuant(BaseQuantizeModule):
         smooth_factor: smooth factor
         """
         smooth_input = self.batch_input / smooth_factor.cpu().repeat(1, self.batch_num)
-        cout_axis = -2
-        axis_list = list(range(0, smooth_input.dim()))
-        axis_list.pop(cout_axis)
-        axis = tuple(axis_list)
-        per_token_max = torch.amax(smooth_input, dim=axis, keepdim=True)
-        per_token_min = torch.amin(smooth_input, dim=axis, keepdim=True)
+        per_token_max = torch.amax(smooth_input, dim=-1, keepdim=True)
+        per_token_min = torch.amin(smooth_input, dim=-1, keepdim=True)
         return calculate_scale_offset(
             per_token_max, per_token_min, self.act_symmetric, self.act_type
         )
