@@ -10,7 +10,7 @@ _昇腾模型压缩工具_
 [![CANN](https://img.shields.io/badge/CANN-%E2%89%A58.5.0-green.svg)](docs/zh/quick_install.md)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.1.0%20%7C%202.7.1-orange.svg)](requirements.txt)
 
-[快速开始](#-快速开始) · [特性](#-核心特性) · [样例](#-文档样例) · [FAQ](#-常见问题) · [贡献](#-参与贡献)
+[快速开始](#快速开始) · [特性](#核心特性) · [样例](#文档样例) · [FAQ](#常见问题) · [贡献](#参与贡献)
 
 </div>
 
