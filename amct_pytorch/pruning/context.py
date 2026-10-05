@@ -16,6 +16,7 @@
 # ----------------------------------------------------------------------------
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterable, Iterator, Optional, Tuple
 
@@ -36,7 +37,10 @@ class PruneContext:
         adapter = self.batch_adapter or default_batch_adapter
 
         def generator() -> Iterator[Tuple[Tuple[Any, ...], Dict[str, Any]]]:
-            for batch in self.data:
+            data = self.data
+            if isinstance(data, Mapping):
+                data = [data]
+            for batch in data:
                 yield adapter(batch)
 
         return generator()

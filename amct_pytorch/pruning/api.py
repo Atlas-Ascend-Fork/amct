@@ -29,6 +29,19 @@ from .report import PruneReport
 ConfigLike = Union[dict, PruneConfig, type(None)]
 
 
+def _as_batch_sequence(data):
+    """Normalize one mapping batch into a one-element list.
+
+    Passing a mapping directly to ``data`` or ``eval_data`` previously caused
+    the data loop to iterate over its keys (strings) as separate batches.
+    Wrapping a mapping in a list keeps a single batch, while lists, tuples,
+    and other iterables continue to represent multiple batches.
+    """
+    if isinstance(data, Mapping):
+        return [data]
+    return data
+
+
 def _coerce_config(config: ConfigLike) -> PruneConfig:
     if config is None:
         return PruneConfig()
@@ -223,6 +236,10 @@ def prune(
         raise ValueError(
             "Pass only one of tolerance= or size_budget= (mutually exclusive search modes)."
         )
+    # A single mapping (e.g. {"input_ids": ids, "labels": labels}) is one batch;
+    # without this wrap the batch loop would iterate over its keys.
+    data = _as_batch_sequence(data)
+    eval_data = _as_batch_sequence(eval_data)
     menu_cfg = _menu_config(config)
     if menu_cfg is not None:
         _reject_search_args(
