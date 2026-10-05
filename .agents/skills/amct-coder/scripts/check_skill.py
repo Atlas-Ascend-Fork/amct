@@ -108,8 +108,12 @@ def _heading_keys(files: list[Path]) -> dict[str, str]:
         for h in re.findall(r"^#+ (.+)$", f.read_text(encoding="utf-8"), re.M):
             h = h.strip()
             no_paren = PAREN_RE.sub("", h).strip()
-            for variant in {h, no_paren, HEADING_NUM_RE.sub("", h).strip(),
-                            HEADING_NUM_RE.sub("", no_paren).strip()}:
+            for variant in {
+                h,
+                no_paren,
+                HEADING_NUM_RE.sub("", h).strip(),
+                HEADING_NUM_RE.sub("", no_paren).strip(),
+            }:
                 if variant:
                     keys.setdefault(variant, f"{f.name}「{h}」")
     return keys
@@ -129,7 +133,9 @@ def check_quoted_refs(files: list[Path]) -> list[str]:
             ref = m.group(1).strip()
             if ref in keys or ref in QUOTED_WHITELIST:
                 continue
-            best = max(names, key=lambda n: difflib.SequenceMatcher(None, ref, n).ratio())
+            best = max(
+                names, key=lambda n: difflib.SequenceMatcher(None, ref, n).ratio()
+            )
             ratio = difflib.SequenceMatcher(None, ref, best).ratio()
             if ratio >= SIM_THRESHOLD:
                 issues.append(
@@ -522,12 +528,14 @@ def self_test() -> int:
                 )
         # 节名引用：漂移必须被检出，精确一致与白名单必须放过
         head = Path(td) / "quoted_head.md"
-        head.write_text("## 跨端约定缺失的处理形态\n\n## 验证\n\n正文。\n", encoding="utf-8")
+        head.write_text(
+            "## 跨端约定缺失的处理形态\n\n## 验证\n\n正文。\n", encoding="utf-8"
+        )
         quoted_cases = [
             # 历史上真实发生过的漂移：多一个「时」字，锚点检查查不出来
             ("跨端约定缺失时的处理形态", True),
-            ("跨端约定缺失的处理形态", False),   # 精确一致
-            ("已验证", False),               # 白名单散文用词（近似标题「验证」）
+            ("跨端约定缺失的处理形态", False),  # 精确一致
+            ("已验证", False),  # 白名单散文用词（近似标题「验证」）
         ]
         for idx, (ref, expect_issue) in enumerate(quoted_cases):
             user = Path(td) / f"quoted_ref{idx}.md"
