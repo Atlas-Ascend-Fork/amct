@@ -108,7 +108,11 @@ class QuantileQuant(BaseQuantizeModule):
         weight_min, weight_max = get_weight_min_max_by_granularity(
             weight_data, quant_config
         )
-        self.scale_w = self.calculate_hif8_scale(weight_max)
+        # HiFloat8 weight quantization is symmetric, so the scale must cover the larger of
+        # the two absolute extremes; using only weight_max under-scales groups whose
+        # negative extreme dominates.
+        weight_abs_max = torch.maximum(weight_min.abs(), weight_max.abs())
+        self.scale_w = self.calculate_hif8_scale(weight_abs_max)
         self.offset_w = None
         LOGGER.logd(
             "Calculate quantile quant params of layer '{}' success!".format(

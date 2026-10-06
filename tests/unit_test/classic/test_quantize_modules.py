@@ -24,7 +24,9 @@ import torch.nn as nn
 from amct_pytorch.classic.quantize_op.ofmr_quant_module import OfmrQuant
 from amct_pytorch.classic.quantize_op.linear_awq_module import LinearAWQuant
 from amct_pytorch.classic.quantize_op.smooth_quant_module import SmoothQuant
-from amct_pytorch.common.utils.vars import INT8
+from amct_pytorch.classic.quantize_op.cast_module import HIF8CastQuant
+from amct_pytorch.classic.quantize_op.quantile_module import QuantileQuant
+from amct_pytorch.common.utils.vars import HIFLOAT8, INT8
 
 
 def _make_ofmr_config(batch_num=2, strategy="tensor", weight_compress_only=False):
@@ -279,6 +281,48 @@ class TestLinearAWQuantForward(unittest.TestCase):
         out1 = q.fake_quant_forward(x)
         out2 = q.fake_quant_forward(x)  # hits cache
         self.assertEqual(out1.shape, out2.shape)
+
+
+class TestHifloat8WeightScale(unittest.TestCase):
+    """HiFloat8 symmetric weight scale must cover the negative absolute extreme."""
+
+    @staticmethod
+    def _negative_dominant_linear():
+        linear = nn.Linear(2, 2, bias=False)
+        with torch.no_grad():
+            # Row 0: the negative extreme (-100) dominates the positive max (1).
+            # Row 1: the positive extreme (100) dominates and acts as the control.
+            linear.weight.copy_(torch.tensor([[-100.0, 1.0], [1.0, 100.0]]))
+        return linear
+
+    @patch(
+        "amct_pytorch.classic.quantize_op.cast_module.quant_dequant_weight",
+        side_effect=lambda weight, wts_type, scale: weight,
+    )
+    def test_hifloat8_cast_channel_scale_covers_negative_extreme(self, _mock_dq):
+        cfg = {
+            "weights_cfg": {
+                "quant_type": HIFLOAT8,
+                "strategy": "channel",
+                "symmetric": True,
+            },
+            "inputs_cfg": {"enable_quant": False},
+        }
+        module = HIF8CastQuant(self._negative_dominant_linear(), "linear", cfg)
+        # max|weight| / 16 = 100 / 16 = 6.25 for both rows.
+        self.assertAlmostEqual(module.scale_w[0].item(), 6.25)
+        self.assertAlmostEqual(module.scale_w[1].item(), 6.25)
+
+    def test_hifloat8_quantile_channel_scale_covers_negative_extreme(self):
+        cfg = {
+            "batch_num": 1,
+            "weights_cfg": {"quant_type": HIFLOAT8, "strategy": "channel"},
+            "inputs_cfg": {"enable_quant": False},
+        }
+        module = QuantileQuant(self._negative_dominant_linear(), "linear", cfg)
+        # max(|min|, |max|) / 16 = 100 / 16 = 6.25 for both rows.
+        self.assertAlmostEqual(module.scale_w[0].item(), 6.25)
+        self.assertAlmostEqual(module.scale_w[1].item(), 6.25)
 
 
 if __name__ == "__main__":
