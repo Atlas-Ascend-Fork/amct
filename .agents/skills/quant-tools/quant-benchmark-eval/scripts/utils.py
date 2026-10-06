@@ -89,6 +89,9 @@ def ensure_supported_quant_target(quant_target, allow_attn_quant=False):
 
 
 def check_environment(require_lm_eval=False, require_lcb_runner=False):
+    from config import BENCH_ASSETS, require_amct_home
+
+    require_amct_home()
     requirements = [
         ("torch", "torch", None),
         ("torch_npu", "torch_npu", None),
@@ -126,6 +129,7 @@ def check_environment(require_lm_eval=False, require_lcb_runner=False):
         if version_mismatch:
             parts.append("version mismatch: " + "; ".join(version_mismatch))
         raise RuntimeError("benchmark environment check failed: " + " | ".join(parts))
+    print(f"[env] BENCH_ASSETS={BENCH_ASSETS}")
 
 
 def parse_result_log(path):

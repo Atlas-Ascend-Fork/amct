@@ -3,7 +3,7 @@
 
 Why MLP-only: quantized attention (QuantQwen3Attn) has no KV-cache support, so
 quantizing attn forces generate(use_cache=False) → ~7 min/question. Quantizing
-only MLP keeps attn native (KV cache on) → ~6 s/question. See SKILL.md constraint 1.
+only MLP keeps attn native (KV cache on) → ~6 s/question. See references/constraints.md #1.
 
 Assembly reuses amct blockwise building blocks (float_model + build_quant_block +
 load_selected_layer_ptq_params) but assembles ALL layers into one generatable model
