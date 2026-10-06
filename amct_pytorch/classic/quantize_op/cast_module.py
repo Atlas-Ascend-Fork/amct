@@ -31,7 +31,7 @@ class HIF8CastQuant(BaseQuantizeModule):
     """
     Function: fake-quant operator for the HIF8 cast algorithm (no calibration).
 
-    Mirrors NpuHIF8CastLinear's weight scale (weight_max / 16) but simulates the
+    Mirrors NpuHIF8CastLinear's weight scale (max(abs(weight)) / 16) but simulates the
     cast in FP so accuracy can be evaluated off-NPU. The FP round trip goes through
     hifloat8_fake_quant, which falls back to amct_ops when torch_npu lacks a native
     hifloat8 cast -- that fallback is the reason this stage is split out from the
