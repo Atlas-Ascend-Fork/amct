@@ -29,7 +29,10 @@ class CompModuleLinear(CompModuleBase):  # pylint: disable=R0903
 
     def __init__(self, *args, **kwargs):
         super(CompModuleLinear, self).__init__(*args, **kwargs)
-        self.num_scales = 1
+        if not self.wts_config.get('channel_wise'):
+            self.num_scales = 1
+        else:
+            self.num_scales = self.replaced_module.weight.size(0)
         self._init_output()
 
     def forward(self, inputs):

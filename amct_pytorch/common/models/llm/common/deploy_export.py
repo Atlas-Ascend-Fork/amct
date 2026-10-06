@@ -21,9 +21,10 @@ from safetensors.torch import load_file
 
 from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
 from amct_pytorch.common.models.llm.common.weight_path_validation import (
+    collect_safetensors_files,
     resolve_safetensors_path,
 )
-from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
+from amct_pytorch.quantization.dtypes.fp_impl import weight_dequant
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
@@ -101,6 +102,19 @@ def generate_quant_config(cache_scheme, ignores, is_mx=False, bits_scheme=None):
     return quant_config
 
 
+def generate_tensor_quant_config(plan, cache_scheme=None):
+    """Describe the actual tensor plan without model-specific selection methods.
+
+    User ignore rules and all other unselected weight modules must be FLOAT
+    under the legacy broad Linear/MoEGMM targets. Keep the user-only resolved
+    ignore set on the plan for selection-equivalence auditing.
+    """
+    ignores = sorted(plan.ignored_modules | plan.unselected_weight_modules)
+    return generate_quant_config(
+        cache_scheme, ignores, bits_scheme=_default_bits_scheme()
+    )
+
+
 def get_quant_ignore_linear_names(block, weight_prefix):
     """Return weight names of non-quantized Linear modules in a block.
 
@@ -156,13 +170,19 @@ def export_block_deploy(pipeline, layer_idx: int, quant_ignore_layers: list):
     return deploy_tensors, tensor_routes
 
 
-def _load_scales(names, original_weight_map, model_dir, loaded_files):
+def _load_scales(
+    names, original_weight_map, model_dir, loaded_files, safetensors_files=None
+):
     """Load scale tensors by name, loading their shards on demand."""
     scales = []
     for name in names:
         file_name = original_weight_map[name]
         if file_name not in loaded_files:
-            file_path = resolve_safetensors_path(model_dir, file_name)
+            if safetensors_files is None:
+                safetensors_files = collect_safetensors_files(model_dir)
+            file_path = resolve_safetensors_path(
+                model_dir, file_name, safetensors_files
+            )
             loaded_files[file_name] = load_file(str(file_path), device="cpu")
         scales.append(loaded_files[file_name][name])
     return scales
@@ -176,6 +196,7 @@ def convert_state_dict(
     model_dir,
     loaded_files,
     block_size,
+    safetensors_files=None,
 ):
     if weight.element_size() != 1:
         return weight
@@ -185,11 +206,19 @@ def convert_state_dict(
             from amct_pytorch.common.utils.nvfp4_format import nvfp4_weight_dequant
 
             scale, scale_2 = _load_scales(
-                scale_inv_name, original_weight_map, model_dir, loaded_files
+                scale_inv_name,
+                original_weight_map,
+                model_dir,
+                loaded_files,
+                safetensors_files,
             )
             return nvfp4_weight_dequant(weight, scale, scale_2)
         scale_inv = _load_scales(
-            (scale_inv_name,), original_weight_map, model_dir, loaded_files
+            (scale_inv_name,),
+            original_weight_map,
+            model_dir,
+            loaded_files,
+            safetensors_files,
         )[0]
 
         # HiF4
@@ -203,13 +232,29 @@ def convert_state_dict(
 
             weight = hif4_unpack(scale_inv, weight)
 
-        # MXFP4
+        # MXFP4 (E2M1 packed into int8, E8M0 block scale)
         elif weight.dtype == torch.int8:
             weight = weight_dequant(
                 weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True
             )
 
-        # FP8 / MXFP8
+        # MXFP8 (FP8 weight, E8M0 block scale). An integer scale marks MX; the last-dim
+        # group size is derived from the scale and must tile the weight's last dim exactly.
+        elif not torch.is_floating_point(scale_inv):
+            n = weight.shape[-1]
+            scale_cols = scale_inv.shape[-1] if scale_inv.dim() == weight.dim() else 0
+            if scale_cols <= 0 or n % scale_cols != 0:
+                raise ValueError(
+                    f"MXFP8 weight '{weight_name}': E8M0 scale shape "
+                    f"{tuple(scale_inv.shape)} does not tile weight last dim {n} "
+                    f"(need a 2-D scale whose last dim divides {n}, e.g. OCP MX group "
+                    f"size 32)."
+                )
+            weight = weight_dequant(
+                weight, scale_inv, block_size=n // scale_cols, is_mx=True
+            )
+
+        # Standard FP8 dequantization with a floating-point block scale.
         else:
             weight = weight_dequant(weight, scale_inv, block_size=block_size)
 
@@ -221,8 +266,10 @@ def convert_state_dict(
     return weight
 
 
-def quant_payload(quant_cls, weight_name, weight, bit):
-    quant_obj = quant_cls(bits=int(bit))
+def quant_payload(
+    quant_cls, weight_name, weight, bit, block_size_col=128, scale_dtype="fp32"
+):
+    quant_obj = quant_cls(int(bit), False, block_size_col, scale_dtype)
     payload = quant_obj.export_deploy(weight)
     tensors = {weight_name: payload["qweight"]}
     for extra_name, extra_tensor in payload.items():
@@ -231,3 +278,66 @@ def quant_payload(quant_cls, weight_name, weight, bit):
         extra_key = weight_name.replace(".weight", f".{extra_name}")
         tensors[extra_key] = extra_tensor
     return tensors
+
+
+def adapt_ascend_payload(
+    weight_name: str, payload: dict[str, torch.Tensor]
+) -> dict[str, torch.Tensor]:
+    """Adapt symmetric INT8 payload to the W8A8_DYNAMIC checkpoint contract."""
+    if not weight_name.endswith(".weight"):
+        raise ValueError(f"Ascend payload requires a .weight key: {weight_name}")
+    prefix = weight_name.removesuffix(".weight")
+    scale_name = prefix + ".weight_scale"
+    if set(payload) != {weight_name, scale_name}:
+        raise ValueError(
+            f"Ascend payload for {weight_name} must contain only weight and weight_scale"
+        )
+    weight = payload[weight_name]
+    scale = payload[scale_name]
+    if weight.dtype != torch.int8 or weight.ndim != 2 or weight.numel() == 0:
+        raise ValueError(
+            f"Ascend payload {weight_name} requires a nonempty 2-D INT8 weight"
+        )
+    if not scale.is_floating_point() or scale.shape != (weight.shape[0], 1):
+        raise ValueError(
+            f"Ascend payload {weight_name} requires floating scale shape [out, 1]"
+        )
+    scale = scale.to(torch.bfloat16)
+    if not torch.isfinite(scale).all() or not (scale > 0).all():
+        raise ValueError(
+            f"Ascend scale for {weight_name} must remain finite and positive in BF16"
+        )
+    result = dict(payload)
+    result[scale_name] = scale
+    result[prefix + ".weight_offset"] = torch.zeros_like(scale)
+    return result
+
+
+def make_ascend_description(
+    output_tensor_names: set[str], selected_modules: frozenset[str]
+) -> dict:
+    """Describe exactly the tensors written by the shared shard exporter."""
+    dynamic_names = {
+        module + suffix
+        for module in selected_modules
+        for suffix in (".weight", ".weight_scale", ".weight_offset")
+    }
+    missing = dynamic_names - output_tensor_names
+    if missing:
+        raise ValueError(
+            f"Ascend output is missing quantized tensors: {sorted(missing)}"
+        )
+    description = {
+        "version": "1.0.0",
+        "model_quant_type": "W8A8_DYNAMIC",
+        "metadata": {},
+        "group_size": 0,
+        "is_rot_used": False,
+    }
+    description.update(
+        {
+            name: "W8A8_DYNAMIC" if name in dynamic_names else "FLOAT"
+            for name in sorted(output_tensor_names)
+        }
+    )
+    return description

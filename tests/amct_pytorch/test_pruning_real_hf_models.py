@@ -180,6 +180,286 @@ class TestDenseRealLLM(unittest.TestCase):
 
 
 @requires_tf
+@unittest.skipUnless(
+    _HAS_TF and _has("Qwen3_5MoeTextConfig", "Qwen3_5MoeForCausalLM"),
+    "Qwen3_5Moe unavailable",
+)
+class TestQwen3_5MoeFusedExperts(unittest.TestCase):
+    """The A3B-class model the pruning walkthrough targets: fused experts on dim 0, a
+    non-Linear top-k router, and -- in the multimodal wrapper -- the language dims one
+    level down in ``config.text_config``."""
+
+    @staticmethod
+    def _text_config():
+        # Both a linear-attention and a full-attention layer: this architecture's cache
+        # rejects a model built entirely from either kind.
+        return transformers.Qwen3_5MoeTextConfig(
+            vocab_size=128,
+            hidden_size=32,
+            num_hidden_layers=2,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            intermediate_size=64,
+            moe_intermediate_size=32,
+            num_experts=8,
+            num_experts_per_tok=2,
+            max_position_embeddings=64,
+            decoder_sparse_step=1,
+            shared_expert_intermediate_size=32,
+            layer_types=["linear_attention", "full_attention"],
+            use_cache=False,
+        )
+
+    def _build(self, multimodal=False):
+        text_config = self._text_config()
+        if not multimodal:
+            return transformers.Qwen3_5MoeForCausalLM(text_config).eval()
+        vision_config = transformers.Qwen3_5MoeConfig(
+            text_config=text_config
+        ).vision_config
+        wrapper = transformers.Qwen3_5MoeConfig(
+            text_config=text_config, vision_config=vision_config
+        )
+        return transformers.Qwen3_5MoeForConditionalGeneration(wrapper).eval()
+
+    @staticmethod
+    def _cfg(ratio):
+        return {
+            "methods": {
+                "moe": {
+                    "name": "mass_variance",
+                    "kwargs": {"prune_ratio": ratio, "boundary": 10},
+                }
+            },
+            "skip_layers": ["self_attn"],
+            "missing_data_policy": "warn_skip",
+        }
+
+    def _blocks(self, model, multimodal):
+        inner = model.model.language_model if multimodal else model.model
+        return inner.layers
+
+    def _prune_and_check(self, multimodal, ratio, expected_experts):
+        model = self._build(multimodal)
+        calib = _token_calib()
+        before = _params(model)
+        report = PruneReport()
+        prune(model, self._cfg(ratio), data=calib, report=report)
+        mlp = self._blocks(model, multimodal)[0].mlp
+        self.assertEqual(mlp.experts.gate_up_proj.shape[0], expected_experts)
+        self.assertLess(_params(model), before)
+        with torch.no_grad():
+            out = model(input_ids=calib[0]).logits
+        self.assertTrue(
+            torch.isfinite(out).all(), "pruned model produced non-finite logits"
+        )
+        return model, mlp
+
+    def test_causal_lm_fused_experts(self):
+        self._prune_and_check(multimodal=False, ratio=0.5, expected_experts=4)
+
+    def test_multimodal_wrapper_fused_experts(self):
+        model, _ = self._prune_and_check(multimodal=True, ratio=0.5, expected_experts=4)
+        # The wrapper keeps the language dims in text_config; a config left at 8 would
+        # describe a model that no longer exists.
+        self.assertEqual(model.config.text_config.num_experts, 4)
+
+    def test_a_masked_trial_matches_a_real_cut_on_this_router(self):
+        """The router returns (logits, scores, indices) and the block dispatches on the
+        last two, so masking the logits alone would leave every expert in play. A masked
+        trial has to rebuild the selection, and this pins that it matches a real cut."""
+        import copy as _copy
+
+        from amct_pytorch.pruning import simulate
+        from amct_pytorch.pruning.config import PruneConfig
+        from amct_pytorch.pruning.pruner import AutoPruner
+        from amct_pytorch.pruning.utils import count_parameters
+
+        torch.manual_seed(0)
+        model = self._build(multimodal=False)
+        calib = _token_calib()
+        cfg_dict = self._cfg(0.5)
+
+        real = _copy.deepcopy(model)
+        report = PruneReport()
+        prune(real, _copy.deepcopy(cfg_dict), data=calib, report=report)
+        with torch.no_grad():
+            real_out = real(input_ids=calib[0]).logits
+
+        with torch.no_grad():
+            pristine_out = model(input_ids=calib[0]).logits.detach().clone()
+        before = {k: v.detach().clone() for k, v in model.state_dict().items()}
+        cfg = PruneConfig(**_copy.deepcopy(cfg_dict))
+        cfg.copy_model = False
+        params_before = count_parameters(model)
+        with simulate.SimulationSession(model) as session:
+            AutoPruner(cfg)(model, data=calib)
+            with torch.no_grad():
+                masked_out = model(input_ids=calib[0]).logits
+            masked_params = params_before - session.removed_params
+
+        self.assertLess(report.params_after, params_before, "nothing was pruned")
+        # This router hands its own top-k downstream, so a mask that only touched the
+        # logits would leave the forward untouched. Catch that directly.
+        moved = (masked_out - pristine_out).abs().max().item()
+        self.assertGreater(
+            moved / (pristine_out.abs().max().item() or 1.0),
+            1e-6,
+            "the router mask did not change the forward",
+        )
+        self.assertEqual(masked_params, report.params_after, "param accounting differs")
+        scale = real_out.abs().max().item() or 1.0
+        gap = (masked_out - real_out).abs().max().item()
+        self.assertLessEqual(gap / scale, 1e-5, f"masked output differs by {gap}")
+        for name, ref in before.items():
+            self.assertTrue(torch.equal(ref, model.state_dict()[name]), name)
+
+    def test_router_top_k_follows_the_surviving_experts(self):
+        """Cutting below num_experts_per_tok must lower top_k, or routing indexes an
+        expert that is gone."""
+        for multimodal in (False, True):
+            with self.subTest(multimodal=multimodal):
+                _, mlp = self._prune_and_check(
+                    multimodal=multimodal, ratio=0.875, expected_experts=1
+                )
+                self.assertEqual(getattr(mlp.gate, "top_k", None), 1)
+
+
+@requires_tf
+class TestMaskedTrialAcrossRouterFamilies(unittest.TestCase):
+    """Masked trial vs real cut on every HF top-k router family in reach.
+
+    Each family hands something different downstream: Mixtral renormalises its top-k,
+    Qwen3Moe only when norm_topk_prob is set, Qwen3.5 softmaxes before we ever see the
+    tensor. A hook that rebuilds the selection has to match each of them, so this runs
+    the same equivalence check across all of them.
+    """
+
+    COMMON = dict(
+        vocab_size=128,
+        hidden_size=32,
+        intermediate_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        num_key_value_heads=2,
+        max_position_embeddings=64,
+    )
+
+    @staticmethod
+    def _real_prune(model, cfg_dict, calib, ids):
+        import copy as _copy
+
+        real = _copy.deepcopy(model)
+        report = PruneReport()
+        prune(real, _copy.deepcopy(cfg_dict), data=calib, report=report)
+        with torch.no_grad():
+            real_out = real(input_ids=ids).logits
+        return report, real_out
+
+    def _check(self, name, model):
+        import copy as _copy
+
+        from amct_pytorch.pruning import simulate
+        from amct_pytorch.pruning.config import PruneConfig
+        from amct_pytorch.pruning.pruner import AutoPruner
+        from amct_pytorch.pruning.utils import count_parameters
+
+        ids = torch.randint(0, 128, (2, 16))
+        calib = [ids for _ in range(4)]
+        cfg_dict = {
+            "methods": {
+                "moe": {
+                    "name": "mass_variance",
+                    "kwargs": {"prune_ratio": 0.5, "boundary": 10},
+                }
+            },
+            "skip_layers": ["self_attn"],
+            "missing_data_policy": "warn_skip",
+        }
+        report, real_out = self._real_prune(model, cfg_dict, calib, ids)
+        cfg = PruneConfig(**_copy.deepcopy(cfg_dict))
+        cfg.copy_model = False
+        params_before = count_parameters(model)
+        with torch.no_grad():
+            pristine = model(input_ids=ids).logits.clone()
+        try:
+            with simulate.SimulationSession(model) as session:
+                AutoPruner(cfg)(model, data=calib)
+                with torch.no_grad():
+                    masked_out = model(input_ids=ids).logits
+                masked_params = params_before - session.removed_params
+        except simulate.MaskUnsupported:
+            # This version routes in a shape no mask can rebuild. The honest behaviour
+            # is refusal -- verify the model came back untouched, which is what lets
+            # the search fall back to copy-based trials.
+            with torch.no_grad():
+                after = model(input_ids=ids).logits
+            self.assertTrue(
+                torch.equal(pristine, after),
+                f"{name}: refusal left the model changed",
+            )
+            return
+        self._assert_equivalent(
+            name, report, params_before, masked_params, pristine, masked_out, real_out
+        )
+
+    def _assert_equivalent(
+        self, name, report, params_before, masked_params, pristine, masked_out, real_out
+    ):
+        scale = real_out.abs().max().item() or 1.0
+        self.assertLess(
+            report.params_after, params_before, f"{name}: nothing was pruned"
+        )
+        self.assertEqual(
+            masked_params, report.params_after, f"{name}: param accounting"
+        )
+        self.assertGreater(
+            (masked_out - pristine).abs().max().item() / scale,
+            1e-6,
+            f"{name}: the mask did not change the forward",
+        )
+        self.assertLessEqual(
+            (masked_out - real_out).abs().max().item() / scale,
+            1e-4,
+            f"{name}: masked trial diverges from the real cut",
+        )
+
+    @unittest.skipUnless(
+        _HAS_TF and _has("MixtralConfig", "MixtralForCausalLM"), "no Mixtral"
+    )
+    def test_mixtral(self):
+        torch.manual_seed(0)
+        cfg = transformers.MixtralConfig(
+            **self.COMMON, num_local_experts=8, num_experts_per_tok=2
+        )
+        self._check("Mixtral", transformers.MixtralForCausalLM(cfg).eval())
+
+    @unittest.skipUnless(
+        _HAS_TF and _has("Qwen3MoeConfig", "Qwen3MoeForCausalLM"), "no Qwen3Moe"
+    )
+    def test_qwen3moe(self):
+        torch.manual_seed(0)
+        cfg = transformers.Qwen3MoeConfig(
+            **self.COMMON,
+            moe_intermediate_size=32,
+            num_experts=8,
+            num_experts_per_tok=2,
+            decoder_sparse_step=1,
+        )
+        self._check("Qwen3Moe", transformers.Qwen3MoeForCausalLM(cfg).eval())
+
+    @unittest.skipUnless(
+        _HAS_TF and _has("GraniteMoeConfig", "GraniteMoeForCausalLM"), "no GraniteMoe"
+    )
+    def test_granitemoe(self):
+        torch.manual_seed(0)
+        cfg = transformers.GraniteMoeConfig(
+            **self.COMMON, num_local_experts=8, num_experts_per_tok=2
+        )
+        self._check("GraniteMoe", transformers.GraniteMoeForCausalLM(cfg).eval())
+
+
+@requires_tf
 class TestCNNRealVision(unittest.TestCase):
     @unittest.skipUnless(
         _HAS_TF and _has("RegNetConfig", "RegNetForImageClassification"),

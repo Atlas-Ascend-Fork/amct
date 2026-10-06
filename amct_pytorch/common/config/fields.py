@@ -437,7 +437,7 @@ class AlgorithmField:
         for alg_name in alg_names:
             if alg_reg.algo.get(alg_name) is None:
                 raise ValueError(
-                    f'Not support algorithm {alg_name}, pls regiter it first'
+                    f'Not support algorithm {alg_name}, pls register it first'
                 )
 
         registed_algo_field = {

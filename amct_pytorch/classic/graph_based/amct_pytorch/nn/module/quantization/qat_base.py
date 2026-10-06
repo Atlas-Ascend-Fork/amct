@@ -25,7 +25,7 @@ from torch.nn.parameter import Parameter
 
 from .....amct_pytorch.utils.log import LOGGER
 from .....amct_pytorch.common.utils.check_params import check_params
-from .....amct_pytorch.common.utils.vars_util import INT8, INT16
+from .....amct_pytorch.common.utils.vars_util import INT4, INT8, INT16
 from .....amct_pytorch.common.utils.vars_util import RNN_TENSOR_NUM
 from .....amct_pytorch.custom_op.ifmr.ifmr import IFMR
 from .....amct_pytorch.custom_op.utils import copy_tensor
@@ -34,6 +34,12 @@ from .....amct_pytorch.custom_op.ulq_retrain.ulq_retrain import UlqRetrainFuncQA
 from .....amct_pytorch.custom_op.arq_retrain.arq_retrain import ArqRetrainFuncQAT
 from .....amct_pytorch.custom_op.ulq_scale_retrain.ulq_scale_retrain import (
     UlqScaleRetrainFuncQAT,
+)
+from .....amct_pytorch.custom_op.qdq_symbolic import (
+    add_qdq_dynamo,
+    add_weight_qdq_dynamo,
+    check_int4_dynamo_export,
+    is_dynamo_export,
 )
 from .....amct_pytorch.utils.vars import (
     CLIP_MAX,
@@ -66,6 +72,7 @@ class QATBase(metaclass=ABCMeta):
 
     _float_module = None
     _required_params = list()
+    _supported_weight_dst_types = (INT8,)
 
     @check_params(layer_type=str, device=(str, type(None)), config=(dict, type(None)))
     def __init__(self, layer_type, device, config=None):
@@ -324,6 +331,8 @@ class QATBase(metaclass=ABCMeta):
                     inputs.dtype
                 )
             )
+        if is_dynamo_export() and self.retrain_enable:
+            return self._forward_qat_export(inputs)
         if self.retrain_enable:
             if self.do_init:
                 self.acts_quant_init(inputs)
@@ -336,6 +345,42 @@ class QATBase(metaclass=ABCMeta):
                 self.cur_batch += 1
         else:
             quantized_acts, quantized_weights = inputs, self.weight
+        return quantized_acts, quantized_weights
+
+    def _forward_qat_export(self, inputs):
+        """Build Q/DQ nodes without retraining-time state updates."""
+        if self.do_init:
+            raise RuntimeError(
+                'QAT model must be initialized before Dynamo ONNX export.'
+            )
+
+        quantized_acts = add_qdq_dynamo(
+            inputs,
+            self.acts_scale,
+            self.acts_offset_deploy,
+            self.act_num_bits,
+        )
+
+        wts_config = self.retrain_weight_config
+        if self.wts_num_bits == 4:
+            check_int4_dynamo_export(
+                {
+                    'channel_wise': wts_config.get('channel_wise', True),
+                    'module': self,
+                }
+            )
+        algo = wts_config.get('weights_retrain_algo', 'arq_retrain')
+        if algo not in ('arq_retrain', 'ulq_retrain'):
+            raise RuntimeError('Unsupported weights retrain algorithm: {}'.format(algo))
+        quantized_weights = add_weight_qdq_dynamo(
+            self.weight,
+            self.wts_scales,
+            self.wts_offsets_deploy,
+            self.wts_num_bits,
+            self.layer_type,
+            wts_config.get('channel_wise', True),
+            self,
+        )
         return quantized_acts, quantized_weights
 
     def acts_quant_init(self, inputs):
@@ -466,6 +511,9 @@ class QATBase(metaclass=ABCMeta):
                 "but your input is {}".format(self.retrain_data_config.get(DST_TYPE))
             )
 
+        if self.retrain_data_config.get('channel_wise', False):
+            raise ValueError('Activation quantization only supports per-tensor.')
+
         batch_num = self.retrain_data_config.get(BATCH_NUM, 1)
         if not isinstance(batch_num, int) or batch_num <= 0:
             raise ValueError(
@@ -498,11 +546,21 @@ class QATBase(metaclass=ABCMeta):
             )
 
         # check params for weights
-        if self.retrain_weight_config.get(DST_TYPE, INT8) not in [INT8]:
+        if (
+            self.retrain_weight_config.get(DST_TYPE, INT8)
+            not in self._supported_weight_dst_types
+        ):
             raise ValueError(
-                "dst_type for weight should be in range ['INT8'], "
-                "but your input is {}".format(self.retrain_weight_config.get(DST_TYPE))
+                "dst_type for weight should be in range {}, but your input is {}".format(
+                    list(self._supported_weight_dst_types),
+                    self.retrain_weight_config.get(DST_TYPE),
+                )
             )
+        if (
+            self.retrain_weight_config.get(DST_TYPE, INT8) == INT4
+            and self.retrain_data_config.get(DST_TYPE, INT8) != INT8
+        ):
+            raise ValueError('INT4 weight quantization requires INT8 activation.')
 
         if self.retrain_weight_config.get('weight_retrain_algo', 'arq_retrain') not in [
             'arq_retrain',

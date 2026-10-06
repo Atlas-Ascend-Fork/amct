@@ -14,8 +14,14 @@ fakequant/
 │   ├── python/mxfp4/# Python 包装
 │   ├── reference/   # 纯 PyTorch 参考实现
 │   └── tests/
-└── README.md
+├── mxfp4_qat/       # MXFP4 量化感知训练（QAT）：带 STE 的 nn.Linear 替代实现
+│   ├── fake_quant.py# MXFP4 QDQ + STE autograd.Function + 量化器模块
+│   └── linear.py    # MXFP4QATLinear + convert_to_mxfp4_qat
+├── README.md
+└── README_en.md
 ```
+
+`mxfp4_ascendc/` 面向**推理侧精度验证**（快速跑出伪量化数值），`mxfp4_qat/` 面向**训练侧**（让模型在训练中适应 MXFP4 误差）；后者在 NPU 上会自动复用前者的算子加速。
 
 ## 说明
 

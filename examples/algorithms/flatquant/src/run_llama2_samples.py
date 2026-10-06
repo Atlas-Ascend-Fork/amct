@@ -81,7 +81,7 @@ if __name__ == '__main__':
         outputs = model(**inputs)
     t2_orig = datetime.now()
     t_diff_orig = (t2_orig - t1_orig).total_seconds() * 1000
-    logger.info(f"Time diff orig: {t_diff_orig}")
+    logger.info(f"Time diff orig: {t_diff_orig} ms")
 
     # Phase1: quantize model
     amct.quantize(model, INT4_FLAT_QUANT_CFG)
@@ -112,7 +112,7 @@ if __name__ == '__main__':
         outputs = model(**inputs)
     t2_real_quant = datetime.now()
     t_diff_real_quant = (t2_real_quant - t1_real_quant).total_seconds() * 1000
-    logger.info(f"Time diff after real quant: {t_diff_real_quant}")
+    logger.info(f"Time diff after real quant: {t_diff_real_quant} ms")
 
     # Evaluate real quant
     eval_total(model, tokenizer, calib_dataset_eval, logger)

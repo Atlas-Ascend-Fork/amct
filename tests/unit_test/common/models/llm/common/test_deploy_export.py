@@ -246,11 +246,12 @@ def test_load_scales_rejects_shard_outside_model_directory(tmp_path):
 
     model_dir = tmp_path / "model"
     model_dir.mkdir()
+    sf_save({"allowed": torch.ones(1)}, str(model_dir / "allowed.safetensors"))
     outside_path = tmp_path / "outside.safetensors"
     scale_name = "layer.weight_scale_inv"
     sf_save({scale_name: torch.ones(1)}, str(outside_path))
 
-    with pytest.raises(ValueError, match="plain file name"):
+    with pytest.raises(ValueError, match="not in the model directory allowlist"):
         deploy_export_mod._load_scales(
             (scale_name,),
             {scale_name: "../outside.safetensors"},
@@ -534,9 +535,14 @@ def test_quant_payload_basic():
     """quant_payload builds tensors dict from quant_cls.export_deploy."""
     from amct_pytorch.common.models.llm.common.deploy_export import quant_payload
 
+    captured = {}
+
     class FakeQuantCls:
-        def __init__(self, bits):
+        def __init__(self, bits, is_act=False, *args):
             self.bits = bits
+            captured["bits"] = bits
+            captured["is_act"] = is_act
+            captured["extra"] = args
 
         def export_deploy(self, weight):
             return {
@@ -545,10 +551,22 @@ def test_quant_payload_basic():
             }
 
     weight = torch.randn(4, 4)
-    result = quant_payload(FakeQuantCls, "layer.weight", weight, bit=8)
+    result = quant_payload(
+        FakeQuantCls,
+        "layer.weight",
+        weight,
+        bit=8,
+        block_size_col=1,
+        scale_dtype="e8m0",
+    )
     assert "layer.weight" in result
     assert torch.allclose(result["layer.weight"], torch.ones(4, 4) * 8)
     assert "layer.weight_scale" in result
+    # block_size_col / scale_dtype must reach the quant class (fp 4-bit needs
+    # scale_dtype="e8m0"; the fp32 default would raise).
+    assert captured["bits"] == 8
+    assert captured["is_act"] is False
+    assert captured["extra"] == (1, "e8m0")
 
 
 def test_quant_payload_skips_none_extras():
@@ -556,7 +574,7 @@ def test_quant_payload_skips_none_extras():
     from amct_pytorch.common.models.llm.common.deploy_export import quant_payload
 
     class FakeQuantCls:
-        def __init__(self, bits):
+        def __init__(self, bits, is_act=False, *args):
             pass
 
         def export_deploy(self, weight):
@@ -567,6 +585,21 @@ def test_quant_payload_skips_none_extras():
     result = quant_payload(FakeQuantCls, "layer.weight", weight, bit=4)
     assert "layer.weight" in result
     assert "layer.bias" not in result
+
+
+def test_quant_payload_fp4_e8m0_does_not_raise():
+    """4-bit fp export must pass scale_dtype='e8m0' instead of the fp32 default."""
+    from amct_pytorch.common.models.llm.common.deploy_export import quant_payload
+    from amct_pytorch.quantization.dtypes import register_dtype
+
+    register_dtype()
+    from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY
+
+    fp_cls = DTYPE_REGISTRY.get("fp")
+    weight = torch.randn(4, 64)
+    result = quant_payload(fp_cls, "layer.weight", weight, bit=4, scale_dtype="e8m0")
+    assert "layer.weight" in result
+    assert "layer.weight_scale" in result
 
 
 # ---- get_quant_ignore_linear_names: PlainLinear filtering -----------------
@@ -597,3 +630,34 @@ def test_get_quant_ignore_linear_names_mixed_plain_and_plain_linear():
     block.wrapped = PlainLinear(nn.Linear(4, 4))
     names = get_quant_ignore_linear_names(block, "")
     assert sorted(names) == ["plain_fc", "wrapped"]
+
+
+def test_convert_state_dict_mxfp8_dequant():
+    """FP8 weight + uint8 E8M0 2-D scale must dequantize via the MXFP8 branch."""
+    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+
+    w8 = torch.zeros(2, 64, dtype=torch.float8_e4m3fn)
+    w8[0, 0] = 448.0
+    # e=127 -> 2^0 = 1.0; e=130 -> 2^3 = 8.0
+    scale = torch.tensor([[127, 130]], dtype=torch.uint8).expand(2, -1)
+    loaded_files = {"shard.safetensors": {"mod.weight_scale": scale}}
+    weight_map = {"mod.weight_scale": "shard.safetensors"}
+    out = convert_state_dict(
+        w8, "mod.weight", "mod.weight_scale", weight_map, "", loaded_files, 32
+    )
+    assert out[0, 0] == 448.0
+    assert out[1, 32] == 0.0
+
+
+def test_convert_state_dict_mxfp8_bad_scale_tiling_raises():
+    """An E8M0 scale whose last dim does not divide the weight last dim must fail loudly."""
+    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+
+    w8 = torch.zeros(2, 64, dtype=torch.float8_e4m3fn)
+    scale = torch.zeros(2, 3, dtype=torch.uint8)  # 64 % 3 != 0
+    loaded_files = {"shard.safetensors": {"mod.weight_scale": scale}}
+    weight_map = {"mod.weight_scale": "shard.safetensors"}
+    with pytest.raises(ValueError, match="does not tile"):
+        convert_state_dict(
+            w8, "mod.weight", "mod.weight_scale", weight_map, "", loaded_files, 32
+        )

@@ -1,5 +1,7 @@
 # Introduction
 
+English | [简体中文](./README.md)
+
 This project provides calling samples for different scenarios. After setting up the environment, you can try to run them according to actual scenarios:
 
 | Sample | Algorithm | Description |
@@ -14,6 +16,7 @@ This project provides calling samples for different scenarios. After setting up 
 | Quantize model using MXQuant algorithm | [MXQuant](algorithms/mxquant/README_en.md) | Micro-scaling floating-point quantization (MXFP8/MXFP4) |
 | Quantize model using FlatQuant algorithm (Experimental) | [FlatQuant](algorithms/flatquant/README_en.md) | Quantization that flattens distribution through affine transformation |
 | Compress model using structured pruning | [Pruning](algorithms/pruning/README_en.md) | Structured pruning of dense FFN / CNN channels / MoE experts |
+| Export offline model using torchair | [Torchair offline export](algorithms/export/README_en.md) | Export the quantized deploy model to a torchair AIR offline graph |
 
 > **Note**: Samples marked as "Experimental" depend on content under `amct_pytorch/experimental/`.
 > Build the package with `bash build.sh --torch --experimental` (or `--pkg --experimental`) before use.

@@ -6,9 +6,9 @@
 
 | 产品                                        | 是否支持 |
 | ------------------------------------------- | -------- |
-| Ascend 950PR/Ascend 950DT                   | √        |
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 | √        |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 | √        |
+| Ascend 950PR&950DT系列产品                   | √        |
+| Atlas A3系列产品 | √        |
+| Atlas A2系列产品 | √        |
 
 
 
@@ -243,4 +243,3 @@
                                 padding_mode='zeros', device=None, dtype=None)
     Conv3dQAT.from_float(mod=conv3d_op, config=None)
     ```
-

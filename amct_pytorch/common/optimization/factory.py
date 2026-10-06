@@ -21,6 +21,8 @@ from typing import Any
 from loguru import logger
 import torch
 
+from amct_pytorch.common.optimization.sign_sgd import SignSGD
+
 
 def get_n_set_parameters_byname(model, required_names):
     params = []
@@ -57,6 +59,14 @@ def build_optimizer(args: Any, parameters):
     if optimizer_name == "sgd":
         momentum = getattr(args, "momentum", 0.9)
         return torch.optim.SGD(
+            parameters,
+            lr=base_lr,
+            weight_decay=weight_decay,
+            momentum=momentum,
+        )
+    if optimizer_name == "signsgd":
+        momentum = getattr(args, "momentum", 0.9)
+        return SignSGD(
             parameters,
             lr=base_lr,
             weight_decay=weight_decay,

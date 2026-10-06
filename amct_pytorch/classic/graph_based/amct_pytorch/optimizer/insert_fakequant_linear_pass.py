@@ -66,7 +66,7 @@ class InsertFakequantLinearPass(BaseModuleFusionPass):
         model_helper = ModuleHelper(model)
         parent_module = model_helper.get_parent_module(object_name)
         quant_params = self.records[object_name]
-        quant_params['channel_wise'] = False
+        quant_params['channel_wise'] = len(quant_params['weight_scale'].flatten()) > 1
 
         # Step2: fake quant
         fakequant_linear_module = FakeQuantizedLinear(

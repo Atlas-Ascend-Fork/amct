@@ -1,6 +1,6 @@
 ---
 name: quant-run
-description: 量化执行 skill（implementer 用）：按已确认方案跑全部实际量化命令——直转评测 / 校准数据提取 / PTQ 算法训练 / PTQ 结果评测，按 algo 参数化（直转无 algo；PTQ 走 lwc/lac/omniquant/autoround）。触发场景：方案已确认后执行 eval / extract_ptq_data / ptq / 结果评测。不适用：判达标（→ $direct-quant-eval / $algorithm-validation）、设计方案（→ $scheme-recommendation）、改 adapter（→ $model-adapter）。
+description: 量化执行 skill（implementer 用）：按已确认方案跑全部实际量化命令——直转评测 / 校准数据提取 / PTQ 算法训练 / PTQ 结果评测，按 algo 参数化（直转无 algo；PTQ 走 lwc/lac/let/autoround）。触发场景：方案已确认后执行 eval / extract_ptq_data / ptq / 结果评测。不适用：判达标（→ $direct-quant-eval / $algorithm-validation）、设计方案（→ $scheme-recommendation）、改 adapter（→ $model-adapter）。
 ---
 
 # 量化执行（quant-run）
@@ -44,7 +44,7 @@ bf16 baseline = 命令 1 把 `--eval_mode` 换 `bf16`。
 
 - `--model_name` 必填（已注册适配器名；缺失会默认 deepseek 误用）。`--granularity block` 必填（默认 `model` 不真量化、给假"无掉点"）。`--quant_dtype` 在 quant 模式必填（缺报 `KeyError: '' is not registered in 'dtype'`）。
 - **`--algos` 一致性**：加载 PTQ 参数（**评测 与 deploy 都**）必带与 ptq 训练一致的 `--algos`，否则加载侧 quant 模块不构建 `weight_quantizer.algorithms.<algo>` 子模块、`load_module` 报 `KeyError: Submodule '...algorithms.<algo>' is not found`。
-- **算法只认 new-path（LLM）`ALGO_REGISTRY`**：当前 = `autoround / lac / lwc / omniquant`（gptq/awq/mxfp 视分支移植）；跑前确认算法在 new-path（忽略 classic 图量化名册，详见 L1 `cross-model-pitfalls.md`）。
+- **算法只认 new-path（LLM）`ALGO_REGISTRY`**：当前 = `autoround / lac / lwc / let`（`lwc` + `let` 为完整的omniquant算法；gptq/awq/mxfp 视分支移植）；跑前确认算法在 new-path（忽略 classic 图量化名册，详见 L1 `cross-model-pitfalls.md`）。
 - 一次 `--quant_target` 聚焦一个角色；多角色分别跑、分别给 `--*_param_dir`。
 - **评测数据不可达（离线容器）= 环境/调用方责任**：设 `HF_ENDPOINT` 镜像 / 用 modelscope / 指本地数据路径（或调用方自备 wrapper patch `get_wikitext2`/`get_pileval`）；仍不可达按 progress 协议写 `BLOCKED` 停下，不臆造继续。
 - **extract↔ptq 数据目录一致**：`extract_ptq_data` 把校准数据写到 **`--data_dir`**（不是 `--output_dir`！），与对应 `ptq --data_dir <D>` 必须是**同一个 `--data_dir`**；产物名 `block_<idx>_<target>_in.pkl`。报 `PTQ input file not found: <dir>/block_*_<target>_in.pkl` → 先核对 extract 与 ptq 的 `--data_dir` 是否同一目录、`find -name 'block_*_in.pkl'` 确认真实位置，**不要直接判 extract 未生成 / 有 bug**（同 `--algos`：漏检自身用法别甩锅框架）。

@@ -165,7 +165,7 @@ class LongcatLite(BaseModel):
 
             yield f"{weight_prefix}{name}.weight", module
 
-    def iter_ptq_units(self, layer_idx, block):
+    def iter_ptq_units(self, layer_idx, block, *, for_load=False):
         if "attn-linear" in self.quant_target or "attn-cache" in self.quant_target:
             yield from iter_indexed_units(
                 kind="attn",
@@ -186,7 +186,7 @@ class LongcatLite(BaseModel):
                     "LongCat MoE PTQ expected 'experts' on the located MoE module."
                 )
 
-            if hasattr(experts, "iter_ptq_expert_modules"):
+            if not for_load and hasattr(experts, "iter_ptq_expert_modules"):
                 ptq_items = experts.iter_ptq_expert_modules()
             elif hasattr(experts, "expert_modules"):
                 num_routed = getattr(experts, "num_routed_experts", None)
@@ -223,7 +223,7 @@ class LongcatLite(BaseModel):
             )
             return
 
-        yield from super().iter_ptq_units(layer_idx, block)
+        yield from super().iter_ptq_units(layer_idx, block, for_load=for_load)
 
     def load_embed_state_dict(self):
         super().load_embed_state_dict()

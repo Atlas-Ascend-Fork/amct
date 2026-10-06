@@ -103,12 +103,12 @@ the drop is directly comparable:
 
 ```shell
 # baseline (original, single-card blockwise)
-python -m amct_pytorch.eval --model /data/models/Qwen3.6-35B-A3B \
+python -m amct_pytorch.eval --trust_remote_code --model /data/models/Qwen3.6-35B-A3B \
   --model_name qwen3_6_moe --seq_len 4096 --granularity block \
   --device npu:0 --eval_mode bf16 --bit_config amct_pytorch/configs/bf16.yaml
 
 # pruned (fix config.json as noted above first, then eval)
-python -m amct_pytorch.eval --model /data/models/Qwen3.6-35B-A3B-pruned10 \
+python -m amct_pytorch.eval --trust_remote_code --model /data/models/Qwen3.6-35B-A3B-pruned10 \
   --model_name qwen3_6_moe --seq_len 4096 --granularity block \
   --device npu:0 --eval_mode bf16 --bit_config amct_pytorch/configs/bf16.yaml
 ```

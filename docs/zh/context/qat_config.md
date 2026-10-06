@@ -460,7 +460,7 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
 <td class="cellrowborder" valign="top" headers="mcps1.2.6.1.3 "><p id="p3294693487"><a name="p3294693487"></a><a name="p3294693487"></a>n_out_of_m_pruner</p>
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.2.6.1.4 "><p id="p1529439134817"><a name="p1529439134817"></a><a name="p1529439134817"></a>4选2稀疏的配置。</p>
-<p id="p268413597138"><a name="p268413597138"></a><a name="p268413597138"></a><strong id="b1168415951310"><a name="b1168415951310"></a><a name="b1168415951310"></a>由于硬件约束，<span id="ph2357057154619"><a name="ph2357057154619"></a><a name="ph2357057154619"></a>Ascend 950PR/Ascend 950DT</span>不支持4选2结构化稀疏特性。</strong></p>
+<p id="p268413597138"><a name="p268413597138"></a><a name="p268413597138"></a><strong id="b1168415951310"><a name="b1168415951310"></a><a name="b1168415951310"></a>由于硬件约束，<span id="ph2357057154619"><a name="ph2357057154619"></a><a name="ph2357057154619"></a>Ascend 950PR&950DT系列产品</span>不支持4选2结构化稀疏特性。</strong></p>
 </td>
 </tr>
 <tr id="row13753152020303"><td class="cellrowborder" rowspan="2" valign="top" width="12.748725127487251%" headers="mcps1.2.6.1.1 "><p id="p167537204302"><a name="p167537204302"></a><a name="p167537204302"></a>FilterPruner</p>
@@ -579,27 +579,27 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
             dst_type: INT8
         }
     }
-    
+
     retrain_weight_quant_config: {
         arq_retrain: {
            channel_wise: true
            dst_type: INT8
            }
       }
-    
+
     skip_layers: "Opname"
     skip_layer_types: "Optype"
-    
+
     override_layer_types : {
         layer_type: "Optype"
         retrain_weight_quant_config: {
             arq_retrain: {
                channel_wise: false
-               dst_type: INT8     
+               dst_type: INT8
             }
         }
     }
-    
+
     override_layer_configs : {
        layer_name: "Opname"
        retrain_data_quant_config: {
@@ -626,12 +626,12 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
             }
         }
     }
-    
+
     # skip layers
     regular_prune_skip_layers: "Opname"
     regular_prune_skip_layers: "Opname"
-    
-    # overide specific layers
+
+    # override specific layers
     override_layer_configs: {
         layer_name: "Opname"
         prune_config : {
@@ -657,12 +657,12 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
             }
         }
     }
-    
+
     # skip layers
     regular_prune_skip_layers: "Opname"
     regular_prune_skip_layers: "Opname"
-    
-    # overide specific layers
+
+    # override specific layers
     override_layer_configs: {
         layer_name: "Opname"
         prune_config : {
@@ -687,20 +687,20 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
             }
         }
     }
-    
+
     # skip_layers: "skip_layers_name_0"
     skip_layer_types: "Optype"
-    
+
     quant_skip_layers: "Opname"
     quant_skip_types: "Optype"
-    
+
     retrain_weight_quant_config: {
         arq_retrain: {
         channel_wise: true
         dst_type: INT8
         }
     }
-    
+
     override_layer_types : {
         layer_type: "Optype"
         retrain_weight_quant_config: {
@@ -741,17 +741,17 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
     }
     # skip_layers: "skip_layers_name_0"
     skip_layer_types: "Optype"
-    
+
     quant_skip_layers: "quant_skip_layers_name_0"
     quant_skip_types: "Optype"
-    
+
     retrain_weight_quant_config: {
         arq_retrain: {
         channel_wise: true
         dst_type: INT8
         }
     }
-    
+
     override_layer_types : {
         layer_type: "Optype"
         retrain_weight_quant_config: {
@@ -778,4 +778,3 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
         }
     }
     ```
-

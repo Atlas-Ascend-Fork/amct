@@ -262,7 +262,12 @@ class NpuQuantizationLinear(torch.nn.Module):
         - module.bias is None: handle offset_bias if present
         """
         if module.bias is None:
-            self.bias = self.offset_bias
+            if self.offset_bias is not None:
+                # register as a buffer so torchair .air export inlines the bias
+                # as Const instead of leaving a Data node (issue #200)
+                self.register_buffer('bias', self.offset_bias)
+            else:
+                self.bias = None
             return
 
         if (

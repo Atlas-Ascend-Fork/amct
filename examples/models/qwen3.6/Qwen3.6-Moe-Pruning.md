@@ -95,12 +95,12 @@ tok.save_pretrained("/data/models/Qwen3.6-35B-A3B-pruned10")
 
 ```shell
 # 基准（原始，单卡 blockwise）
-python -m amct_pytorch.eval --model /data/models/Qwen3.6-35B-A3B \
+python -m amct_pytorch.eval --trust_remote_code --model /data/models/Qwen3.6-35B-A3B \
   --model_name qwen3_6_moe --seq_len 4096 --granularity block \
   --device npu:0 --eval_mode bf16 --bit_config amct_pytorch/configs/bf16.yaml
 
 # 剪枝后（先按上文修正 config.json，再评测）
-python -m amct_pytorch.eval --model /data/models/Qwen3.6-35B-A3B-pruned10 \
+python -m amct_pytorch.eval --trust_remote_code --model /data/models/Qwen3.6-35B-A3B-pruned10 \
   --model_name qwen3_6_moe --seq_len 4096 --granularity block \
   --device npu:0 --eval_mode bf16 --bit_config amct_pytorch/configs/bf16.yaml
 ```

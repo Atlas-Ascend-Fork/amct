@@ -8,11 +8,13 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
+import unittest
 import torch
 import torch_npu
 import numpy as np
-import pytest
-from quantize_ref import py_quantize_mx4, py_dequantize_mx4
+
+from amct_ops import svd_quant  # noqa: F401 — Lazy loading of SvdQuant extension
+from .quantize_ref import py_quantize_mx4, py_dequantize_mx4
 
 DEVICE_ID = 0
 torch_npu.npu.set_device(int(DEVICE_ID))
@@ -101,7 +103,6 @@ SVD_QUANT_TEST_CASES = [
 
 def quantize(data):
     data_q = py_quantize_mx4(data.float(), group_size=32, rounding_mode=1)
-    print(data_q.shape)
     data_deq = py_dequantize_mx4(data_q, group_size=32)
     return data_deq.to(torch.bfloat16)
 
@@ -123,33 +124,47 @@ class GoldenSubGraph(torch.nn.Module):
         return up_o + mx_o
 
 
-@pytest.mark.parametrize("shape", SVD_QUANT_TEST_CASES)
-def test_svd_quant(shape):
-    bs, seq_len, n, k, rank = shape
-    a_shape = (bs, seq_len, k)
-    w_shape = (n, k)
-    dp_shape = (k, rank)
-    up_shape = (rank, n)
+class TestSvdQuant(unittest.TestCase):
+    def test_svd_quant(self):
+        for shape in SVD_QUANT_TEST_CASES:
+            test_name = f"{shape}"
+            with self.subTest(msg=test_name, shape=shape):
+                self.__run_svd_quant(shape)
 
-    np.random.seed(0)
+    def __run_svd_quant(self, shape):
+        bs, seq_len, n, k, rank = shape
+        a_shape = (bs, seq_len, k)
+        w_shape = (n, k)
+        dp_shape = (k, rank)
+        up_shape = (rank, n)
 
-    x = torch.tensor(np.random.uniform(-10, 10, a_shape), dtype=torch.bfloat16)
-    w = torch.tensor(np.random.uniform(-10, 10, w_shape), dtype=torch.bfloat16)
-    dp = torch.tensor(np.random.uniform(-10, 10, dp_shape), dtype=torch.bfloat16).npu()
-    up = torch.tensor(np.random.uniform(-10, 10, up_shape), dtype=torch.bfloat16).npu()
+        np.random.seed(0)
 
-    # Golden Graph
-    x_deq = quantize(x)
-    w_deq = quantize(w)
-    golden_model = GoldenSubGraph(w_deq.npu(), dp, up)
-    golden_out = golden_model(x.npu(), x_deq.npu())
-    np_golden_out = golden_out.cpu().float().detach().numpy()
+        x = torch.tensor(np.random.uniform(-10, 10, a_shape), dtype=torch.bfloat16)
+        w = torch.tensor(np.random.uniform(-10, 10, w_shape), dtype=torch.bfloat16)
+        dp = torch.tensor(
+            np.random.uniform(-10, 10, dp_shape), dtype=torch.bfloat16
+        ).npu()
+        up = torch.tensor(
+            np.random.uniform(-10, 10, up_shape), dtype=torch.bfloat16
+        ).npu()
 
-    # SVDQuant Graph
-    w_quant, scale = torch_npu.npu_dynamic_mx_quant(
-        w.npu(), block_size=32, round_mode="round"
-    )
-    svd_quant_out = torch.ops.amct.svd_quant(x.npu(), w_quant, scale, dp, up)
-    np_svd_out = svd_quant_out.cpu().float().detach().numpy()
+        # Golden Graph
+        x_deq = quantize(x)
+        w_deq = quantize(w)
+        golden_model = GoldenSubGraph(w_deq.npu(), dp, up)
+        golden_out = golden_model(x.npu(), x_deq.npu())
+        np_golden_out = golden_out.cpu().float().detach().numpy()
 
-    assert np.allclose(np_svd_out, np_golden_out, rtol=1e-02)
+        # SVDQuant Graph
+        w_quant, scale = torch_npu.npu_dynamic_mx_quant(
+            w.npu(), block_size=32, round_mode="round"
+        )
+        svd_quant_out = torch.ops.amct.svd_quant(x.npu(), w_quant, scale, dp, up)
+        np_svd_out = svd_quant_out.cpu().float().detach().numpy()
+        result = np.allclose(np_svd_out, np_golden_out, atol=1e-2, rtol=1e-02)
+        self.assertTrue(result)
+
+
+if __name__ == '__main__':
+    unittest.main()

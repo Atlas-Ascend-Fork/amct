@@ -9,7 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-set +e
+set -euo pipefail
 
 echo "start run test case, please wait ..."
 cd ${WORKSPACE}
@@ -40,6 +40,7 @@ log "start run test case, please wait ..."
 export ASCEND_GLOBAL_LOG_LEVEL=2
 export ASCEND_SLOG_PRINT_TO_STDOUT=0
 
+smoke_status=0
 for op in "${ops[@]}"; do
   echo "Processing: $op"
   mode="eager"
@@ -47,7 +48,7 @@ for op in "${ops[@]}"; do
   source /usr/local/Ascend/cann/set_env.sh
   pip3 install onnx modelscope
   echo "bash tests/smoke/run_smoke.sh --model_source modelscope"
-  bash tests/smoke/run_smoke.sh --model_source modelscope 2>&1 | tee -a ${WORKSPACE}/run_test.log
+  bash tests/smoke/run_smoke.sh --model_source modelscope 2>&1 | tee -a "${WORKSPACE}/run_test.log" || smoke_status=$?
 done
 
 # ==============================
@@ -70,7 +71,7 @@ npu-smi info  2>&1 | tee ./npu_log/npu_info.log
 log "checking test results ..."
 
 date_time=`date +%Y%m%d`"."`date +%H%M%S`
-if grep -w -e "AMCT_EXAMPLE_ALL_PASS" "./run_test.log"; then
+if [ "${smoke_status}" -eq 0 ] && grep -w -e "AMCT_EXAMPLE_ALL_PASS" "./run_test.log"; then
     echo "$date_time : run test case success"
 else
   echo "$date_time : run test case failed"

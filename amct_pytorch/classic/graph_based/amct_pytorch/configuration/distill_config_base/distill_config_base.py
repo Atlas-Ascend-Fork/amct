@@ -67,13 +67,13 @@ class DistillConfigBase:
             if not layer_data_config.get(DST_TYPE):
                 LOGGER.logw(
                     "dst_type of DistillDataQuantConfig was not given in config, "
-                    "and was set to 'INT8' by defualt!",
+                    "and was set to 'INT8' by default!",
                     module_name='DistillConfig',
                 )
             if not layer_weight_config.get(DST_TYPE):
                 LOGGER.logw(
                     "dst_type of RetrainWeightQuantConfig was not given in config, "
-                    "and was set to 'INT8' by defualt!",
+                    "and was set to 'INT8' by default!",
                     module_name='DistillConfig',
                 )
             raise ValueError(
@@ -597,7 +597,7 @@ class DistillConfigBase:
                 "Not support to distill reused module for {}".format(node.module_name)
             )
 
-        # save the path from start node to curent node
+        # save the path from start node to current node
         cur_path = path + [node]
         if node.module_name == end_layer:
             return [cur_path]

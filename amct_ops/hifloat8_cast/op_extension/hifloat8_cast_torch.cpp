@@ -278,12 +278,13 @@ static uint32_t GetUbSizeBytes() {
 static uint32_t ComputeMaxTileLength(uint32_t ubBytes, bool isEncode) {
     uint32_t lutBytes = isEncode ? LUT16_SIZE : (LUT8_SIZE * 2u);
     // UB 连 LUT 都放不下，硬件配置异常
-    TORCH_CHECK(ubBytes > lutBytes, "UB too small to hold LUT");
+    TORCH_CHECK(ubBytes > lutBytes, "UB size must be greater than LUT size, but got UB size ", ubBytes,
+        " bytes and LUT size ", lutBytes, " bytes");
     // 每个元素占 3 字节 UB：encode/decode 的 input + output 之和（FP16/BF16 是 2B，HiF8 是 1B）。
     // 单缓冲（TQue depth=1, InitBuffer num=1）—— 标量循环主导，MTE/Compute 重叠收益为 0。
     uint32_t maxTile = (ubBytes - lutBytes) / 3u;
     // UB 剩余空间不足一个最小 tile（32 元素），硬件配置异常
-    TORCH_CHECK(maxTile >= 32u, "UB too small to hold minimum tile");
+    TORCH_CHECK(maxTile >= 32u, "maximum tile length must be at least 32 elements, but got ", maxTile);
     maxTile = std::min(maxTile, 65536u); // A3 UB 实测最大可用 tile
     // ≥ 32768 时对齐到 32768 的整数倍，使 CopyIn 大块走 Case B（{n, 32768}），
     // 避免 DataCopyParams.blockLen(uint16_t) 溢出
@@ -294,7 +295,7 @@ static uint32_t ComputeMaxTileLength(uint32_t ubBytes, bool isEncode) {
 }
 
 static uint32_t ComputeNumBlocks(uint64_t totalElements, uint32_t maxBlocks, uint32_t minPerCore) {
-    TORCH_CHECK(minPerCore > 0u, "minPerCore must be positive");
+    TORCH_CHECK(minPerCore > 0u, "minPerCore must be greater than 0, but got ", minPerCore);
     uint64_t idealBlocks64 = totalElements / minPerCore;
     idealBlocks64 = std::min(idealBlocks64, static_cast<uint64_t>(maxBlocks));
     uint32_t idealBlocks = static_cast<uint32_t>(idealBlocks64);
@@ -302,14 +303,16 @@ static uint32_t ComputeNumBlocks(uint64_t totalElements, uint32_t maxBlocks, uin
 }
 
 static void ValidateInput(const at::Tensor &input, int64_t castMode) {
-    TORCH_CHECK(castMode >= FP16_TO_HIF8 && castMode <= HIF8_TO_BF16, "castMode must be in [0, 3]");
-    TORCH_CHECK(input.device().type() == c10::DeviceType::PrivateUse1, "input must be on NPU device");
+    TORCH_CHECK(castMode >= FP16_TO_HIF8 && castMode <= HIF8_TO_BF16, "castMode must be in [", FP16_TO_HIF8, ", ",
+        HIF8_TO_BF16, "], but got ", castMode);
+    TORCH_CHECK(input.device().type() == c10::DeviceType::PrivateUse1, "input must be on an NPU device, but got ",
+        input.device());
     if (castMode == FP16_TO_HIF8)
-        TORCH_CHECK(input.dtype() == at::kHalf, "FP16_TO_HIF8 requires half input");
+        TORCH_CHECK(input.dtype() == at::kHalf, "FP16_TO_HIF8 requires float16 input, but got ", input.dtype());
     if (castMode == BF16_TO_HIF8)
-        TORCH_CHECK(input.dtype() == at::kBFloat16, "BF16_TO_HIF8 requires bfloat16 input");
+        TORCH_CHECK(input.dtype() == at::kBFloat16, "BF16_TO_HIF8 requires bfloat16 input, but got ", input.dtype());
     if (castMode >= HIF8_TO_FP16)
-        TORCH_CHECK(input.dtype() == at::kByte, "decode modes require uint8 input");
+        TORCH_CHECK(input.dtype() == at::kByte, "HiFloat8 decode modes require uint8 input, but got ", input.dtype());
 }
 
 static at::Tensor AllocateOutput(const at::Tensor &inputContiguous, int64_t castMode) {
@@ -379,7 +382,7 @@ at::Tensor Hifloat8CastTorch(const at::Tensor &input, int64_t castMode) {
 
     auto inputContiguous = input.contiguous();
     int64_t totalElements = inputContiguous.numel();
-    TORCH_CHECK(totalElements > 0, "input tensor must not be empty");
+    TORCH_CHECK(totalElements > 0, "input tensor must contain at least one element, but got ", totalElements);
 
     at::Tensor output = AllocateOutput(inputContiguous, castMode);
     bool isEncode = (castMode <= BF16_TO_HIF8);

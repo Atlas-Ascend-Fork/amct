@@ -9,19 +9,19 @@
 </th>
 </tr>
 </thead>
-<tbody><tr id="zh-cn_topic_0000002517188752_row574891710101"><td class="cellrowborder" valign="top" width="47.92%" headers="mcps1.1.3.1.1 "><p id="zh-cn_topic_0000002517188752_p177491117171015"><a name="zh-cn_topic_0000002517188752_p177491117171015"></a><a name="zh-cn_topic_0000002517188752_p177491117171015"></a><span id="zh-cn_topic_0000002517188752_ph2272194216543"><a name="zh-cn_topic_0000002517188752_ph2272194216543"></a><a name="zh-cn_topic_0000002517188752_ph2272194216543"></a>Ascend 950PR/Ascend 950DT</span></p>
+<tbody><tr id="zh-cn_topic_0000002517188752_row574891710101"><td class="cellrowborder" valign="top" width="47.92%" headers="mcps1.1.3.1.1 "><p id="zh-cn_topic_0000002517188752_p177491117171015"><a name="zh-cn_topic_0000002517188752_p177491117171015"></a><a name="zh-cn_topic_0000002517188752_p177491117171015"></a><span id="zh-cn_topic_0000002517188752_ph2272194216543"><a name="zh-cn_topic_0000002517188752_ph2272194216543"></a><a name="zh-cn_topic_0000002517188752_ph2272194216543"></a>Ascend 950PR&950DT系列产品</span></p>
 </td>
 <td class="cellrowborder" align="left" valign="top" width="52.080000000000005%" headers="mcps1.1.3.1.2 "><a name="zh-cn_topic_0000002517188752_ul1367712433612"></a><a name="zh-cn_topic_0000002517188752_ul1367712433612"></a><ul id="zh-cn_topic_0000002517188752_ul1367712433612"><li>量化感知训练：<a name="zh-cn_topic_0000002517188752_ul5366163611332"></a><a name="zh-cn_topic_0000002517188752_ul5366163611332"></a><ul id="zh-cn_topic_0000002517188752_ul5366163611332"><li>INT8量化：√</li><li>INT4量化：x</li></ul>
 </li><li>通道稀疏：√</li><li>4选2结构化稀疏：x</li></ul>
 </td>
 </tr>
-<tr id="zh-cn_topic_0000002517188752_row220181016240"><td class="cellrowborder" valign="top" width="47.92%" headers="mcps1.1.3.1.1 "><p id="zh-cn_topic_0000002517188752_p48327011813"><a name="zh-cn_topic_0000002517188752_p48327011813"></a><a name="zh-cn_topic_0000002517188752_p48327011813"></a><span id="zh-cn_topic_0000002517188752_ph583230201815"><a name="zh-cn_topic_0000002517188752_ph583230201815"></a><a name="zh-cn_topic_0000002517188752_ph583230201815"></a><term id="zh-cn_topic_0000002517188752_zh-cn_topic_0000001312391781_term1253731311225"><a name="zh-cn_topic_0000002517188752_zh-cn_topic_0000001312391781_term1253731311225"></a><a name="zh-cn_topic_0000002517188752_zh-cn_topic_0000001312391781_term1253731311225"></a>Atlas A3 训练系列产品</term>/<term id="zh-cn_topic_0000002517188752_zh-cn_topic_0000001312391781_term131434243115"><a name="zh-cn_topic_0000002517188752_zh-cn_topic_0000001312391781_term131434243115"></a><a name="zh-cn_topic_0000002517188752_zh-cn_topic_0000001312391781_term131434243115"></a>Atlas A3 推理系列产品</term></span></p>
+<tr id="zh-cn_topic_0000002517188752_row220181016240"><td class="cellrowborder" valign="top" width="47.92%" headers="mcps1.1.3.1.1 "><p id="zh-cn_topic_0000002517188752_p48327011813"><a name="zh-cn_topic_0000002517188752_p48327011813"></a><a name="zh-cn_topic_0000002517188752_p48327011813"></a><span id="zh-cn_topic_0000002517188752_ph583230201815"><a name="zh-cn_topic_0000002517188752_ph583230201815"></a><a name="zh-cn_topic_0000002517188752_ph583230201815"></a><term id="zh-cn_topic_0000002517188752_zh-cn_topic_0000001312391781_term1253731311225">Atlas A3系列产品</term></span></p>
 </td>
 <td class="cellrowborder" align="left" valign="top" width="52.080000000000005%" headers="mcps1.1.3.1.2 "><a name="zh-cn_topic_0000002517188752_ul66191179379"></a><a name="zh-cn_topic_0000002517188752_ul66191179379"></a><ul id="zh-cn_topic_0000002517188752_ul66191179379"><li>量化感知训练：<a name="zh-cn_topic_0000002517188752_ul7274174217362"></a><a name="zh-cn_topic_0000002517188752_ul7274174217362"></a><ul id="zh-cn_topic_0000002517188752_ul7274174217362"><li>INT8量化：√</li><li>INT4量化：x</li></ul>
 </li><li>通道稀疏：√</li><li>4选2结构化稀疏：√</li></ul>
 </td>
 </tr>
-<tr id="zh-cn_topic_0000002517188752_row173226882415"><td class="cellrowborder" valign="top" width="47.92%" headers="mcps1.1.3.1.1 "><p id="zh-cn_topic_0000002517188752_p14832120181815"><a name="zh-cn_topic_0000002517188752_p14832120181815"></a><a name="zh-cn_topic_0000002517188752_p14832120181815"></a><span id="zh-cn_topic_0000002517188752_ph1483216010188"><a name="zh-cn_topic_0000002517188752_ph1483216010188"></a><a name="zh-cn_topic_0000002517188752_ph1483216010188"></a><term id="zh-cn_topic_0000002517188752_zh-cn_topic_0000001312391781_term11962195213215"><a name="zh-cn_topic_0000002517188752_zh-cn_topic_0000001312391781_term11962195213215"></a><a name="zh-cn_topic_0000002517188752_zh-cn_topic_0000001312391781_term11962195213215"></a>Atlas A2 训练系列产品</term>/<term id="zh-cn_topic_0000002517188752_zh-cn_topic_0000001312391781_term184716139811"><a name="zh-cn_topic_0000002517188752_zh-cn_topic_0000001312391781_term184716139811"></a><a name="zh-cn_topic_0000002517188752_zh-cn_topic_0000001312391781_term184716139811"></a>Atlas A2 推理系列产品</term></span></p>
+<tr id="zh-cn_topic_0000002517188752_row173226882415"><td class="cellrowborder" valign="top" width="47.92%" headers="mcps1.1.3.1.1 "><p id="zh-cn_topic_0000002517188752_p14832120181815"><a name="zh-cn_topic_0000002517188752_p14832120181815"></a><a name="zh-cn_topic_0000002517188752_p14832120181815"></a><span id="zh-cn_topic_0000002517188752_ph1483216010188"><a name="zh-cn_topic_0000002517188752_ph1483216010188"></a><a name="zh-cn_topic_0000002517188752_ph1483216010188"></a><term id="zh-cn_topic_0000002517188752_zh-cn_topic_0000001312391781_term11962195213215">Atlas A2系列产品</term></span></p>
 </td>
 <td class="cellrowborder" align="left" valign="top" width="52.080000000000005%" headers="mcps1.1.3.1.2 "><a name="zh-cn_topic_0000002517188752_ul19623147153713"></a><a name="zh-cn_topic_0000002517188752_ul19623147153713"></a><ul id="zh-cn_topic_0000002517188752_ul19623147153713"><li>量化感知训练：<a name="zh-cn_topic_0000002517188752_ul0992647173610"></a><a name="zh-cn_topic_0000002517188752_ul0992647173610"></a><ul id="zh-cn_topic_0000002517188752_ul0992647173610"><li>INT8量化：√</li><li>INT4量化：x</li></ul>
 </li><li>通道稀疏：√</li><li>4选2结构化稀疏：√</li></ul>
@@ -154,13 +154,12 @@ amct.save_compressed_retrain_model(
 
 落盘文件说明：
 
--   精度仿真模型文件：ONNX格式的模型文件，模型名中包含fake\_quant，可以在ONNX Runtime环境进行精度仿真。
--   部署模型文件：ONNX格式的模型文件，模型名中包含deploy，经过ATC转换工具转换后可部署到AI处理器。
--   （可选）\*.external文件，包括\*deploy.external和\*fakequant.external：
+- 精度仿真模型文件：ONNX格式的模型文件，模型名中包含fake\_quant，可以在ONNX Runtime环境进行精度仿真。
+- 部署模型文件：ONNX格式的模型文件，模型名中包含deploy，经过ATC转换工具转换后可部署到AI处理器。
+- （可选）\*.external文件，包括\*deploy.external和\*fakequant.external：
 
     只有保存的精度仿真模型以及部署模型文件大小\>=2GB才会生成该类文件，且与压缩后的\*.onnx模型文件生成在同级目录，用于保存Tensor中的数据，每个Tensor数据单独保存一份\*.external文件，文件名与Tensor相同，例如_conv1.weight_\_deploy.external和_conv1.weight_\_fakequant.external。
 
     后续通过ATC工具加载压缩后的\*.onnx部署模型文件进行模型转换时，会自动读取同级目录下\*.external文件中的Tensor数据。
 
 重新执行静态组合压缩时，该接口输出的上述文件将会被覆盖。
-

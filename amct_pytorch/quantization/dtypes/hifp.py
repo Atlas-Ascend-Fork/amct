@@ -30,7 +30,7 @@ from amct_pytorch.quantization.dtypes.hifp_impl import (
 
 @DTYPE_REGISTRY.register(name="hifp", description="quant dequant for hifloat")
 class QuantDequantHifp(torch.nn.Module):
-    def __init__(self, bits=8, is_act=False):
+    def __init__(self, bits=8, is_act=False, *args):
         super(QuantDequantHifp, self).__init__()
         self.bits = bits
         self.is_act = is_act
@@ -42,7 +42,13 @@ class QuantDequantHifp(torch.nn.Module):
             dq = hifloat8_fake_quant(x)
             return dq.detach() + (x - x.detach())
         elif self.bits == 4:
-            return hifloat4_fake_quant(x)
+            quant_dtype = (
+                x.dtype
+                if x.dtype in (torch.float16, torch.bfloat16)
+                else torch.bfloat16
+            )
+            dq = hifloat4_fake_quant(x.to(quant_dtype)).to(x.dtype)
+            return dq.detach() + (x - x.detach())
         else:
             raise ValueError(f"HiFloat {self.bits}-bit not supported.")
 

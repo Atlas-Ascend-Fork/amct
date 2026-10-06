@@ -9,7 +9,7 @@
 
 The dependency packages for this sample can be found in [requirements.txt](requirements.txt)
 
-Note that the torch_npu package version needs to match the Python and torch package versions, and the CANN package needs to be installed
+Note that the TorchNPU package version needs to match the Python and torch package versions, and the CANN package needs to be installed
 
 ### 1.2 Model and Dataset Preparation
 
@@ -30,7 +30,7 @@ The FlatQuant algorithm supports the following partial quantization:
 Supported quantization types and quantization configurations:
 
 | Field | Type | Description | Value Range | Notes |
-|:--| :-: | :-- | :-: | :-: | :-- |
+|:--| :-: | :-- | :-: | :-- |
 |skip_layers|str|Layers to skip quantization |/|Skip quantization layers support fuzzy matching. When the configured string is a layer name substring or matches the layer name, skip quantization for that layer and do not generate quantization configuration. The string must contain numbers or letters|
 |algorithm|dict|Quantization algorithm configuration used|{'flatquant'}|Refer to `INT4_FLAT_QUANT_CFG` example
 
@@ -98,3 +98,5 @@ content:  ======================================================================
 <>
 The Ascend Model Compression Toolkit (AMCT) is a powerful tool designed to ...
 ```
+
+> After quantization, to export the quantized model as a torchair offline model (.air) for ATC-to-om conversion and on-board inference, refer to [AMCT large-model offline torchair model export](../export/README_en.md).

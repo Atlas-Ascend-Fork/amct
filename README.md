@@ -2,9 +2,9 @@
 
 # AMCT
 
-**Ascend Model Compression Toolkit**
+简体中文 | [English](./README_en.md)
 
-_昇腾 NPU 原生模型压缩工具包_
+_昇腾模型压缩工具_
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![CANN](https://img.shields.io/badge/CANN-%E2%89%A58.5.0-green.svg)](docs/zh/quick_install.md)
@@ -18,6 +18,7 @@ _昇腾 NPU 原生模型压缩工具包_
 
 ## 🔥 最新动态
 
+- **[2026/09/29]** 新增DeepSeekV4.1-Flash网络量化，并提供 [AMCT 低精度量化Agent量化实践](./examples/models/deepseekv4.1/DeepSeekV4.1-Flash-Quantization-Agent.md) 样例
 - **[2026/08/07]** 新增结构化剪枝（`amct_pytorch.pruning`），支持 MoE 专家 / Dense FFN / CNN 通道剪枝，并提供 [Qwen3.6-MoE 结构化剪枝](./examples/models/qwen3.6/Qwen3.6-Moe-Pruning.md) 的一站式单卡样例
 - **[2026/05/28]** 新增当前主流 LLM 网络量化、PTQ 算法支持，并提供 [DeepSeek-V4](./examples/models/deepseekv4/DeepSeekV4-Flash-Walkthrough.md) 和 [Qwen3.6-MoE](./examples/models/qwen3.6/Qwen3.6-Moe.md) 的一站式样例
 - **[2026/04/24]** 新增 [DeepSeek-V4](./amct_pytorch/experimental/deepseek-v4/README.md) 模型 INT8 量化支持
@@ -72,11 +73,11 @@ AMCT 是昇腾 NPU 原生的模型量化压缩工具。量化后模型体积减�
 | 依赖 | 版本 |
 |------|------|
 | Python | >=3.9 |
-| PyTorch | 2.7.1 或 2.1.0（NPU 加速后端需使用 CPU 版 PyTorch，并配套 `torch_npu`） |
+| PyTorch | 2.7.1 或 2.1.0（NPU 加速后端需使用 CPU 版 PyTorch，并配套 `TorchNPU`） |
 | GCC / CMake / patch | ≥ 7.3 / ≥ 3.16（推荐 3.20） / ≥ 2.7 |
 | CANN（Toolkit & Ops） | ≥ 8.5.0（需提前安装 NPU 驱动 / 固件） |
 
-> ⚠️ 使用 NPU 加速后端时，请安装 CPU 版 PyTorch 后再安装配套 `torch_npu`，不要在同一环境中混用非 CPU 版 PyTorch 与 `torch_npu`。
+> ⚠️ 使用 NPU 加速后端时，请安装 CPU 版 PyTorch 后再安装配套 `TorchNPU`，不要在同一环境中混用非 CPU 版 PyTorch 与 `TorchNPU`。
 
 完整环境部署请参见 [快速安装](docs/zh/quick_install.md)。
 

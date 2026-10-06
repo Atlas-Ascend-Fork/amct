@@ -66,7 +66,7 @@ class IFMR(nn.Module):  # pylint: disable=R0903
 
     def forward(self, inputs):  # pylint: disable=W0221
         """
-        Function: IFMR foward funtion.
+        Function: IFMR forward function.
         """
         with torch.no_grad():
             self.cur_batch += 1
@@ -78,7 +78,7 @@ class IFMR(nn.Module):  # pylint: disable=R0903
             else:
                 self._accm_data([inputs])
             LOGGER.logd(
-                "Accumulated {} batch to do layer {} data calibration.".format(
+                "Accumulated batch {} for layer {} data calibration.".format(
                     self.cur_batch, self.layers_name
                 )
             )
@@ -96,7 +96,7 @@ class IFMR(nn.Module):  # pylint: disable=R0903
 
             device = inputs.device
             LOGGER.logi(
-                "Use {} batch to do layer {} data calibration.".format(
+                "Use {}-batch data calibration for layer {}.".format(
                     ifmr_param.get('batch_num'), self.layers_name
                 )
             )
@@ -114,7 +114,7 @@ class IFMR(nn.Module):  # pylint: disable=R0903
 
             self.calibrated_flag = True
             LOGGER.logd(
-                "Do layer {} data calibration succeeded!".format(self.layers_name),
+                "Data calibration for layer {} succeeded!".format(self.layers_name),
                 'IFMR',
             )
 

@@ -42,7 +42,7 @@ class PassivePruneHelperBase(PruneHelperBase):
             if len(prune_records) > 1:
                 record_helper.delete_record_list(prune_records)
                 LOGGER.logd(
-                    "disable {} {} for cannot set prune group for several passive prune_records".format(
+                    "Disable {} {} because a prune group cannot be set for multiple passive prune_records.".format(
                         node.type, node.name
                     ),
                     "PassivePruneHelperBase",

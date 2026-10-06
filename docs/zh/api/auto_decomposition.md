@@ -6,9 +6,9 @@
 
 | 产品                                        | 是否支持 |
 | ------------------------------------------- | -------- |
-| Ascend 950PR/Ascend 950DT                   | √        |
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 | √        |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 | √        |
+| Ascend 950PR&950DT系列产品                   | √        |
+| Atlas A3系列产品 | √        |
+| Atlas A2系列产品 | √        |
 
 
 
@@ -81,4 +81,3 @@ net, changes = auto_decomposition(                             # 执行张量分
 >
 >1.  当涉及模型训练时，本接口的调用需在将模型参数传递给优化器之前；如使用了torch.nn.parallel.DistributedDataParallel \(DDP\)，则本接口的调用也需在将模型传递给DDP之前。
 >2.  本接口将原地修改传入的模型对象，即分解后会改变用户传入的模型对象本身（例外：传入的模型是一个torch.nn.Conv2d对象，该情况下本接口不会对其进行修改，如发生分解，则返回的模型是新构建的torch.nn.Module对象）。
-

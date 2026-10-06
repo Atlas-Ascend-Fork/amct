@@ -77,8 +77,10 @@ BF16_BIT_CONFIG = REPO_ROOT / "amct_pytorch/configs/bf16.yaml"
 W8A8_BIT_CONFIG = REPO_ROOT / "amct_pytorch/configs/w4a8.yaml"
 
 MLP_MOE_PARAM_DIR = OUTPUT_ROOT / "ptq_params" / MODEL_NAME / "mlp_moe"
+ATTN_LINEAR_PARAM_DIR = OUTPUT_ROOT / "ptq_params" / MODEL_NAME / "attn-linear"
+ATTN_CACHE_PARAM_DIR = OUTPUT_ROOT / "ptq_params" / MODEL_NAME / "attn-cache"
 
-for path in [OUTPUT_ROOT, EXPORT_DIR, MLP_MOE_PARAM_DIR]:
+for path in [OUTPUT_ROOT, EXPORT_DIR, MLP_MOE_PARAM_DIR, ATTN_LINEAR_PARAM_DIR, ATTN_CACHE_PARAM_DIR]:
     path.mkdir(parents=True, exist_ok=True)
 
 
@@ -122,6 +124,7 @@ NEW_MODEL_PATH.mkdir(parents=True, exist_ok=True)
 baseline_cmd = [
     "python", "amct_pytorch/cli/llm/deploy.py",
     "--model", MODEL_PATH,
+    "--trust_remote_code",
     "--model_name", MODEL_NAME,
     "--device", DEVICE,
     "--granularity", GRANULARITY,
@@ -143,6 +146,7 @@ baseline_dir.mkdir(parents=True, exist_ok=True)
 baseline_cmd = [
     "python", "-m", "amct_pytorch.eval",
     "--model", MODEL_PATH,
+    "--trust_remote_code",
     "--model_name", MODEL_NAME,
     "--device", DEVICE,
     "--granularity", GRANULARITY,
@@ -168,6 +172,7 @@ direct_quant_dir.mkdir(parents=True, exist_ok=True)
 direct_quant_cmd = [
     "python", "-m", "amct_pytorch.eval",
     "--model", MODEL_PATH,
+    "--trust_remote_code",
     "--model_name", MODEL_NAME,
     "--device", DEVICE,
     "--granularity", GRANULARITY,
@@ -202,6 +207,7 @@ for target in PTQ_TARGETS:
     cmd = [
         "python", "-m", "amct_pytorch.extract_ptq_data",
         "--model", MODEL_PATH,
+        "--trust_remote_code",
         "--model_name", MODEL_NAME,
         "--device", DEVICE,
         "--granularity", GRANULARITY,
@@ -246,6 +252,7 @@ for target in PTQ_TARGETS:
     cmd = [
         "python", "-m", "amct_pytorch.ptq",
         "--model", MODEL_PATH,
+        "--trust_remote_code",
         "--model_name", MODEL_NAME,
         "--device", DEVICE,
         "--granularity", GRANULARITY,
@@ -288,6 +295,7 @@ calibrated_eval_dir.mkdir(parents=True, exist_ok=True)
 calibrated_eval_cmd = [
     "python", "-m", "amct_pytorch.eval",
     "--model", MODEL_PATH,
+    "--trust_remote_code",
     "--model_name", MODEL_NAME,
     "--device", DEVICE,
     "--granularity", GRANULARITY,
@@ -315,6 +323,7 @@ This section exports deployable quantization weights, updated configuration file
 export_cmd = [
     "python", "-m", "amct_pytorch.deploy",
     "--model", MODEL_PATH,
+    "--trust_remote_code",
     "--model_name", MODEL_NAME,
     "--device", DEVICE,
     "--granularity", GRANULARITY,

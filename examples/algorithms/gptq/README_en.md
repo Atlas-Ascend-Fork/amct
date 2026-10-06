@@ -6,7 +6,7 @@
 
 The dependency packages for this sample can be found in [requirements.txt](requirements.txt)
 
-Note that the torch_npu package version needs to match the Python and torch package versions, and the CANN package needs to be installed
+Note that the TorchNPU package version needs to match the Python and torch package versions, and the CANN package needs to be installed
 
 ### 1.2 Model and Dataset Preparation
 
@@ -39,7 +39,7 @@ If you need to modify the detailed configuration, please refer to the documentat
 The GPTQ algorithm only supports weight quantization. The supported quantization types and quantization configurations are:
 
 | Field | Type | Description | Value Range | Notes |
-|:--| :-: | :-- | :-: | :-: | :-- |
+|:--| :-: | :-- | :-: | :-- |
 |batch_num|uint32|Number of batches used for quantization |1|/|
 |skip_layers|str|Layers to skip quantization |/|Skip quantization layers support fuzzy matching. When the configured string is a layer name substring or matches the layer name, skip quantization for that layer and do not generate quantization configuration. The string must contain numbers or letters|
 |weights.type|str|Quantized weight type|'int4'/'int8'/'float4_e2m1'/'mxfp4_e2m1'|/|
@@ -79,3 +79,5 @@ Where Score is the quantized model PPL. For specific values, refer to the follow
 
 
 After inference succeeds, a quantization log file ./amct_log/amct_pytorch.log is generated in the current directory
+
+> After quantization, to export the quantized model as a torchair offline model (.air) for ATC-to-om conversion and on-board inference, refer to [AMCT large-model offline torchair model export](../export/README_en.md).

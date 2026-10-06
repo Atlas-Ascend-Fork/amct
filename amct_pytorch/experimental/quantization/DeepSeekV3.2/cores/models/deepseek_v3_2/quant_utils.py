@@ -93,7 +93,7 @@ def apply_quant_to_moe(args, model, shared_expert_bits=None, routed_expert_bits=
                 mod[i] = QuantDeepseekV3MLP(new_args, mod[i])
 
         if name in ["shared_experts"]:
-            logger.info(f"{name} - replace to QuantDeepseekV3MLP")
+            logger.info(f"{name} - replace with QuantDeepseekV3MLP")
             if shared_expert_bits is not None:
                 _new_args = deepcopy(args)
                 _new_args.w_bits = shared_expert_bits

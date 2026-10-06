@@ -96,7 +96,14 @@ class WeightFakequantPass(BaseFusionPass):
         weight_offset = self.records.get(object_node.name).get('weight_offset')
         fp_weight = quant_weight.astype(np.float32)
         if not np.all(weight_offset == 0):
-            fp_weight = fp_weight - weight_offset.astype(np.float32)
+            weight_offset = weight_offset.astype(np.float32)
+            if (
+                object_node.type == 'MatMul'
+                and object_node.has_attr('with_weights_trans')
+                and object_node.get_attr('with_weights_trans')
+            ):
+                weight_offset = weight_offset.reshape([-1, 1])
+            fp_weight = fp_weight - weight_offset
 
         if object_node.type == 'ConvTranspose' and get_deconv_group(object_node) > 1:
             group = get_deconv_group(object_node)

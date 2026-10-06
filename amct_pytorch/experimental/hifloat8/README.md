@@ -2,8 +2,9 @@
 
 本模块提供了基于 HiFloat8 格式的 PyTorch 模型伪量化功能，包括 HiFloat8 与 FP32/FP16/BF16 格式的转换、伪量化线性模块以及测试脚本。
 
-*注意* 
+*注意*
 当前HiFloat8格式转换完全基于 CPU 实现，使用OpenMP进行并行加速。相比于NPU硬件加速，其性能会有一定差距。建议：
+
 - 在小批量数据处理时使用
 - 用于模型精度验证和调试
 - 生产环境建议使用NPU硬件加速版本
@@ -21,6 +22,7 @@
 ```
 
 ## 功能说明
+
 ### 1、HiFloat8格式转换
 
 #### 1.1 编译 C++ 扩展
@@ -88,6 +90,7 @@ amct.algorithm_register('hifloat8_fakequant', 'Linear', Hifloat8FakequantLinear,
 ### 4、测试脚本
 
 测试脚本执行以下步骤：
+
 1. **加载模型**：从指定路径加载预训练模型和分词器
 2. **注册算法**：注册 HiFloat8 伪量化算法
 3. **模型量化**：使用 HiFloat8 格式对模型进行伪量化
@@ -97,18 +100,23 @@ amct.algorithm_register('hifloat8_fakequant', 'Linear', Hifloat8FakequantLinear,
 ### 5、完整使用流程
 
 #### 5.1 准备环境
+
 1. 安装amct工具，参考[工具构建](../../../docs/zh/build.md)
 2. 安装其他依赖
+
 ```bash
 pip install transformers datasets
 ```
+
 3. 编译 HiFloat8 扩展
+
 ```bash
 cd amct_pytorch/experimental/hifloat8
 ./build.sh
 ```
 
 #### 5.2 运行测试
+
 ```bash
 # 运行测试脚本
 python test.py --model_path /path/to/qwen/model

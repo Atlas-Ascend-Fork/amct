@@ -24,6 +24,7 @@ from amct_pytorch.common.datasets.preproc import get_pileval
 from amct_pytorch.common.models.llm import register_llm_models
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
+from amct_pytorch.common.utils.seed_utils import seed_everything
 
 
 class LlmExtractPtqDataWorkflow:
@@ -32,13 +33,24 @@ class LlmExtractPtqDataWorkflow:
         self.seq_len = args.seq_len
         self.nsamples = args.nsamples
         self.granularity = args.granularity
+        if self.granularity != "block":
+            raise ValueError(
+                f"extract_ptq_data only supports granularity 'block', "
+                f"got '{self.granularity}'."
+            )
+        if not args.quant_target:
+            raise ValueError("extract_ptq_data requires --quant_target.")
         if len(args.quant_target) != 1:
             raise ValueError("extract_ptq_data only supports a single quant_target.")
+        if not args.data_dir:
+            raise ValueError("extract_ptq_data requires --data_dir.")
         self.quant_target = args.quant_target[0]
         self.device = args.device
         self.pipeline = None
         self.data_provider = None
         self.model_name = self.args.model_name
+        self.seed = args.seed
+        seed_everything(self.seed)
 
     @staticmethod
     def _register_components():
@@ -79,7 +91,9 @@ class LlmExtractPtqDataWorkflow:
             if self.quant_target in ("attn", "attn-linear", "attn-cache")
             else ffn_hook_name
         )
-        samples = get_pileval(tokenizer, self.nsamples, seq_len=self.seq_len)
+        samples = get_pileval(
+            tokenizer, self.nsamples, seq_len=self.seq_len, seed=self.seed
+        )
         logger.info(
             "Loaded {} calibration samples for extract_ptq_data.",
             len(samples),

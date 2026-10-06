@@ -1568,38 +1568,57 @@ class TestMenuNeutralisesUnlistedDomains(unittest.TestCase):
         self.assertEqual(ratios["cnn"], 0.0)
 
 
-class _FakeEvaluator:
-    """Mimics the quantization-side ModelEvaluator: evaluate(model, iterations) -> accuracy (here a param ratio)."""
+def _output_quality(model, probe):
+    """Quality read from the model's outputs: how close a pruned model stays to the original.
 
-    def __init__(self, p0):
-        self.p0 = p0
+    Parameter counts make a tempting stand-in in a test, but they describe the model's
+    structure rather than its behaviour, and a search may measure a candidate without
+    physically resizing anything. Size targets are what ``size_budget`` is for.
+    """
+    with torch.no_grad():
+        ref = model(probe).detach().clone()
+    scale = ref.abs().mean().clamp_min(1e-12)
+
+    def quality(m):
+        with torch.no_grad():
+            out = m(probe)
+        return -float((out - ref).abs().mean() / scale)
+
+    return quality
+
+
+class _FakeEvaluator:
+    """Mimics the quantization-side ModelEvaluator: evaluate(model, iterations) -> accuracy."""
+
+    def __init__(self, model, probe):
+        self.quality = _output_quality(model, probe)
         self.calls = 0
 
     def evaluate(self, model, iterations):
         self.calls += 1
-        return sum(p.numel() for p in model.parameters()) / self.p0
+        return self.quality(model)
 
 
 class TestEvaluatorUnification(unittest.TestCase):
     def test_evaluator_drives_search(self):
         model, _ = create_mini_mlp()
         model.eval()
-        p0 = _params(model)
-        ev = _FakeEvaluator(p0)
+        calib = _tok()
+        ev = _FakeEvaluator(model, calib[0])
         res = accuracy_based_auto_prune(
             model,
             {
                 "methods": {"dense": {"name": "low_variance"}},
                 "missing_data_policy": "warn_skip",
             },
-            data=_tok(),
+            data=calib,
             tolerance=0.2,
             evaluator=ev,
         )
         self.assertGreater(ev.calls, 1)
         self.assertIsNotNone(res.chosen_ratio)
         self.assertLessEqual(res.quality_drop, 0.2 + 1e-9)
-        self.assertLessEqual(res.weight_reduction, 0.2 + 1e-9)
+        self.assertGreater(res.weight_reduction, 0.0)
 
     def test_bad_evaluator_raises(self):
         model, _ = create_mini_mlp()
@@ -1612,24 +1631,25 @@ class TestEvaluatorUnification(unittest.TestCase):
     def test_single_arg_evaluator_works(self):
         model, _ = create_mini_mlp()
         model.eval()
-        p0 = _params(model)
+        calib = _tok()
 
         class _OneArgEvaluator:
-            def __init__(self):
+            def __init__(self, model, probe):
+                self.quality = _output_quality(model, probe)
                 self.calls = 0
 
             def evaluate(self, model):
                 self.calls += 1
-                return sum(p.numel() for p in model.parameters()) / p0
+                return self.quality(model)
 
-        ev = _OneArgEvaluator()
+        ev = _OneArgEvaluator(model, calib[0])
         res = accuracy_based_auto_prune(
             model,
             {
                 "methods": {"dense": {"name": "low_variance"}},
                 "missing_data_policy": "warn_skip",
             },
-            data=_tok(),
+            data=calib,
             tolerance=0.2,
             evaluator=ev,
         )

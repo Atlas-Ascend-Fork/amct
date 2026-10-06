@@ -12,6 +12,7 @@
   - `qwen3_next`：当前 `transformers==5.3.0` 环境下，checkpoint 上是展开的 per-expert 权重，运行时 MoE 模块是 packed experts，block 内部也混有 `linear_attention` 和 `full_attention`
 - 当前已确认的 dense 适配分支：
   - `qwen3`：标准 dense Qwen3 decoder，`lm_head` 与 `embed_tokens` tied；attention wrapper 在只做 `attn-linear` 时需要继续复用官方 `attention_interface`，不能提前切到自定义 attention kernel
+  - `qwen3_5`：Qwen3.6-27B Dense 复用该 adapter，64 层 decoder；已验证 `attn-linear` / `mlp` A4W4 MXFP4
 
 ## 默认参考路径
 
@@ -58,5 +59,5 @@
 
 - [Qwen3-dense](qwen3-dense.md) — `Qwen3` dense：Qwen3-4B（起点）+ Qwen3-8B（纯复用）
 - [Qwen3-moe](qwen3-moe.md) — `Qwen3Moe`：Qwen3-30B-A3B + Qwen3-235B-A22B
-- [Qwen3.5-3.6](qwen3.5-3.6.md) — `Qwen3_5Moe`：Qwen3.5-35B-A3B + Qwen3.6-35B（`Qwen3_6Moe(Qwen3_5Moe): pass`，零 delta）
+- [Qwen3.5-3.6](qwen3.5-3.6.md) — `Qwen3_5Moe`：Qwen3.5-35B-A3B + Qwen3.6-35B（`Qwen3_6Moe(Qwen3_5Moe): pass`，零 delta）；`qwen3_5`：Qwen3.6-27B Dense
 - [Qwen3-Next-80B-A3B-Instruct](qwen3-next-80b-a3b-instruct.md) — `Qwen3Next`：MoE + 混合 attention

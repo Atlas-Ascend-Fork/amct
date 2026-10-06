@@ -26,9 +26,6 @@ markers = [
     "slow: tests that take more than a few seconds",
 ]
 addopts = "-ra"
-env = [
-    "TORCH_DEVICE_BACKEND_AUTOLOAD=0",
-]
 
 [tool.coverage.run]
 source = ["amct_pytorch"]
@@ -51,4 +48,4 @@ quote-style = "preserve"
 [tool.codespell]
 # CANN/cann: Huawei product name / org in URLs; nd: tensor dim count variable;
 # CopyIn/vor: AscendC intrinsic names.
-ignore-words-list = "cann,nd,copyin,vor"
+ignore-words-list = "cann,nd,copyin,vor,fro"

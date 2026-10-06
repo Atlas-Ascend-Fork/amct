@@ -23,6 +23,7 @@ from ....amct_pytorch.utils.log import LOGGER
 from ....amct_pytorch.custom_op import ulq_retrain_forward_pytorch
 from ....amct_pytorch.custom_op import ulq_retrain_backward_pytorch
 from ....amct_pytorch.custom_op.utils import check_quant_data
+from ....amct_pytorch.custom_op.qdq_symbolic import add_qdq_dynamo, is_dynamo_export
 
 
 class UlqRetrainFunction(Function):
@@ -46,8 +47,22 @@ class UlqRetrainFunction(Function):
         world_size,
     ):
         """
-        Function: UlqRetrain foward funtion.
+        Function: UlqRetrain forward function.
         """
+        if is_dynamo_export():
+            output = add_qdq_dynamo(
+                inputs,
+                act_qat_param.get('acts_scale'),
+                act_qat_param.get('acts_offset'),
+                act_qat_param.get('num_bits', 8),
+            )
+            return (
+                output,
+                act_qat_param.get('acts_scale'),
+                act_qat_param.get('acts_offset'),
+                clip_max,
+                clip_min,
+            )
         check_quant_data(inputs, 'activation')
         outputs, scale, offset, clip_max, clip_min = ulq_retrain_forward_pytorch(
             inputs,
@@ -95,7 +110,7 @@ class UlqRetrainFunction(Function):
     @staticmethod
     def backward(ctx, grad_outputs, grad_scale, grad_offset, grad_max, grad_min):
         """
-        Function: UlqRetrain backward funtion required by torch
+        Function: UlqRetrain backward function required by torch
                   torch.autograd.
         """
         inputs, clip_max, clip_min = ctx.saved_tensors
@@ -138,7 +153,7 @@ class UlqRetrainFuncQAT(UlqRetrainFunction):
             inputs[5].get("acts_offset"),
         )
         LOGGER.logi(
-            'Convert ULQ op to onnx to onnx QuantizeLinear and DequantizeLinear op successfully.'
+            'Converted ULQ op to ONNX QuantizeLinear and DequantizeLinear ops successfully.'
         )
         ret = (output, None, None, None, None)
         return ret

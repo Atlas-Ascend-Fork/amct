@@ -20,7 +20,7 @@ def get_qwen(model_path, seqlen=2048):
 
 def get_test_dataset(enc):
     print('Loading dataset: Wikitext2')
-    testenc = load_dataset('wikitext', 'wikitext-2-raw-v1', split='test')
+    testenc = load_dataset('Salesforce/wikitext', 'wikitext-2-raw-v1', split='test')
     testenc = enc("\n\n".join(testenc["text"]), return_tensors="pt")
     return testenc
 

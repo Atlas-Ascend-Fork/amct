@@ -54,27 +54,45 @@ ARQ （Adaptive Range Quantization）算法是对权重直接量化的算法。�
 ADA权重量化算法用于PTQ流程，由于量化后的权重舍入模式会影响模型精度，ADA主要是对舍入模式进行微调，针对每个量化数据自适应向上或向下舍入模式，需要未标记的数据进行训练调优以确定不同的舍入模式。整体流程如下图所示，先将权重用KL散度算法计算weight初始量化因子scale和offset，然后使用无标签的数据进行训练，调整weight的舍入模式。
 
 **图 1**  ADA权重量化算法<a name="fig432315576612"></a>  
-![](./figures/ADAquant.png "ADA权重量化算法")
+![](./figures/adaquant.png "ADA权重量化算法")
 
 量化后的weight计算公式如下：
 
-![](./figures/zh-cn_formulaimage_0000002548668767.png)，其中n和p分别是量化后的上下界。
+$$
+
+W_q = \mathrm{clip}\left( \left| \frac{W}{\mathrm{scale}} \right| + h(alpha), n, p \right)
+
+$$
+
+，其中n和p分别是量化后的上下界。
 
 训练过程主要是对alpha参数进行优化，目标是使得h\(alpha\)等于0或1：
 
-![](./figures/zh-cn_formulaimage_0000002548668773.png)
+$$
 
-，其中![](./figures/zh-cn_formulaimage_0000002548668765.png)和![](./figures/zh-cn_formulaimage_0000002548788779.png)是伸缩参数，分别取值为1.1和-0.1。
+alpha = -\ln\left( \frac{\varsigma-\gamma}{\dfrac{W}{\mathrm{scale}} - \left\lfloor \dfrac{W}{\mathrm{scale}} \right\rfloor} - 1 \right)
+
+$$
+
+，其中$\varsigma$和$\gamma$是伸缩参数，分别取值为1.1和-0.1。
 
 将原始weight量化，量化完成后加上h\(alpha\)将其反量化，将反量化的weight引入最后的算子计算中，最终输出带量化误差的结果：
 
-![](./figures/zh-cn_formulaimage_0000002548788781.png)
+$$
+
+h(alpha) = \mathrm{clip}\big(\mathrm{sigmoid}(alpha) \times (\varsigma-\gamma),\, 0,\, 1\big)
+
+$$
 
 损失函数计算如下：
 
-![](./figures/zh-cn_formulaimage_0000002548668771.png)
+$$
 
-正则项（Loss函数的后半部分），用以约束h\(alpha\)向0和1两个值收敛，在迭代初期![](./figures/zh-cn_formulaimage_0000002548668769.png)较大值可以使得正则项对整体损失的影响比重变大，就会促使优化过程快速调整h\(alpha\)，接近最优解的区域。迭代后期，此时h\(alpha\)已经处于最优解区域，使用较小![](./figures/zh-cn_formulaimage_0000002548668769.png)，不会因为微小的参数变动导致正则项剧烈变化，从而让模型在微调参数时更加稳健，避免因过度调整而错过最优解，使h\(alpha\)逼近最优解。
+\mathrm{Loss} = \left\| WX - \widetilde{W}X \right\|^2 + \lambda \sum 1 - \left| 2h(alpha) - 1 \right|^\beta
+
+$$
+
+正则项（Loss函数的后半部分），用以约束h\(alpha\)向0和1两个值收敛，在迭代初期$\beta$较大值可以使得正则项对整体损失的影响比重变大，就会促使优化过程快速调整h\(alpha\)，接近最优解的区域。迭代后期，此时h\(alpha\)已经处于最优解区域，使用较小$\beta$，避免因过度调整而错过最优解，使h\(alpha\)逼近最优解。
 
 ### AutoRound
 
@@ -116,7 +134,7 @@ LAC（Learnable Activation Clipping，可学习激活裁剪范围），是面向
 
 DMQ（Diagonal Matrix Quantization Balancer）在计算量化因子之前对数据进行均衡处理，将数据的量化难度转移一部分至权重。如下图所示，X为数据，W为权重。
 
-![](./figures/DMQ.png)
+![](./figures/dmq.png)
 
 均衡原理为：
 
@@ -134,7 +152,7 @@ HFMG（Histogram Feature Map Glutton）算法通过直方图的方式来记录�
 2. 若有更多batch的数据则对每个batch的数据创建一个直方图，然后进行直方图合并的操作，如[图1](#fig1126323519407)所示。
 3. 基于激活数据的直方图根据搜索的方式确定数据的截断点，如[图2](#fig1419882412)所示。
 
-该量化算法的数据放在内存中，和[IFMR数据量化算法](#IFMR数据量化算法)相比，更节省内存。该算法与IFMR数据量化算法同一层不能同时配置。
+该量化算法的数据放在内存中，和[IFMR数据量化算法](#ifmr数据量化算法)相比，更节省内存。该算法与IFMR数据量化算法同一层不能同时配置。
 
 create\_quant\_config接口量化默认使用的为IFMR数据量化算法，如果想使用HFMG数据量化算法，则只能通过create\_quant\_config接口config\_defination参数配置简易配置文件方式实现。
 
@@ -151,7 +169,7 @@ create\_quant\_config接口量化默认使用的为IFMR数据量化算法，如�
 IFMR（Input Feature Map Reconstruction）算法在某个数据分布下，通过搜索的方式确定最佳量化方式。该算法用于训练后量化场景，量化原理图如下所示：
 
 **图 1**  IFMR数据量化算法<a name="fig11850413154412"></a>  
-![](./figures/IFMRquant.png "IFMR数据量化算法")
+![](./figures/ifmrquant.png "IFMR数据量化算法")
 
 上图中序号\[1,3\]代表\[clip\_min\_start, clip\_min\_end\]、2代表clip\_min、 \[4,6\]代表\[clip\_max\_start, clip\_max\_end\]、5代表clip\_max。
 
@@ -208,7 +226,7 @@ OFMR（Output FeatureMap Reconstruct）算法在某个数据分布下，通过�
 3. 比较量化输出与原始输出的误差，选取误差最小的量化因子。
 
 **图 1**  OFMR算法原理<a name="fig1393075517419"></a>  
-![](./figures/OFMRquant.png "OFMR算法原理")
+![](./figures/ofmrquant.png "OFMR算法原理")
 
 ### OmniQuant
 
@@ -245,15 +263,29 @@ ULQ（Universal Linear Quantization）算法在训练过程中不断训练量化
 
 该问题为组合优化问题，建模为背包问题，已知所有物品各自的价值v<sub>i</sub>和重量F<sub>i</sub>，求背包容量C下能够装下总价值最多的物品，可以用公式表示为：
 
-最大化：![](./figures/zh-cn_formulaimage_0000002517188876.png)
+最大化：
 
-受限于：![](./figures/zh-cn_formulaimage_0000002548668755.png)
+$$
+
+\max_{b}\sum_{i} b_i v_i
+
+$$
+
+受限于：
+
+$$
+\text{s.t.}\quad \sum_{i} b_i F_i \le c,\; b_i \in \{0,1\}
+$$
 
 其中，v<sub>i</sub>相当于稀疏敏感度；F<sub>i</sub>为比特复杂度；b为通道稀疏方案，即该通道是否保留；C为用户设置的压缩率。
 
 对于通道稀疏任务，重量F<sub>i</sub>为第i个通道的计算量，v<sub>i</sub>为裁剪第i个通道后网络w的损失函数变化：
 
-![](./figures/zh-cn_formulaimage_0000002517188878.png)
+$$
+
+v_i = \text{loss}(w) - \text{loss}(w - W_i)
+
+$$
 
 其中，loss\(w - w<sub>i</sub>\)可以通过一阶或者二阶泰勒展开式来做近似估计。
 

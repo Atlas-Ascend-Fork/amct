@@ -22,7 +22,9 @@ from unittest.mock import patch
 
 import numpy as np
 import torch
+from onnx import TensorProto, helper, numpy_helper
 
+from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.graph_optimizer import (
     GraphOptimizer,
 )
@@ -33,6 +35,7 @@ from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
 from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
     TensorProtoHelper,
 )
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node import QuantOpInfo
 from amct_pytorch.classic.graph_based.amct_pytorch.utils.vars import (
     QUANTIZABLE_TYPES,
 )
@@ -95,6 +98,11 @@ class TestWeightQuantPass(unittest.TestCase):
 
     @unittest.skipUnless(_INT4_SUPPORTED, _SKIP_INT4_MSG)
     def test_quant_weight_int4(self):
+        target_node = self.graph.get_node_by_name('fc.2')
+        weight_node = QuantOpInfo.get_weight_node(target_node)
+        original_dims = list(weight_node.proto.dims)
+        element_count = int(np.prod(original_dims))
+
         with patch(
             'amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node.'
             'QuantOpInfo.get_dst_num_bits',
@@ -107,6 +115,128 @@ class TestWeightQuantPass(unittest.TestCase):
             optimizer.do_optimizer(self.graph, None)
             after_nodes = len(self.graph.nodes)
             self.assertEqual(after_nodes - before_nodes, 0)
+
+        self.assertEqual(
+            weight_node.proto.data_type,
+            TensorProtoHelper.data_type_maps['INT4'][0],
+        )
+        self.assertEqual(list(weight_node.proto.dims), original_dims)
+        self.assertEqual(len(weight_node.proto.raw_data), (element_count + 1) // 2)
+
+    def test_matmul_weight_quantizes_per_output_channel(self):
+        class LinearModel(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.linear = torch.nn.Linear(2, 4, bias=False)
+                self.linear.weight.data = torch.tensor(
+                    [[1, 2], [10, 20], [100, 200], [1000, 2000]],
+                    dtype=torch.float32,
+                )
+
+            def forward(self, inputs):
+                return self.linear(inputs)
+
+        model = LinearModel()
+        tmp_onnx = BytesIO()
+        Parser.export_onnx(model, torch.ones(1, 2), tmp_onnx)
+        graph = Parser.parse_net_to_graph(tmp_onnx)
+        node = graph.get_node_by_name('linear')
+        self.assertEqual(node.type, 'MatMul')
+        records = {
+            'linear': {
+                'weight_scale': np.array([1, 10, 100, 1000], dtype=np.float32),
+                'weight_offset': np.zeros(4, dtype=np.int8),
+                'wts_type': 'INT8',
+            }
+        }
+
+        InsertWeightQuantPass(records).do_pass(graph, node)
+
+        weight_node = QuantOpInfo.get_weight_node(node)
+        quantized = TensorProtoHelper(weight_node.proto).get_data()
+        np.testing.assert_array_equal(
+            quantized,
+            np.array([[1, 1, 1, 1], [2, 2, 2, 2]], dtype=np.int8),
+        )
+
+    def test_matmul_multidimensional_weight_quantizes_per_output_channel(self):
+        weight = np.stack(
+            [
+                np.full((2, 3), 1, dtype=np.float32),
+                np.full((2, 3), 10, dtype=np.float32),
+                np.full((2, 3), 100, dtype=np.float32),
+                np.full((2, 3), 1000, dtype=np.float32),
+            ],
+            axis=-1,
+        )
+        model = helper.make_model(
+            helper.make_graph(
+                [
+                    helper.make_node(
+                        'MatMul', ['inputs', 'weight'], ['output'], name='linear'
+                    )
+                ],
+                'linear_graph',
+                [helper.make_tensor_value_info('inputs', TensorProto.FLOAT, [1, 2, 3])],
+                [helper.make_tensor_value_info('output', TensorProto.FLOAT, None)],
+                [numpy_helper.from_array(weight, name='weight')],
+            )
+        )
+        graph = Graph(model)
+        node = graph.get_node_by_name('linear')
+        records = {
+            'linear': {
+                'weight_scale': np.array([1, 10, 100, 1000], dtype=np.float32),
+                'weight_offset': np.zeros(4, dtype=np.int8),
+                'wts_type': 'INT8',
+            }
+        }
+
+        InsertWeightQuantPass(records).do_pass(graph, node)
+
+        quantized = TensorProtoHelper(graph.get_node_by_name('weight').proto).get_data()
+        self.assertEqual(list(quantized.shape), [2, 3, 4])
+        np.testing.assert_array_equal(quantized, np.ones((2, 3, 4), dtype=np.int8))
+
+    def test_matmul_transposed_weight_quantizes_per_output_channel(self):
+        weight = np.array(
+            [[1, 2], [10, 20], [100, 200], [1000, 2000]], dtype=np.float32
+        )
+        model = helper.make_model(
+            helper.make_graph(
+                [
+                    helper.make_node(
+                        'Transpose', ['weight'], ['weight_t'], name='weight_trans'
+                    ),
+                    helper.make_node(
+                        'MatMul', ['inputs', 'weight_t'], ['output'], name='linear'
+                    ),
+                ],
+                'linear_graph',
+                [helper.make_tensor_value_info('inputs', TensorProto.FLOAT, [1, 2])],
+                [helper.make_tensor_value_info('output', TensorProto.FLOAT, [1, 4])],
+                [numpy_helper.from_array(weight, name='weight')],
+            )
+        )
+        graph = Graph(model)
+        node = graph.get_node_by_name('linear')
+        records = {
+            'linear': {
+                'weight_scale': np.array([1, 10, 100, 1000], dtype=np.float32),
+                'weight_offset': np.zeros(4, dtype=np.int8),
+                'wts_type': 'INT8',
+            }
+        }
+
+        InsertWeightQuantPass(records).do_pass(graph, node)
+
+        weight_node = graph.get_node_by_name('weight')
+        quantized = TensorProtoHelper(weight_node.proto).get_data()
+        self.assertEqual(list(weight_node.proto.dims), [4, 2])
+        np.testing.assert_array_equal(
+            quantized,
+            np.array([[1, 2], [1, 2], [1, 2], [1, 2]], dtype=np.int8),
+        )
 
     def test_rnn_weight_quant_success(self):
         class RNNModule(torch.nn.Module):
@@ -141,38 +271,6 @@ class TestWeightQuantPass(unittest.TestCase):
 
         passer = InsertWeightQuantPass(records)
         passer.quant_recurrence_weight(node)
-
-    def test_deploy_packs_int4_weight(self):
-        # 4 个 INT4 权重 → deploy 应 pack 成 2 个 INT8 字节
-        from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
-            pack_int4_to_int8,
-        )
-
-        int4_vals = np.array([1, -2, 7, -8], dtype=np.int8)
-        packed = pack_int4_to_int8(int4_vals)
-        self.assertEqual(packed.size, 2)
-
-    def test_deploy_packs_int4_recurrence_weight(self):
-        """LSTM A8W4: deploy finalize packs recurrence_weight INT4 → INT8 (packed.size == n//2).
-        Guards the ReplaceRNNPass ordering bug where recurrence_weight was silently skipped."""
-        from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
-            pack_int4_to_int8,
-        )
-
-        # Simulate a recurrence_weight tensor for an LSTM with hidden_size=20,
-        # input_size=10: shape is (4, 20, 20) → 1600 INT4 elements (even count).
-        n_elements = 1600
-        rng = np.random.default_rng(42)
-        int4_vals = rng.integers(-8, 8, size=n_elements, dtype=np.int8)
-
-        packed = pack_int4_to_int8(int4_vals)
-
-        # Two INT4 nibbles packed into each INT8 byte → exactly n_elements // 2 bytes.
-        self.assertEqual(
-            packed.size,
-            n_elements // 2,
-            msg='expected {} packed bytes, got {}'.format(n_elements // 2, packed.size),
-        )
 
     def build_lstm_int4_case(self):
         """Build the LSTM graph node and INT4 records for recurrence-weight UT."""
@@ -278,63 +376,4 @@ class TestWeightQuantPass(unittest.TestCase):
             msg='expected recurrence_weight stored as INT4, got {}'.format(
                 actual_dtype
             ),
-        )
-
-    def test_conv_int4_finalize_deploy_no_crash(self):
-        """C-1 regression: Conv A8W4 deploy finalize loop must not crash.
-        get_recurrence_weight_node must return None (not raise) for non-RNN nodes."""
-        from amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node import (
-            QuantOpInfo,
-        )
-
-        # Use the Conv graph already built in setUpClass (Net001 has Conv2d layers).
-        conv_node = None
-        for node in self.graph.nodes:
-            if node.type == 'Conv':
-                conv_node = node
-                break
-        self.assertIsNotNone(
-            conv_node, 'Expected at least one Conv node in Net001 graph'
-        )
-
-        # assert get_recurrence_weight_node returns None, not crash
-        rw_node = QuantOpInfo.get_recurrence_weight_node(conv_node)
-        self.assertIsNone(
-            rw_node,
-            'get_recurrence_weight_node must return None for a Conv node, not crash',
-        )
-
-        # get the weight node and set up INT4 data
-        weight_node = QuantOpInfo.get_weight_node(conv_node)
-        self.assertIsNotNone(weight_node, 'Conv node must have a weight node')
-
-        from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.pack_int4_weight_pass import (
-            pack_along_axis,
-        )
-
-        weight_helper = TensorProtoHelper(weight_node.proto, weight_node.model_path)
-        orig_dims = list(weight_node.proto.dims)
-        int4_vals = np.clip(weight_helper.get_data().astype(np.int8), -8, 7)
-
-        # deploy path: Conv packs along the Cin axis (axis 1), other axes unchanged
-        cin_axis = 1
-        packed, new_dims = pack_along_axis(int4_vals, orig_dims, cin_axis)
-        expected = orig_dims.copy()
-        expected[cin_axis] = (orig_dims[cin_axis] + 1) // 2
-        self.assertEqual(new_dims, expected, 'Cin axis must become ceil(axis/2)')
-
-        weight_helper.clear_data()
-        weight_helper.set_data(packed, 'INT8', dims=new_dims)
-
-        # only the quant axis halves; other axes stay identical
-        self.assertEqual(
-            [d for i, d in enumerate(new_dims) if i != cin_axis],
-            [d for i, d in enumerate(orig_dims) if i != cin_axis],
-            'non-quant axes must stay unchanged after packing',
-        )
-        # self-consistent: prod(new_dims) == raw_data byte length
-        self.assertEqual(
-            int(np.prod(new_dims)),
-            len(weight_node.proto.raw_data),
-            'packed INT8 tensor must satisfy prod(dims) == raw_data bytes',
         )

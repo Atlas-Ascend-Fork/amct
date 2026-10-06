@@ -33,5 +33,6 @@ def register_dtype():
     from .int import QuantDequantInt  # noqa: F401
     from .mxfp import QuantDequantMx  # noqa: F401
     from .hifp import QuantDequantHifp  # noqa: F401
+    from .fp import QuantDequantFP  # noqa: F401
 
     _REGISTERED = True

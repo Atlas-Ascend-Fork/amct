@@ -17,6 +17,7 @@
 
 #!/bin/bash
 python amct_pytorch/cli/llm/deploy.py \
+  --trust_remote_code \
   --model /path/to/model \
   --model_name qwen3_5 \
   --device npu:0 \
@@ -25,4 +26,3 @@ python amct_pytorch/cli/llm/deploy.py \
   --quant_dtype int \
   --bit_config amct_pytorch/configs/w8a8.yaml \
   --output_dir ./deploy_out
-

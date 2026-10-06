@@ -218,7 +218,7 @@ class RetrainConfigBase:
         self._del_reduant_config(
             ordered_config, retrain_supported_layers, prune_supported_layers
         )
-        self.downgrade_int4_unpackable_layers(graph, ordered_config)
+        self.skip_int4_unpackable_layers(graph, ordered_config)
         if hasattr(self.graph_checker, 'check_weights_shared'):
             layer_names = get_layers_from_config(
                 ordered_config, self.config_tree.get_global_keys()
@@ -233,25 +233,22 @@ class RetrainConfigBase:
             with open(config_file, 'w') as fid:
                 json.dump(ordered_config, fid, indent=4, separators=(',', ':'))
 
-    def downgrade_int4_unpackable_layers(self, graph, ordered_config):
-        '''
-        group/depthwise conv 或 Cin 为奇数的层无法沿 Cin pack INT4，
-        配置阶段将其权重从 INT4 降级为 INT8(A8W8)。遍历所有配置了
-        retrain_weight_config 的层。
-        '''
-        if not hasattr(self.graph_querier, 'check_int4_cin_pack_supported'):
-            return
+    def skip_int4_unpackable_layers(self, graph, ordered_config):
+        '''Keep INT4 layers with an odd final Deploy pack axis in floating point.'''
         for layer, layer_cfg in ordered_config.items():
             if not isinstance(layer_cfg, dict):
                 continue
             wts = layer_cfg.get('retrain_weight_config')
             if wts is None or wts.get('dst_type') != 'INT4':
                 continue
-            if not self.graph_querier.check_int4_cin_pack_supported(graph, layer):
-                wts['dst_type'] = 'INT8'
+            if not self.graph_querier.is_int4_weight_pack_axis_even(graph, layer):
+                layer_cfg[RETRAIN_ENABLE] = False
                 LOGGER.logw(
-                    "Layer {} weight cannot be INT4-packed along Cin (grouped "
-                    "conv or odd Cin), downgraded to INT8 (A8W8).".format(layer)
+                    "Cannot quantize layer '{}' with INT4 weights: its final Deploy "
+                    "weight pack axis is invalid or odd; the layer remains in floating point.".format(
+                        layer
+                    ),
+                    module_name=_MODULE_NAME,
                 )
 
     def get_support_layers(self, graph):
@@ -317,6 +314,7 @@ class RetrainConfigBase:
         quant_config = self.config_tree.dump()
         valid_layers_refilled = self.get_supported_layers(graph)
         self._del_reduant_config(quant_config, valid_layers_refilled, dict())
+        self.skip_int4_unpackable_layers(graph, quant_config)
 
         if hasattr(self.graph_checker, 'check_weights_shared'):
             layer_names = get_layers_from_config(
@@ -469,7 +467,7 @@ class RetrainConfigBase:
         proto.check_field(self.enable_retrain, self.enable_prune)
 
         # Step2: check not support layers and not support types
-        # check gloabl
+        # check global
         self._check_proto_global(proto, retrain_layers.get('support_layers'))
         # check retrain
         if self.enable_retrain:
@@ -522,13 +520,13 @@ def check_dst_type_legal(layer_data_config, layer_weight_config):
         if not layer_data_config.get(DST_TYPE):
             LOGGER.logw(
                 "dst_type of RetrainDataQuantConfig was not given in config, "
-                "and was set to 'INT8' by defualt!",
+                "and was set to 'INT8' by default!",
                 module_name=_MODULE_NAME,
             )
         if not layer_weight_config.get(DST_TYPE):
             LOGGER.logw(
                 "dst_type of RetrainWeightQuantConfig was not given in config, "
-                "and was set to 'INT8' by defualt!",
+                "and was set to 'INT8' by default!",
                 module_name=_MODULE_NAME,
             )
         error_info = (

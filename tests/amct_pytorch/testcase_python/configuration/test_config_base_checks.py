@@ -16,7 +16,10 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import logging
+import json
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock
 
 from amct_pytorch.classic.graph_based.amct_pytorch.capacity import CAPACITY
@@ -116,6 +119,55 @@ class TestConfigBaseChecks(unittest.TestCase):
         config = {'l1': {WGT: {'num_bits': 6}}}
         obj.check_and_down_grade_winograd_num_bits(GRAPH, config, ['l1'])
         self.assertEqual(config['l1'][WGT]['num_bits'], 8)
+
+    def test_int4_odd_pack_axis_skips_layer_without_int8_downgrade(self):
+        obj, q = _cfg()
+        q.get_support_quant_layers.return_value = ['l1', 'l2']
+        q.get_name_type_dict.return_value = {'l1': 'Conv2d', 'l2': 'Conv2d'}
+        q.is_int4_weight_pack_axis_even.side_effect = lambda graph, layer: layer == 'l2'
+        obj.set_param_pool(['l1', 'l2'], GRAPH)
+        supported_layers = ['l1', 'l2']
+        config = {
+            'l1': {'quant_enable': True, WGT: {'num_bits': 4}},
+            'l2': {'quant_enable': True, WGT: {'num_bits': 4}},
+        }
+
+        quant_layers = obj.check_int4_weight_quant_axis(GRAPH, config, supported_layers)
+
+        self.assertFalse(config['l1']['quant_enable'])
+        self.assertEqual(config['l1'][WGT]['num_bits'], 4)
+        self.assertEqual(supported_layers, ['l1', 'l2'])
+        self.assertEqual(quant_layers, ['l2'])
+        self.assertTrue(config['l2']['quant_enable'])
+
+    def test_non_int4_layer_is_not_checked_for_pack_support(self):
+        obj, q = _cfg()
+        config = {'l1': {'quant_enable': True, WGT: {'num_bits': 8}}}
+
+        obj.check_int4_weight_quant_axis(GRAPH, config, ['l1'])
+
+        q.is_int4_weight_pack_axis_even.assert_not_called()
+        self.assertTrue(config['l1']['quant_enable'])
+
+    def test_parse_config_file_applies_int4_pack_axis_filter(self):
+        obj, q = _cfg()
+        obj.root = MagicMock()
+        obj.root.get_keys.return_value = []
+        q.get_name_type_dict.return_value = {'l1': 'Conv2d'}
+        obj.check_int4_weight_quant_axis = MagicMock()
+        config = {
+            'l1': {
+                'quant_enable': True,
+                ACT: {'num_bits': 8},
+                WGT: {'num_bits': 4},
+            }
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_file = Path(temp_dir) / 'config.json'
+            config_file.write_text(json.dumps(config), encoding='utf-8')
+            parsed = obj.parse_config_file(str(config_file), GRAPH)
+
+        obj.check_int4_weight_quant_axis.assert_called_once_with(GRAPH, parsed, ['l1'])
 
     def test_check_activation_symmetric_valid_raises(self):
         obj, q = _cfg()

@@ -120,9 +120,9 @@ svd_quant/            # SVDQuant components
 | ----------- | ----------------------- | ----------------- |
 | `ascend950` | Ascend950PR/Ascend950DT | 512 KB+           |
 
-- CANN 9.0.0
+- CANN ≥ 9.0.0
 - Python ≥ 3.9
-- PyTorch + torch_npu（适配对应 CANN 版本）
+- PyTorch + TorchNPU（适配对应 CANN 版本）
 
 ## 编译与使用说明
 
@@ -130,18 +130,15 @@ svd_quant/            # SVDQuant components
 
 ```bash
 source $ASCEND_HOME_PATH/set_env.sh
-path="amct"
-cd $path$/amct_ops
-bash ops_build.sh --soc ascend950 svd_quant
-./output/CANN-custom_ops--linux.aarch64.run --install-path=$ASCEND_HOME_PATH/opp
+bash amct_ops/ops_build.sh --soc ascend950
+./amct_ops/output/CANN-custom_ops-*.run --quiet --install-path=$ASCEND_HOME_PATH/opp
 source $ASCEND_HOME_PATH/opp/vendors/customize/bin/set_env.bash
 ```
 
 ### 2. PyTorch算子安装指南
 
 ```bash
-cd $path$/amct_ops
-pip install ./dist/amct-*.whl --force-reinstall --no-deps
+pip install ./amct_ops/dist/amct_*.whl --force-reinstall --no-deps
 ```
 
 ### 3. 使用示例
@@ -199,21 +196,18 @@ svd_quant_out = torch.ops.amct.svd_quant(x, w_quant, scale,  dp, up)
 通过以下条件进行准确性验证：
 
 **黄金数据**: 在低秩和低精度分支上，基于随机BF16数据（激活和权重张量）计算，使用反量化后的激活和权重  
-**MxFp4 权重**: 初步计算使用 `torch_npu` 中的 `npu_dynamic_mx_quant` 算子，参数为 `block_size=32` 和 `round_mode="round"`。  
+**MxFp4 权重**: 初步计算使用 `TorchNPU` 中的 `npu_dynamic_mx_quant` 算子，参数为 `block_size=32` 和 `round_mode="round"`。  
 **相对耐受性**: 阈值设置为 `1e-02`  
 
 ## 测试方法
 
 ```bash
-cd $path$/tests/amct_ops
-pytest test_svd_quant.py
+PYTHONPATH=amct_ops/staging python3 -m unittest tests.amct_ops.test_svd_quant
 ```
 
 也可以先安装 wheel 后再执行测试：
 
 ```bash
-cd $path$/amct_ops
-pip install dist/amct-1.0-*.whl
-pytest test_svd_quant.py
+pip install ./amct_ops/dist/amct_*.whl --force-reinstall --no-deps
+PYTHONPATH=amct_ops/staging python3 -m unittest tests.amct_ops.test_svd_quant
 ```
-

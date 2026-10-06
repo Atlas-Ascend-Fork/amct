@@ -91,6 +91,20 @@ class TestFakeConvModule(unittest.TestCase):
         out = fake_linear(torch.tensor(inputs))
         self.assertIsNotNone(out)
 
+    def test_fake_linear_module_per_channel(self):
+        weight_scale = np.array([0.5, 0.25, 0.125, 0.0625])
+        quant_params = {
+            "data_scale": 1,
+            "data_offset": 0,
+            "weight_scale": weight_scale,
+        }
+        sub_module = torch.nn.Linear(2, 4, bias=False)
+        fake_linear = FakeQuantizedLinear(sub_module, quant_params, "linear_channel")
+
+        output = fake_linear(torch.ones(3, 2))
+
+        self.assertEqual(tuple(output.shape), (3, 4))
+
     def test_fake_conv3d_module(self):
         weight_scale = np.array([0.5, 0.5, 0.5])
         quant_params = {

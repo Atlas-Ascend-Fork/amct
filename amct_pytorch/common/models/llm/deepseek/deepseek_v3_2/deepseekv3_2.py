@@ -42,6 +42,12 @@ from amct_pytorch.common.datasets.ptq_io import save_ptq_kwargs
 )
 class DeepseekV32(BaseModel):
     def __init__(self, args):
+        if not getattr(args, "trust_remote_code", False):
+            model_name = getattr(args, "model_name", "deepseek_v3_2")
+            raise ValueError(
+                f"{model_name} requires --trust_remote_code. "
+                "Please rerun the command with --trust_remote_code."
+            )
         super().__init__(args)
         self.quant_target = args.quant_target
         self.init_cls()
@@ -157,8 +163,8 @@ class DeepseekV32(BaseModel):
             cls=QuantDeepseekV3MLP,
         )
 
-    def iter_ptq_units(self, layer_idx, block):
-        yield from super().iter_ptq_units(layer_idx, block)
+    def iter_ptq_units(self, layer_idx, block, *, for_load=False):
+        yield from super().iter_ptq_units(layer_idx, block, for_load=for_load)
 
     def iter_deploy_bindings(self, layer_idx, block):
         yield from super().iter_deploy_bindings(layer_idx, block)

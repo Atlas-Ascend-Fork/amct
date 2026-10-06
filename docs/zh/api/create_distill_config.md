@@ -6,9 +6,9 @@
 
 | 产品                                        | 是否支持 |
 | ------------------------------------------- | -------- |
-| Ascend 950PR/Ascend 950DT                   | √        |
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 | √        |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 | √        |
+| Ascend 950PR&950DT系列产品                   | √        |
+| Atlas A3系列产品 | √        |
+| Atlas A2系列产品 | √        |
 
 
 
@@ -85,8 +85,8 @@ input_data = tuple([torch.randn(input_shape)])
  
 # 生成蒸馏配置文件
 amct.create_distill_config(config_file="./configs/config.json",
-                           model,
-                           input_data,
+                           model=model,
+                           input_data=input_data,
                            config_defination="./configs/distill.cfg")
 ```
 
@@ -138,4 +138,3 @@ amct.create_distill_config(config_file="./configs/config.json",
     }
 }
 ```
-
