@@ -259,12 +259,19 @@ class DeepseekV41:
     def _convert_tensorwise_shard_a3(
         self, source_file, model_dir, original_weight_map, quant_layers, loaded_files
     ):
+        # The read cache is scoped to this shard only. The workflow hands the
+        # same dict to every shard of the export, so caching processed source
+        # shards there kept all of them resident and made peak host memory grow
+        # with the whole checkpoint instead of the working set of one shard
+        # (its weights plus the shards holding their scales). Cross-shard scale
+        # lookups still work: they are re-read on demand for each shard.
+        del loaded_files
+        shard_cache = {}
         source_path = resolve_safetensors_path(
             model_dir, source_file, self.safetensors_files
         )
-        if source_file not in loaded_files:
-            loaded_files[source_file] = load_file(str(source_path), device="cpu")
-        current_state_dict = loaded_files[source_file]
+        shard_cache[source_file] = load_file(str(source_path), device="cpu")
+        current_state_dict = shard_cache[source_file]
         new_state_dict = {}
         processed = set()
 
@@ -283,17 +290,17 @@ class DeepseekV41:
                 scale_name = weight_name.removesuffix(".weight") + ".scale"
                 if scale_name in original_weight_map:
                     scale_file = original_weight_map[scale_name]
-                    if scale_file not in loaded_files:
+                    if scale_file not in shard_cache:
                         scale_path = resolve_safetensors_path(
                             model_dir, scale_file, self.safetensors_files
                         )
-                        loaded_files[scale_file] = load_file(
+                        shard_cache[scale_file] = load_file(
                             str(scale_path), device="cpu"
                         )
-                    scale = loaded_files[scale_file].get(scale_name)
+                    scale = shard_cache[scale_file].get(scale_name)
                     if scale is None:
                         raise ValueError(f"Missing source scale tensor: {scale_name}")
-                    loaded_files[scale_file][scale_name] = self._prepare_a3_scale(
+                    shard_cache[scale_file][scale_name] = self._prepare_a3_scale(
                         weight, scale
                     )
                     weight = convert_state_dict(
@@ -302,7 +309,7 @@ class DeepseekV41:
                         scale_name,
                         original_weight_map,
                         model_dir,
-                        loaded_files,
+                        shard_cache,
                         block_size=BLOCK,
                         safetensors_files=self.safetensors_files,
                     )

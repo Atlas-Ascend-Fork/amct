@@ -22,12 +22,14 @@ from safetensors.torch import load_file, save_file
 from amct_pytorch.common.models.llm.common.deploy_selection import DeploySelection
 from amct_pytorch.common.models.llm.deepseek.deepseek_v4_1 import deepseekv4_1
 from amct_pytorch.common.models.llm.deepseek.deepseek_v4_1.deepseekv4_1 import (
+    BLOCK,
     DeepseekV41,
 )
 from amct_pytorch.quantization.bit_policy import BitPolicy
 
 SHARD = "model.safetensors"
 MODULE = "model.layers.0.mlp.down_proj"
+MODULE_B = "model.layers.1.mlp.down_proj"
 
 
 def _args(**overrides):
@@ -380,6 +382,58 @@ def test_convert_a3_shard_rejects_scale_missing_from_mapped_shard(tmp_path):
             {MODULE: 8},
             {},
         )
+
+
+def test_convert_a3_shard_cache_does_not_accumulate_across_shards(tmp_path):
+    """Regression for issue #246: peak host memory stays at one shard's set.
+
+    Both scales live in a single shared shard, so the second source shard must
+    still be able to re-read them after the first shard's cache is dropped.
+    """
+    model = _bare_model(tmp_path, selection=DeploySelection((MODULE, MODULE_B)))
+    shards = ("model-00001-of-00002.safetensors", "model-00002-of-00002.safetensors")
+    scale_shard = "scales.safetensors"
+    source = (((torch.arange(BLOCK * BLOCK, dtype=torch.float32) % 7) - 3) / 4).reshape(
+        BLOCK, BLOCK
+    )
+    scales = {}
+    weight_map = {}
+    paths = []
+    for shard, module in zip(shards, (MODULE, MODULE_B)):
+        weight_name = f"{module}.weight"
+        scale_name = f"{module}.scale"
+        save_file(
+            {weight_name: source.to(torch.float8_e4m3fn)},
+            str(model.model_path / shard),
+        )
+        scales[scale_name] = torch.full((1, 1), 127, dtype=torch.uint8).view(
+            torch.float8_e8m0fnu
+        )
+        weight_map[weight_name] = shard
+        weight_map[scale_name] = scale_shard
+        paths.append(model.model_path / shard)
+    save_file(scales, str(model.model_path / scale_shard))
+    paths.append(model.model_path / scale_shard)
+    model.safetensors_files = frozenset(path.resolve() for path in paths)
+
+    loaded_files = {}
+    quant_layers = dict.fromkeys((MODULE, MODULE_B), 8)
+    for shard, module in zip(shards, (MODULE, MODULE_B)):
+        routing = model.convert_tensorwise_shard(
+            shard, model.model_path, weight_map, quant_layers, loaded_files
+        )
+        # The dict shared by the whole export must never retain processed
+        # source shards or the shards read only for their scales.
+        assert loaded_files == {}
+
+        output = load_file(str(model.output_dir / shard))
+        assert set(routing) == set(output)
+        assert output[f"{module}.weight"].dtype == torch.int8
+        assert output[f"{module}.weight_scale"].dtype == torch.bfloat16
+        assert output[f"{module}.weight_offset"].dtype == torch.bfloat16
+        assert output[f"{module}.weight_scale"].shape == (BLOCK, 1)
+
+    assert model.processed_modules == {MODULE, MODULE_B}
 
 
 def test_prepare_a3_scale_expands_e8m0_rows_for_block_fp8():
