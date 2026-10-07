@@ -32,12 +32,12 @@ class ParamsHelper:
         """Calculate flops for conv node.
 
         Args:
-            in_channel (int): channle for input fearuremap.
-            out_channel (int): channle for output fearuremap.
+            in_channel (int): channel for input feature map.
+            out_channel (int): channel for output feature map.
             k_h (int): height for kernel.
-            k_w (int): weight for kernel.
-            out_h (int): height for output fearuremap.
-            out_w (int): weight for output fearuremap.
+            k_w (int): width for kernel.
+            out_h (int): height for output feature map.
+            out_w (int): width for output feature map.
             group (int): group for node.
             has_bias (bool): with bias or not.
 
@@ -58,14 +58,12 @@ class ParamsHelper:
         """Calculate flops for deconv node.
 
         Args:
-            in_channel (int): channle for input fearuremap.
-            out_channel (int): channle for output fearuremap.
+            in_channel (int): channel for input feature map.
+            out_channel (int): channel for output feature map.
             k_h (int): height for kernel.
-            k_w (int): weight for kernel.
-            in_h ([type]): height for input fearuremap.
-            in_w ([type]): weight for input fearuremap.
-            out_h (int): height for output fearuremap.
-            out_w (int): weight for output fearuremap.
+            k_w (int): width for kernel.
+            in_h (int): height for input feature map.
+            in_w (int): width for input feature map.
             group (int): group for node.
             has_bias (bool): with bias or not.
 
@@ -83,8 +81,8 @@ class ParamsHelper:
         """Calculate flops for matmul node, including matmul, gemm, batch_matmul and so on.
 
         Args:
-            input_shape (list of int): shape of input fearuremap.
-            output_shape (list of int): shape of output fearuremap.
+            input_shape (list of int): shape of input feature map.
+            output_shape (list of int): shape of output feature map.
             has_bias (bool): with bias or not.
 
         Returns:
