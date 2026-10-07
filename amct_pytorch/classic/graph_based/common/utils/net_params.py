@@ -32,8 +32,8 @@ class ParamsHelper:
         """Calculate flops for conv node.
 
         Args:
-            in_channel (int): channle for input fearuremap.
-            out_channel (int): channle for output fearuremap.
+            in_channel (int): channel for input feature map.
+            out_channel (int): channel for output feature map.
             k_h (int): height for kernel.
             k_w (int): weight for kernel.
             out_h (int): height for output fearuremap.
@@ -58,14 +58,12 @@ class ParamsHelper:
         """Calculate flops for deconv node.
 
         Args:
-            in_channel (int): channle for input fearuremap.
-            out_channel (int): channle for output fearuremap.
+            in_channel (int): channel for input feature map.
+            out_channel (int): channel for output feature map.
             k_h (int): height for kernel.
             k_w (int): weight for kernel.
             in_h ([type]): height for input fearuremap.
             in_w ([type]): weight for input fearuremap.
-            out_h (int): height for output fearuremap.
-            out_w (int): weight for output fearuremap.
             group (int): group for node.
             has_bias (bool): with bias or not.
 
