@@ -163,7 +163,7 @@ def hfmg_calculate_loss(data_bins, dst_num_bins, search_range):
 
     Args:
         data_bins (list): the list of DataBin
-        dst_num_of_bins (int): destination num of bins
+        dst_num_bins (int): destination num of bins
         search_range (list): the list of search range
 
     Returns:

@@ -64,8 +64,6 @@ class ParamsHelper:
             k_w (int): weight for kernel.
             in_h ([type]): height for input fearuremap.
             in_w ([type]): weight for input fearuremap.
-            out_h (int): height for output fearuremap.
-            out_w (int): weight for output fearuremap.
             group (int): group for node.
             has_bias (bool): with bias or not.
 

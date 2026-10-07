@@ -87,7 +87,6 @@ class AutoChannelPruneConfigHelper:
 
         Args:
             config_file (string): file to read and parse.
-            proto_init_func (function): function to initialize proto.
 
         Raises:
             RuntimeError: content in file doesn't match proto.
@@ -129,7 +128,6 @@ class AutoChannelPruneConfigHelper:
         """create auto prune channel result config.
 
         Args:
-            config_file (string): user file to read.
             search_prune_config (dict): prune config <layer_name: >.
             output_config (string): output config file
 
