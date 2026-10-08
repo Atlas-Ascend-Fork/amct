@@ -43,3 +43,4 @@ log/
 
 # Local community-sample artifacts (PTQ data / reports)
 examples/models/*/outputs/
+examples/algorithms/*/outputs/

@@ -102,6 +102,19 @@ def generate_quant_config(cache_scheme, ignores, is_mx=False, bits_scheme=None):
     return quant_config
 
 
+def generate_tensor_quant_config(plan, cache_scheme=None):
+    """Describe the actual tensor plan without model-specific selection methods.
+
+    User ignore rules and all other unselected weight modules must be FLOAT
+    under the legacy broad Linear/MoEGMM targets. Keep the user-only resolved
+    ignore set on the plan for selection-equivalence auditing.
+    """
+    ignores = sorted(plan.ignored_modules | plan.unselected_weight_modules)
+    return generate_quant_config(
+        cache_scheme, ignores, bits_scheme=_default_bits_scheme()
+    )
+
+
 def get_quant_ignore_linear_names(block, weight_prefix):
     """Return weight names of non-quantized Linear modules in a block.
 
@@ -265,3 +278,66 @@ def quant_payload(
         extra_key = weight_name.replace(".weight", f".{extra_name}")
         tensors[extra_key] = extra_tensor
     return tensors
+
+
+def adapt_ascend_payload(
+    weight_name: str, payload: dict[str, torch.Tensor]
+) -> dict[str, torch.Tensor]:
+    """Adapt symmetric INT8 payload to the W8A8_DYNAMIC checkpoint contract."""
+    if not weight_name.endswith(".weight"):
+        raise ValueError(f"Ascend payload requires a .weight key: {weight_name}")
+    prefix = weight_name.removesuffix(".weight")
+    scale_name = prefix + ".weight_scale"
+    if set(payload) != {weight_name, scale_name}:
+        raise ValueError(
+            f"Ascend payload for {weight_name} must contain only weight and weight_scale"
+        )
+    weight = payload[weight_name]
+    scale = payload[scale_name]
+    if weight.dtype != torch.int8 or weight.ndim != 2 or weight.numel() == 0:
+        raise ValueError(
+            f"Ascend payload {weight_name} requires a nonempty 2-D INT8 weight"
+        )
+    if not scale.is_floating_point() or scale.shape != (weight.shape[0], 1):
+        raise ValueError(
+            f"Ascend payload {weight_name} requires floating scale shape [out, 1]"
+        )
+    scale = scale.to(torch.bfloat16)
+    if not torch.isfinite(scale).all() or not (scale > 0).all():
+        raise ValueError(
+            f"Ascend scale for {weight_name} must remain finite and positive in BF16"
+        )
+    result = dict(payload)
+    result[scale_name] = scale
+    result[prefix + ".weight_offset"] = torch.zeros_like(scale)
+    return result
+
+
+def make_ascend_description(
+    output_tensor_names: set[str], selected_modules: frozenset[str]
+) -> dict:
+    """Describe exactly the tensors written by the shared shard exporter."""
+    dynamic_names = {
+        module + suffix
+        for module in selected_modules
+        for suffix in (".weight", ".weight_scale", ".weight_offset")
+    }
+    missing = dynamic_names - output_tensor_names
+    if missing:
+        raise ValueError(
+            f"Ascend output is missing quantized tensors: {sorted(missing)}"
+        )
+    description = {
+        "version": "1.0.0",
+        "model_quant_type": "W8A8_DYNAMIC",
+        "metadata": {},
+        "group_size": 0,
+        "is_rot_used": False,
+    }
+    description.update(
+        {
+            name: "W8A8_DYNAMIC" if name in dynamic_names else "FLOAT"
+            for name in sorted(output_tensor_names)
+        }
+    )
+    return description

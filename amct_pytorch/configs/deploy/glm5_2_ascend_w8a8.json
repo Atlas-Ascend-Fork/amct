@@ -1,0 +1,26 @@
+{
+  "quant_layers": [
+    "model.layers.*.self_attn.q_a_proj",
+    "model.layers.*.self_attn.q_b_proj",
+    "model.layers.*.self_attn.kv_a_proj_with_mqa",
+    "model.layers.*.self_attn.indexer.wq_b",
+    "model.layers.*.self_attn.o_proj",
+    "model.layers.*.mlp.gate_proj",
+    "model.layers.*.mlp.up_proj",
+    "model.layers.*.mlp.down_proj",
+    "model.layers.*.mlp.experts.*.gate_proj",
+    "model.layers.*.mlp.experts.*.up_proj",
+    "model.layers.*.mlp.experts.*.down_proj",
+    "model.layers.*.mlp.shared_experts.gate_proj",
+    "model.layers.*.mlp.shared_experts.up_proj",
+    "model.layers.*.mlp.shared_experts.down_proj"
+  ],
+  "ignore_layers": [
+    "model.layers.78.*",
+    "model.embed_tokens",
+    "lm_head",
+    "model.layers.*.self_attn.kv_b_proj",
+    "model.layers.*.self_attn.indexer.wk",
+    "model.layers.*.self_attn.indexer.weights_proj"
+  ]
+}
