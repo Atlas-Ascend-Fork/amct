@@ -23,6 +23,7 @@ import logging
 import os
 import stat
 from functools import wraps
+from inspect import signature
 
 
 # mode is 640
@@ -65,15 +66,17 @@ def log_split_deco(length=500):
     '''check whether input string length and split it to smaller strings'''
 
     def decorator(func):
+        func_sig = signature(func)
+        message_parameter = tuple(func_sig.parameters)[1]
+
         @wraps(func)
         def wrapper(*args, **kwargs):
-            if len(args) > 1:
-                args = list(args)
-                args[1] = split_str_by_length(str(args[1]), length)
-            else:
-                input_key = tuple(kwargs.keys())[0]
-                kwargs[input_key] = split_str_by_length(str(kwargs[input_key]), length)
-            return func(*args, **kwargs)
+            bound = func_sig.bind(*args, **kwargs)
+            bound.apply_defaults()
+            bound.arguments[message_parameter] = split_str_by_length(
+                str(bound.arguments[message_parameter]), length
+            )
+            return func(*bound.args, **bound.kwargs)
 
         return wrapper
 

@@ -175,3 +175,58 @@ def test_logger_logw_writes_warning_message():
 def test_logger_is_instantiated():
     assert LOGGER is not None
     assert isinstance(LOGGER, Logger)
+
+
+@pytest.fixture
+def file_logger(tmp_path):
+    """Own and close handlers before temporary log-directory cleanup."""
+    logger = LoggerBase(str(tmp_path), "keyword-message.log")
+    logger.set_debug_level("error", "debug")
+    yield logger, tmp_path / "keyword-message.log"
+    for handler in (logger.console_handler, logger.file_handler):
+        logger.logger.removeHandler(handler)
+        handler.close()
+
+
+@pytest.mark.parametrize(
+    "method,message_name",
+    [
+        ("logd", "debug_message"),
+        ("logi", "info_message"),
+        ("logw", "warning_message"),
+        ("loge", "error_message"),
+    ],
+)
+@pytest.mark.parametrize("module_first", [False, True])
+def test_logger_keyword_order_preserves_complete_message(
+    file_logger, method, message_name, module_first
+):
+    logger, path = file_logger
+    items = [(message_name, "hello world"), ("module_name", "CLI")]
+    if module_first:
+        items.reverse()
+    getattr(logger, method)(**dict(items))
+    logger.file_handler.flush()
+    messages = [line.split("[AMCT]:", 1)[1] for line in path.read_text().splitlines()]
+    assert messages == ["[CLI]: hello world"]
+
+
+@pytest.mark.parametrize("module_first", [False, True])
+def test_logger_keyword_order_preserves_long_message_chunks(file_logger, module_first):
+    logger, path = file_logger
+    items = [("info_message", "a" * 550), ("module_name", "CLI")]
+    if module_first:
+        items.reverse()
+    logger.logi(**dict(items))
+    logger.file_handler.flush()
+    messages = [line.split("[AMCT]:", 1)[1] for line in path.read_text().splitlines()]
+    assert messages == ["[CLI]: " + "a" * 500, "[CLI]: " + "a" * 50]
+
+
+@pytest.mark.parametrize("method", ["logd", "logi", "logw", "loge"])
+def test_logger_positional_message_and_module_compatibility(file_logger, method):
+    logger, path = file_logger
+    getattr(logger, method)("hello world", "CLI")
+    logger.file_handler.flush()
+    messages = [line.split("[AMCT]:", 1)[1] for line in path.read_text().splitlines()]
+    assert messages == ["[CLI]: hello world"]
