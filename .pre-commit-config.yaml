@@ -42,7 +42,7 @@ repos:
       - id: ruff-format
         types: [python]
 
-  # 拼写检查（CANN 专用词典白名单见 .codespellrc）
+  # 拼写检查（本仓未配置 .codespellrc，hook 也未传 --ignore-words-list / --skip，即对全部文件类型按 codespell 默认词典与默认规则执行）
   - repo: https://gitcode.com/gh_mirrors/co/codespell
     rev: v2.4.1
     hooks:
