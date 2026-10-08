@@ -102,6 +102,51 @@ def _tensor_json_args(workflow, quant=("model.layers.0.self_attn.o_proj",), igno
     )
 
 
+def test_legacy_tensorwise_dispatches_adapter_conversion_and_metadata(tmp_path):
+    """Deploy-only adapters can own their source format without changing other models."""
+    source = tmp_path / "source"
+    output = tmp_path / "output"
+    source.mkdir()
+    output.mkdir()
+    (source / CONFIG_JSON).write_text('{}', encoding="utf-8")
+    (source / SAFETENSORS_INDEX_JSON).write_text(
+        json.dumps({"weight_map": {LAYER_WEIGHT: MODEL_SAFETENSORS}}),
+        encoding="utf-8",
+    )
+    save_file({LAYER_WEIGHT: torch.ones(1, 32)}, str(source / MODEL_SAFETENSORS))
+    wf = _make_workflow(str(source), str(output), "mxfp")
+    converted = torch.arange(32).reshape(1, 32).to(torch.bfloat16)
+
+    def convert_shard(source_file, model_dir, weight_map, quant_layers, loaded_files):
+        save_file({LAYER_WEIGHT: converted}, str(output / source_file))
+        return {LAYER_WEIGHT: source_file}
+
+    def refresh_config(ignored):
+        (output / CONFIG_JSON).write_text(
+            json.dumps({"adapter_format": "kimi", "ignored": ignored}),
+            encoding="utf-8",
+        )
+
+    wf.pipeline = SimpleNamespace(
+        generate_tensorwise_quant_layers=dict,
+        generate_tensorwise_ignore_layers=lambda: ["untouched"],
+        convert_tensorwise_shard=convert_shard,
+        refresh_config=refresh_config,
+        get_scale_name=lambda name: (".scale", name + ".scale"),
+        block_size=lambda weight: 32,
+    )
+    wf._run_legacy_tensorwise()
+    from safetensors.torch import load_file
+
+    assert torch.equal(
+        load_file(str(output / MODEL_SAFETENSORS))[LAYER_WEIGHT], converted
+    )
+    assert json.loads((output / CONFIG_JSON).read_text(encoding="utf-8")) == {
+        "adapter_format": "kimi",
+        "ignored": ["untouched"],
+    }
+
+
 def test_workflow_initializes_plural_safetensors_files_cache():
     args = SimpleNamespace(
         granularity=GRANULARITY_BLOCK,

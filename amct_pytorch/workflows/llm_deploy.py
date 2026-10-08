@@ -475,9 +475,12 @@ class LlmDeployWorkflow:
         updated_weight_map = {}
         model_dir = Path(self.model_path)
         loaded_files = {}
+        convert_shard = getattr(self.pipeline, "convert_tensorwise_shard", None)
+        if not callable(convert_shard):
+            convert_shard = self._convert_tensorwise_shard
         for source_file in tqdm(sorted(weights_by_file), desc="Tensor convert..."):
             updated_weight_map.update(
-                self._convert_tensorwise_shard(
+                convert_shard(
                     source_file,
                     model_dir,
                     original_weight_map,
@@ -486,7 +489,10 @@ class LlmDeployWorkflow:
                 )
             )
         index_path = self._refresh_weight_index(original_index, updated_weight_map)
-        self._refresh_config(quant_ignore_layers)
+        refresh = getattr(self.pipeline, "refresh_config", None)
+        if not callable(refresh):
+            refresh = self._refresh_config
+        refresh(quant_ignore_layers)
         logger.info("Exported tensor-converted model to {}", self.output_dir)
         logger.info("Refreshed weight index at {}", index_path)
         return {
