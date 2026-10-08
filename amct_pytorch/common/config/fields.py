@@ -33,7 +33,6 @@ from amct_pytorch.common.utils.vars import (
 )
 from amct_pytorch.common.utils.vars import GROUP_SIZE_SUPPORTED_MAP
 from amct_pytorch.common.config.utils import get_alg_name_from_config
-from amct_pytorch.algorithms import AlgorithmRegistry
 
 
 class BatchNumField:
@@ -453,13 +452,18 @@ class AlgorithmField:
         self.algs = []
         supported_src_op = []
         for alg_name, alg_attr in zip(alg_names, alg_attrs):
-            for src_op in AlgorithmRegistry.algo.get(alg_name).keys():
+            for src_op in alg_reg.algo.get(alg_name).keys():
+                # A None src_op is a registry placeholder (e.g. cast's FP8Linear) and
+                # maps to no real source op, so it is excluded from the
+                # "one src_op is owned by exactly one algorithm" duplicate check.
+                if src_op is None:
+                    continue
                 if src_op in supported_src_op:
                     raise ValueError(
                         f'One src_op only support one algorithm, current algo {alg_name} '
                         f'support src_op {src_op} is duplicate'
                     )
-                    supported_src_op.append(src_op)
+                supported_src_op.append(src_op)
             if registed_algo_field.get(alg_name):
                 self.algs.append(registed_algo_field[alg_name](alg_attr))
             else:
@@ -467,11 +471,6 @@ class AlgorithmField:
 
         self.names = alg_names
         self.value = self.set_value()
-
-    @staticmethod
-    def check(alg_cfg):
-        if not isinstance(alg_cfg, str) and len(alg_cfg) != 1:
-            raise ValueError(f'Algorithm only support 1 str, but got {alg_cfg}')
 
     def get_value(self):
         return self.value
