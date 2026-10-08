@@ -274,7 +274,7 @@ python -m amct_pytorch.deploy \
 | `--trust_remote_code` | 默认关闭 | 是否允许 HuggingFace 模型仓执行自定义代码。传入该开关时启用；DeepSeek V3.2、DeepSeek V4 等依赖本地模型实现的模型必须启用，其他模型未启用时会给出 Warning。 |
 | `--device` | `npu:0` | 指定运行设备。建议选择NPU/GPU，以加速计算。 |
 | `--granularity` | `block` | 工作粒度，即量化或处理的单位，按子命令校验合法值：<br> `block`：按模块块处理（更细粒度，可能效果更好但耗时），所有子命令的默认值。<br> `model`：整个模型统一处理（整模型加载后前向，粗粒度，速度快），仅 `eval` 支持，`ptq` 中为预留接口。<br> `tensor`：按张（tensor）粒度转换权重（用于反量化或直转量化），仅 `deploy` 支持。 |
-| `--seed` | `0` | 随机种子，用于控制实验中随机行为的一致性（如数据采样、初始化等），设置为固定值可保证结果可复现。 |
+| `--seed` | `42` | 随机种子，用于控制实验中随机行为的一致性（如数据采样、初始化等），设置为固定值可保证结果可复现。 |
 | `--quant_target` | `[]`（`ptq` / `extract_ptq_data` **必填**；`deploy` 的 blockwise 导出**必填**） | 量化目标，取值：mlp（多层感知机）/ moe（混合专家）/ attn-linear（注意力线性层）/ attn-cache（注意力缓存）。各命令用法不同：`eval` 与 `deploy` 可同时指定多个（如 `--quant_target mlp attn-linear`）；`ptq` / `extract_ptq_data` 一次仅允许一个，多目标请分目标依次执行。`deploy` blockwise 中该参数决定构建并导出哪些量化模块，缺失时会静默导出未量化权重；`granularity=tensor` 时纯反量化（如 FP8/FP4 → BF16 权重转换）不使用该参数，tensorwise 直转量化（部分模型族，如 hy_v3 / glm5_2）仍需指定。 |
 | `--seq_len` | `4096` | 校准和评估时使用的输入序列长度。用于确定模型在处理多长文本时的表现（尤其在量化校准阶段很重要）。 可选值：`1024`、`2048`、`4096`|
 | `--data_dir` | 空字符串（`ptq` / `extract_ptq_data` **必填**） | PTQ 中间数据保存/读取目录：`extract_ptq_data` 的输出目录，`ptq` 从中读取。 |
@@ -324,7 +324,7 @@ python -m amct_pytorch.deploy \
 |------|------|
 | [bf16.yaml](../../amct_pytorch/configs/bf16.yaml) | 全部保持 16 bit。 |
 | [w8a8.yaml](../../amct_pytorch/configs/w8a8.yaml) | 全局 W8A8（权重激活都为8bit）。 |
-| [w4a8.yaml](../../amct_pytorch/configs/w4a8.yaml) | 全局 W4A8（权重8bit，激活4bit）。 |
+| [w4a8.yaml](../../amct_pytorch/configs/w4a8.yaml) | 全局 W4A8（权重4bit，激活8bit）。 |
 | [w4a4.yaml](../../amct_pytorch/configs/w4a4.yaml) | 全局 W4A4（权重激活都为4bit）。 |
 | [example_w4a8.yaml](../../amct_pytorch/configs/example_w4a8.yaml) | 自定义量化方案示例。 |
 
@@ -338,7 +338,7 @@ python -m amct_pytorch.deploy \
 |------|------|------|
 | `--cali_bsz` | `4` | PTQ 校准训练batch size。<br>PTQ过程中，需要使用一小部分数据（称为校准数据集）来调整量化参数（如缩放因子和零点），该参数定义了每次处理多少个样本进行校准。 |
 | `--base_lr` | `1e-5` | 基础学习率，该参数决定了模型参数在每次迭代中更新的步长。 |
-| `--optimizer` | `adamw` | 优化器，指定用于更新模型参数的算法；支持如下几种优化器。<br> `adamw`：Adam的改进版，通常能更好地处理权重衰减。<br>`adam`：经典的Adam优化器。<br/>`sgd`：随机梯度下降。<br/>`cayley：`一种较少见的优化器。 |
+| `--optimizer` | `adamw` | 优化器，指定用于更新模型参数的算法；支持如下几种优化器。<br> `adamw`：Adam的改进版，通常能更好地处理权重衰减。<br>`adam`：经典的Adam优化器。<br/>`sgd`：随机梯度下降。<br/>`signsgd`：基于梯度符号的随机梯度下降变体。 |
 | `--weight_decay` | `0.0` | 权重衰减，适用于部分优化器；一种正则化技术，通过在损失函数中加入一个与权重大小成正比的惩罚项，来防止模型过拟合。值为`0.0`表示在此优化过程中不使用权重衰减。 |
 | `--momentum` | `0.9` | SGD 动量。<br>当使用SGD优化器时，动量可以帮助加速收敛并帮助模型跳出局部最优解,它通过累积之前梯度的指数加权移动平均来更新参数。 |
 | `--lr_scheduler` | `cosine` | 学习率调度器，定义了在训练过程中如何动态地调整学习率；支持如下几种：<br> `none`：学习率保持不变。<br>`cosine`：余弦退火，学习率会按照余弦函数的曲线平滑地降低。<br/>`step`：阶梯式衰减，每隔固定的步数将学习率乘以一个系数。<br/>默认使用`cosine`，因为它能提供更平滑的学习率下降，有助于模型收敛到更好的状态。 |
