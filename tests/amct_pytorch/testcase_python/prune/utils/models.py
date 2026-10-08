@@ -27,7 +27,7 @@ class SingleLinear(nn.Module):
     """args_shape: [(1, 16, 28, 28)]"""
 
     def __init__(self):
-        super(SingleConv, self).__init__()
+        super(SingleLinear, self).__init__()
         self.layer1 = nn.Sequential(
             nn.Linear(in_features=16, out_features=64, bias=True), nn.BatchNorm2d(64)
         )
