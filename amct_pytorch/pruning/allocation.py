@@ -33,6 +33,7 @@ from .accuracy_based_auto_prune import (
 from .calib import calib_nll
 from .compat import detect_backend
 from .config import PruneConfig
+from .context import BatchAdapter
 from .pruner import AutoPruner
 from .report import PruneReport
 from .utils import count_parameters
@@ -130,6 +131,7 @@ def measure_layer_sensitivity(
     config: Optional[PruneConfig] = None,
     ref_ratio: float = 0.5,
     skip_layers: Optional[Sequence[str]] = None,
+    batch_adapter: Optional[BatchAdapter] = None,
 ) -> "dict[str, float]":
     """Prune each layer alone at ref_ratio, measure top-1 fidelity drop -> {layer prefix: drop}."""
     batches = list(data)
@@ -146,12 +148,14 @@ def measure_layer_sensitivity(
         base_cfg["skip_layers"] = list(base_cfg.get("skip_layers") or []) + list(
             skip_layers
         )
-    fid = _make_fidelity_quality(model, batches, None)
+    fid = _make_fidelity_quality(model, batches, batch_adapter)
     sens: dict = {}
     for key in keys:
         cand = copy.deepcopy(model)
         try:
-            _prune_single_layer(cand, base_cfg, keys, key, ref_ratio, batches, None)
+            _prune_single_layer(
+                cand, base_cfg, keys, key, ref_ratio, batches, batch_adapter
+            )
             sens[key] = 1.0 - float(fid(cand))
         except (
             RuntimeError,
@@ -312,6 +316,7 @@ def prune_with_allocation(
         config,
         float(alloc.get("ref_ratio", cut)),
         config.skip_layers,
+        batch_adapter=batch_adapter,
     )
     ratios = water_fill_ratios(
         sens,
