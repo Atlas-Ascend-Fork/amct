@@ -35,7 +35,7 @@ def _unwrap_logits(out: Any) -> torch.Tensor:
 
 def nll_from_logits(logits: torch.Tensor, ids: torch.Tensor) -> tuple[float, int]:
     """Next-token cross-entropy sum and token count for one batch (logits[:, :-1] vs ids[:, 1:])."""
-    target = ids[:, 1:].reshape(-1)
+    target = ids[:, 1:].reshape(-1).long()
     nll_sum = F.cross_entropy(
         logits[:, :-1].reshape(-1, logits.shape[-1]),
         target,
@@ -64,4 +64,6 @@ def calib_nll(model: nn.Module, data: Sequence[Any]) -> float:
             nll_sum, n = nll_from_logits(logits, c)
             tot += nll_sum
             n_tokens += n
-    return tot / max(n_tokens, 1)
+    if n_tokens == 0:
+        raise ValueError("calib_nll needs at least one next-token target.")
+    return tot / n_tokens
