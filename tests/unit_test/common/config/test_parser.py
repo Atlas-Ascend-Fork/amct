@@ -15,6 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 from unittest.mock import MagicMock
 
 import pytest
@@ -200,6 +201,73 @@ def test_check_quant_op_constraint_has_bias():
         ),
     )
     assert result is False
+
+
+def _warning_records(caplog, keyword):
+    return [
+        rec.getMessage()
+        for rec in caplog.records
+        if rec.levelno == logging.WARNING and keyword in rec.getMessage()
+    ]
+
+
+def test_check_quant_op_constraint_shape_skip_logs_warning(caplog):
+    '''形状约束跳层应打 WARNING，用户配置未生效时控制台/日志需有痕迹'''
+    mod = _make_mock_linear(in_features=96, out_features=64)
+    qc = _make_quant_config(
+        weight_type="float4_e2m1", weight_strategy="group", group_size=64
+    )
+    with caplog.at_level(logging.DEBUG, logger="Log"):
+        result = check_quant_op_constraint(mod, "wide", "NOT_QUANTIZE float4_e2m1", qc)
+    assert result is False
+    assert _warning_records(caplog, "layer:wide")
+    assert _warning_records(caplog, "integer multiple of 64")
+
+
+def test_check_quant_op_constraint_bias_skip_logs_warning(caplog):
+    '''bias 约束跳层同样打 WARNING'''
+    mod = _make_mock_linear(in_features=64, out_features=64, has_bias=True)
+    qc = _make_quant_config(
+        weight_type="float4_e2m1", weight_strategy="group", group_size=64
+    )
+    with caplog.at_level(logging.DEBUG, logger="Log"):
+        result = check_quant_op_constraint(
+            mod, "layer.0", "float8_e4m3fn float4_e2m1", qc
+        )
+    assert result is False
+    assert _warning_records(caplog, "bias is not supported")
+
+
+def test_check_quant_op_constraint_int4_shape_skip_logs_warning(caplog):
+    '''int4 的 8 倍数约束跳层打 WARNING'''
+    mod = _make_mock_linear(in_features=60, out_features=64)
+    qc = _make_quant_config(
+        weight_type="int4", weight_strategy="channel", enable_input=False
+    )
+    with caplog.at_level(logging.DEBUG, logger="Log"):
+        result = check_quant_op_constraint(mod, "layer.0", "NOT_QUANTIZE int4", qc)
+    assert result is False
+    assert _warning_records(caplog, "integer multiples of 8")
+
+
+def test_get_supported_layers_fuzzy_shape_skip_logs_warning(caplog):
+    '''通配符改 dtype 导致形状不满足而跳层时，控制台需可见告警'''
+    model = _FuzzyModel()
+    qc = _make_fuzzy_quant_config(
+        {
+            "weights": {"type": "int8", "symmetric": True, "strategy": "channel"},
+            "*wide.weights": {
+                "type": "float4_e2m1",
+                "symmetric": True,
+                "strategy": "group",
+                "group_size": 32,
+            },
+        }
+    )
+    with caplog.at_level(logging.DEBUG, logger="Log"):
+        result = get_supported_layers(model, qc, AlgorithmRegistry)
+    assert "wide" not in result
+    assert _warning_records(caplog, "layer:wide")
 
 
 def test_check_quant_op_constraint_no_bias_no_group_size():
@@ -921,6 +989,56 @@ def test_check_layer_config_algo_not_support_comb():
         check_layer_config("NOT_QUANTIZE hifloat8", layer_cfg, MINMAX)
 
 
+def test_check_layer_config_error_carries_layer_name():
+    '''多个模糊 pattern 并存时，报错文案需指明是哪一层'''
+    from amct_pytorch.common.config.parser import check_layer_config
+
+    layer_cfg = {
+        "weights_cfg": {"quant_type": "hifloat8", "strategy": "channel"},
+        "inputs_cfg": {"enable_quant": False},
+    }
+    with pytest.raises(ValueError) as exc_info:
+        check_layer_config(
+            "NOT_QUANTIZE hifloat8", layer_cfg, MINMAX, "model.layers.0.mlp.down_proj"
+        )
+    assert str(exc_info.value).startswith("layer:model.layers.0.mlp.down_proj ")
+    assert "do not support act and weight quant dtype" in str(exc_info.value)
+
+
+def test_check_layer_config_no_layer_name_keeps_message():
+    '''不传层名时保持与全局路径一致的原始文案'''
+    from amct_pytorch.common.config.parser import check_layer_config
+
+    with pytest.raises(ValueError) as exc_info:
+        check_layer_config("float64 float64", None, MINMAX)
+    assert str(exc_info.value) == (
+        "Do not support combination float64 float64 of act and weight quant dtype."
+    )
+
+
+def test_check_layer_config_comb_rules_error_carries_layer_name():
+    '''组合级规则（对称性 / 粒度）报错同样带层名'''
+    from amct_pytorch.common.config.parser import check_layer_config
+
+    layer_cfg = {
+        "weights_cfg": {
+            "quant_type": "int8",
+            "symmetric": False,
+            "strategy": "channel",
+        },
+        "inputs_cfg": {
+            "quant_type": "int8",
+            "symmetric": True,
+            "strategy": "tensor",
+        },
+    }
+    with pytest.raises(ValueError) as exc_info:
+        check_layer_config("int8 int8", layer_cfg, MINMAX, "wide")
+    assert str(exc_info.value) == (
+        "layer:wide int8 int8 only support symmetric weight quantization"
+    )
+
+
 def test_check_layer_config_weight_strategy_not_supported():
     from amct_pytorch.common.config.parser import check_layer_config
 
@@ -1035,7 +1153,9 @@ def test_get_supported_layers_fuzzy_algo_comb_raises():
             },
         }
     )
-    with pytest.raises(ValueError, match="do not support act and weight quant dtype"):
+    with pytest.raises(
+        ValueError, match="layer:wide .*do not support act and weight quant dtype"
+    ):
         get_supported_layers(model, qc, AlgorithmRegistry)
 
 
@@ -1059,7 +1179,9 @@ def test_get_supported_layers_fuzzy_weight_strategy_raises():
             },
         }
     )
-    with pytest.raises(ValueError, match="do not support weight quant strategy"):
+    with pytest.raises(
+        ValueError, match="layer:wide .*do not support weight quant strategy"
+    ):
         get_supported_layers(model, qc, AlgorithmRegistry)
 
 
@@ -1125,7 +1247,7 @@ def test_get_supported_layers_fuzzy_group_size_overrides_global():
         }
     )
     result = get_supported_layers(model, qc, AlgorithmRegistry)
-    # small 的 cin=64，被覆盖成 group_size=64 后应跳过；large/wide 仍用全局 32
+    # small 的 cin=64，被覆盖成 group_size=64 后应跳过；wide 仍用全局 32
     assert "small" not in result
     assert "wide" in result
     assert result["wide"]["weights_cfg"]["group_size"] == 32
