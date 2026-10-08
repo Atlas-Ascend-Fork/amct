@@ -10,6 +10,7 @@ Dataset->local-path mapping comes from datasets.json (shared with prefetch_data.
 via config.py, resolved under $BENCH_ASSETS. Add a benchmark = add a datasets.json
 entry, no code change here.
 """
+
 import os
 import sys
 import pandas as pd
@@ -37,7 +38,8 @@ def _patched(path, *args, **kwargs):
             if missing:
                 raise FileNotFoundError(
                     f"{path} split '{split}' not prefetched at {missing}; "
-                    f"run prefetch_data.py first")
+                    f"run prefetch_data.py first"
+                )
             frames = [read_dataset_file(fp) for fp in fps]
             df = pd.concat(frames, ignore_index=True) if len(frames) > 1 else frames[0]
             splits[split] = datasets.Dataset.from_pandas(df, preserve_index=False)
@@ -49,6 +51,7 @@ def install():
     datasets.load_dataset = _patched
     try:
         import lm_eval.api.task as _t
+
         _t.load_dataset = _patched
     except Exception:
         pass

@@ -1,5 +1,6 @@
 # -*- coding: UTF-8 -*-
 """Shared helpers for quant-benchmark-eval scripts."""
+
 import importlib.metadata
 import importlib.util
 import ast
@@ -34,8 +35,7 @@ def _restore_dotted_columns(df):
         groups.setdefault(prefix, []).append((suffix, col))
     for prefix, items in groups.items():
         df[prefix] = [
-            {suffix: row[col] for suffix, col in items}
-            for _, row in df.iterrows()
+            {suffix: row[col] for suffix, col in items} for _, row in df.iterrows()
         ]
         df = df.drop(columns=[col for _, col in items])
     return df
@@ -52,7 +52,8 @@ def local_dataset_files(task, registry, mapping, split="test", existing_only=Tru
         return fps
     raise FileNotFoundError(
         f"{spec['repo_id']} split '{split}' is not prefetched for task '{task}'. "
-        f"Run prefetch_data.py --task {task} first.")
+        f"Run prefetch_data.py --task {task} first."
+    )
 
 
 def validate_lcb_docs(docs):
@@ -61,7 +62,8 @@ def validate_lcb_docs(docs):
         missing = [field for field in REQUIRED_LCB_FIELDS if not doc.get(field)]
         if missing:
             raise ValueError(
-                f"LiveCodeBench doc #{idx} missing required fields: {missing}")
+                f"LiveCodeBench doc #{idx} missing required fields: {missing}"
+            )
 
 
 def split_quant_targets(quant_target):
@@ -84,7 +86,8 @@ def ensure_supported_quant_target(quant_target, allow_attn_quant=False):
             "attention quant target requires explicit confirmation: "
             f"{unsupported}. Quantized attention disables KV cache and is much "
             "slower for generation. Re-run with --allow_attn_quant only after "
-            "confirming this is the intended benchmark object.")
+            "confirming this is the intended benchmark object."
+        )
     return targets
 
 
@@ -120,7 +123,8 @@ def check_environment(require_lm_eval=False, require_lcb_runner=False):
             installed = "unknown"
         if installed != expected_version:
             version_mismatch.append(
-                f"{package_name}=={expected_version} required, found {installed}")
+                f"{package_name}=={expected_version} required, found {installed}"
+            )
 
     if missing or version_mismatch:
         parts = []

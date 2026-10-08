@@ -5,6 +5,7 @@ snapshot_download is robust (retries, per-file) where datasets' remote glob time
 out on this box's mirror. Run once per benchmark before offline eval. The dataset
 registry lives in datasets.json (shared with bench_offline.py) via config.py.
 """
+
 import argparse
 import os
 import sys
@@ -23,11 +24,18 @@ def main():
     ap.add_argument("--task", required=True, choices=list(reg))
     a = ap.parse_args()
     from huggingface_hub import snapshot_download
+
     spec = reg[a.task]
     dst = os.path.join(BENCH_ASSETS, spec["subdir"])
-    allow_patterns = spec.get("allow_patterns", ["*.parquet", "*.json", "*.jsonl", "*.md"])
-    p = snapshot_download(repo_id=spec["repo_id"], repo_type="dataset", local_dir=dst,
-                          allow_patterns=allow_patterns)
+    allow_patterns = spec.get(
+        "allow_patterns", ["*.parquet", "*.json", "*.jsonl", "*.md"]
+    )
+    p = snapshot_download(
+        repo_id=spec["repo_id"],
+        repo_type="dataset",
+        local_dir=dst,
+        allow_patterns=allow_patterns,
+    )
     print(f"[prefetch] {spec['repo_id']} -> {p}")
     for split, rels in spec["splits"].items():
         if isinstance(rels, str):

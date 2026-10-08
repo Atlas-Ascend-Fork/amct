@@ -13,6 +13,7 @@ official lcb_runner custom-evaluator JSON format:
 Run lcb_runner.runner.custom_evaluator on that JSON to compute the official
 hidden-test pass@1/pass@k metric.
 """
+
 import argparse
 import json
 import os
@@ -55,7 +56,9 @@ def load_lcb_docs(task, limit):
 
 
 def build_prompt(doc):
-    question = doc.get("question_content") or doc.get("prompt") or doc.get("content") or ""
+    question = (
+        doc.get("question_content") or doc.get("prompt") or doc.get("content") or ""
+    )
     starter = doc.get("starter_code") or ""
     prompt = (
         "You are solving a programming problem. Write a complete Python 3 solution.\n"
@@ -68,7 +71,9 @@ def build_prompt(doc):
 
 
 def extract_code(text):
-    blocks = re.findall(r"```(?:python|py)?\s*(.*?)```", text, flags=re.IGNORECASE | re.DOTALL)
+    blocks = re.findall(
+        r"```(?:python|py)?\s*(.*?)```", text, flags=re.IGNORECASE | re.DOTALL
+    )
     if blocks:
         return blocks[-1].strip()
     # Fall back to stripping common chatty preambles.
@@ -84,9 +89,12 @@ def generate_code(model, tok, prompt, max_new_tokens, use_cache=True):
     encoded = {k: v.to(input_device(model)) for k, v in encoded.items()}
     with torch.no_grad():
         out = model.generate(
-            **encoded, max_new_tokens=max_new_tokens, do_sample=False,
-            use_cache=use_cache)
-    return tok.decode(out[0][encoded["input_ids"].shape[1]:], skip_special_tokens=True)
+            **encoded,
+            max_new_tokens=max_new_tokens,
+            do_sample=False,
+            use_cache=use_cache,
+        )
+    return tok.decode(out[0][encoded["input_ids"].shape[1] :], skip_special_tokens=True)
 
 
 def write_json(path, rows):
@@ -113,24 +121,44 @@ def main():
     ap.add_argument("--param_dir", default="")
     ap.add_argument("--quant_target", default="")
     ap.add_argument("--bit_config", default=DEFAULT_BIT_CONFIG)
-    ap.add_argument("--output_dir", default="/tmp/qbe_out",
-                    help="amct temporary output dir")
+    ap.add_argument(
+        "--output_dir", default="/tmp/qbe_out", help="amct temporary output dir"
+    )
     ap.add_argument("--seq_len", type=int, default=2048)
     ap.add_argument("--device_map", default="")
-    ap.add_argument("--limit", type=int, default=0,
-                    help="debug only; official custom_evaluator requires the full selected release")
+    ap.add_argument(
+        "--limit",
+        type=int,
+        default=0,
+        help="debug only; official custom_evaluator requires the full selected release",
+    )
     ap.add_argument("--max_gen_toks", type=int, default=1024)
     ap.add_argument("--bf16", action="store_true")
-    ap.add_argument("--allow_attn_quant", action="store_true",
-                    help="explicitly allow attn-linear/attn-cache quant targets")
-    ap.add_argument("--dataset_task", choices=["livecodebench", "livecodebench_release_v6"],
-                    default="livecodebench_release_v6")
-    ap.add_argument("--release_version", default="release_v6",
-                    help="lcb_runner release_version to use when scoring this output")
-    ap.add_argument("--output_json", default="livecodebench_custom_outputs.json",
-                    help="official lcb_runner custom_output_file JSON")
-    ap.add_argument("--raw_output_jsonl", default="",
-                    help="optional JSONL with prompt and raw generation for debugging")
+    ap.add_argument(
+        "--allow_attn_quant",
+        action="store_true",
+        help="explicitly allow attn-linear/attn-cache quant targets",
+    )
+    ap.add_argument(
+        "--dataset_task",
+        choices=["livecodebench", "livecodebench_release_v6"],
+        default="livecodebench_release_v6",
+    )
+    ap.add_argument(
+        "--release_version",
+        default="release_v6",
+        help="lcb_runner release_version to use when scoring this output",
+    )
+    ap.add_argument(
+        "--output_json",
+        default="livecodebench_custom_outputs.json",
+        help="official lcb_runner custom_output_file JSON",
+    )
+    ap.add_argument(
+        "--raw_output_jsonl",
+        default="",
+        help="optional JSONL with prompt and raw generation for debugging",
+    )
     a = ap.parse_args()
 
     check_environment()
@@ -146,52 +174,73 @@ def main():
         tag = "quant"
         if not a.param_dir:
             sys.exit("--param_dir required unless --bf16")
-        model, tok = assemble_quant_model(a.model, a.model_name, a.param_dir,
-                                          a.bit_config, a.seq_len, device_map=dmap,
-                                          quant_target=(a.quant_target or None),
-                                          output_dir=a.output_dir,
-                                          allow_attn_quant=a.allow_attn_quant)
+        model, tok = assemble_quant_model(
+            a.model,
+            a.model_name,
+            a.param_dir,
+            a.bit_config,
+            a.seq_len,
+            device_map=dmap,
+            quant_target=(a.quant_target or None),
+            output_dir=a.output_dir,
+            allow_attn_quant=a.allow_attn_quant,
+        )
 
     docs = load_lcb_docs(a.dataset_task, a.limit)
     validate_lcb_docs(docs)
     custom_outputs = []
     raw_rows = []
     if a.limit and a.limit > 0:
-        print("[warn] --limit creates a partial output file; official custom_evaluator "
-              "will reject it unless the selected release has the same number of problems.")
+        print(
+            "[warn] --limit creates a partial output file; official custom_evaluator "
+            "will reject it unless the selected release has the same number of problems."
+        )
     generate_use_cache = not (not a.bf16 and has_attention_quant(a.quant_target))
-    print(f"[generate] {tag} livecodebench dataset_task={a.dataset_task} "
-          f"release_version={a.release_version} samples={len(docs)} "
-          f"max_gen_toks={a.max_gen_toks}")
+    print(
+        f"[generate] {tag} livecodebench dataset_task={a.dataset_task} "
+        f"release_version={a.release_version} samples={len(docs)} "
+        f"max_gen_toks={a.max_gen_toks}"
+    )
     for idx, doc in enumerate(docs, 1):
         prompt = build_prompt(doc)
-        raw = generate_code(model, tok, prompt, a.max_gen_toks,
-                            use_cache=generate_use_cache)
+        raw = generate_code(
+            model, tok, prompt, a.max_gen_toks, use_cache=generate_use_cache
+        )
         code = extract_code(raw)
         question_id = str(doc.get("question_id", ""))
-        custom_outputs.append({
-            "question_id": question_id,
-            "code_list": [code],
-        })
-        raw_rows.append({
-            "idx": idx,
-            "question_id": question_id,
-            "prompt": prompt,
-            "generation": raw,
-            "code": code,
-        })
-        print(f"[sample] {idx}/{len(docs)} id={question_id} generated_chars={len(code)}")
+        custom_outputs.append(
+            {
+                "question_id": question_id,
+                "code_list": [code],
+            }
+        )
+        raw_rows.append(
+            {
+                "idx": idx,
+                "question_id": question_id,
+                "prompt": prompt,
+                "generation": raw,
+                "code": code,
+            }
+        )
+        print(
+            f"[sample] {idx}/{len(docs)} id={question_id} generated_chars={len(code)}"
+        )
 
     write_json(a.output_json, custom_outputs)
     if a.raw_output_jsonl:
         write_jsonl(a.raw_output_jsonl, raw_rows)
-    print(f"[RESULT] {tag} livecodebench_custom_output: "
-          f"{{'sample_len': {len(docs)}, 'output_json': {a.output_json!r}, "
-          f"'raw_output_jsonl': {a.raw_output_jsonl!r}}}")
+    print(
+        f"[RESULT] {tag} livecodebench_custom_output: "
+        f"{{'sample_len': {len(docs)}, 'output_json': {a.output_json!r}, "
+        f"'raw_output_jsonl': {a.raw_output_jsonl!r}}}"
+    )
     print("[next] score with official hidden tests:")
-    print("python -m lcb_runner.runner.custom_evaluator "
-          f"--scenario codegeneration --release_version {a.release_version} "
-          f"--custom_output_file {a.output_json}")
+    print(
+        "python -m lcb_runner.runner.custom_evaluator "
+        f"--scenario codegeneration --release_version {a.release_version} "
+        f"--custom_output_file {a.output_json}"
+    )
 
 
 if __name__ == "__main__":

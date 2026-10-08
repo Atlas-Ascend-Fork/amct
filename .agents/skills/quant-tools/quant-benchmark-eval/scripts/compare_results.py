@@ -1,5 +1,6 @@
 # -*- coding: UTF-8 -*-
 """Compare bf16 and quant benchmark result files."""
+
 import argparse
 import json
 import os
@@ -66,17 +67,25 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--bf16", required=True, help="bf16 result log or JSON")
     ap.add_argument("--quant", required=True, help="quant result log or JSON")
-    ap.add_argument("--metric", default="",
-                    help="metric suffix to compare, e.g. exact_match,none or pass@1")
+    ap.add_argument(
+        "--metric",
+        default="",
+        help="metric suffix to compare, e.g. exact_match,none or pass@1",
+    )
     ap.add_argument("--sample_len", type=int, default=0)
-    ap.add_argument("--limited", action="store_true",
-                    help="mark the comparison as a smoke/limited sample")
+    ap.add_argument(
+        "--limited",
+        action="store_true",
+        help="mark the comparison as a smoke/limited sample",
+    )
     args = ap.parse_args()
 
     bf16_flat = _flatten(_load_result(args.bf16))
     quant_flat = _flatten(_load_result(args.quant))
     bf16_key, bf16_value = _pick_metric(bf16_flat, args.metric)
-    quant_key, quant_value = _pick_metric(quant_flat, args.metric or bf16_key.split(".")[-1])
+    quant_key, quant_value = _pick_metric(
+        quant_flat, args.metric or bf16_key.split(".")[-1]
+    )
     result = {
         "metric": args.metric or bf16_key.split(".")[-1],
         "bf16_key": bf16_key,

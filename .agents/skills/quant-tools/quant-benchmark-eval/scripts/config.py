@@ -15,6 +15,7 @@ Env vars (all optional):
                 ~/.cache/amct-bench-assets.
   HF_ENDPOINT   HF mirror for prefetch.  default: https://hf-mirror.com
 """
+
 import json
 import os
 from glob import glob
@@ -30,8 +31,9 @@ def _default_amct_home():
     here = os.path.dirname(os.path.abspath(__file__))
     cand = here
     while True:
-        if (os.path.isdir(os.path.join(cand, "amct_pytorch"))
-                and os.path.isfile(os.path.join(cand, "setup.py"))):
+        if os.path.isdir(os.path.join(cand, "amct_pytorch")) and os.path.isfile(
+            os.path.join(cand, "setup.py")
+        ):
             return cand
         parent = os.path.dirname(cand)
         if parent == cand:
@@ -42,7 +44,8 @@ def _default_amct_home():
 def _default_bench_assets():
     """Per-user cache dir for benchmark datasets (XDG-friendly)."""
     base = os.environ.get("XDG_CACHE_HOME") or os.path.join(
-        os.path.expanduser("~"), ".cache")
+        os.path.expanduser("~"), ".cache"
+    )
     return os.path.join(base, "amct-bench-assets")
 
 
@@ -64,11 +67,14 @@ def require_amct_home():
         raise RuntimeError(
             "cannot locate the amct repo root (no directory with both "
             "amct_pytorch/ and setup.py above this skill). Set AMCT_HOME to "
-            "your amct checkout, or pass --bit_config explicitly.")
+            "your amct checkout, or pass --bit_config explicitly."
+        )
     return AMCT_HOME
 
 
-_DATASETS_JSON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "datasets.json")
+_DATASETS_JSON = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "datasets.json"
+)
 
 
 def load_dataset_registry():

@@ -4,6 +4,7 @@
 This does not load model weights, allocate NPU memory, download datasets, or run
 benchmarks. It verifies script wiring and local config assumptions.
 """
+
 import os
 import subprocess
 import sys
@@ -40,7 +41,9 @@ def _check_registry():
         files = local_dataset_files(task, reg, mapping, existing_only=False)
         if not files:
             raise AssertionError(f"task {task} resolved to no files")
-    if not DEFAULT_BIT_CONFIG.endswith(os.path.join("amct_pytorch", "configs", "w8a8.yaml")):
+    if not DEFAULT_BIT_CONFIG.endswith(
+        os.path.join("amct_pytorch", "configs", "w8a8.yaml")
+    ):
         raise AssertionError(f"unexpected DEFAULT_BIT_CONFIG: {DEFAULT_BIT_CONFIG}")
 
 
@@ -50,7 +53,9 @@ def _check_jsonl_reader():
         with open(path, "w", encoding="utf-8") as f:
             f.write('{"question_id":"q1","question_content":"Solve it"}\n')
         df = read_dataset_file(path)
-        if df.to_dict("records") != [{"question_id": "q1", "question_content": "Solve it"}]:
+        if df.to_dict("records") != [
+            {"question_id": "q1", "question_content": "Solve it"}
+        ]:
             raise AssertionError("jsonl reader returned unexpected rows")
 
 
@@ -86,7 +91,8 @@ def _check_cli_help():
         )
         if proc.returncode != 0:
             raise AssertionError(
-                f"{script} --help failed with {proc.returncode}: {proc.stderr}")
+                f"{script} --help failed with {proc.returncode}: {proc.stderr}"
+            )
 
 
 def main():

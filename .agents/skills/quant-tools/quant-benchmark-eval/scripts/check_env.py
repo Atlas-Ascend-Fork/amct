@@ -1,5 +1,6 @@
 # -*- coding: UTF-8 -*-
 """Check quant-benchmark-eval runtime dependencies."""
+
 import argparse
 import os
 import sys
@@ -12,10 +13,14 @@ from utils import check_environment  # noqa: E402
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--skip_lm_eval", action="store_true",
-                    help="do not require lm-eval==0.4.12")
-    ap.add_argument("--livecodebench_score", action="store_true",
-                    help="also require lcb_runner for official scoring")
+    ap.add_argument(
+        "--skip_lm_eval", action="store_true", help="do not require lm-eval==0.4.12"
+    )
+    ap.add_argument(
+        "--livecodebench_score",
+        action="store_true",
+        help="also require lcb_runner for official scoring",
+    )
     args = ap.parse_args()
 
     check_environment(
