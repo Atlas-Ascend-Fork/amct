@@ -10,7 +10,7 @@ English | [简体中文](./README.md)
 [![CANN](https://img.shields.io/badge/CANN-%E2%89%A58.5.0-green.svg)](docs/zh/quick_install.md)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.1.0%20%7C%202.7.1-orange.svg)](requirements.txt)
 
-[Quick Start](#-quick-start) · [Features](#-core-features) · [Samples](#-documentation-samples) · [FAQ](#-faq) · [Contribution](#-participate-in-contribution)
+[Quick Start](#quickstart) · [Features](#core) · [Samples](#documentsdemo) · [FAQ](#faq) · [Contribution](#contribute)
 
 </div>
 
@@ -41,7 +41,7 @@ AMCT is an Ascend NPU native model quantization compression tool. After quantiza
 - **🔢 Multi-Precision Full Stack** —— INT8 / INT4 / MXFP8 / MXFP4 / HiFloat8 available
 - **🚀 Large Model Ready** —— Native support for frontier models such as DeepSeek-V3.2 / V4
 
-
+<a id="core"></a>
 ## ✨ Core Features
 
 | Feature Category | Introduction |
@@ -65,7 +65,7 @@ Quantization significantly reduces deployment costs:
 | **MXFP8** | ✅ MXQuant | ✅ MXQuant | Size **↓50%** · High precision |
 | **MXFP4** | ✅ MXQuant | ✅ MXQuant | Size **↓75%** · Micro-scaling floating-point |
 
-
+<a id="quickstart"></a>
 ## 📦 Quick Start
 
 ### Environment Requirements
@@ -121,6 +121,7 @@ The "One-Stop Platform" is an NPU environment provided for developers, internall
 | [DeepSeek-V4](examples/models/deepseekv4/DeepSeekV4-Flash-Walkthrough.md) | Complete DeepSeek-V4 Flash model single-card inference in Atlas A3 environment, providing standard launch process and related configurations for one-stop platform scenarios, helping users quickly get started to complete an end-to-end NPU inference experience.    |
 | [Qwen3.6-MoE Structured Pruning](./examples/models/qwen3.6/Qwen3.6-Moe-Pruning_en.md) | Structurally prune the MoE experts of Qwen3.6-MoE on Atlas A3, shrinking a model that does not fit one card until it does; the pruned model can still be quantized. |
 
+<a id="documentsdemo"></a>
 ## 📖 Documentation Samples
 
 | Topic | Content |
@@ -154,6 +155,7 @@ amct/
 └── requirements.txt               # Python third-party dependencies
 ```
 
+<a id="faq"></a>
 ## ❓ FAQ
 
 <details>
@@ -212,6 +214,7 @@ Welcome to join the AMCT community and participate in discussion and exchange:
 | [GitCode Discussions](https://gitcode.com/cann/amct/discussions) | Experience sharing, best practices, community interaction |
 | [SIG Discussions](https://gitcode.com/cann/community/blob/master/CANN/sigs/tools/README.md) | Technical decisions, problem handling, project landing |
 
+<a id="contribute"></a>
 ## 🤝 Participate in Contribution
 
 Welcome to contribute code, algorithms, and documentation, see [Contributing Guide](CONTRIBUTING.md):
