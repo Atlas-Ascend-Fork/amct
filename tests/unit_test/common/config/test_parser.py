@@ -270,6 +270,33 @@ def test_get_supported_layers_fuzzy_shape_skip_logs_warning(caplog):
     assert _warning_records(caplog, "layer:wide")
 
 
+def test_check_layer_constraints_dtype_mismatch_skip_logs_warning(caplog):
+    '''原始权重 dtype 不在组合白名单内而跳层时，应打 WARNING 而非 DEBUG'''
+    mod = nn.Linear(64, 64, dtype=torch.float32)
+    qc = _make_quant_config(weight_type="int8", enable_input=False)
+    with caplog.at_level(logging.DEBUG, logger="Log"):
+        result = _check_layer_constraints(mod, "wide", MINMAX, "NOT_QUANTIZE int8", qc)
+    assert result is False
+    assert _warning_records(caplog, "Layer wide cannot be quantized")
+    assert _warning_records(caplog, "only supports original dtypes")
+
+
+def test_get_supported_layers_fuzzy_dtype_whitelist_skip_logs_warning(caplog):
+    '''通配符改 dtype 后按逐层白名单跳层时，控制台需可见告警'''
+    model = _Fp32FuzzyModel()
+    qc = _make_fuzzy_quant_config(
+        {
+            "weights": {"type": "int4", "symmetric": True, "strategy": "channel"},
+            "*wide.weights": {"type": "int8", "symmetric": True, "strategy": "channel"},
+        }
+    )
+    with caplog.at_level(logging.DEBUG, logger="Log"):
+        result = get_supported_layers(model, qc, AlgorithmRegistry)
+    assert "wide" not in result
+    assert "small" in result
+    assert _warning_records(caplog, "Layer wide cannot be quantized")
+
+
 def test_check_quant_op_constraint_no_bias_no_group_size():
     mod = _make_mock_linear(in_features=64, out_features=64, has_bias=False)
     result = check_quant_op_constraint(
@@ -855,6 +882,15 @@ class _FuzzyModel(nn.Module):
         super().__init__()
         self.small = nn.Linear(64, 64, bias=False, dtype=torch.bfloat16)
         self.wide = nn.Linear(96, 64, bias=False, dtype=torch.bfloat16)
+
+
+class _Fp32FuzzyModel(nn.Module):
+    '''与 _FuzzyModel 同构，但权重为 fp32，用于触发 dtype 白名单跳层'''
+
+    def __init__(self):
+        super().__init__()
+        self.small = nn.Linear(64, 64, bias=False, dtype=torch.float32)
+        self.wide = nn.Linear(96, 64, bias=False, dtype=torch.float32)
 
 
 def _make_fuzzy_quant_config(quant_cfg, algo=MINMAX):

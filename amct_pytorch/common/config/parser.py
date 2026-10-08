@@ -509,7 +509,7 @@ def _check_layer_constraints(
         and hasattr(mod, "weight")
         and mod.weight.dtype not in ALLOWED_WEIGHT_DTYPES.get(quant_type_comb)
     ):
-        LOGGER.logd(
+        LOGGER.logw(
             "Layer {} cannot be quantized. The act_dtype and wts dtype combination {} only supports "
             "original dtypes {}, but the weight dtype is {}.".format(
                 name,
