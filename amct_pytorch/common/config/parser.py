@@ -109,36 +109,20 @@ def check_config(quant_data_comb, quant_config, algo):
             )
 
 
-def _layer_error(layer_name, message):
-    """
-    Prefix an error message with the layer name when it is available.
-
-    Layer level checks run once per layer, so a model with several fuzzy
-    patterns can raise the same dtype combination error from different layers.
-    Carrying the layer name tells the user which pattern went wrong, while the
-    global path stays unchanged because it only has a single configuration.
-    """
-    if layer_name:
-        return 'layer:{} {}'.format(layer_name, message)
-    return message
-
-
 def _check_layer_quant_dtype_comb_rules(
-    quant_data_comb, weights_cfg, inputs_cfg, layer_name=None
+    quant_data_comb, weights_cfg, inputs_cfg, prefix=''
 ):
     """
     Per layer counterpart of _check_quant_dtype_comb_rules(), working on the
     resolved layer config dicts produced by QuantConfig.get_layer_config().
+    prefix: error message prefix carrying the layer name, see check_layer_config
     """
     if (
         quant_data_comb in ACT_GRANULARITY_SUPPORT_MAP["tensor"]
         and weights_cfg.get('symmetric') is False
     ):
         raise ValueError(
-            _layer_error(
-                layer_name,
-                f"{quant_data_comb} only support symmetric weight quantization",
-            )
+            f"{prefix}{quant_data_comb} only support symmetric weight quantization"
         )
 
     if quant_data_comb != 'int8 int4':
@@ -146,17 +130,12 @@ def _check_layer_quant_dtype_comb_rules(
 
     if weights_cfg.get('strategy') not in ['tensor', 'channel']:
         raise ValueError(
-            _layer_error(
-                layer_name,
-                f"{quant_data_comb} only support weight quant strategy tensor or channel",
-            )
+            f"{prefix}{quant_data_comb} only support weight quant strategy "
+            f"tensor or channel"
         )
     if inputs_cfg.get('strategy') != 'tensor':
         raise ValueError(
-            _layer_error(
-                layer_name,
-                f"{quant_data_comb} only support activation quant strategy tensor",
-            )
+            f"{prefix}{quant_data_comb} only support activation quant strategy tensor"
         )
 
 
@@ -198,38 +177,33 @@ def check_layer_config(quant_data_comb, layer_quant_cfg, algo, layer_name=None):
     """
     if quant_data_comb is None or algo not in BUILT_IN_ALGORITHM:
         return
+    # Layer level checks run per layer, so several fuzzy patterns of one model
+    # can raise the same error. Naming the layer tells which pattern is wrong;
+    # the prefix is empty when the caller has no layer name.
+    prefix = f"layer:{layer_name} " if layer_name else ''
     if quant_data_comb not in ALGORITHM_SUPPORTED_QUANT_TYPE_COMB.keys():
         raise ValueError(
-            _layer_error(
-                layer_name,
-                f"Do not support combination {quant_data_comb} of act and weight "
-                f"quant dtype.",
-            )
+            f"{prefix}Do not support combination {quant_data_comb} of act and "
+            f"weight quant dtype."
         )
     if algo not in ALGORITHM_SUPPORTED_QUANT_TYPE_COMB[quant_data_comb]:
         raise ValueError(
-            _layer_error(
-                layer_name,
-                f"Algorithm {algo} do not support act and weight quant dtype "
-                f"{quant_data_comb}",
-            )
+            f"{prefix}Algorithm {algo} do not support act and weight quant dtype "
+            f"{quant_data_comb}"
         )
 
     layer_quant_cfg = layer_quant_cfg or {}
     weights_cfg = layer_quant_cfg.get('weights_cfg') or {}
     inputs_cfg = layer_quant_cfg.get('inputs_cfg') or {}
     _check_layer_quant_dtype_comb_rules(
-        quant_data_comb, weights_cfg, inputs_cfg, layer_name
+        quant_data_comb, weights_cfg, inputs_cfg, prefix
     )
 
     weight_strategy = weights_cfg.get('strategy')
     if quant_data_comb not in (WTS_GRANULARITY_SUPPORT_MAP.get(weight_strategy) or []):
         raise ValueError(
-            _layer_error(
-                layer_name,
-                f"act_dtype and wts_dtype {quant_data_comb} do not support weight "
-                f"quant strategy {weight_strategy}",
-            )
+            f"{prefix}act_dtype and wts_dtype {quant_data_comb} do not support "
+            f"weight quant strategy {weight_strategy}"
         )
 
     act_dtype = inputs_cfg.get('quant_type')
@@ -239,29 +213,20 @@ def check_layer_config(quant_data_comb, layer_quant_cfg, algo, layer_name=None):
             ACT_GRANULARITY_SUPPORT_MAP.get(act_strategy) or []
         ):
             raise ValueError(
-                _layer_error(
-                    layer_name,
-                    f"act_dtype and wts_dtype {quant_data_comb} do not support "
-                    f"activation quant strategy {act_strategy}",
-                )
+                f"{prefix}act_dtype and wts_dtype {quant_data_comb} do not support "
+                f"activation quant strategy {act_strategy}"
             )
         if act_dtype in ['mxfp8_e4m3fn'] and act_strategy != 'group':
             raise ValueError(
-                _layer_error(
-                    layer_name,
-                    f"act_dtype and wts_dtype {quant_data_comb} only support "
-                    f"activation quant strategy group",
-                )
+                f"{prefix}act_dtype and wts_dtype {quant_data_comb} only support "
+                f"activation quant strategy group"
             )
 
     group_size = weights_cfg.get('group_size')
     if group_size is not None and (group_size < 32 or group_size % 32 != 0):
         raise ValueError(
-            _layer_error(
-                layer_name,
-                f"act_type and wts_type {quant_data_comb} only support group_size "
-                f"larger than 32 and integer multiple of 32, current is {group_size}",
-            )
+            f"{prefix}act_type and wts_type {quant_data_comb} only support group_size "
+            f"larger than 32 and integer multiple of 32, current is {group_size}"
         )
 
 
