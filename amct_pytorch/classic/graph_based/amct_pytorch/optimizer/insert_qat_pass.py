@@ -33,7 +33,7 @@ REPLACE_DICT = {
 
 class InsertQatPass(BaseModuleFusionPass):
     """
-    Function: Insert QAT mudule about compressed quantization.
+    Function: Insert QAT module about compressed quantization.
     APIs: match_pattern, do_pass
     """
 

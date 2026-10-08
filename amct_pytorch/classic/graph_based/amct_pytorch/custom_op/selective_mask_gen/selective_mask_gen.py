@@ -46,7 +46,7 @@ def cal_shape(ori_tensor_shape, prune_axis, group_num, group_size, padding_size)
 
 def selective_mask_gen(tensor, prune_axis, group_size, pruned_size):
     """
-    Function: selective mask gen funtion.
+    Function: selective mask gen function.
     Args:
     tensor: data used for selective prune in torch.tensor
     prune_axis: prune axis for selective

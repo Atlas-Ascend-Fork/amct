@@ -48,7 +48,7 @@ class RetrainQuant(nn.Module):
         """
         Function: init function
         Inputs:
-            quant_module: a torch.nn.Module inculdes conv/linear, ulq_retrain,
+            quant_module: a torch.nn.Module includes conv/linear, ulq_retrain,
                 arq_retrain.
             record_module: a torch.nn.Module recording quantification factor.
             bn_module: a torch.nn.Module record batchnorm.
