@@ -11,7 +11,7 @@
 - 已接通 → 允许 `attn-linear` 与 `use_cache=True` 同时用于生成式评测。
 - 未接通 → 默认只量化 MLP，attn 保持 bf16，KV cache 正常工作。
 
-补 / 改 KV cache 属于适配工作，本 skill 不默认改源码；只有用户明确要求，或用户确认本次 benchmark 必须先补 wrapper 时才进入源码修改。实现原则、最小正确路径与等价性验证清单见 `$model-adapter` 的「Attention 适配原则」第 6–10 条。
+补 / 改 KV cache 属于适配工作，本 skill 不默认改源码；只有用户明确要求，或用户确认本次 benchmark 必须先补 wrapper 时才进入源码修改。实现原则、最小正确路径与等价性验证清单见 `$model-adapter` 的「Attention 适配原则」。
 
 ⚠️ **用户给的量化参数里含 attn-linear 时，必须先说明取舍并征得同意，不得静默跳过**——静默跳过等于把用户量化过的 attn 降级回 bf16，被评测对象就不再是完整 W8A8。三条路由用户选，不要替他决定：
 
