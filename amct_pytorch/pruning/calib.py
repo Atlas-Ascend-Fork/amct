@@ -35,7 +35,7 @@ def _unwrap_logits(out: Any) -> torch.Tensor:
 
 def nll_from_logits(logits: torch.Tensor, ids: torch.Tensor) -> tuple[float, int]:
     """Next-token cross-entropy sum and token count for one batch (logits[:, :-1] vs ids[:, 1:])."""
-    target = ids[:, 1:].reshape(-1)
+    target = ids[:, 1:].reshape(-1).long()
     nll_sum = F.cross_entropy(
         logits[:, :-1].reshape(-1, logits.shape[-1]),
         target,
@@ -50,18 +50,27 @@ def calib_nll(model: nn.Module, data: Sequence[Any]) -> float:
     if not batches:
         raise ValueError("calib_nll needs at least one calibration batch.")
     device = next(model.parameters()).device
-    model.eval()
+    modes = [(module, module.training) for module in model.modules()]
     tot, n_tokens = 0.0, 0
-    with torch.no_grad():
-        for c in batches:
-            if c.is_floating_point():
-                raise ValueError(
-                    "calib_nll expects integer token-id batches (target of "
-                    f"cross_entropy); got floating-point batch dtype={c.dtype}."
-                )
-            c = c.to(device)
-            logits = _unwrap_logits(model(c))
-            nll_sum, n = nll_from_logits(logits, c)
-            tot += nll_sum
-            n_tokens += n
-    return tot / max(n_tokens, 1)
+    try:
+        model.eval()
+        with torch.no_grad():
+            for c in batches:
+                if c.is_floating_point():
+                    raise ValueError(
+                        "calib_nll expects integer token-id batches (target of "
+                        f"cross_entropy); got floating-point batch dtype={c.dtype}."
+                    )
+                if c[:, 1:].numel() == 0:
+                    continue
+                c = c.to(device)
+                logits = _unwrap_logits(model(c))
+                nll_sum, n = nll_from_logits(logits, c)
+                tot += nll_sum
+                n_tokens += n
+    finally:
+        for module, training in modes:
+            module.training = training
+    if n_tokens == 0:
+        raise ValueError("calib_nll needs at least one next-token target.")
+    return tot / n_tokens

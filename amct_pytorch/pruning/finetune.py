@@ -60,12 +60,8 @@ def _default_loss(
 
 
 def _move_to_device(batch, dev):
-    if isinstance(batch, Mapping):
-        return {k: (v.to(dev) if torch.is_tensor(v) else v) for k, v in batch.items()}
-    if isinstance(batch, (tuple, list)):
-        args, _ = move_batch_to_device(tuple(batch), {}, dev)
-        return type(batch)(args)
-    return batch.to(dev) if torch.is_tensor(batch) else batch
+    args, _ = move_batch_to_device((batch,), {}, dev)
+    return args[0]
 
 
 def _train_step(model, moved, loss_fn, batch_adapter, opt, params, grad_clip):
@@ -127,10 +123,10 @@ def prune_finetune(
         else torch.optim.AdamW(params, lr=lr, weight_decay=weight_decay)
     )
 
-    was_training = model.training
-    model.train()
+    modes = [(module, module.training) for module in model.modules()]
     history: List[float] = []
     try:
+        model.train()
         for i, batch in enumerate(islice(cycle(batches), steps)):
             _set_warmup_lr(opt, lr, i, warmup)
             moved = _move_to_device(batch, dev)
@@ -140,7 +136,8 @@ def prune_finetune(
                 )
             )
     finally:
-        model.train(was_training)
+        for module, training in modes:
+            module.training = training
         model.zero_grad(set_to_none=True)
     step = len(history)
 
