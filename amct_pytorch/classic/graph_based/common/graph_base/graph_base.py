@@ -119,7 +119,7 @@ class GraphBase:
 
     def topologic_sort(self):
         """
-        Function: Do whole grpah topologic sort
+        Function: Do whole graph topologic sort
         Parameter: None
         Return: None
         """
@@ -234,7 +234,7 @@ class GraphBase:
 
     def insert_parallel_node(self, node, in_idx, brother_node, brother_in_idx):
         """
-        Function: Insert paralel node to brother_node as follows, so
+        Function: Insert parallel node to brother_node as follows, so
         node[in_idx] and brother_node[brother_in_idx] are both linked
         to producer[*].
                     producer        producer
@@ -256,7 +256,7 @@ class GraphBase:
     def insert_node_before(self, node, in_idx, out_idx, post_node, post_in_idx):
         """
         Function: Insert node before post_node as follows, so
-        node.intput[in_idx] is link to producer[*] and node.output[out_idx]
+        node.input[in_idx] is link to producer[*] and node.output[out_idx]
         is link to post_node.input[post_in_idx]
                     producer        producer
                        |      -->      |
@@ -279,7 +279,7 @@ class GraphBase:
     def insert_node_after(self, node, in_idx, out_idx, pre_node, pre_out_idx):
         """
         Function: Insert node after pre_node as follows, so
-        node.intput[in_idx] is link to producer[*] and node.output[out_idx]
+        node.input[in_idx] is link to producer[*] and node.output[out_idx]
         is link to post_node.input[post_in_idx]
                     pre_node          pre_node
                       / \\      -->      |
@@ -304,7 +304,7 @@ class GraphBase:
     def delete_node(self, node, in_idx, out_idx):
         """
         Function: Insert node after pre_node as follows, so
-        node.intput[in_idx] is link to producer[*] and node.output[out_idx]
+        node.input[in_idx] is link to producer[*] and node.output[out_idx]
         is link to post_node.input[post_in_idx]
                     pre_node           pre_node
                        |                /  \
@@ -314,8 +314,8 @@ class GraphBase:
 
         Parameter:
             node: Node, node to be insert
-            in_idx: int, which input will to be delted
-            out_idx: int, which input will to be delted
+            in_idx: int, which input will to be deleted
+            out_idx: int, which input will to be deleted
         Return: None
         """
         producer, producer_out_idx = node.get_producer(in_idx)

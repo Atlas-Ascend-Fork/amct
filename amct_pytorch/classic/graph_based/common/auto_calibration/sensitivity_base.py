@@ -59,7 +59,7 @@ class MseSensitivity(SensitivityBase):
         """Init func.
 
         Args:
-            do_normalization (bool, optional): normalize data befor calculating mse. Defaults to False.
+            do_normalization (bool, optional): normalize data before calculating mse. Defaults to False.
         """
         super(MseSensitivity, self).__init__()
         self.do_normalization = do_normalization

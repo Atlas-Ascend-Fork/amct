@@ -58,7 +58,7 @@ class BasicGRUInplaceFillWindowCache(RnnQuantOpBase):
         """
         Function: construct BasicGRUInplaceFillWindowCache node in onnx
         Parameters:
-            ori_proto: proto of orignal GRU node
+            ori_proto: proto of original GRU node
             records: dict including quant factors
         Return:
             node_proto: proto of BasicGRUInplaceFillWindowCache node
