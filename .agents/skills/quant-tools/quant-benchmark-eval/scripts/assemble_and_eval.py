@@ -22,6 +22,7 @@ SKILL_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SKILL_DIR)  # for bench_offline / config
 from config import DEFAULT_BIT_CONFIG  # noqa: E402
 from utils import (  # noqa: E402
+    TASK_ALIASES,
     check_environment,
     ensure_supported_quant_target,
     has_attention_quant,
@@ -35,9 +36,24 @@ _KVSAFE_TARGET = {
     "qwen3_5_moe": "moe",
     "qwen3_6_moe": "moe",
 }
-_TASK_ALIASES = {
-    "math500": "hendrycks_math500",
-}
+
+
+def _resolve_quant_target(model_name, quant_target):
+    """Explicit --quant_target wins; otherwise use the KV-safe default.
+
+    Unknown model_name fails loudly instead of silently defaulting to "mlp":
+    for a MoE family "mlp" is usually not a valid amct target, and the resulting
+    error from deep inside amct would not point back here.
+    """
+    if quant_target:
+        return quant_target
+    if model_name not in _KVSAFE_TARGET:
+        raise RuntimeError(
+            f"no KV-safe default quant_target for model_name={model_name!r}. "
+            f"Known: {sorted(_KVSAFE_TARGET)}. Pass --quant_target explicitly "
+            f"(mlp for dense, moe for MoE)."
+        )
+    return _KVSAFE_TARGET[model_name]
 
 
 def input_device(model):
@@ -100,6 +116,7 @@ def build_pipeline_args(
     ns = argparse.Namespace(
         model=model,
         model_name=model_name,
+        trust_remote_code=True,
         device="npu:0",
         granularity="block",
         seed=0,
@@ -159,7 +176,7 @@ def assemble_quant_model(
     register_dtype()
     register_algorithms()
 
-    qt = quant_target or _KVSAFE_TARGET.get(model_name, "mlp")
+    qt = _resolve_quant_target(model_name, quant_target)
     ensure_supported_quant_target(qt, allow_attn_quant=allow_attn_quant)
     args = build_pipeline_args(
         model, model_name, param_dir, qt, bit_cfg, seq_len, output_dir
@@ -209,7 +226,12 @@ def assemble_quant_model(
             "[warn] attention quant enabled; model.config.use_cache=False for generate"
         )
     print("[assemble] done.")
-    return m, pipe.tokenizer
+    # pipe.tokenizer is deliberately NOT returned: amct builds it with the
+    # use_fast default and trust_remote_code=False, so it can differ from the
+    # tokenizer used on the --bf16 baseline. Callers keep their own tokenizer so
+    # both sides of the comparison tokenize identically. Return the resolved
+    # quant_target instead (needed to decide generate(use_cache=...)).
+    return m, qt
 
 
 def main():
@@ -269,13 +291,14 @@ def main():
     from transformers import AutoTokenizer
 
     tok = AutoTokenizer.from_pretrained(a.model, use_fast=False, trust_remote_code=True)
+    quant_target = a.quant_target or ""
     if a.bf16:
         print(f"[bf16] loading original model (no quant, device_map={dmap})...")
         model = _load_float(a.model, dmap)
     else:
         if not a.param_dir:
             sys.exit("--param_dir required unless --bf16")
-        model, tok = assemble_quant_model(
+        model, quant_target = assemble_quant_model(
             a.model,
             a.model_name,
             a.param_dir,
@@ -287,7 +310,7 @@ def main():
             allow_attn_quant=a.allow_attn_quant,
         )
 
-    generate_use_cache = not (not a.bf16 and has_attention_quant(a.quant_target))
+    generate_use_cache = not has_attention_quant(quant_target)
     print(f"[smoke] generate (use_cache={generate_use_cache})...")
     ids = tok("The capital of France is", return_tensors="pt").input_ids.to(
         input_device(model)
@@ -312,7 +335,7 @@ def main():
         pretrained=model, tokenizer=tok, batch_size=1, max_gen_toks=a.max_gen_toks
     )
     tag = "bf16" if a.bf16 else "quant"
-    task = _TASK_ALIASES.get(a.task, a.task)
+    task = TASK_ALIASES.get(a.task, a.task)
     print(f"[eval] {tag} task={task} limit={a.limit} max_gen_toks={a.max_gen_toks}")
     res = simple_evaluate(
         model=lm,

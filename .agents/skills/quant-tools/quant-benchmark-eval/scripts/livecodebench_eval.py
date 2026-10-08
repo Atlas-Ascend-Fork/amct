@@ -166,6 +166,7 @@ def main():
 
     dmap = a.device_map or None
     tok = AutoTokenizer.from_pretrained(a.model, use_fast=False, trust_remote_code=True)
+    quant_target = a.quant_target or ""
     if a.bf16:
         tag = "bf16"
         print(f"[bf16] loading original model (no quant, device_map={dmap})...")
@@ -174,7 +175,7 @@ def main():
         tag = "quant"
         if not a.param_dir:
             sys.exit("--param_dir required unless --bf16")
-        model, tok = assemble_quant_model(
+        model, quant_target = assemble_quant_model(
             a.model,
             a.model_name,
             a.param_dir,
@@ -195,7 +196,7 @@ def main():
             "[warn] --limit creates a partial output file; official custom_evaluator "
             "will reject it unless the selected release has the same number of problems."
         )
-    generate_use_cache = not (not a.bf16 and has_attention_quant(a.quant_target))
+    generate_use_cache = not has_attention_quant(quant_target)
     print(
         f"[generate] {tag} livecodebench dataset_task={a.dataset_task} "
         f"release_version={a.release_version} samples={len(docs)} "

@@ -12,12 +12,12 @@ sys.path.insert(0, SKILL_DIR)
 from utils import parse_result_log  # noqa: E402
 
 PREFERRED_METRICS = (
-    "exact_match,none",
     "exact_match",
-    "acc,none",
+    "acc_norm",
     "acc",
     "pass@1",
     "pass_at_1",
+    "math_verify",
 )
 
 
@@ -44,23 +44,66 @@ def _flatten(obj, prefix=""):
     return out
 
 
+def _split_key(key):
+    """Split a flattened key into (depth, metric_field, metric_name).
+
+    "quant.mmlu_pro.exact_match,custom-extract" -> (3, "exact_match,custom-extract",
+    "exact_match"). lm-eval suffixes every metric with its filter name, so match
+    on the metric name and keep the full field only for display / exact requests.
+    """
+    parts = key.split(".")
+    metric_field = parts[-1]
+    return len(parts), metric_field, metric_field.split(",")[0]
+
+
+def _candidates(flat):
+    """Numeric, non-stderr candidates: key -> (depth, key, metric_field, metric_name, value)."""
+    out = {}
+    for key, value in flat.items():
+        depth, metric_field, metric_name = _split_key(key)
+        if metric_name.endswith("_stderr"):
+            continue
+        out[key] = (depth, key, metric_field, metric_name, value)
+    return out
+
+
+def _select(cands):
+    """Prefer the shallowest key so a group aggregate wins over its subtasks.
+
+    Ties are broken by key length then lexicographically, so "mmlu_pro" wins over
+    "mmlu_pro_biology" deterministically instead of by ASCII luck.
+    """
+    best = min(cands.values(), key=lambda c: (c[0], len(c[1]), c[1]))
+    return best[1], best[4]
+
+
 def _pick_metric(flat, metric):
+    cands = _candidates(flat)
+    if not cands:
+        raise KeyError(f"no numeric metric found. Available: {sorted(flat)}")
+    available = sorted({c[2] for c in cands.values()})
+
     if metric:
-        matches = {k: v for k, v in flat.items() if k.endswith(metric)}
+        matches = {
+            k: c
+            for k, c in cands.items()
+            if c[2] == metric
+            or c[3] == metric
+            or k == metric
+            or k.endswith("." + metric)
+        }
         if not matches:
-            raise KeyError(f"metric '{metric}' not found. Available: {sorted(flat)}")
-        key = sorted(matches)[0]
-        return key, matches[key]
+            raise KeyError(f"metric '{metric}' not found. Available: {available}")
+        return _select(matches)
 
     for preferred in PREFERRED_METRICS:
-        matches = {k: v for k, v in flat.items() if k.endswith(preferred)}
+        matches = {k: c for k, c in cands.items() if c[3] == preferred}
         if matches:
-            key = sorted(matches)[0]
-            return key, matches[key]
-    if len(flat) == 1:
-        key = next(iter(flat))
-        return key, flat[key]
-    raise KeyError(f"cannot auto-pick metric. Available: {sorted(flat)}")
+            return _select(matches)
+    if len(cands) == 1:
+        only = next(iter(cands.values()))
+        return only[1], only[4]
+    raise KeyError(f"cannot auto-pick metric. Available: {available}")
 
 
 def main():
@@ -70,7 +113,11 @@ def main():
     ap.add_argument(
         "--metric",
         default="",
-        help="metric suffix to compare, e.g. exact_match,none or pass@1",
+        help=(
+            "metric to compare: either the metric name (exact_match, acc_norm, "
+            "pass@1) or lm-eval's full result key (<metric>,<filter>, e.g. "
+            "exact_match,custom-extract). Omit to auto-pick."
+        ),
     )
     ap.add_argument("--sample_len", type=int, default=0)
     ap.add_argument(
@@ -83,11 +130,10 @@ def main():
     bf16_flat = _flatten(_load_result(args.bf16))
     quant_flat = _flatten(_load_result(args.quant))
     bf16_key, bf16_value = _pick_metric(bf16_flat, args.metric)
-    quant_key, quant_value = _pick_metric(
-        quant_flat, args.metric or bf16_key.split(".")[-1]
-    )
+    metric_field = bf16_key.split(".")[-1]
+    quant_key, quant_value = _pick_metric(quant_flat, metric_field)
     result = {
-        "metric": args.metric or bf16_key.split(".")[-1],
+        "metric": metric_field,
         "bf16_key": bf16_key,
         "quant_key": quant_key,
         "bf16": bf16_value,

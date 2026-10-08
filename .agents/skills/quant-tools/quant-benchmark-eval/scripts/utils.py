@@ -13,6 +13,12 @@ import pandas as pd
 ATTN_QUANT_TARGETS = {"attn-linear", "attn-cache"}
 REQUIRED_LCB_FIELDS = ("question_id", "question_content")
 
+# Task names this skill accepts that are not lm-eval task names.
+TASK_ALIASES = {"math500": "hendrycks_math500"}
+# Scored by the official lcb_runner instead of lm-eval, so they have no
+# "<metric>,<filter>" result key to cross-check.
+NON_LM_EVAL_TASKS = {"livecodebench", "livecodebench_release_v6"}
+
 
 def read_dataset_file(path):
     """Read one registered dataset file into a pandas DataFrame."""
@@ -160,3 +166,44 @@ def expand_existing(paths):
         matches = sorted(glob(path))
         out.extend(matches or [path])
     return out
+
+
+def resolve_task_metric_keys(task_name, task_manager=None):
+    """Return lm-eval's result key names ("<metric>,<filter>") for a task/group.
+
+    lm-eval names every result key `f"{metric},{filter_key}"`, where filter_key
+    is the `name` of an entry in the task's `filter_list` ("none" when the task
+    declares no filter_list). Reading it back from the installed task index keeps
+    SKILL.md's metric column from drifting away from what lm-eval emits.
+
+    Only the task index / YAML configs are read -- no dataset is downloaded, so
+    this is safe offline. Requires lm-eval to be importable.
+    """
+    from lm_eval.tasks import TaskManager
+
+    tm = task_manager or TaskManager()
+    entry = tm.task_index.get(task_name)
+    if entry is None:
+        raise KeyError(f"task '{task_name}' is not in the lm-eval task index")
+    cfg = getattr(entry, "cfg", None) or {}
+    metrics = [
+        m.get("metric") for m in (cfg.get("metric_list") or []) if m.get("metric")
+    ]
+    filters = [
+        f.get("name") for f in (cfg.get("filter_list") or []) if f.get("name")
+    ] or ["none"]
+    keys = {f"{metric},{f}" for metric in metrics for f in filters}
+    for agg in cfg.get("aggregate_metric_list") or []:
+        metric = agg.get("metric")
+        if not metric:
+            continue
+        agg_filter = agg.get("filter_list")
+        agg_filters = (
+            agg_filter
+            if isinstance(agg_filter, list)
+            else ([agg_filter] if agg_filter else ["none"])
+        )
+        keys |= {f"{metric},{f}" for f in agg_filters}
+    if not keys:
+        raise KeyError(f"task '{task_name}' declares no metrics")
+    return sorted(keys)

@@ -40,7 +40,7 @@ description: 在 Ascend NPU 上用 lm-eval-harness / LiveCodeBench 官方 runner
 
 ## 覆盖度状态
 
-⚠️ 下表结论均基于特定硬件：**2× Ascend 910（每卡 64GB HBM，即 65536 MB）**。其中显存相关判断（能否单卡放下、是否 OOM、要几张卡）与速度数字（约 6 秒 / 题等）强依赖这套配置；换用显存更大 / 更小、算力不同的卡后结论会变——例如更大显存上约束 8 的 OOM 可能不再出现，单卡也可能放得下 35B。迁移到其他硬件时把这些当参考量级、重新实测确认，不要当普适结论。
+下表只记录**功能是否打通**（任务能否接入、脚本链路是否跑通）：这与硬件无关，换卡不必重新验证。表内唯一一条显存相关状态（35B MoE 长 prompt OOM）是特定配置下的现象，量级与调优手段见 [references/constraints.md](references/constraints.md) 约束 8；速度量级见约束 6。这两条依赖 2× Ascend 910（每卡 64GB HBM），换硬件后按当机实测，不要当普适结论。
 
 | 场景 | 状态 |
 |---|---|
@@ -58,19 +58,21 @@ description: 在 Ascend NPU 上用 lm-eval-harness / LiveCodeBench 官方 runner
 
 **不要默认替用户决定 benchmark**：先按用户的资源、时间预算、能力覆盖需求给候选，让用户选。
 
-| 成本档 | 任务 | 默认主指标 | 适用场景 | 注意 |
+| 成本档 | 任务 | 默认主指标（lm-eval 结果键） | 适用场景 | 注意 |
 |---|---|---|---|---|
-| 低 | `arc_challenge` | `acc_norm` | 首选轻量下游回归；科学 / 常识推理，比 ARC-Easy 更敏感 | 同时保留 `acc`；适合先 `--limit` 冒烟 |
-| 低 | `arc_easy` | `acc_norm` | 更便宜的科学问答补充 | 难度低，大模型区分度有限 |
-| 低 | `boolq` | `acc` | 阅读理解 yes/no 回归 | 二分类，随机基线高，小样本波动大 |
-| 低 | `copa` | `acc` | 常识因果二选一 smoke | 样本少，只能作补充，不要单独下结论 |
-| 低 | `piqa` | `acc_norm` | 物理常识 / 日常操作推理 | 比 COPA 更稳，适合低成本补充 |
-| 低 | `sciq` | `acc_norm` | 科学知识多选补充 | 与 ARC 能力有重叠，难度较低 |
-| 高 | `mmlu_pro` | `exact_match,none` | 覆盖面更广的通用知识 / 推理 | 题量大，建议先 `--limit` |
+| 低 | `arc_challenge` | `acc_norm,none` | 首选轻量下游回归；科学 / 常识推理，比 ARC-Easy 更敏感 | 同时保留 `acc,none`；适合先 `--limit` 冒烟 |
+| 低 | `arc_easy` | `acc_norm,none` | 更便宜的科学问答补充 | 难度低，大模型区分度有限 |
+| 低 | `boolq` | `acc,none` | 阅读理解 yes/no 回归 | 二分类，随机基线高，小样本波动大 |
+| 低 | `copa` | `acc,none` | 常识因果二选一 smoke | 样本少，只能作补充，不要单独下结论 |
+| 低 | `piqa` | `acc_norm,none` | 物理常识 / 日常操作推理 | 比 COPA 更稳，适合低成本补充 |
+| 低 | `sciq` | `acc_norm,none` | 科学知识多选补充 | 与 ARC 能力有重叠，难度较低 |
+| 高 | `mmlu_pro` | `exact_match,custom-extract` | 覆盖面更广的通用知识 / 推理 | 题量大，建议先 `--limit`；filter 名是 `custom-extract` 不是 `none` |
 | 高 | `math500` | `exact_match,none` | 数学推理 | 长生成，需更大 `--max_gen_toks`，耗时高 |
 | 高 | `livecodebench` / `livecodebench_release_v6` | `pass@1` | 代码生成 hidden-tests pass@1 | 最耗时之一，评分依赖 `lcb_runner` |
 
-- 低资源任务的汇总指标固定为：`arc_challenge` / `arc_easy` / `piqa` / `sciq` 看 `acc_norm`，`boolq` / `copa` 看 `acc`。做 bf16 vs quant 对比时**必须同任务同指标**，不要把 `acc` 与 `acc_norm` 混用；其它指标可留在明细里。
+- lm-eval 的结果键格式固定为 **`<指标名>,<filter名>`**：task YAML 声明了 `filter_list` 就用其中每条的 `name`（mmlu_pro 是 `custom-extract`），没声明则默认 `none`。上表已按 lm-eval 0.4.12 实测键名填写，`scripts/self_check.py` 会拿已安装的 lm-eval task index 反查校验，升版本后跑一次自检即可发现漂移。
+- `livecodebench` 的 `pass@1` 由官方 `lcb_runner` 产出，不经 lm-eval，故无 `,filter` 后缀。
+- 低资源任务的汇总指标固定为：`arc_challenge` / `arc_easy` / `piqa` / `sciq` 看 `acc_norm,none`，`boolq` / `copa` 看 `acc,none`。做 bf16 vs quant 对比时**必须同任务同指标**，不要把 `acc` 与 `acc_norm` 混用；其它指标可留在明细里。
 - 资源有限时优先建议：`WikiText2 PPL + arc_challenge`；有余量再加 `piqa` / `boolq` / `sciq` / `arc_easy` / `copa`；要综合结论再升级 `mmlu_pro`；要数学或代码能力再跑 `math500` / `livecodebench`。
 - `--limit` 的结果只能称**小样本回归 / 冒烟**，不能称官方分数。
 
@@ -119,7 +121,7 @@ python scripts/assemble_and_eval.py --model <model_path> --model_name qwen3_5_mo
 ### 4. 报告结果
 
 - 对比量化与 bf16 的**主指标**（按「任务选择与资源成本」表的默认主指标）。
-- 汇总差值：`python scripts/compare_results.py --bf16 <bf16.log> --quant <quant.log> --metric exact_match,none --sample_len <N> --limited`。
+- 汇总差值：`python scripts/compare_results.py --bf16 <bf16.log> --quant <quant.log> --metric exact_match --sample_len <N> --limited`。`--metric` 传指标名（`exact_match` / `acc_norm` / `acc` / `pass@1`）或完整结果键（`exact_match,custom-extract`）都能匹配；省略则自动挑选，`_stderr` 键与子任务键会被排除，优先取组聚合键。
 - 必须写明**样本量**与（LiveCodeBench 的）`release_version`。
 - 用了 `--limit` 就写小样本冒烟，不写官方分数；差异落在统计噪声内表述为「无可见损失」，不表述为「量化更好」。
 
