@@ -775,3 +775,357 @@ def test_is_layer_supported_fp8linear_returns_false():
     )
     result = _is_layer_supported(mod, "fp8.0", {"FP8Linear": MINMAX}, "int8 int8", qc)
     assert result is False
+
+
+# ---- per layer (fuzzy override) config validation ---------------------------
+
+
+class _FuzzyModel(nn.Module):
+    '''small: cin=64 (64 的倍数); wide: cin=96 (非 64 的倍数)'''
+
+    def __init__(self):
+        super().__init__()
+        self.small = nn.Linear(64, 64, bias=False, dtype=torch.bfloat16)
+        self.wide = nn.Linear(96, 64, bias=False, dtype=torch.bfloat16)
+
+
+def _make_fuzzy_quant_config(quant_cfg, algo=MINMAX):
+    return QuantConfig(
+        {"batch_num": 1, "quant_cfg": quant_cfg, "algorithm": {algo: {}}},
+        AlgorithmRegistry,
+    )
+
+
+def test_resolve_layer_quant_type_comb_fuzzy_override():
+    from amct_pytorch.common.config.parser import _resolve_layer_quant_type_comb
+
+    layer_cfg = {
+        "weights_cfg": {
+            "quant_type": "float4_e2m1",
+            "symmetric": True,
+            "strategy": "group",
+            "group_size": 32,
+        },
+        "inputs_cfg": {"enable_quant": False},
+    }
+    assert (
+        _resolve_layer_quant_type_comb(layer_cfg, "NOT_QUANTIZE int8")
+        == "NOT_QUANTIZE float4_e2m1"
+    )
+
+
+def test_resolve_layer_quant_type_comb_fuzzy_override_both_dtypes():
+    from amct_pytorch.common.config.parser import _resolve_layer_quant_type_comb
+
+    layer_cfg = {
+        "weights_cfg": {"quant_type": "int4", "symmetric": True, "strategy": "channel"},
+        "inputs_cfg": {
+            "quant_type": "int8",
+            "symmetric": True,
+            "strategy": "tensor",
+        },
+    }
+    assert _resolve_layer_quant_type_comb(layer_cfg, "int8 int8") == "int8 int4"
+
+
+def test_resolve_layer_quant_type_comb_fallback_to_global():
+    from amct_pytorch.common.config.parser import _resolve_layer_quant_type_comb
+
+    assert _resolve_layer_quant_type_comb(None, "int8 int8") == "int8 int8"
+    assert (
+        _resolve_layer_quant_type_comb({"weights_cfg": None}, "int8 int8")
+        == "int8 int8"
+    )
+    assert (
+        _resolve_layer_quant_type_comb({"inputs_cfg": {"enable_quant": False}}, None)
+        is None
+    )
+
+
+def test_resolve_layer_group_size_prefers_layer_config():
+    from amct_pytorch.common.config.parser import _resolve_layer_group_size
+
+    qc = _make_quant_config(weight_type="int4", weight_strategy="group", group_size=128)
+    layer_cfg = {
+        "weights_cfg": {
+            "quant_type": "int4",
+            "symmetric": True,
+            "strategy": "group",
+            "group_size": 32,
+        }
+    }
+    assert _resolve_layer_group_size(layer_cfg, qc) == 32
+    # 模糊配置未带 group_size 时不应回落到全局值（整体覆盖语义）
+    assert (
+        _resolve_layer_group_size(
+            {"weights_cfg": {"quant_type": "int8", "strategy": "channel"}}, qc
+        )
+        is None
+    )
+    # 未传逐层配置时保持全局 group_size
+    assert _resolve_layer_group_size(None, qc) == 128
+
+
+def test_check_quant_op_constraint_uses_layer_group_size():
+    mod = _make_mock_linear(in_features=64, out_features=64)
+    qc = _make_quant_config(
+        weight_type="int8", weight_strategy="channel", enable_input=False
+    )
+    layer_cfg = {
+        "weights_cfg": {
+            "quant_type": "int8",
+            "symmetric": True,
+            "strategy": "group",
+            "group_size": 64,
+        }
+    }
+    # group_size(64) >= cin(64) -> 逐层配置生效，跳过该层
+    assert (
+        check_quant_op_constraint(mod, "layer.0", "NOT_QUANTIZE int8", qc, layer_cfg)
+        is False
+    )
+    layer_cfg["weights_cfg"]["group_size"] = 32
+    assert (
+        check_quant_op_constraint(mod, "layer.0", "NOT_QUANTIZE int8", qc, layer_cfg)
+        is True
+    )
+
+
+def test_check_layer_config_none_comb_returns_early():
+    from amct_pytorch.common.config.parser import check_layer_config
+
+    check_layer_config(None, {"weights_cfg": {"strategy": "group"}}, MINMAX)
+
+
+def test_check_layer_config_custom_algo_returns_early():
+    from amct_pytorch.common.config.parser import check_layer_config
+
+    check_layer_config("float64 float64", None, "my_custom_algo")
+
+
+def test_check_layer_config_unsupported_comb():
+    from amct_pytorch.common.config.parser import check_layer_config
+
+    with pytest.raises(ValueError, match="Do not support combination"):
+        check_layer_config("float64 float64", None, MINMAX)
+
+
+def test_check_layer_config_algo_not_support_comb():
+    from amct_pytorch.common.config.parser import check_layer_config
+
+    layer_cfg = {
+        "weights_cfg": {"quant_type": "hifloat8", "strategy": "channel"},
+        "inputs_cfg": {"enable_quant": False},
+    }
+    with pytest.raises(ValueError, match="do not support act and weight quant dtype"):
+        check_layer_config("NOT_QUANTIZE hifloat8", layer_cfg, MINMAX)
+
+
+def test_check_layer_config_weight_strategy_not_supported():
+    from amct_pytorch.common.config.parser import check_layer_config
+
+    layer_cfg = {
+        "weights_cfg": {
+            "quant_type": "int8",
+            "symmetric": True,
+            "strategy": "group",
+            "group_size": 32,
+        },
+        "inputs_cfg": {
+            "quant_type": "int8",
+            "symmetric": True,
+            "strategy": "tensor",
+        },
+    }
+    with pytest.raises(ValueError, match="do not support weight quant strategy"):
+        check_layer_config("int8 int8", layer_cfg, MINMAX)
+
+
+def test_check_layer_config_act_strategy_not_supported():
+    from amct_pytorch.common.config.parser import check_layer_config
+
+    layer_cfg = {
+        "weights_cfg": {"quant_type": "int8", "strategy": "channel"},
+        "inputs_cfg": {"quant_type": "int8", "strategy": "group"},
+    }
+    with pytest.raises(ValueError, match="do not support activation quant strategy"):
+        check_layer_config("int8 int8", layer_cfg, MINMAX)
+
+
+def test_check_layer_config_asymmetric_weight_raises():
+    from amct_pytorch.common.config.parser import check_layer_config
+
+    layer_cfg = {
+        "weights_cfg": {
+            "quant_type": "int8",
+            "symmetric": False,
+            "strategy": "channel",
+        },
+        "inputs_cfg": {
+            "quant_type": "int8",
+            "symmetric": True,
+            "strategy": "tensor",
+        },
+    }
+    with pytest.raises(ValueError, match="only support symmetric"):
+        check_layer_config("int8 int8", layer_cfg, MINMAX)
+
+
+def test_check_layer_config_group_size_invalid():
+    from amct_pytorch.common.config.parser import check_layer_config
+
+    layer_cfg = {
+        "weights_cfg": {
+            "quant_type": "int4",
+            "symmetric": True,
+            "strategy": "group",
+            "group_size": 33,
+        },
+        "inputs_cfg": {"enable_quant": False},
+    }
+    with pytest.raises(ValueError, match="integer multiple of 32"):
+        check_layer_config("NOT_QUANTIZE int4", layer_cfg, MINMAX)
+
+
+def test_check_layer_config_valid():
+    from amct_pytorch.common.config.parser import check_layer_config
+
+    layer_cfg = {
+        "weights_cfg": {
+            "quant_type": "int4",
+            "symmetric": True,
+            "strategy": "group",
+            "group_size": 64,
+        },
+        "inputs_cfg": {"enable_quant": False},
+    }
+    check_layer_config("NOT_QUANTIZE int4", layer_cfg, MINMAX)
+
+
+def test_get_supported_layers_fuzzy_dtype_shape_constraint_skips_layer():
+    '''模糊配置把某层改成 float4_e2m1，形状不满足时应跳过该层（与全局配置一致）'''
+    model = _FuzzyModel()
+    qc = _make_fuzzy_quant_config(
+        {
+            "weights": {"type": "int8", "symmetric": True, "strategy": "channel"},
+            "*wide.weights": {
+                "type": "float4_e2m1",
+                "symmetric": True,
+                "strategy": "group",
+                "group_size": 32,
+            },
+        }
+    )
+    result = get_supported_layers(model, qc, AlgorithmRegistry)
+    assert "small" in result
+    assert "wide" not in result
+    assert result["small"]["weights_cfg"]["quant_type"] == "int8"
+
+
+def test_get_supported_layers_fuzzy_algo_comb_raises():
+    '''模糊配置改出算法不支持的 dtype 组合时应立刻报错'''
+    model = _FuzzyModel()
+    qc = _make_fuzzy_quant_config(
+        {
+            "weights": {"type": "int8", "symmetric": True, "strategy": "channel"},
+            "*wide.weights": {
+                "type": "hifloat8",
+                "symmetric": True,
+                "strategy": "channel",
+            },
+        }
+    )
+    with pytest.raises(ValueError, match="do not support act and weight quant dtype"):
+        get_supported_layers(model, qc, AlgorithmRegistry)
+
+
+def test_get_supported_layers_fuzzy_weight_strategy_raises():
+    '''模糊配置把不支持 per-group 的组合改成 group 粒度时应立刻报错'''
+    model = _FuzzyModel()
+    qc = _make_fuzzy_quant_config(
+        {
+            "weights": {"type": "int8", "symmetric": True, "strategy": "channel"},
+            "inputs": {
+                "type": "int8",
+                "symmetric": True,
+                "strategy": "tensor",
+                "enable_quant": True,
+            },
+            "*wide.weights": {
+                "type": "int8",
+                "symmetric": True,
+                "strategy": "group",
+                "group_size": 32,
+            },
+        }
+    )
+    with pytest.raises(ValueError, match="do not support weight quant strategy"):
+        get_supported_layers(model, qc, AlgorithmRegistry)
+
+
+def test_get_supported_layers_fuzzy_only_group_size_skips_layer():
+    '''仅配置模糊 pattern（无全局 weights）时，group_size >= cin 的层不应被静默量化'''
+    model = _FuzzyModel()
+    qc = _make_fuzzy_quant_config(
+        {
+            "*small.weights": {
+                "type": "int8",
+                "symmetric": True,
+                "strategy": "group",
+                "group_size": 64,
+            },
+        }
+    )
+    result = get_supported_layers(model, qc, AlgorithmRegistry)
+    assert result == {}
+
+
+def test_get_supported_layers_fuzzy_only_group_size_effective():
+    '''仅配置模糊 pattern 时，逐层 group_size 应通过校验并生效'''
+    model = _FuzzyModel()
+    qc = _make_fuzzy_quant_config(
+        {
+            "*small.weights": {
+                "type": "int8",
+                "symmetric": True,
+                "strategy": "group",
+                "group_size": 32,
+            },
+            "*wide.weights": {
+                "type": "int4",
+                "symmetric": True,
+                "strategy": "group",
+                "group_size": 32,
+            },
+        }
+    )
+    result = get_supported_layers(model, qc, AlgorithmRegistry)
+    assert set(result) == {"small", "wide"}
+    assert result["small"]["weights_cfg"]["group_size"] == 32
+    assert result["wide"]["weights_cfg"]["quant_type"] == "int4"
+
+
+def test_get_supported_layers_fuzzy_group_size_overrides_global():
+    '''模糊配置覆盖全局 group_size 时，约束检查应使用逐层值'''
+    model = _FuzzyModel()
+    qc = _make_fuzzy_quant_config(
+        {
+            "weights": {
+                "type": "int8",
+                "symmetric": True,
+                "strategy": "group",
+                "group_size": 32,
+            },
+            "*small.weights": {
+                "type": "int8",
+                "symmetric": True,
+                "strategy": "group",
+                "group_size": 64,
+            },
+        }
+    )
+    result = get_supported_layers(model, qc, AlgorithmRegistry)
+    # small 的 cin=64，被覆盖成 group_size=64 后应跳过；large/wide 仍用全局 32
+    assert "small" not in result
+    assert "wide" in result
+    assert result["wide"]["weights_cfg"]["group_size"] == 32
