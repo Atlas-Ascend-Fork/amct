@@ -26,7 +26,7 @@ def load_data(inputs, data_paths, data_types, num=None):
     Function: Load binary data in the given data path to numpy array and create data mapping
     Arguments:
     inputs: dict, {'input_node_name': dims(list)} the input tensors
-    data_paths: list, the pathes to the processed binry data to be feeded to the inputs
+    data_paths: list, the paths to the processed binary data to be fed to the inputs
     data_types: list, the dtypes of the input tensors
     num: batch num for yielding data. if None, yield all data in data_paths.
     Return:

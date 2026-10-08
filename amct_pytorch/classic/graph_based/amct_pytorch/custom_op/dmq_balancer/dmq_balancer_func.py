@@ -32,7 +32,7 @@ class DMQBalancerFunction(Function):
     @staticmethod
     def forward(ctx, inputs, weights, migration_strength):
         """
-        Function: dmq_balancer foward funtion.
+        Function: dmq_balancer forward function.
         """
         # check data's type and range
         check_quant_data(inputs, 'activation')

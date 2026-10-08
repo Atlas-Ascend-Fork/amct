@@ -191,7 +191,7 @@ def tensor_dim_dot(tensor, matrix, dim):
 
 
 def tensor_decomposition(tensor, stride=1, group=1, dilation=1):  # pylint: disable=R0914
-    """decompose 4d tensor to 2 samll tensors,
+    """decompose 4d tensor to 2 small tensors,
        if tensor can not decompose, return DecomposeMode.UNCHANGE
 
     param tensor: ndarray

@@ -48,7 +48,7 @@ class KVCacheQuant(nn.Module):
 
     def forward(self, inputs):
         """
-        Function: KVCacheQuant foward funtion.
+        Function: KVCacheQuant forward function.
         Args:
         inputs: data used for calibration in torch.tensor.
         """
