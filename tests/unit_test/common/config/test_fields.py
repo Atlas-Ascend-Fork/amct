@@ -385,7 +385,7 @@ def test_algorithm_field_single_minmax():
 
 
 def test_algorithm_field_multiple_algos():
-    """两个算法各自负责不同的 src_op 时，配置合法且都保留。"""
+    """Two algorithms owning distinct src_ops are both valid and both kept."""
     fake_algo_a = type("AlgoA", (), {"keys": lambda self: ["Linear"]})()
     fake_algo_b = type("AlgoB", (), {"keys": lambda self: ["Conv2d"]})()
     fake_reg = type(
@@ -398,7 +398,7 @@ def test_algorithm_field_multiple_algos():
 
 
 def test_algorithm_field_duplicate_src_op_raises():
-    """两个算法认领同一个 src_op 时必须报错，不能静默选一个。"""
+    """Two algorithms claiming the same src_op must raise, not silently pick one."""
     fake_algo_a = type("AlgoA", (), {"keys": lambda self: ["Linear"]})()
     fake_algo_b = type("AlgoB", (), {"keys": lambda self: ["Linear"]})()
     fake_reg = type(
@@ -409,12 +409,32 @@ def test_algorithm_field_duplicate_src_op_raises():
 
 
 def test_algorithm_field_duplicate_src_op_uses_passed_registry():
-    """查重必须读传入的 registry，而不是全局 AlgorithmRegistry。"""
+    """The duplicate check must read the passed registry, not the global one."""
     fake_algo = type("AlgoA", (), {"keys": lambda self: ["OpOnlyInFakeReg"]})()
     fake_reg = type("FakeReg", (), {"algo": {ALGO_A: fake_algo}})()
-    # ALGO_A 只存在于 fake_reg；若实现误读全局表会抛 AttributeError
+    # ALGO_A only exists in fake_reg; reading the global table would raise AttributeError
     f = AlgorithmField({ALGO_A: {}}, fake_reg)
     assert ALGO_A in f.names
+
+
+def test_algorithm_field_none_src_op_skipped_in_duplicate_check():
+    """A None src_op is a registry placeholder (e.g. cast's FP8Linear), not deduped."""
+    fake_algo_a = type("AlgoA", (), {"keys": lambda self: ["Linear", None]})()
+    fake_algo_b = type("AlgoB", (), {"keys": lambda self: ["Conv2d", None]})()
+    fake_reg = type(
+        "FakeReg", (), {"algo": {ALGO_A: fake_algo_a, ALGO_B: fake_algo_b}}
+    )()
+    f = AlgorithmField({ALGO_A: {}, ALGO_B: {}}, fake_reg)
+    v = f.get_value()
+    assert ALGO_A in v["algorithm"]
+    assert ALGO_B in v["algorithm"]
+
+
+def test_algorithm_field_cast_none_src_op_with_real_registry():
+    """cast carries a None placeholder src_op in the real registry; must not be blocked."""
+    assert None in AlgorithmRegistry.algo["cast"].keys()
+    f = AlgorithmField({"cast": {}}, AlgorithmRegistry)
+    assert "cast" in f.get_value()["algorithm"]
 
 
 def test_algorithm_field_unknown_algo_raises():

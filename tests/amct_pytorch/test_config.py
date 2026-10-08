@@ -1403,7 +1403,7 @@ class TestConfigParse(unittest.TestCase):
             )
 
     def test_multi_algo_fail_cfg(self):
-        """同一 src_op 被两个算法认领时必须报错，不允许静默挑一个。"""
+        """Two algorithms claiming the same src_op must raise, not silently pick one."""
         cfg = {
             KEY_BATCH_NUM: 1,
             QUANT_CFG: {

@@ -453,6 +453,11 @@ class AlgorithmField:
         supported_src_op = []
         for alg_name, alg_attr in zip(alg_names, alg_attrs):
             for src_op in alg_reg.algo.get(alg_name).keys():
+                # A None src_op is a registry placeholder (e.g. cast's FP8Linear) and
+                # maps to no real source op, so it is excluded from the
+                # "one src_op is owned by exactly one algorithm" duplicate check.
+                if src_op is None:
+                    continue
                 if src_op in supported_src_op:
                     raise ValueError(
                         f'One src_op only support one algorithm, current algo {alg_name} '

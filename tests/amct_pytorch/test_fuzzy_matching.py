@@ -71,11 +71,11 @@ LAYER1 = 'layer1'
 
 
 def _minmax_registry():
-    """构造只注册了 minmax 的假 registry。
+    """Build a fake registry that only registers minmax.
 
-    QuantConfig/AlgorithmField 会读 registry 的 algo 表做 src_op 查重，
-    裸 Mock() 的 algo.get(...).keys() 返回不可迭代的 Mock，查重路径会直接
-    抛 TypeError，因此这里显式给出 algo 表。
+    QuantConfig/AlgorithmField reads the registry's algo table for the src_op
+    duplicate check. A bare Mock() makes algo.get(...).keys() return a
+    non-iterable Mock, so that path raises TypeError. Hence the explicit table.
     """
     reg = Mock()
     reg.algo = {ALGORITHM_MINMAX: {'Linear': None}}
