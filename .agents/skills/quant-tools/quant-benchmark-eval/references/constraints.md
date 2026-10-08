@@ -66,3 +66,16 @@ sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'
 ## 9. 在独立工作目录里运行，不要直接在 `scripts/` 下跑
 
 amct 会往当前目录写 `amct_log/` 和 `fusion_result.json`。在一个专用运行目录（如 `<workdir>/<task>_run/`）里用完整路径调用脚本，保持 skill 的 `scripts/` 只存代码、不留运行产物。
+
+## 10. `--algos` 必须与 ptq 参数训练时用的算法一致
+
+amct 按 `args.algos` 在每个量化块里**构造对应的算法子模块**：`lwc` / `lac` 落在 `weight_quantizer.algorithms.<key>` 与 `input_quant.algorithms.<key>`，`let` / `flatquant` 属 structure 目标，落在 `input_transform` / `hidden_transform`。加载 ptq 参数是拿参数文件里的 key 去找同名子模块，所以两侧不一致直接 `KeyError`：
+
+- 参数由 `let` 训出、脚本却按默认 `lwc,lac` 构造 → `KeyError: "Submodule 'input_transform' is not found in module 'QuantQwen3MLP'."`
+- 把 `lwc` 的 key 改名冒充 `let` → `KeyError: "Submodule 'gate_proj.weight_quantizer.algorithms.let' is not found ..."`
+
+因此 `assemble_and_eval.py` / `livecodebench_eval.py` 都暴露 `--algos`（默认 `lwc,lac`），并在装配前用 amct 的 `ALGO_REGISTRY` 校验键名，写错立刻报错并列出已注册算法（`autoround / flatquant / gptq / lac / let / lwc`）。评别人的 ptq 结果前，先确认它训练时用了哪些算法（`$quant-run` 的命令里有）。
+
+## 11. `--param_dir` 必须真的加载上，否则评的是直转不是 PTQ
+
+amct 的 `load_selected_layer_ptq_params(strict=False)` 对缺失文件只打 debug 日志并**回落直转**：目录写错、文件名不对（应为 `layer_<idx>_<unit>.pt`）、算法不匹配时，评测照样出数，但被评对象已经不是用户的 PTQ 结果。脚本因此逐层统计 `loaded/missing`：全部为 0 直接 `RuntimeError`；部分缺失打 `[warn]`（例如只有前 2 层有参数、其余 26 层走直转 → 混合对象，结论里必须写明）。

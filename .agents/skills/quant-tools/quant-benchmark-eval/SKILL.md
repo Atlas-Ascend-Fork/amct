@@ -32,7 +32,7 @@ description: 在 Ascend NPU 上用 lm-eval-harness / LiveCodeBench 官方 runner
 
 | 什么时候读 | 读什么 |
 |---|---|
-| **任何一次评测前（必读）** | [references/constraints.md](references/constraints.md) —— 9 条踩坑约束，编号稳定 |
+| **任何一次评测前（必读）** | [references/constraints.md](references/constraints.md) —— 11 条踩坑约束，编号稳定 |
 | 换机器 / 配 env / 装依赖 | [references/env-and-portability.md](references/env-and-portability.md) |
 | 要跑代码生成任务 | [references/livecodebench.md](references/livecodebench.md) |
 
@@ -48,7 +48,7 @@ description: 在 Ascend NPU 上用 lm-eval-harness / LiveCodeBench 官方 runner
 | 35B MoE 双卡 bf16（跨卡 generate + HFLM + 打分） | ✅ 已验证 |
 | 35B MoE 双卡 W8A8 装配 + 跨卡 generate 冒烟 | ✅ 已验证（需约束 7 的 hook 修复） |
 | 35B MoE 双卡 W8A8 + 长 prompt 评测 | ⚠️ npu:0 OOM（见约束 8，属显存调优） |
-| MATH500，lm-eval `hendrycks_math500` / 别名 `math500` | ✅ 已接入（耗时需按机器实测） |
+| MATH500，lm-eval `hendrycks_math500` / 别名 `math500` | ✅ 已验证（离线读仓库实际的 `test.jsonl` 并出分；全量耗时按机器实测） |
 | LiveCodeBench code-generation-lite，官方 custom_evaluator hidden-tests pass@1 | ⚠️ 已接入生成官方 custom 输出；评分需安装并调用 `lcb_runner` |
 | ARC-Challenge / ARC-Easy / BoolQ / COPA / PIQA / SciQ | ⚠️ 已登记为低资源候选；需在目标机器预下载并跑小样本确认 |
 
@@ -86,11 +86,14 @@ description: 在 Ascend NPU 上用 lm-eval-harness / LiveCodeBench 官方 runner
 
 ```bash
 python scripts/self_check.py                                  # 轻量自检：不加载模型、不占 NPU
+python scripts/self_check.py --remote                         # 加验 datasets.json 与各数据集仓真实文件列表是否一致（只读元数据，需联网）
 python scripts/check_env.py                                   # 依赖 + lm-eval 版本检查
 python scripts/prefetch_data.py --task <task>                 # 预下载到 $BENCH_ASSETS/<subdir>/
 ```
 
 `<task>` 取上表任务名（`livecodebench` 只下单 release 的 `test6.jsonl`，累计集用 `livecodebench_release_v6`）。env 变量、依赖版本、离线读取机制见 [references/env-and-portability.md](references/env-and-portability.md)。
+
+`prefetch_data.py` 会逐个 split 打印实际命中的文件，**任一 split 没命中就以非 0 退出并给出排查方向**（网络被拦 / `datasets.json` 的 glob 与仓库布局不符）——不要带着 MISSING 往下跑，否则评测阶段只会看到一句误导性的 `run prefetch_data.py first`。同一 split 可声明多个候选布局（如 `test.jsonl` 与 `data/test-*.parquet`），候选之间是「或」，命中一个即可。
 
 ### 2. 装配 + 评测
 
@@ -98,11 +101,11 @@ python scripts/prefetch_data.py --task <task>                 # 预下载到 $BE
 # 8B dense，单卡
 python scripts/assemble_and_eval.py --model <model_path> --model_name qwen3 \
   --param_dir <ptq_params/mlp> --task mmlu_pro --limit 10 --max_gen_toks 512 \
-  --output_dir <out_dir>
+  --output_dir <out_dir> --algos lwc,lac
 
 # 35B MoE，双卡（先设 ASCEND_RT_VISIBLE_DEVICES=0,1）
 python scripts/assemble_and_eval.py --model <model_path> --model_name qwen3_5_moe \
-  --param_dir <ptq_params/moe> --task mmlu_pro --device_map auto --limit 10
+  --param_dir <ptq_params/moe> --task mmlu_pro --device_map auto --limit 10 --algos lwc,lac
 
 # 低资源任务：换 --task arc_challenge / arc_easy / boolq / copa / piqa / sciq，--max_gen_toks 64
 # MATH500：--task math500（别名，映射到 lm-eval hendrycks_math500）--max_gen_toks 1024
@@ -110,6 +113,8 @@ python scripts/assemble_and_eval.py --model <model_path> --model_name qwen3_5_mo
 ```
 
 - **装配流程**：`_load_float()`（支持 `device_map`）加载模型 → 逐层 `build_quant_block`（KV-safe 目标：dense 用 `mlp`，MoE 用 `moe`）+ `load_selected_layer_ptq_params` → 开启量化、置 `eval_mode=True` → 量化块塞回层列表**并放回该层原本所在的卡** → 先做一次 `generate` 冒烟。出现 cpu / disk offload 直接报错（offload 会破坏量化正确性）。
+- **`--algos` 必须与 ptq 参数训练时的算法一致**（默认 `lwc,lac`；amct 已注册 `autoround / flatquant / gptq / lac / let / lwc`）。算法决定了量化块里构造出哪些子模块，不一致时加载参数会 `KeyError`；脚本在装配前先按 `ALGO_REGISTRY` 校验键名。详见约束 10。
+- **ptq 参数必须真的加载上**：脚本逐层统计 `loaded/missing`，一个都没加载上直接报错（否则会静默回落直转，评的就不是用户的 PTQ 结果）；部分层缺参数打 `[warn]`，结论里要写明是混合对象。详见约束 11。
 - **`--bf16` 跑基线**：跳过量化，用**同一套 harness** 跑原始模型。两者都要跑，最后报告差值。
 - **`--device_map auto`** 走多卡，省略则单卡 npu:0；输入经 `input_device()` 路由到 embedding 所在卡。
 - **attention 量化默认被拦截**：脚本禁 `--quant_target attn-linear` / `attn-cache`，确需评完整 attention 量化对象要显式加 `--allow_attn_quant`，且先按约束 1 与用户确认取舍。
@@ -142,16 +147,16 @@ python scripts/assemble_and_eval.py --model <model_path> --model_name qwen3_5_mo
 
 | 文件 | 用途 |
 |---|---|
-| `references/constraints.md` | 9 条关键约束（attention / KV cache、离线数据、PYTHONPATH、OOM、多卡 hook 等） |
+| `references/constraints.md` | 11 条关键约束（attention / KV cache、离线数据、PYTHONPATH、OOM、多卡 hook、`--algos` 与 ptq 参数匹配等） |
 | `references/env-and-portability.md` | 依赖边界、可配置 env、环境模板、新机器部署步骤 |
 | `references/livecodebench.md` | LiveCodeBench 生成 + 官方评分 + 榜单对齐清单 |
 | `scripts/config.py` | env 解析（`AMCT_HOME` / `BENCH_ASSETS` / `HF_ENDPOINT`）+ 加载 `datasets.json`；提供 `local_dataset_map()`（旧名 `local_parquet_map()` 为兼容别名） |
 | `scripts/utils.py` | 数据读取（parquet / jsonl）、依赖检查、LiveCodeBench 字段校验、attention 量化保护、结果日志解析 |
 | `scripts/datasets.json` | benchmark 注册表（repo_id、subdir、split → parquet/jsonl/glob），prefetch 与离线 shim 的单一数据源 |
-| `scripts/self_check.py` | 不加载模型、不跑 NPU 的轻量自检，验证脚本接线 |
+| `scripts/self_check.py` | 不加载模型、不跑 NPU 的轻量自检：脚本接线、注册表声明、已预下载任务的 split 是否真能解析、SKILL.md 指标列 vs lm-eval task index；`--remote` 再加验注册表 vs 数据集仓真实文件列表 |
 | `scripts/check_env.py` | 检查运行依赖与 lm-eval 版本；`--livecodebench_score` 加查官方评分 runner |
-| `scripts/prefetch_data.py` | `snapshot_download` 把数据集下到 `$BENCH_ASSETS` |
+| `scripts/prefetch_data.py` | `snapshot_download` 把数据集下到 `$BENCH_ASSETS`，并校验每个 split 是否真命中文件（未命中即非 0 退出） |
 | `scripts/bench_offline.py` | monkeypatch `load_dataset` → fastparquet 读本地 parquet、pandas 读本地 jsonl |
-| `scripts/assemble_and_eval.py` | 装配 fake-quant 模型（KV-safe 目标、多卡保留 hook）+ HFLM 评测 + `--bf16` 基线 |
-| `scripts/livecodebench_eval.py` | 装配后生成代码，输出 LiveCodeBench 官方 `custom_evaluator` JSON |
-| `scripts/compare_results.py` | 从 bf16 / quant 日志或 JSON 抽指标并输出差值 |
+| `scripts/assemble_and_eval.py` | 装配 fake-quant 模型（KV-safe 目标、`--algos` 校验、ptq 参数落地校验、多卡保留 hook）+ HFLM 评测 + `--bf16` 基线 |
+| `scripts/livecodebench_eval.py` | 装配后生成代码，输出 LiveCodeBench 官方 `custom_evaluator` JSON（同样支持 `--algos`） |
+| `scripts/compare_results.py` | 从 bf16 / quant 日志或 JSON 抽指标并输出差值；日志没有 `[RESULT]` 行时给出可诊断报错 |

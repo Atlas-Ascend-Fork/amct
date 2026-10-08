@@ -20,6 +20,9 @@ import json
 import os
 from glob import glob
 
+# Characters that make a registry entry a glob candidate instead of a literal path.
+_GLOB_MAGIC = "*?["
+
 
 def _default_amct_home():
     """Locate the amct repo root from this file; no machine-specific defaults.
@@ -85,16 +88,25 @@ def load_dataset_registry():
 
 
 def _resolve_split_files(base, rels):
+    """Resolve one split's declared paths/globs under `base`.
+
+    A split may declare several *candidate* layouts (`test.jsonl` plus
+    `data/test-*.parquet`) because dataset repos differ; the candidates are
+    alternatives, not a required set. Globs are expanded, every candidate that
+    exists is kept, and only when none exists do the declared paths come back
+    verbatim so the caller's error can name them.
+    """
     if isinstance(rels, str):
         rels = [rels]
-    out = []
+    expanded = []
     for rel in rels:
-        matches = sorted(glob(os.path.join(base, rel), recursive=True))
-        if matches:
-            out.extend(matches)
+        if any(ch in rel for ch in _GLOB_MAGIC):
+            expanded.extend(sorted(glob(os.path.join(base, rel), recursive=True)))
         else:
-            out.append(os.path.join(base, rel))
-    return out
+            expanded.append(os.path.join(base, rel))
+    deduped = list(dict.fromkeys(expanded))
+    existing = [path for path in deduped if os.path.exists(path)]
+    return existing or deduped
 
 
 def local_dataset_map():

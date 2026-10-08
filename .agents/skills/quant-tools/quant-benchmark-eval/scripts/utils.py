@@ -80,6 +80,18 @@ def split_quant_targets(quant_target):
     return list(quant_target)
 
 
+def split_list_arg(value, default=None):
+    """Split a comma-separated CLI value into a list; empty → `default`.
+
+    Accepts an already-split list so callers can forward either form.
+    """
+    if value is None or value == "":
+        return list(default) if default else []
+    if isinstance(value, str):
+        return [item.strip() for item in value.split(",") if item.strip()]
+    return list(value)
+
+
 def has_attention_quant(quant_target):
     return bool(ATTN_QUANT_TARGETS.intersection(split_quant_targets(quant_target)))
 

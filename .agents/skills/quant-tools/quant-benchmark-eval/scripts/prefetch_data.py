@@ -37,14 +37,29 @@ def main():
         allow_patterns=allow_patterns,
     )
     print(f"[prefetch] {spec['repo_id']} -> {p}")
+    unresolved = []
     for split, rels in spec["splits"].items():
         if isinstance(rels, str):
             rels = [rels]
         found = []
         for rel in rels:
             found.extend(glob(os.path.join(dst, rel), recursive=True))
-        status = f"OK ({len(found)} files)" if found else "MISSING"
-        print(f"   {split}: {rels} {status}")
+        if found:
+            print(f"   {split}: OK ({len(found)} files) -> {sorted(found)[:3]}")
+        else:
+            unresolved.append(split)
+            print(f"   {split}: MISSING, looked for {rels} under {dst}")
+    if unresolved:
+        # Fail loud: a MISSING split means eval will die later with a confusing
+        # FileNotFoundError, or silently fall back to a network read.
+        sys.exit(
+            f"[prefetch] FAILED for task '{a.task}': split(s) {unresolved} matched no "
+            f"downloaded file. Either the download was blocked (check network / "
+            f"allow_patterns) or datasets.json globs do not match the repo layout "
+            f"(list it with: huggingface_hub.HfApi().list_repo_files("
+            f"'{spec['repo_id']}', repo_type='dataset'))."
+        )
+    print(f"[prefetch] {a.task}: all declared splits resolved")
 
 
 if __name__ == "__main__":

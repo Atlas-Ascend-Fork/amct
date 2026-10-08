@@ -13,11 +13,20 @@
     "subdir": "math500",
     "splits": {
       "test": [
+        "test.jsonl",
+        "data/test.jsonl",
         "test-*.parquet",
         "data/test-*.parquet",
         "**/test-*.parquet"
       ]
-    }
+    },
+    "allow_patterns": [
+      "*.parquet",
+      "**/*.parquet",
+      "*.jsonl",
+      "**/*.jsonl",
+      "README.md"
+    ]
   },
   "livecodebench": {
     "repo_id": "livecodebench/code_generation_lite",

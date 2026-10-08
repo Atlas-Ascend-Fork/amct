@@ -26,6 +26,7 @@ from utils import (  # noqa: E402
     check_environment,
     ensure_supported_quant_target,
     has_attention_quant,
+    split_list_arg,
     split_quant_targets,
 )
 
@@ -36,6 +37,12 @@ _KVSAFE_TARGET = {
     "qwen3_5_moe": "moe",
     "qwen3_6_moe": "moe",
 }
+
+# Algorithm modules built into every quant block. Must match the algorithms the
+# ptq params were trained with, or loading them raises
+# "Submodule '...algorithms.<algo>' is not found in module 'Quant...'"
+# (see references/constraints.md #10).
+DEFAULT_ALGOS = ["lwc", "lac"]
 
 
 def _resolve_quant_target(model_name, quant_target):
@@ -88,6 +95,82 @@ def _get_layers(model):
     raise RuntimeError("cannot locate decoder layers on this model")
 
 
+def _validate_algos(algos):
+    """Fail before assembly if an algo key is not in amct's ALGO_REGISTRY.
+
+    Otherwise the mismatch surfaces much later as
+    "Submodule '<unit>.algorithms.<algo>' is not found in module 'Quant...'"
+    while loading ptq params, which does not point back to --algos.
+    """
+    from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
+
+    if not algos:
+        raise RuntimeError(
+            "--algos resolved to an empty list; pass at least one amct algorithm "
+            f"key (registered: {ALGO_REGISTRY.list_all()})."
+        )
+    unknown = [a for a in algos if not ALGO_REGISTRY.has(a)]
+    if unknown:
+        raise RuntimeError(
+            f"--algos {unknown} not in amct ALGO_REGISTRY "
+            f"(registered: {ALGO_REGISTRY.list_all()}). The keys must match the "
+            f"algorithms the ptq params were trained with."
+        )
+    return algos
+
+
+def _tally(stats, per_target_result):
+    """Accumulate amct's {target: {loaded, missing}} over layers."""
+    for target, res in (per_target_result or {}).items():
+        entry = stats.setdefault(target, {"loaded": 0, "missing": 0})
+        entry["loaded"] += len(res.get("loaded") or [])
+        entry["missing"] += len(res.get("missing") or [])
+    return stats
+
+
+def _require_ptq_params_landed(param_dir, stats, algos):
+    """Fail loud when a user-supplied param_dir loaded nothing.
+
+    amct loads ptq params with strict=False: an empty/mismatched dir silently
+    falls back to direct quant, so the run would still print numbers -- for a
+    different object than the PTQ result the user asked to benchmark.
+    """
+    if not param_dir:
+        return
+    detail = (
+        ", ".join(
+            f"{t}: loaded={s['loaded']} missing={s['missing']}"
+            for t, s in sorted(stats.items())
+        )
+        or "no quant target reported"
+    )
+    total_loaded = sum(s["loaded"] for s in stats.values())
+    total_missing = sum(s["missing"] for s in stats.values())
+    if total_loaded == 0:
+        try:
+            head = sorted(os.listdir(param_dir))[:6]
+        except OSError as exc:
+            raise RuntimeError(
+                f"--param_dir {param_dir} is unreadable ({exc}); no ptq params were "
+                f"loaded ({detail}), so this run would silently be direct quant."
+            ) from exc
+        raise RuntimeError(
+            f"no ptq params were loaded from --param_dir {param_dir} ({detail}); "
+            f"amct would silently fall back to direct quant, so these numbers would "
+            f"not describe your PTQ result. Expected files named "
+            f"layer_<idx>_<unit>.pt, dir head={head}. Check --param_dir, "
+            f"--model_name/--quant_target and --algos={algos}."
+        )
+    if total_missing:
+        print(
+            f"[warn] {total_missing} quant unit(s) found no ptq params under "
+            f"{param_dir} ({detail}); those units fall back to direct quant, so the "
+            f"evaluated object is mixed PTQ/direct."
+        )
+    else:
+        print(f"[ptq] params loaded from {param_dir} ({detail})")
+
+
 def _load_float(model_path, device_map):
     import torch_npu  # noqa: F401
     from transformers import AutoModelForCausalLM
@@ -108,7 +191,14 @@ def _load_float(model_path, device_map):
 
 
 def build_pipeline_args(
-    model, model_name, param_dir, quant_target, bit_cfg, seq_len, output_dir
+    model,
+    model_name,
+    param_dir,
+    quant_target,
+    bit_cfg,
+    seq_len,
+    output_dir,
+    algos=None,
 ):
     from amct_pytorch.quantization.bit_policy import BitPolicy
 
@@ -137,7 +227,7 @@ def build_pipeline_args(
         lr_step_size=1,
         lr_gamma=0.1,
         epochs=15,
-        algos=["lwc", "lac"],
+        algos=list(algos) if algos else list(DEFAULT_ALGOS),
         is_per_tensor=False,
         k_size=128,
         start_block_idx=0,
@@ -164,6 +254,7 @@ def assemble_quant_model(
     quant_target=None,
     output_dir="/tmp/qbe_out",
     allow_attn_quant=False,
+    algos=None,
 ):
     from amct_pytorch.common.models.llm import register_llm_models
     from amct_pytorch.quantization.dtypes import register_dtype
@@ -178,8 +269,10 @@ def assemble_quant_model(
 
     qt = _resolve_quant_target(model_name, quant_target)
     ensure_supported_quant_target(qt, allow_attn_quant=allow_attn_quant)
+    algo_list = split_list_arg(algos, DEFAULT_ALGOS)
+    _validate_algos(algo_list)
     args = build_pipeline_args(
-        model, model_name, param_dir, qt, bit_cfg, seq_len, output_dir
+        model, model_name, param_dir, qt, bit_cfg, seq_len, output_dir, algo_list
     )
     pipe = MODEL_REGISTRY.get(model_name)(args)
     print(
@@ -188,6 +281,7 @@ def assemble_quant_model(
     m = _load_float(model, device_map)
     layers = _get_layers(m)
     n = pipe.num_layers
+    print(f"[assemble] algos={algo_list} param_dir={param_dir or '<none>'}")
     # Multi-card: device_map=auto attaches accelerate AlignDevicesHooks that move
     # activations to each layer's card as data flows layer→layer. Replacing a layer
     # object drops its hook → cross-card activations no longer realigned → matmul
@@ -197,12 +291,13 @@ def assemble_quant_model(
         from accelerate.hooks import add_hook_to_module
     except Exception:
         add_hook_to_module = None
+    load_stats = {}
     for i in range(n):
         # place quant block on the SAME card as the original layer (multi-card safe)
         dev = next(layers[i].parameters()).device
         old_hook = getattr(layers[i], "_hf_hook", None)
         qblock = pipe.build_quant_block(i)
-        pipe.load_selected_layer_ptq_params(i, qblock, strict=False)
+        _tally(load_stats, pipe.load_selected_layer_ptq_params(i, qblock, strict=False))
         set_model_to_observe(qblock, False)
         for mod in qblock.modules():
             if isinstance(mod, QuantLinear):
@@ -217,6 +312,7 @@ def assemble_quant_model(
                 f"[assemble] {i + 1}/{n} layers quantized"
                 f"{' (+hook)' if old_hook is not None else ''}"
             )
+    _require_ptq_params_landed(param_dir, load_stats, algo_list)
     import torch_npu
 
     torch_npu.npu.empty_cache()
@@ -251,6 +347,15 @@ def main():
         "--quant_target",
         default="",
         help="override KV-safe target (dense→mlp, MoE→moe)",
+    )
+    ap.add_argument(
+        "--algos",
+        default=",".join(DEFAULT_ALGOS),
+        help=(
+            "comma-separated amct algorithm keys built into every quant block "
+            "(registered: lwc, lac, let, autoround, flatquant, gptq). Must match "
+            "the algorithms the ptq params were trained with."
+        ),
     )
     ap.add_argument(
         "--bit_config",
@@ -308,6 +413,7 @@ def main():
             quant_target=(a.quant_target or None),
             output_dir=a.output_dir,
             allow_attn_quant=a.allow_attn_quant,
+            algos=a.algos,
         )
 
     generate_use_cache = not has_attention_quant(quant_target)

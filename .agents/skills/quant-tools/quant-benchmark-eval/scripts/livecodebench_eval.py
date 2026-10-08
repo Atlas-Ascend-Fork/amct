@@ -27,6 +27,7 @@ SKILL_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SKILL_DIR)
 
 from assemble_and_eval import (  # noqa: E402
+    DEFAULT_ALGOS,
     _load_float,
     assemble_quant_model,
     input_device,
@@ -120,6 +121,14 @@ def main():
     ap.add_argument("--model_name", default="qwen3")
     ap.add_argument("--param_dir", default="")
     ap.add_argument("--quant_target", default="")
+    ap.add_argument(
+        "--algos",
+        default=",".join(DEFAULT_ALGOS),
+        help=(
+            "comma-separated amct algorithm keys built into every quant block; "
+            "must match the algorithms the ptq params were trained with"
+        ),
+    )
     ap.add_argument("--bit_config", default=DEFAULT_BIT_CONFIG)
     ap.add_argument(
         "--output_dir", default="/tmp/qbe_out", help="amct temporary output dir"
@@ -185,6 +194,7 @@ def main():
             quant_target=(a.quant_target or None),
             output_dir=a.output_dir,
             allow_attn_quant=a.allow_attn_quant,
+            algos=a.algos,
         )
 
     docs = load_lcb_docs(a.dataset_task, a.limit)

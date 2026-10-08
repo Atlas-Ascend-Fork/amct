@@ -34,6 +34,13 @@ def _patched(path, *args, **kwargs):
     if key in _LOCAL:
         splits = {}
         for split, fps in _LOCAL[key].items():
+            if not fps:
+                raise FileNotFoundError(
+                    f"{path} split '{split}' resolved to no local file under "
+                    f"$BENCH_ASSETS: every datasets.json glob for it matched "
+                    f"nothing. Prefetch it (prefetch_data.py) or fix the split "
+                    f"globs to the layout the dataset repo actually ships."
+                )
             missing = [fp for fp in fps if not os.path.exists(fp)]
             if missing:
                 raise FileNotFoundError(

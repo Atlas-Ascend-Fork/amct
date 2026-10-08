@@ -27,10 +27,28 @@ def _load_json(path):
 
 
 def _load_result(path):
+    """Load a result JSON, or a run log's `[RESULT]` lines.
+
+    Every failure mode here is reported with an actionable message: a truncated
+    or interrupted run leaves no `[RESULT]` line, and the old behaviour surfaced
+    that much later as "no numeric metric found. Available: []".
+    """
+    if not os.path.isfile(path):
+        raise SystemExit(f"result file not found: {path}")
     try:
         return _load_json(path)
     except json.JSONDecodeError:
-        return parse_result_log(path)
+        pass
+    parsed = parse_result_log(path)
+    if not parsed:
+        raise SystemExit(
+            f"{path} is not JSON and contains no "
+            f"'[RESULT] <tag> <task>: <metrics>' line: the benchmark did not "
+            f"finish (interrupted / OOM / crashed before scoring) or its results "
+            f"went to another file. Re-run it and pass the log that ends with a "
+            f"[RESULT] line."
+        )
+    return parsed
 
 
 def _flatten(obj, prefix=""):
@@ -80,7 +98,11 @@ def _select(cands):
 def _pick_metric(flat, metric):
     cands = _candidates(flat)
     if not cands:
-        raise KeyError(f"no numeric metric found. Available: {sorted(flat)}")
+        raise SystemExit(
+            "no numeric metric found in this result file. Expected lm-eval "
+            "[RESULT] lines or a JSON metrics object; parsed keys: "
+            f"{sorted(flat) or '<empty>'}"
+        )
     available = sorted({c[2] for c in cands.values()})
 
     if metric:
@@ -93,7 +115,7 @@ def _pick_metric(flat, metric):
             or k.endswith("." + metric)
         }
         if not matches:
-            raise KeyError(f"metric '{metric}' not found. Available: {available}")
+            raise SystemExit(f"metric '{metric}' not found. Available: {available}")
         return _select(matches)
 
     for preferred in PREFERRED_METRICS:
@@ -103,7 +125,9 @@ def _pick_metric(flat, metric):
     if len(cands) == 1:
         only = next(iter(cands.values()))
         return only[1], only[4]
-    raise KeyError(f"cannot auto-pick metric. Available: {available}")
+    raise SystemExit(
+        f"cannot auto-pick a metric; pass --metric. Available: {available}"
+    )
 
 
 def main():
