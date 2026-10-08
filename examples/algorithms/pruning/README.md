@@ -691,3 +691,90 @@ dense FFN 中间维只占 Qwen3-0.6B 总参数的一部分（embedding、attenti
 （做法参考[第 6.6 节](#66-size_budget05-恢复训练)）缓解。
 
 > 剪枝完成后，如需将模型导出为 torchair 离线模型（.air）用于 ATC 转 om 板端推理，请参考 [AMCT大模型torchair离线模型导出](../export/README.md)。
+
+## 8 社区任务样例：Qwen3-0.6B Dense FFN `reconstruct` + `ratio`（任务 6）
+
+对应 issue [#183](https://gitcode.com/cann/amct/issues/183) 的任务 6：在原始 Qwen3-0.6B 上，分别以 `prune_ratio=0.1/0.2/0.5` 对 Dense FFN 中间维度进行结构化剪枝，使用 `reconstruct` 和默认的最小二乘恢复 `recovery=ls`。脚本：[src/run_qwen3_0_6b_pruning_reconstruct_ratio.py](src/run_qwen3_0_6b_pruning_reconstruct_ratio.py)。
+
+### 8.1 准备与运行
+
+本次实测：Linux aarch64，Python 3.12.13，CANN 9.1.0，torch 2.7.1+cpu，torch_npu 2.7.1.post4，transformers 5.12.1，datasets 4.8.4，huggingface-hub 1.33.0，AMCT 1.1.0。运行设备为单个可见 NPU，`torch.npu.get_device_name(0)` 返回 `Ascend910_9382`，显存约 61.27 GiB。这是已验证的组合，并非所有版本的兼容性声明。
+
+将 [Qwen/Qwen3-0.6B](https://huggingface.co/Qwen/Qwen3-0.6B) 下载到本地目录，确保包含权重、config 和 tokenizer 文件。安装与 Python/torch 匹配的 torch_npu 和 AMCT，加载实际 CANN 安装路径中的 `set_env.sh`。`torch` 版本带 `+cpu` 不表示不能通过 torch_npu 使用 NPU。首次运行需联网下载并缓存数据集。
+
+从 `examples/algorithms/pruning` 目录运行，路径是占位符：
+
+```bash
+# 先在实际环境加载 CANN，例如本次使用：
+source /usr/local/Ascend/cann-9.1.0/set_env.sh
+# 从仓库源码运行时：
+export PYTHONPATH=../../..
+
+python3 src/run_qwen3_0_6b_pruning_reconstruct_ratio.py \
+  --model-path ./path/to/Qwen3-0.6B \
+  --prune-ratio 0.1 --calib-samples 32 --calib-seq-len 512 \
+  --seq-len 4096 --device npu:0 --save-model \
+  --save-dir ./outputs/qwen3_0_6b_reconstruct_ratio/r0_1
+
+python3 src/run_qwen3_0_6b_pruning_reconstruct_ratio.py \
+  --model-path ./path/to/Qwen3-0.6B \
+  --prune-ratio 0.2 --calib-samples 32 --calib-seq-len 512 \
+  --seq-len 4096 --device npu:0 --save-model \
+  --save-dir ./outputs/qwen3_0_6b_reconstruct_ratio/r0_2
+
+python3 src/run_qwen3_0_6b_pruning_reconstruct_ratio.py \
+  --model-path ./path/to/Qwen3-0.6B \
+  --prune-ratio 0.5 --calib-samples 32 --calib-seq-len 512 \
+  --seq-len 4096 --device npu:0 --save-model \
+  --save-dir ./outputs/qwen3_0_6b_reconstruct_ratio/r0_5
+```
+
+每条命令启动新进程并重新加载同一原始模型；不要将上一档剪枝模型作为下一档输入。输出目录必须为空。单卡已足够完成本例；本次只验证了上述设备，未测试 A2/A5。
+
+| 参数 | 默认值 | 含义 |
+| --- | --- | --- |
+| `--model-path` | 必填 | 原始 Qwen3-0.6B 本地模型目录 |
+| `--prune-ratio` | 必填 | 仅允许 0.1、0.2、0.5 |
+| `--calib-samples` / `--calib-seq-len` | 32 / 512 | Pileval 校准块数量及长度 |
+| `--seq-len` | 4096 | 固定 WikiText2 评估长度，其他值会报错 |
+| `--eval-batches` | 全量 | 正整数上限，仅用于快速检查；正式实验不传 |
+| `--device` | npu:0 | 模型和校准数据所在设备 |
+| `--save-dir` | ./outputs/qwen3_0_6b_reconstruct_ratio | 本次结果目录；不允许覆盖已有内容 |
+| `--save-model` | 关闭 | 保存到 model/ 并自动重新加载验证 |
+| `--skip-diagnose` | 关闭 | 跳过诊断预览，正式报告仍会产生 |
+
+### 8.2 校准、评估与计时口径
+
+复用现有 `src/utils.py` 的模型加载、校准、评估和参数统计接口，不修改共用 helper。Pileval 使用 `mit-han-lab/pile-val-backup` 的 validation，经共享 `get_pileval/pileval_awq` 以 seed=42 打乱、去首尾空白、编码、跳过超过 512 token 的文本行，再拼接取前 32 个完整块，共 16,384 token。校准块与模型均放置到 npu:0。
+
+WikiText2 使用 `Salesforce/wikitext` 的 `wikitext-2-raw-v1` test；共享 `get_wiki_inputs` 用两个换行连接所有行，一次编码后切为不重叠的 4096-token 块，丢弃尾部不足一块的内容。本次得到 73 块，共 299,008 输入 token；共享 PPL helper 使用各块内部的 next-token loss，块间不预测跨边界 token。三档模型输入文件、校准 token 和评估 token 的 SHA256 均一致。
+
+表中剪枝时间为校准数据加载/预处理/搬运时间与实际 `amct.prune()` 时间之和，包含实际剪枝时的激活采集和 LS 求解；NPU 同步后计时。不含模型加载、文件哈希、评估数据准备、基线/剪枝后评估、诊断预览、保存和重载验证。诊断时间单独列出。缓存与设备状态会影响时间；本表不是推理性能测试。没有额外微调或量化，因此后处理 PPL 为 N/A；LS 是 reconstruct 剪枝内部步骤。
+
+早期独立 starter 使用逐行编码、无分隔符拼接，评估为 72 块；其 18.608421 基线和其他结果保留作调试历史，不能与本表的 73 块口径混用。
+
+### 8.3 诊断与完整报告
+
+三档诊断均识别 `cnn=0, dense=28, moe=0`，fixed-ratio dry run 的前向检查通过。诊断中的 `acc binary search: unavailable` 表示默认 tolerance 下未找到候选，仅为诊断结果；本任务使用固定 ratio，正式剪枝不依赖该搜索。诊断预览比例与本档实际比例一致。
+
+真实 PruneReport 各含 28 条不同的 Dense reconstruct 事件，全部为 `output-preserving (ls)`；warnings 为空。另有 CNN/MoE 的 `<none>` 事件，因为 Qwen3-0.6B 不含对应目标。三档 28 层 FFN 中间维度分别从 3072 变为 2765、2458、1536；gate/up 输出维度、down 输入维度和 config.intermediate_size 一致。
+
+完整诊断、PruneReport、运行指标、数据哈希、环境记录和重载验证：
+
+- [prune_ratio=0.1](reports/qwen3_0_6b_reconstruct_ratio/ratio_0_1.md)
+- [prune_ratio=0.2](reports/qwen3_0_6b_reconstruct_ratio/ratio_0_2.md)
+- [prune_ratio=0.5](reports/qwen3_0_6b_reconstruct_ratio/ratio_0_5.md)
+
+### 8.4 全量实测结果
+
+| Model | Method | Setting | Baseline PPL | Pruned PPL | Post-process PPL | Params (before → after) | Param cut | Prune time (min) | Diagnose time (min) |
+| --- | --- | --- | ---: | ---: | --- | --- | ---: | ---: | ---: |
+| Qwen3-0.6B | reconstruct (ls) | prune_ratio=0.1 | 19.157549 | 24.783754 | N/A | 596049920 → 569643008 | 4.4303% | 0.4071 | 1.0841 |
+| Qwen3-0.6B | reconstruct (ls) | prune_ratio=0.2 | 19.157549 | 28.937954 | N/A | 596049920 → 543236096 | 8.8606% | 0.4632 | 1.4742 |
+| Qwen3-0.6B | reconstruct (ls) | prune_ratio=0.5 | 19.157549 | 59.402245 | N/A | 596049920 → 463929344 | 22.1660% | 0.2663 | 0.9786 |
+
+三档均已保存并重新加载：逐一检查全部 311 个 state_dict tensor，权重完全相等；参数数、28 层 FFN 形状、config 和 tokenizer 抽样编码一致；首个 4096-token 评估块的重载前后 PPL 完全一致（分别为 21.380943、24.609314、87.247597）。这一步是保存一致性验证，完整评估值以表中 73 块结果为准。
+
+剪枝比例针对 FFN 中间维度，而参数下降针对整个模型，因此 0.5 不等于总参数减少 50%。PPL 越低越好，三档 PPL 均高于原始模型；0.5 档有明显精度损失。本例验证任务要求的流程和实测结果，不据此宣称可直接用于部署，也不与不同校准量/环境的其他任务结果直接比较。
+
+输出目录保存 `run_config.json`、`run_command.txt`、`run_environment.json`、`model_input_sha256.json`、`data_protocol.json`、`baseline_metrics.json`、`prune_config.json`、`diagnose_summary.txt`（未跳过时）、`prune_report.json`、`run_metrics.json`、`run_status.json` 和可选的 `model/`、`reload_validation.json`。权重和数据集不提交到仓库。
