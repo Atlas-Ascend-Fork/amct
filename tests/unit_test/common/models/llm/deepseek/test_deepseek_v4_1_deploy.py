@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -424,7 +425,7 @@ def test_convert_a3_shard_cache_does_not_accumulate_across_shards(tmp_path):
         )
         # The dict shared by the whole export must never retain processed
         # source shards or the shards read only for their scales.
-        assert loaded_files == {}
+        assert not loaded_files, sorted(loaded_files)
 
         output = load_file(str(model.output_dir / shard))
         assert set(routing) == set(output)
@@ -433,6 +434,58 @@ def test_convert_a3_shard_cache_does_not_accumulate_across_shards(tmp_path):
         assert output[f"{module}.weight_offset"].dtype == torch.bfloat16
         assert output[f"{module}.weight_scale"].shape == (BLOCK, 1)
 
+    assert model.processed_modules == {MODULE, MODULE_B}
+
+
+def test_convert_a3_shard_reads_scales_without_loading_their_shards(
+    tmp_path, monkeypatch
+):
+    """Scales are read tensor by tensor and their shard is never materialised."""
+    model = _bare_model(tmp_path, selection=DeploySelection((MODULE, MODULE_B)))
+    scale_shard = "scales.safetensors"
+    weight_map = {}
+    paths = []
+    for module in (MODULE, MODULE_B):
+        save_file(
+            {f"{module}.weight": torch.ones(BLOCK, BLOCK, dtype=torch.float8_e4m3fn)},
+            str(model.model_path / f"{module}.safetensors"),
+        )
+        weight_map[f"{module}.weight"] = f"{module}.safetensors"
+        weight_map[f"{module}.scale"] = scale_shard
+        paths.append(model.model_path / f"{module}.safetensors")
+    save_file(
+        {
+            f"{module}.scale": torch.full((1, 1), 127, dtype=torch.uint8).view(
+                torch.float8_e8m0fnu
+            )
+            for module in (MODULE, MODULE_B)
+        },
+        str(model.model_path / scale_shard),
+    )
+    paths.append(model.model_path / scale_shard)
+    model.safetensors_files = frozenset(path.resolve() for path in paths)
+
+    loaded = []
+    real_load_file = deepseekv4_1.load_file
+
+    def counting_load_file(path, **kwargs):
+        loaded.append(Path(path).name)
+        return real_load_file(path, **kwargs)
+
+    monkeypatch.setattr(deepseekv4_1, "load_file", counting_load_file)
+    quant_layers = dict.fromkeys((MODULE, MODULE_B), 8)
+    for module in (MODULE, MODULE_B):
+        model.convert_tensorwise_shard(
+            f"{module}.safetensors",
+            model.model_path,
+            weight_map,
+            quant_layers,
+            {},
+        )
+
+    # Only the two source shards are materialised; the shared scale shard is
+    # read through safe_open handles, one scale tensor at a time.
+    assert loaded == [f"{MODULE}.safetensors", f"{MODULE_B}.safetensors"]
     assert model.processed_modules == {MODULE, MODULE_B}
 
 
