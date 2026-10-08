@@ -384,20 +384,87 @@ def test_algorithm_field_single_minmax():
     assert "minmax" in v["algorithm"]
 
 
-def test_algorithm_field_multiple_algos(monkeypatch):
+def test_algorithm_field_multiple_algos():
+    """Two algorithms owning distinct src_ops are both valid and both kept."""
     fake_algo_a = type("AlgoA", (), {"keys": lambda self: ["Linear"]})()
     fake_algo_b = type("AlgoB", (), {"keys": lambda self: ["Conv2d"]})()
     fake_reg = type(
         "FakeReg", (), {"algo": {ALGO_A: fake_algo_a, ALGO_B: fake_algo_b}}
     )()
-    monkeypatch.setattr(
-        "amct_pytorch.common.config.fields.AlgorithmRegistry",
-        fake_reg,
-    )
     f = AlgorithmField({ALGO_A: {}, ALGO_B: {}}, fake_reg)
     v = f.get_value()
     assert ALGO_A in v["algorithm"]
     assert ALGO_B in v["algorithm"]
+
+
+def test_algorithm_field_duplicate_src_op_raises():
+    """Two algorithms claiming the same src_op must raise, not silently pick one."""
+    fake_algo_a = type("AlgoA", (), {"keys": lambda self: ["Linear"]})()
+    fake_algo_b = type("AlgoB", (), {"keys": lambda self: ["Linear"]})()
+    fake_reg = type(
+        "FakeReg", (), {"algo": {ALGO_A: fake_algo_a, ALGO_B: fake_algo_b}}
+    )()
+    with pytest.raises(ValueError, match="One src_op only support one algorithm"):
+        AlgorithmField({ALGO_A: {}, ALGO_B: {}}, fake_reg)
+
+
+def _duplicate_src_op_registry():
+    """Registry where ALGO_A and ALGO_B both claim src_op 'Linear'."""
+    fake_algo_a = type("AlgoA", (), {"keys": lambda self: ["Linear"]})()
+    fake_algo_b = type("AlgoB", (), {"keys": lambda self: ["Linear"]})()
+    return type("FakeReg", (), {"algo": {ALGO_A: fake_algo_a, ALGO_B: fake_algo_b}})()
+
+
+def test_algorithm_field_duplicate_src_op_reports_both_algos():
+    """The error must name both clashing algorithms, not only the later one."""
+    with pytest.raises(ValueError) as exc_info:
+        AlgorithmField({ALGO_A: {}, ALGO_B: {}}, _duplicate_src_op_registry())
+    msg = str(exc_info.value)
+    assert ALGO_A in msg
+    assert ALGO_B in msg
+    assert "Linear" in msg
+
+
+def test_algorithm_field_duplicate_src_op_message_is_order_independent():
+    """The reported pair must not depend on config order (i.e. on PYTHONHASHSEED)."""
+    msgs = []
+    for cfg in ({ALGO_A: {}, ALGO_B: {}}, {ALGO_B: {}, ALGO_A: {}}):
+        with pytest.raises(ValueError) as exc_info:
+            AlgorithmField(cfg, _duplicate_src_op_registry())
+        msgs.append(str(exc_info.value))
+    assert msgs[0] == msgs[1]
+    # sorted() puts algo_a first, so algo_b is the one reported as the duplicate claimer
+    assert f"current algo {ALGO_B}" in msgs[0]
+    assert f"claimed by algo {ALGO_A}" in msgs[0]
+
+
+def test_algorithm_field_duplicate_src_op_uses_passed_registry():
+    """The duplicate check must read the passed registry, not the global one."""
+    fake_algo = type("AlgoA", (), {"keys": lambda self: ["OpOnlyInFakeReg"]})()
+    fake_reg = type("FakeReg", (), {"algo": {ALGO_A: fake_algo}})()
+    # ALGO_A only exists in fake_reg; reading the global table would raise AttributeError
+    f = AlgorithmField({ALGO_A: {}}, fake_reg)
+    assert ALGO_A in f.names
+
+
+def test_algorithm_field_none_src_op_skipped_in_duplicate_check():
+    """A None src_op is a registry placeholder (e.g. cast's FP8Linear), not deduped."""
+    fake_algo_a = type("AlgoA", (), {"keys": lambda self: ["Linear", None]})()
+    fake_algo_b = type("AlgoB", (), {"keys": lambda self: ["Conv2d", None]})()
+    fake_reg = type(
+        "FakeReg", (), {"algo": {ALGO_A: fake_algo_a, ALGO_B: fake_algo_b}}
+    )()
+    f = AlgorithmField({ALGO_A: {}, ALGO_B: {}}, fake_reg)
+    v = f.get_value()
+    assert ALGO_A in v["algorithm"]
+    assert ALGO_B in v["algorithm"]
+
+
+def test_algorithm_field_cast_none_src_op_with_real_registry():
+    """cast carries a None placeholder src_op in the real registry; must not be blocked."""
+    assert None in AlgorithmRegistry.algo["cast"].keys()
+    f = AlgorithmField({"cast": {}}, AlgorithmRegistry)
+    assert "cast" in f.get_value()["algorithm"]
 
 
 def test_algorithm_field_unknown_algo_raises():
@@ -609,11 +676,6 @@ def test_algorithm_field_custom_algo():
         assert MY_UNIQUE_ALGO in f.names
     finally:
         del AlgorithmRegistry.algo[MY_UNIQUE_ALGO]
-
-
-def test_algorithm_field_check_invalid_input():
-    with pytest.raises(ValueError, match="Algorithm only support 1 str"):
-        AlgorithmField.check({"a": "b", "c": "d"})
 
 
 def test_quant_config_get_layer_config_inputs_fallback_enable_false():
