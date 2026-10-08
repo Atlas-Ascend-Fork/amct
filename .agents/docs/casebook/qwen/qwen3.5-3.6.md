@@ -37,6 +37,7 @@
 
 - 首推 `attn-linear + moe` W8A8-int8 直转，3.5/3.6 均 delta 小达标（见精度速查表）。`linear_attention` kernel 量化未就绪时先留 BF16，仅量化其投影 Linear（3.6 smoke 已验该单元可 PTQ）。
 - Qwen3.6-27B A4W4 MXFP4 `attn-linear` 和 `mlp` 结果见精度速查表。
+- Qwen3.6-27B A8W8 MXFP8 `attn-linear` 和 `mlp` 直转量化结果见精度速查表。
 
 ## 适配建议（下次同系列/同结构）
 
@@ -91,3 +92,5 @@
 | MXFP | A4w4: mlp | omniquant | 7.8741 |
 | MXFP | A4w4: mlp | autoround | 7.9661 |
 | MXFP | A4w4: mlp | flatquant | 7.7327 |
+| MXFP | A8w8: attn-linear | 无 | 7.5638 |
+| MXFP | A8w8: mlp | 无 | 7.6255 |
