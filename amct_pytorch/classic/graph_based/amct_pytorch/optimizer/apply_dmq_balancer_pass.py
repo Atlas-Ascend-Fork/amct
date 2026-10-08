@@ -109,7 +109,7 @@ class ApplyDMQBalancerPass(BaseFusionPass):
             graph: graph structure
             object_node: node to process
             model: torch.nn.Module, the model to be modified. if it's
-                None, the gaph will be modified.
+                None, the graph will be modified.
         Return: None
         """
         tensor_balance_factor = self.records.get(object_node.name).get(

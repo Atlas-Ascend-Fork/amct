@@ -102,7 +102,7 @@ class ShareActCompPass(BaseFusionPass):
         Parameters: graph: graph structure
                     object_node: node to process
                     model: torch.nn.Module, the model to be modified. if it's
-                        None, the gaph will be modified.
+                        None, the graph will be modified.
         Return: None
         """
         object_node_name = object_node.name

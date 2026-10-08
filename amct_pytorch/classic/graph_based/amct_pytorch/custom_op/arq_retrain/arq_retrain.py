@@ -108,7 +108,7 @@ class ArqRetrainFunction(Function):
     @staticmethod
     def backward(ctx, grad_outputs, grad_scale, grad_offset):
         """
-        Function: ArqRetrain backward function required by torch torch.autograd.
+        Function: ArqRetrain backward function required by torch.autograd.
         """
         grad_input = arq_retrain_backward_pytorch(grad_outputs)
         ret = (grad_input, None, None, None, None)
