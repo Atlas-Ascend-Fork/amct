@@ -70,7 +70,7 @@ def _collect_block_inputs(
         b.register_forward_pre_hook(_make_input_hook(feats, id(b))) for b in blocks
     ]
     device = infer_model_device(model)
-    was_training = model.training
+    modes = [(module, module.training) for module in model.modules()]
     model.eval()
     try:
         with torch.no_grad():
@@ -78,7 +78,8 @@ def _collect_block_inputs(
                 moved_args, moved_kwargs = move_batch_to_device(args, kwargs, device)
                 model(*moved_args, **moved_kwargs)
     finally:
-        model.train(was_training)
+        for module, training in modes:
+            module.training = training
         for h in hooks:
             h.remove()
     return {k: (torch.cat(v) if v else None) for k, v in feats.items()}

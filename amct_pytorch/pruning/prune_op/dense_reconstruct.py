@@ -216,7 +216,7 @@ def _collect_consumer_acts(model, targets, context, device):
         handles.append(mod.register_forward_hook(hook))
 
     n_batches = 0
-    was_training = model.training
+    modes = [(module, module.training) for module in model.modules()]
     model.eval()
     try:
         with torch.no_grad():
@@ -227,7 +227,8 @@ def _collect_consumer_acts(model, targets, context, device):
     finally:
         for h in handles:
             h.remove()
-        model.train(was_training)
+        for module, training in modes:
+            module.training = training
     return acts, paths, n_batches
 
 

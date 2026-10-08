@@ -48,6 +48,22 @@ def _channel_saliency(acts: torch.Tensor, n_channels: int) -> torch.Tensor:
     return a.pow(2).mean(dim=(0, 2)).sqrt()
 
 
+def _pad_for_consumer(consumer: nn.Conv2d, inputs: torch.Tensor) -> torch.Tensor:
+    """Apply the same boundary padding as Conv2d before unfold or convolution."""
+    if isinstance(consumer.padding, str):
+        if consumer.padding == "same":
+            height = consumer.dilation[0] * (consumer.kernel_size[0] - 1)
+            width = consumer.dilation[1] * (consumer.kernel_size[1] - 1)
+            pad = (width // 2, width - width // 2, height // 2, height - height // 2)
+        else:
+            pad = (0, 0, 0, 0)
+    else:
+        height, width = consumer.padding
+        pad = (width, width, height, height)
+    mode = "constant" if consumer.padding_mode == "zeros" else consumer.padding_mode
+    return F.pad(inputs, pad, mode=mode)
+
+
 @torch.no_grad()
 def _reconstruct_conv_consumer(
     consumer: nn.Conv2d, x_keep: torch.Tensor, y: torch.Tensor, ridge: float
@@ -55,9 +71,9 @@ def _reconstruct_conv_consumer(
     """Reconstruct conv consumer weights on the kept input channels via im2col least squares."""
     k = consumer.kernel_size
     cols = F.unfold(
-        x_keep.float(),
+        _pad_for_consumer(consumer, x_keep.float()),
         kernel_size=k,
-        padding=consumer.padding,
+        padding=0,
         stride=consumer.stride,
         dilation=consumer.dilation,
     )
@@ -82,11 +98,11 @@ def _conv_bias_fold_delta(consumer, x_full, keep, total):
     xp = x_full.float().clone()
     xp[:, keep_mask] = 0.0
     y_pruned = nn.functional.conv2d(
-        xp,
+        _pad_for_consumer(consumer, xp),
         consumer.weight.detach().float(),
         None,
         stride=consumer.stride,
-        padding=consumer.padding,
+        padding=0,
         dilation=consumer.dilation,
     )
     return y_pruned.mean(dim=(0, 2, 3))
