@@ -49,7 +49,7 @@ class AttrProtoHelper:
     @classmethod
     def map_value_location(cls, proto_value):
         """
-        Funtion: find value's location in node_proto with proto_value
+        Function: find value's location in node_proto with proto_value
         Inputs:
         proto_value: a number in [0, 12], means the location as
         attr_map
@@ -102,7 +102,7 @@ class AttrProtoHelper:
         Inputs:
         attr_name: string, name of attr
         type_string: string, indicate type
-        value: number or lsit, attr's data
+        value: number or list, attr's data
         Returns:
         None
         """

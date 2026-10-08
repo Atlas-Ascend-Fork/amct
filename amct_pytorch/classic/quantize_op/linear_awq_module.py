@@ -63,7 +63,7 @@ class LinearAWQuant(BaseQuantizeModule):
     @torch.no_grad()
     def forward(self, inputs):
         """
-        Function: LinearAWQuant foward funtion.
+        Function: LinearAWQuant forward function.
         Args:
         inputs: data used for calibration in torch.tensor.
         """
