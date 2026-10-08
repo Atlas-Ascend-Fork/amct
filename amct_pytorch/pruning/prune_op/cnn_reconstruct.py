@@ -199,8 +199,8 @@ def _register_consumer_hooks(model, conv_targets):
         caches[id(t)] = {"x": [], "y": []}
 
         def hook(mod, inp, out, key=id(t)):
-            caches[key]["x"].append(inp[0].detach())
-            caches[key]["y"].append(out.detach())
+            caches[key]["x"].append(inp[0].detach().clone())
+            caches[key]["y"].append(out.detach().clone())
 
         handles.append(mod.register_forward_hook(hook))
     return caches, handles
