@@ -126,7 +126,14 @@ class QuantileQuant(BaseQuantizeModule):
             scale: HIF8 scale factor
         """
         if tensor_max is not None:
-            return (tensor_max / QUANT_SCOPE[HIFLOAT8]).to(torch.float32)
+            scale = (tensor_max / QUANT_SCOPE[HIFLOAT8]).to(torch.float32)
+            # An all-zero weight channel / calibration tensor yields scale == 0, and
+            # fake quant divides by it (quant_dequant_tensor -> tensor / scale), which
+            # turns the zeros into NaN. Substitute a unit scale for exact zeros only:
+            # 0 / 1 -> 0 keeps the all-zero data losslessly zero after dequant.
+            # Deliberately not process_scale() here -- its scale < FLT_EPSILON test
+            # would also lift legitimately tiny scales up to 1.0 and lose precision.
+            return torch.where(scale == 0, torch.ones_like(scale), scale)
         else:
             return tensor_max
 
