@@ -107,7 +107,7 @@ class RetrainConfig:
     @staticmethod
     @check_params(file_name=str, graph=Graph)
     def create_default_retrain_config(file_name, graph):
-        """create deafult config"""
+        """create default config"""
         CONFIGURER.set_ability(enable_retrain=True, enable_prune=False)
         CONFIGURER.create_default_config(file_name, graph)
         LOGGER.logd(

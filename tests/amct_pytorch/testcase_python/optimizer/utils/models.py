@@ -67,7 +67,7 @@ class Net001(nn.Module):
     conv + bn
     conv(with bias) + bn
     depthwise_conv + bn
-    depthwise_conv(with bais) + bn
+    depthwise_conv(with bias) + bn
     group_conv + bn
     group_conv(bias) + bn
     fc + bn
@@ -156,7 +156,7 @@ class Net002(nn.Module):
     conv + bn
     conv(with bias) + bn
     depthwise_conv + bn
-    depthwise_conv(with bais) + bn
+    depthwise_conv(with bias) + bn
     group_conv + bn
     group_conv(bias) + bn
     fc + bn
