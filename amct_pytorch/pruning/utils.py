@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import copy
+from collections.abc import Mapping
 from typing import Dict, List, Sequence, Tuple
 
 import torch
@@ -385,7 +386,7 @@ def move_batch_to_device(
             return tuple(move(x) for x in value)
         if isinstance(value, list):
             return [move(x) for x in value]
-        if isinstance(value, dict):
+        if isinstance(value, Mapping):
             return {k: move(v) for k, v in value.items()}
         return value
 
@@ -398,9 +399,9 @@ def run_calibration_epoch(model: nn.Module, context, device=None) -> int:
     if device is None:
         device = infer_model_device(model)
     was_training = model.training
-    model.eval()
     num_batches = 0
     try:
+        model.eval()
         for args, kwargs in context.iter_model_inputs():
             moved_args, moved_kwargs = move_batch_to_device(args, kwargs, device)
             model(*moved_args, **moved_kwargs)

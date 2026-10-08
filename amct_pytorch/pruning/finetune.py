@@ -128,9 +128,9 @@ def prune_finetune(
     )
 
     was_training = model.training
-    model.train()
     history: List[float] = []
     try:
+        model.train()
         for i, batch in enumerate(islice(cycle(batches), steps)):
             _set_warmup_lr(opt, lr, i, warmup)
             moved = _move_to_device(batch, dev)
