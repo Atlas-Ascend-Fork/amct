@@ -50,7 +50,7 @@ description: 在 Ascend NPU 上用 lm-eval-harness / LiveCodeBench 官方 runner
 | 35B MoE 双卡 W8A8 + 长 prompt 评测 | ⚠️ npu:0 OOM（见约束 8，属显存调优） |
 | MATH500，lm-eval `hendrycks_math500` / 别名 `math500` | ✅ 已验证（离线读仓库实际的 `test.jsonl` 并出分；全量耗时按机器实测） |
 | LiveCodeBench code-generation-lite，官方 custom_evaluator hidden-tests pass@1 | ⚠️ 已接入生成官方 custom 输出；评分需安装并调用 `lcb_runner` |
-| ARC-Challenge / ARC-Easy / BoolQ / COPA / PIQA / SciQ | ⚠️ 已登记为低资源候选；需在目标机器预下载并跑小样本确认 |
+| ARC-Challenge / ARC-Easy / BoolQ / COPA / PIQA / SciQ | ✅ 已验证（bf16 与量化各 6 任务小样本出分，主指标键与下表一致） |
 
 ---
 
