@@ -351,21 +351,27 @@ class DeepseekV41:
     def _read_source_scale(self, model_dir, scale_file, scale_name, open_files):
         """Read one source scale tensor without materialising its whole shard.
 
-        ``open_files`` caches the shard handles for the duration of a single
-        shard conversion and is bounded by ``MAX_OPEN_SCALE_FILES``; dropping an
-        entry closes its file descriptor.
+        ``open_files`` caches ``(handle, names)`` per shard for the duration of
+        a single shard conversion and is bounded by ``MAX_OPEN_SCALE_FILES``;
+        dropping an entry closes its file descriptor. ``names`` is the shard's
+        tensor-name set: ``handle.keys()`` rebuilds a fresh list of Python
+        strings on every call (roughly 0.3-0.6 ms at 2000 tensors, and it grows
+        with the shard), so caching it once per shard keeps the membership
+        check off the per-weight path.
         """
-        handle = open_files.pop(scale_file, None)
-        if handle is None:
+        entry = open_files.pop(scale_file, None)
+        if entry is None:
             scale_path = resolve_safetensors_path(
                 model_dir, scale_file, self.safetensors_files
             )
             handle = safe_open(str(scale_path), framework="pt", device="cpu")
+            entry = (handle, frozenset(handle.keys()))
             while len(open_files) >= MAX_OPEN_SCALE_FILES:
                 open_files.pop(next(iter(open_files)))
         # Re-insert last so eviction drops the least recently used handle.
-        open_files[scale_file] = handle
-        if scale_name not in handle.keys():
+        open_files[scale_file] = entry
+        handle, names = entry
+        if scale_name not in names:
             raise ValueError(f"Missing source scale tensor: {scale_name}")
         return handle.get_tensor(scale_name)
 
