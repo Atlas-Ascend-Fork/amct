@@ -489,6 +489,120 @@ def test_convert_a3_shard_reads_scales_without_loading_their_shards(
     assert model.processed_modules == {MODULE, MODULE_B}
 
 
+def _write_scale_layout(model, modules, scale_shard_of):
+    """Write one source shard plus per-module scale shards; return weight_map."""
+    source = (
+        (((torch.arange(BLOCK * BLOCK, dtype=torch.float32) % 7) - 3) / 4)
+        .reshape(BLOCK, BLOCK)
+        .to(torch.float8_e4m3fn)
+    )
+    save_file(
+        # Distinct storages: safetensors rejects shared tensors on save.
+        {f"{module}.weight": source.clone() for module in modules},
+        str(model.model_path / SHARD),
+    )
+    buckets = {}
+    for module in modules:
+        shard = scale_shard_of[module]
+        buckets.setdefault(shard, {})[f"{module}.scale"] = torch.full(
+            (1, 1), 127, dtype=torch.uint8
+        ).view(torch.float8_e8m0fnu)
+    paths = [model.model_path / SHARD]
+    for name, tensors in sorted(buckets.items()):
+        save_file(tensors, str(model.model_path / name))
+        paths.append(model.model_path / name)
+    model.safetensors_files = frozenset(path.resolve() for path in paths)
+    weight_map = {}
+    for module in modules:
+        weight_map[f"{module}.weight"] = SHARD
+        weight_map[f"{module}.scale"] = scale_shard_of[module]
+    return weight_map
+
+
+def test_convert_a3_shard_evicts_scale_handles_beyond_the_bound(tmp_path, monkeypatch):
+    """The MAX_OPEN_SCALE_FILES eviction path keeps the handle cache in bound."""
+    module_c = "model.layers.2.mlp.down_proj"
+    modules = (MODULE, MODULE_B, module_c)
+    model = _bare_model(tmp_path, selection=DeploySelection(modules))
+    # The third scale lives in the first scale shard again, so it must still be
+    # readable after its handle was evicted by the bound.
+    weight_map = _write_scale_layout(
+        model,
+        modules,
+        {
+            MODULE: "scales-a.safetensors",
+            MODULE_B: "scales-b.safetensors",
+            module_c: "scales-a.safetensors",
+        },
+    )
+
+    monkeypatch.setattr(deepseekv4_1, "MAX_OPEN_SCALE_FILES", 1)
+    real_read = deepseekv4_1.DeepseekV41._read_source_scale
+    peak = {"handles": 0}
+
+    def tracking_read(self, model_dir, scale_file, scale_name, open_files):
+        scale = real_read(self, model_dir, scale_file, scale_name, open_files)
+        peak["handles"] = max(peak["handles"], len(open_files))
+        return scale
+
+    monkeypatch.setattr(deepseekv4_1.DeepseekV41, "_read_source_scale", tracking_read)
+
+    routing = model.convert_tensorwise_shard(
+        SHARD, model.model_path, weight_map, dict.fromkeys(modules, 8), {}
+    )
+
+    output = load_file(str(model.output_dir / SHARD))
+    assert set(routing) == set(output)
+    for module in modules:
+        assert output[f"{module}.weight"].dtype == torch.int8
+        assert output[f"{module}.weight_scale"].dtype == torch.bfloat16
+        assert output[f"{module}.weight_scale"].shape == (BLOCK, 1)
+    assert model.processed_modules == set(modules)
+    assert peak["handles"] <= 1, peak
+
+
+def test_read_source_scale_caches_shard_keys_per_handle(tmp_path, monkeypatch):
+    """``handle.keys()`` is built once per scale shard, not once per weight."""
+    model = _bare_model(tmp_path, selection=DeploySelection((MODULE, MODULE_B)))
+    weight_map = _write_scale_layout(
+        model,
+        (MODULE, MODULE_B),
+        {MODULE: "scales-a.safetensors", MODULE_B: "scales-a.safetensors"},
+    )
+
+    real_safe_open = deepseekv4_1.safe_open
+    calls = {"keys": 0, "opens": 0}
+
+    class CountingHandle:
+        def __init__(self, handle):
+            self._handle = handle
+
+        def keys(self):
+            calls["keys"] += 1
+            return self._handle.keys()
+
+        def get_tensor(self, name):
+            return self._handle.get_tensor(name)
+
+    def counting_safe_open(*args, **kwargs):
+        calls["opens"] += 1
+        return CountingHandle(real_safe_open(*args, **kwargs))
+
+    monkeypatch.setattr(deepseekv4_1, "safe_open", counting_safe_open)
+
+    model.convert_tensorwise_shard(
+        SHARD,
+        model.model_path,
+        weight_map,
+        dict.fromkeys((MODULE, MODULE_B), 8),
+        {},
+    )
+
+    # Both weights read their scale from the same shard: one open, one keys().
+    assert calls == {"keys": 1, "opens": 1}, calls
+    assert model.processed_modules == {MODULE, MODULE_B}
+
+
 def test_prepare_a3_scale_expands_e8m0_rows_for_block_fp8():
     weight = torch.ones((32, 64), dtype=torch.float8_e4m3fn)
     scale = torch.ones((1, 2), dtype=torch.uint8).view(torch.float8_e8m0fnu)
