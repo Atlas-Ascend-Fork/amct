@@ -14,10 +14,87 @@ PACKED = PREFIX + "block_sparse_moe.experts.0.w1.weight_packed"
 SCALE = PACKED.replace("weight_packed", "weight_scale")
 
 
-def adapter(tmp_path, dtype="mxfp"):
+@pytest.mark.parametrize(
+    "targets", [[], ["moe"], ["attn-linear"], ["moe", "attn-linear"]]
+)
+def test_ignore_categories_golden(tmp_path, targets):
+    prefix = "language_model.model.layers."
+    always = [
+        prefix + "1.self_attn." + projection
+        for projection in (
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "o_proj",
+            "f_a_proj",
+            "f_b_proj",
+            "b_proj",
+            "g_proj",
+            "g_a_proj",
+            "g_b_proj",
+            "q_a_proj",
+            "q_b_proj",
+            "kv_a_proj_with_mqa",
+            "kv_b_proj",
+        )
+    ]
+    always += [PREFIX + "self_attn.kv_b_proj"]
+    always += [
+        prefix + "1." + group + "." + projection
+        for group in ("mlp", "block_sparse_moe.shared_experts")
+        for projection in ("gate_proj", "up_proj", "down_proj")
+    ]
+    always += [
+        prefix + "1." + projection
+        for projection in ("self_attention_res_proj", "mlp_res_proj")
+    ]
+    always += [
+        "language_model.model.output_attn_res_proj",
+        "language_model.lm_head",
+        "mm_projector.proj.0",
+        "vision_tower.encoder.blocks.0.wqkv",
+        "vision_tower.encoder.blocks.0.wo",
+        "vision_tower.encoder.blocks.0.mlp.fc0",
+        "vision_tower.encoder.blocks.0.mlp.fc1",
+    ]
+    routed = prefix + "1.block_sparse_moe.experts.0.w1"
+    latent = prefix + "1.block_sparse_moe.routed_expert_up_proj"
+    mla = prefix + "0.self_attn.q_a_proj"
+    unrelated = [
+        prefix + "1.input_layernorm",
+        "language_model.model.embed_tokens",
+        "auxiliary",
+    ]
+    mapping = {
+        name + ".weight": "a.safetensors" for name in [*always, latent, mla, *unrelated]
+    }
+    mapping[routed + ".weight_packed"] = "a.safetensors"
+    (tmp_path / "model.safetensors.index.json").write_text(
+        json.dumps({"weight_map": mapping})
+    )
+    model = adapter(tmp_path)
+    model.quant_target = targets
+    expected = set(always)
+    if targets and "moe" not in targets:
+        expected.update([routed, latent])
+    if "attn-linear" not in targets:
+        expected.add(mla)
+    assert model.generate_tensorwise_ignore_layers() == sorted(
+        name.removeprefix("language_model.") for name in expected
+    )
+
+
+def adapter(tmp_path, dtype="mxfp", config=None):
     output = tmp_path.with_name(tmp_path.name + "_out")
     output.mkdir()
-    config = {"text_config": {"linear_attn_config": {"full_attn_layers": [1]}}}
+    if config is None:
+        config = {
+            "text_config": {
+                "num_hidden_layers": 3,
+                "num_experts": 2,
+                "linear_attn_config": {"full_attn_layers": [1]},
+            }
+        }
     (tmp_path / "config.json").write_text(json.dumps(config))
     model = KimiK3(
         SimpleNamespace(
@@ -132,6 +209,51 @@ def test_selection_excludes_shared_kda_and_nonfull_mla(tmp_path):
     assert "model.layers.0.self_attn.q_proj" in ignores
 
 
+@pytest.mark.parametrize(
+    "targets", [[], ["moe"], ["attn-linear"], ["moe", "attn-linear"]]
+)
+def test_tensorwise_selection_and_ignore_golden(tmp_path, targets):
+    prefix = "language_model.model.layers."
+    routed = [
+        prefix + "1.block_sparse_moe.experts.0.w1",
+        prefix + "1.block_sparse_moe.experts.1.w2",
+    ]
+    latent = prefix + "1.block_sparse_moe.routed_expert_down_proj"
+    mla = prefix + "0.self_attn.q_a_proj"
+    unselected = [
+        prefix + "1.self_attn.q_b_proj",
+        prefix + "1.self_attn.q_proj",
+        prefix + "1.block_sparse_moe.shared_experts.up_proj",
+    ]
+    weight_map = {name + ".weight_packed": "a.safetensors" for name in routed}
+    weight_map.update(
+        {name + ".weight": "a.safetensors" for name in [latent, mla, *unselected]}
+    )
+    (tmp_path / "model.safetensors.index.json").write_text(
+        json.dumps({"weight_map": weight_map})
+    )
+    text = {
+        "num_hidden_layers": 3,
+        "num_experts": 2,
+        "linear_attn_config": {"full_attn_layers": [1]},
+    }
+    model = adapter(tmp_path, config={"text_config": text})
+    model.quant_target = targets
+    expected = {}
+    if not targets or "moe" in targets:
+        expected.update(dict.fromkeys(routed, 4))
+        expected[latent] = 8
+    if "attn-linear" in targets:
+        expected[mla] = 8
+    assert model.generate_tensorwise_quant_layers() == expected
+    assert model.generate_tensorwise_ignore_layers() == sorted(
+        name.removeprefix("language_model.")
+        for name in [*routed, latent, mla, *unselected]
+        if name not in expected
+    )
+    assert model.bits_scheme()[1]["a_bits"] == 8
+
+
 def test_mxfp8_requantization_and_nested_metadata(tmp_path):
     name = PREFIX + "self_attn.q_a_proj.weight"
     scale_name = name.replace(".weight", ".weight_scale")
@@ -224,7 +346,13 @@ def test_actual_workflow_exports_index_and_nested_config(tmp_path):
     source = tmp_path / "source"
     source.mkdir()
     output = tmp_path / "output"
-    config = {"text_config": {"linear_attn_config": {"full_attn_layers": [1]}}}
+    config = {
+        "text_config": {
+            "num_hidden_layers": 1,
+            "num_experts": 1,
+            "linear_attn_config": {"full_attn_layers": [1]},
+        }
+    }
     (source / "config.json").write_text(json.dumps(config))
     shared = PREFIX + "block_sparse_moe.shared_experts.up_proj.weight"
     save_file(

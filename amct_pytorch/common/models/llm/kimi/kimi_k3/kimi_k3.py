@@ -36,43 +36,23 @@ class KimiK3:
     _MOE_WEIGHT_RE = re.compile(
         r"^language_model\.model\.layers\.\d+\.block_sparse_moe\.experts\.\d+\.w[123]\.weight_packed$"
     )
-    _MLA_WEIGHT_RE = re.compile(
-        r"^language_model\.model\.layers\.(?P<layer_idx>\d+)\.self_attn\.(?:q_a_proj|q_b_proj|kv_a_proj_with_mqa|o_proj)\.weight$"
-    )
-    _LATENT_MOE_WEIGHT_RE = re.compile(
-        r"^language_model\.model\.layers\.\d+\.block_sparse_moe\.(?:routed_expert_down_proj|routed_expert_up_proj)\.weight$"
-    )
+    _ROUTED_PROJECTIONS = ("w1", "w2", "w3")
+    _LATENT_PROJECTIONS = ("routed_expert_down_proj", "routed_expert_up_proj")
+    _MLA_PROJECTIONS = ("q_a_proj", "q_b_proj", "kv_a_proj_with_mqa", "o_proj")
 
-    _TENSORWISE_LINEAR_WEIGHT_RES = (
-        re.compile(
-            r"^language_model\.model\.layers\.\d+\.self_attn\."
-            r"(?:q_proj|k_proj|v_proj|f_a_proj|f_b_proj|b_proj|g_proj|g_a_proj|g_b_proj|o_proj|"
-            r"q_a_proj|q_b_proj|kv_a_proj_with_mqa|kv_b_proj)\.weight$"
-        ),
-        re.compile(
-            r"^language_model\.model\.layers\.\d+\.mlp\."
-            r"(?:gate_proj|up_proj|down_proj)\.weight$"
-        ),
-        re.compile(
-            r"^language_model\.model\.layers\.\d+\.block_sparse_moe\.shared_experts\."
-            r"(?:gate_proj|up_proj|down_proj)\.weight$"
-        ),
-        re.compile(
-            r"^language_model\.model\.layers\.\d+\.block_sparse_moe\."
-            r"(?:routed_expert_down_proj|routed_expert_up_proj)\.weight$"
-        ),
-        re.compile(
-            r"^language_model\.model\.layers\.\d+\."
-            r"(?:self_attention_res_proj|mlp_res_proj)\.weight$"
-        ),
-        re.compile(r"^language_model\.model\.output_attn_res_proj\.weight$"),
-        re.compile(r"^language_model\.lm_head\.weight$"),
-        re.compile(
-            r"^vision_tower\.encoder\.blocks\.\d+\."
-            r"(?:wqkv|wo|mlp\.fc0|mlp\.fc1)\.weight$"
-        ),
-        re.compile(r"^mm_projector\.proj\.\d+\.weight$"),
+    _UNQUANTIZED_ATTN_PROJECTIONS = (
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "f_a_proj",
+        "f_b_proj",
+        "b_proj",
+        "g_proj",
+        "g_a_proj",
+        "g_b_proj",
+        "kv_b_proj",
     )
+    _FLOAT_MLP_PROJECTIONS = ("gate_proj", "up_proj", "down_proj")
 
     def __init__(self, args):
         if getattr(args, "granularity", None) != "tensor":
@@ -148,20 +128,34 @@ class KimiK3:
         return self._weight_map
 
     def generate_tensorwise_quant_layers(self):
+        weight_map = self._load_weight_map()
+        text_config = self.config.get("text_config", self.config)
+        layers = range(text_config["num_hidden_layers"])
+        expert_count = text_config["num_experts"]
         selected = {}
-        for name in self._load_weight_map():
+
+        def add_weight(module, suffix, bit):
+            if f"{module}.{suffix}" in weight_map:
+                selected[module] = bit
+
+        for layer_idx in layers:
+            prefix = f"language_model.model.layers.{layer_idx}"
             if not self.quant_target or "moe" in self.quant_target:
-                if self._MOE_WEIGHT_RE.match(name):
-                    selected[name.rsplit(".", 1)[0]] = 4
-                elif self._LATENT_MOE_WEIGHT_RE.match(name):
-                    selected[name.rsplit(".", 1)[0]] = 8
-            match = self._MLA_WEIGHT_RE.match(name)
+                for expert_idx in range(expert_count):
+                    for projection in self._ROUTED_PROJECTIONS:
+                        add_weight(
+                            f"{prefix}.block_sparse_moe.experts.{expert_idx}.{projection}",
+                            "weight_packed",
+                            4,
+                        )
+                for projection in self._LATENT_PROJECTIONS:
+                    add_weight(f"{prefix}.block_sparse_moe.{projection}", "weight", 8)
             if (
                 "attn-linear" in self.quant_target
-                and match
-                and int(match.group("layer_idx")) in self._tensorwise_mla_layer_indices
+                and layer_idx in self._tensorwise_mla_layer_indices
             ):
-                selected[name.rsplit(".", 1)[0]] = 8
+                for projection in self._MLA_PROJECTIONS:
+                    add_weight(f"{prefix}.self_attn.{projection}", "weight", 8)
         return selected
 
     @staticmethod
@@ -169,21 +163,62 @@ class KimiK3:
         return name.removeprefix("language_model.")
 
     def generate_tensorwise_ignore_layers(self):
-        selected = self.generate_tensorwise_quant_layers()
-        return sorted(
-            {
-                self._runtime_name(name.rsplit(".", 1)[0])
-                for name in self._load_weight_map()
-                if (
-                    any(
-                        pattern.match(name)
-                        for pattern in self._TENSORWISE_LINEAR_WEIGHT_RES
-                    )
-                    or self._MOE_WEIGHT_RE.match(name)
-                )
-                and name.rsplit(".", 1)[0] not in selected
-            }
-        )
+        weight_map = self._load_weight_map()
+        ignore = set()
+
+        def add_float(module, suffix="weight"):
+            if f"{module}.{suffix}" in weight_map:
+                ignore.add(self._runtime_name(module))
+
+        def indexed_ids(prefix):
+            return sorted(
+                {
+                    name.removeprefix(prefix).split(".", 1)[0]
+                    for name in weight_map
+                    if name.startswith(prefix)
+                    and name.removeprefix(prefix).split(".", 1)[0].isdigit()
+                },
+                key=int,
+            )
+
+        quantize_moe = not self.quant_target or "moe" in self.quant_target
+        quantize_attn = "attn-linear" in self.quant_target
+        for layer_idx in indexed_ids("language_model.model.layers."):
+            prefix = f"language_model.model.layers.{layer_idx}"
+            for projection in self._UNQUANTIZED_ATTN_PROJECTIONS:
+                add_float(f"{prefix}.self_attn.{projection}")
+            # o_proj belongs to quantized MLA only on configured full-attention layers.
+            if (
+                not quantize_attn
+                or int(layer_idx) not in self._tensorwise_mla_layer_indices
+            ):
+                for projection in self._MLA_PROJECTIONS:
+                    add_float(f"{prefix}.self_attn.{projection}")
+            for group in ("mlp", "block_sparse_moe.shared_experts"):
+                for projection in self._FLOAT_MLP_PROJECTIONS:
+                    add_float(f"{prefix}.{group}.{projection}")
+            for projection in ("self_attention_res_proj", "mlp_res_proj"):
+                add_float(f"{prefix}.{projection}")
+            if not quantize_moe:
+                for projection in self._LATENT_PROJECTIONS:
+                    add_float(f"{prefix}.block_sparse_moe.{projection}")
+                expert_prefix = f"{prefix}.block_sparse_moe.experts."
+                for expert_idx in indexed_ids(expert_prefix):
+                    for projection in self._ROUTED_PROJECTIONS:
+                        add_float(
+                            f"{expert_prefix}{expert_idx}.{projection}", "weight_packed"
+                        )
+        for module in (
+            "language_model.model.output_attn_res_proj",
+            "language_model.lm_head",
+        ):
+            add_float(module)
+        for block_idx in indexed_ids("vision_tower.encoder.blocks."):
+            for projection in ("wqkv", "wo", "mlp.fc0", "mlp.fc1"):
+                add_float(f"vision_tower.encoder.blocks.{block_idx}.{projection}")
+        for projection_idx in indexed_ids("mm_projector.proj."):
+            add_float(f"mm_projector.proj.{projection_idx}")
+        return sorted(ignore)
 
     @staticmethod
     def bits_scheme():
