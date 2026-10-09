@@ -39,7 +39,7 @@
 export PYTHONPATH=$AMCT_HOME:$PYTHONPATH   # 前置（prepend）
 ```
 
-若直接覆盖（`PYTHONPATH=$AMCT_HOME`），会丢掉 CANN 的 tbe / te，导致大模型在 aclop 编译阶段崩溃。
+若直接覆盖（`PYTHONPATH=$AMCT_HOME`），会丢掉 CANN 的 tbe / te，导致大模型在 aclop 编译阶段崩溃。<!-- codespell:ignore tbe,te -->
 
 ## 5. page cache 引起的 OOM
 
@@ -79,3 +79,23 @@ amct 按 `args.algos` 在每个量化块里**构造对应的算法子模块**：
 ## 11. `--param_dir` 必须真的加载上，否则评的是直转不是 PTQ
 
 amct 的 `load_selected_layer_ptq_params(strict=False)` 对缺失文件只打 debug 日志并**回落直转**：目录写错、文件名不对（应为 `layer_<idx>_<unit>.pt`）、算法不匹配时，评测照样出数，但被评对象已经不是用户的 PTQ 结果。脚本因此逐层统计 `loaded/missing`：全部为 0 直接 `RuntimeError`；部分缺失打 `[warn]`（例如只有前 2 层有参数、其余 26 层走直转 → 混合对象，结论里必须写明）。
+
+## 12. `--trust_remote_code` 默认关闭，只在可信模型目录上显式打开
+
+`trust_remote_code=True` 会让 HuggingFace **执行模型目录里的自定义建模代码**（`modeling_*.py`），等价于运行任意 Python。`--model` 是用户给的目录，所以本 skill 不把它写死为 True，而是与 amct 自己的 CLI 保持一致：
+
+- `amct_pytorch/cli/llm/args.py` 的 `--trust_remote_code` 默认 `False`；
+- `amct_pytorch/common/models/llm/common/base.py` 在未开启时打 WARNING。
+
+因此 `assemble_and_eval.py` / `livecodebench_eval.py` 都暴露 `--trust_remote_code`（默认关），并把这个值一路透传到 `AutoTokenizer` / `AutoModelForCausalLM` 与 amct 的 pipeline args（amct 内部据此建 config / tokenizer），两个方向都打 `[warn]`：
+
+- 未开启 → 提示部分模型需要它才能加载自定义建模代码，报 “requires you to execute the modeling file” 时再加；
+- 已开启 → 提示将执行该目录下的自定义代码，**只对可信目录使用**。
+
+agent 代为执行时的规矩：默认不加；确实需要（非原生支持架构）时先向用户说明「这会执行 `<model_dir>` 里的自定义建模代码」，得到确认再加，并在结论里记一笔。绝不为了让报错消失而默默打开。
+
+## 13. 权重 dtype 参数名随 transformers 版本变化，不能写死 `dtype=`
+
+`from_pretrained` 的权重 dtype 参数在 **transformers 4.56 才从 `torch_dtype` 改名为 `dtype`**。本仓不同模型目录钉的版本并不一致（`examples/algorithms/flatquant/requirements.txt` 4.51.0、`amct_pytorch/experimental/quantization/DeepSeekV3.2/requirements.txt` 4.52.4、`MiniMax-M2.7` 4.57.6），所以写死新名字在 4.52 环境上**不是**报“unexpected keyword”，而是该值落进 `**kwargs` → 被写进 config → 延后炸成 `TypeError: Object of type dtype is not JSON serializable`，很难归因。
+
+因此 `_load_float()` 统一走 `utils.dtype_kwargs(torch.bfloat16)`：按已安装版本选 `dtype`（≥4.56）或 `torch_dtype`（更旧，4.57+ 只是弃用告警、未删除）。`check_env.py` 会打印当前 transformers 版本与解析出的参数名，环境不符时先看这一行，不要为了消错去升级/降级用户的 transformers。

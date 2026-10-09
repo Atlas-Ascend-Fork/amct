@@ -19,6 +19,7 @@ python scripts/livecodebench_eval.py --model <model_path> --model_name qwen3 \
 ```
 
 - 加 `--bf16` 跑基线；bf16 与量化各跑一次生成 + 一次官方评分，最后对比两个 pass@1。
+- 模型目录带自定义建模代码时才加 `--trust_remote_code`（默认关，会执行该目录下的 Python，见 [constraints.md](constraints.md) 约束 12）。
 - 多卡（35B MoE）加 `--device_map auto`，并设 `ASCEND_RT_VISIBLE_DEVICES=0,1`。
 - 脚本读取 `livecodebench/code_generation_lite` 的 `question_content`、`starter_code` 等字段拼 prompt，生成 Python 代码，写出官方格式：`[{"question_id": "...", "code_list": ["..."]}]`；`--raw_output_jsonl` 额外留一份原始生成便于排查。
 - **不要加 `--limit` 产出正式分数**：官方 `custom_evaluator` 要求 custom 输出条数与所选 release 的 benchmark 条数一致。`--limit` 只用于生成链路冒烟。
@@ -33,6 +34,19 @@ python -m lcb_runner.runner.custom_evaluator --scenario codegeneration \
 ```
 
 bf16 的 custom 输出同样跑一遍，得到基线 pass@1。
+
+`custom_evaluator` 会把分数写进 `<custom_output_file 去掉 .json>_codegeneration_output_eval.json`（内容是 `[pass_at_k, results, final_metadata]`，`pass_at_k` 里就是 `pass@1` / `pass@5` …）。**pass@1 只存在于这个文件**：生成脚本的日志只打 `[lcb-gen]`（样本数 + 输出路径），不含分数，拿它去 `compare_results.py` 会直接报错，而不是给你一个假的 `delta 0.0`。
+
+## 2.1 对比两侧 pass@1
+
+```bash
+python scripts/compare_results.py \
+  --bf16 <out>/livecodebench_bf16_custom_outputs_codegeneration_output_eval.json \
+  --quant <out>/livecodebench_quant_custom_outputs_codegeneration_output_eval.json \
+  --metric pass@1 --sample_len <N>
+```
+
+`compare_results.py` 认识上面那个 list 形态的 `_eval.json`，会自动取出含 `pass@` 的字典；`sample_len` / `total` 这类非指标键被排除在候选之外，不会被当成精度指标挑中。
 
 ## 3. 与榜单严格对齐时要核对
 

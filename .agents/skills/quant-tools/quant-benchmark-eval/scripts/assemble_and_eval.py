@@ -24,10 +24,12 @@ from config import DEFAULT_BIT_CONFIG  # noqa: E402
 from utils import (  # noqa: E402
     TASK_ALIASES,
     check_environment,
+    dtype_kwargs,
     ensure_supported_quant_target,
     has_attention_quant,
     split_list_arg,
     split_quant_targets,
+    warn_trust_remote_code,
 )
 
 # quant_target that keeps attn native (KV cache works): dense→mlp, MoE→moe.
@@ -171,21 +173,33 @@ def _require_ptq_params_landed(param_dir, stats, algos):
         print(f"[ptq] params loaded from {param_dir} ({detail})")
 
 
-def _load_float(model_path, device_map):
+def _load_float(model_path, device_map, trust_remote_code=False):
+    """Load the bf16 float model.
+
+    `trust_remote_code` is an explicit opt-in, matching amct's own CLI default
+    (`amct_pytorch/cli/llm/args.py`): it executes custom modeling code from the
+    given directory, so it must never be silently on. See constraints.md #12.
+
+    The weight-dtype kwarg name differs across transformers releases (`dtype`
+    from 4.56, `torch_dtype` before); `dtype_kwargs()` picks the one the
+    installed version accepts. See constraints.md #13.
+    """
     import torch_npu  # noqa: F401
     from transformers import AutoModelForCausalLM
 
     if device_map:
         m = AutoModelForCausalLM.from_pretrained(
             model_path,
-            dtype=torch.bfloat16,
+            **dtype_kwargs(torch.bfloat16),
             device_map=device_map,
-            trust_remote_code=True,
+            trust_remote_code=trust_remote_code,
         )
         _check_no_offload(m)
     else:
         m = AutoModelForCausalLM.from_pretrained(
-            model_path, dtype=torch.bfloat16, trust_remote_code=True
+            model_path,
+            **dtype_kwargs(torch.bfloat16),
+            trust_remote_code=trust_remote_code,
         ).to("npu:0")
     return m.eval()
 
@@ -199,6 +213,7 @@ def build_pipeline_args(
     seq_len,
     output_dir,
     algos=None,
+    trust_remote_code=False,
 ):
     from amct_pytorch.quantization.bit_policy import BitPolicy
 
@@ -206,7 +221,7 @@ def build_pipeline_args(
     ns = argparse.Namespace(
         model=model,
         model_name=model_name,
-        trust_remote_code=True,
+        trust_remote_code=trust_remote_code,
         device="npu:0",
         granularity="block",
         seed=0,
@@ -255,6 +270,7 @@ def assemble_quant_model(
     output_dir="/tmp/qbe_out",
     allow_attn_quant=False,
     algos=None,
+    trust_remote_code=False,
 ):
     from amct_pytorch.common.models.llm import register_llm_models
     from amct_pytorch.quantization.dtypes import register_dtype
@@ -272,13 +288,21 @@ def assemble_quant_model(
     algo_list = split_list_arg(algos, DEFAULT_ALGOS)
     _validate_algos(algo_list)
     args = build_pipeline_args(
-        model, model_name, param_dir, qt, bit_cfg, seq_len, output_dir, algo_list
+        model,
+        model_name,
+        param_dir,
+        qt,
+        bit_cfg,
+        seq_len,
+        output_dir,
+        algo_list,
+        trust_remote_code=trust_remote_code,
     )
     pipe = MODEL_REGISTRY.get(model_name)(args)
     print(
         f"[assemble] loading float_model (bf16, device_map={device_map}, target={qt})..."
     )
-    m = _load_float(model, device_map)
+    m = _load_float(model, device_map, trust_remote_code)
     layers = _get_layers(m)
     n = pipe.num_layers
     print(f"[assemble] algos={algo_list} param_dir={param_dir or '<none>'}")
@@ -323,8 +347,9 @@ def assemble_quant_model(
         )
     print("[assemble] done.")
     # pipe.tokenizer is deliberately NOT returned: amct builds it with the
-    # use_fast default and trust_remote_code=False, so it can differ from the
-    # tokenizer used on the --bf16 baseline. Callers keep their own tokenizer so
+    # use_fast default and its own --trust_remote_code value, so it can differ
+    # from the tokenizer used on the --bf16 baseline. Callers keep their own
+    # tokenizer so
     # both sides of the comparison tokenize identically. Return the resolved
     # quant_target instead (needed to decide generate(use_cache=...)).
     return m, qt
@@ -389,17 +414,30 @@ def main():
     )
     ap.add_argument("--smoke", action="store_true", help="only generate smoke test")
     ap.add_argument("--log_samples", action="store_true")
+    ap.add_argument(
+        "--trust_remote_code",
+        action="store_true",
+        default=False,
+        help=(
+            "allow HuggingFace to execute custom modeling code from --model. "
+            "Default off, same as amct's own CLI; only enable for a model "
+            "directory you trust (constraints.md #12)."
+        ),
+    )
     a = ap.parse_args()
 
     check_environment(require_lm_eval=not a.smoke)
     dmap = a.device_map or None
     from transformers import AutoTokenizer
 
-    tok = AutoTokenizer.from_pretrained(a.model, use_fast=False, trust_remote_code=True)
+    warn_trust_remote_code(a.model, a.trust_remote_code)
+    tok = AutoTokenizer.from_pretrained(
+        a.model, use_fast=False, trust_remote_code=a.trust_remote_code
+    )
     quant_target = a.quant_target or ""
     if a.bf16:
         print(f"[bf16] loading original model (no quant, device_map={dmap})...")
-        model = _load_float(a.model, dmap)
+        model = _load_float(a.model, dmap, a.trust_remote_code)
     else:
         if not a.param_dir:
             sys.exit("--param_dir required unless --bf16")
@@ -414,6 +452,7 @@ def main():
             output_dir=a.output_dir,
             allow_attn_quant=a.allow_attn_quant,
             algos=a.algos,
+            trust_remote_code=a.trust_remote_code,
         )
 
     generate_use_cache = not has_attention_quant(quant_target)

@@ -87,26 +87,75 @@ def load_dataset_registry():
     return {k: v for k, v in reg.items() if not k.startswith("_")}
 
 
-def _resolve_split_files(base, rels):
-    """Resolve one split's declared paths/globs under `base`.
+def split_declaration(rels):
+    """Normalize one split's declaration to `(mode, [relpath, ...])`.
 
-    A split may declare several *candidate* layouts (`test.jsonl` plus
-    `data/test-*.parquet`) because dataset repos differ; the candidates are
-    alternatives, not a required set. Globs are expanded, every candidate that
-    exists is kept, and only when none exists do the declared paths come back
-    verbatim so the caller's error can name them.
+    Accepted forms:
+
+    - `"test.jsonl"` / `["a.jsonl", "b.jsonl"]` -> `("all_of", [...])`, the
+      historical form: every entry is a required shard (or a glob whose matches
+      are all shards of one layout), all merged.
+    - `{"any_of": [...]}` -> alternative layouts; first hit wins.
+    - `{"all_of": [...]}` -> same as the bare list, spelled out.
     """
     if isinstance(rels, str):
-        rels = [rels]
-    expanded = []
-    for rel in rels:
-        if any(ch in rel for ch in _GLOB_MAGIC):
-            expanded.extend(sorted(glob(os.path.join(base, rel), recursive=True)))
-        else:
-            expanded.append(os.path.join(base, rel))
-    deduped = list(dict.fromkeys(expanded))
+        return "all_of", [rels]
+    if isinstance(rels, dict):
+        modes = [mode for mode in ("any_of", "all_of") if mode in rels]
+        if len(modes) != 1:
+            raise ValueError(
+                "split declaration must carry exactly one of 'any_of' / 'all_of', "
+                f"got keys {sorted(rels)}"
+            )
+        value = rels[modes[0]]
+        return modes[0], [value] if isinstance(value, str) else list(value)
+    return "all_of", list(rels)
+
+
+def _expand(base, rel):
+    """Expand one declared path/glob under `base` (deduped, sorted)."""
+    if any(ch in rel for ch in _GLOB_MAGIC):
+        return list(
+            dict.fromkeys(sorted(glob(os.path.join(base, rel), recursive=True)))
+        )
+    return [os.path.join(base, rel)]
+
+
+def resolve_split_files(base, rels):
+    """Resolve one split's declared paths/globs under `base`.
+
+    Two declaration modes, because a split's paths can mean opposite things:
+
+    - ``any_of`` — alternative layouts of the *same* data (`test.jsonl` **or**
+      ``data/test-*.parquet``); the first candidate that exists wins, so a cache
+      holding both layouts is not read twice (samples would silently double).
+    - ``all_of`` — shards that must all be merged (LiveCodeBench's cumulative
+      `test.jsonl` … `test6.jsonl`).
+
+    A bare string / list keeps the historical ``all_of`` meaning. Globs are
+    expanded; when nothing exists the declared paths come back verbatim so the
+    caller's error can name them.
+    """
+    mode, rel_list = split_declaration(rels)
+    if mode == "any_of":
+        declared = []
+        for rel in rel_list:
+            matches = _expand(base, rel)
+            declared.extend(matches)
+            existing = [path for path in matches if os.path.exists(path)]
+            if existing:
+                return existing
+        return list(dict.fromkeys(declared))
+    deduped = []
+    for rel in rel_list:
+        deduped.extend(_expand(base, rel))
+    deduped = list(dict.fromkeys(deduped))
     existing = [path for path in deduped if os.path.exists(path)]
     return existing or deduped
+
+
+# Backward-compatible private name.
+_resolve_split_files = resolve_split_files
 
 
 def local_dataset_map():
@@ -117,7 +166,7 @@ def local_dataset_map():
         base = os.path.join(BENCH_ASSETS, spec["subdir"])
         key = (spec["repo_id"], spec.get("dataset_name"))
         out[key] = {
-            split: _resolve_split_files(base, rel)
+            split: resolve_split_files(base, rel)
             for split, rel in spec["splits"].items()
         }
     return out

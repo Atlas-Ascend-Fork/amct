@@ -32,7 +32,7 @@ description: 在 Ascend NPU 上用 lm-eval-harness / LiveCodeBench 官方 runner
 
 | 什么时候读 | 读什么 |
 |---|---|
-| **任何一次评测前（必读）** | [references/constraints.md](references/constraints.md) —— 11 条踩坑约束，编号稳定 |
+| **任何一次评测前（必读）** | [references/constraints.md](references/constraints.md) —— 13 条踩坑约束，编号稳定 |
 | 换机器 / 配 env / 装依赖 | [references/env-and-portability.md](references/env-and-portability.md) |
 | 要跑代码生成任务 | [references/livecodebench.md](references/livecodebench.md) |
 
@@ -71,7 +71,7 @@ description: 在 Ascend NPU 上用 lm-eval-harness / LiveCodeBench 官方 runner
 | 高 | `livecodebench` / `livecodebench_release_v6` | `pass@1` | 代码生成 hidden-tests pass@1 | 最耗时之一，评分依赖 `lcb_runner` |
 
 - lm-eval 的结果键格式固定为 **`<指标名>,<filter名>`**：task YAML 声明了 `filter_list` 就用其中每条的 `name`（mmlu_pro 是 `custom-extract`），没声明则默认 `none`。上表已按 lm-eval 0.4.12 实测键名填写，`scripts/self_check.py` 会拿已安装的 lm-eval task index 反查校验，升版本后跑一次自检即可发现漂移。
-- `livecodebench` 的 `pass@1` 由官方 `lcb_runner` 产出，不经 lm-eval，故无 `,filter` 后缀。
+- `livecodebench` 的 `pass@1` 由官方 `lcb_runner` 产出，不经 lm-eval，故无 `,filter` 后缀。**生成日志里没有分数**：`livecodebench_eval.py` 只打 `[lcb-gen]`（样本数与输出路径），`pass@1` 要拿 `custom_evaluator` 写出的 `*_eval.json` 去 `compare_results.py` 对比（见 [references/livecodebench.md](references/livecodebench.md) §2）。
 - 低资源任务的汇总指标固定为：`arc_challenge` / `arc_easy` / `piqa` / `sciq` 看 `acc_norm,none`，`boolq` / `copa` 看 `acc,none`。做 bf16 vs quant 对比时**必须同任务同指标**，不要把 `acc` 与 `acc_norm` 混用；其它指标可留在明细里。
 - 资源有限时优先建议：`WikiText2 PPL + arc_challenge`；有余量再加 `piqa` / `boolq` / `sciq` / `arc_easy` / `copa`；要综合结论再升级 `mmlu_pro`；要数学或代码能力再跑 `math500` / `livecodebench`。
 - `--limit` 的结果只能称**小样本回归 / 冒烟**，不能称官方分数。
@@ -93,7 +93,12 @@ python scripts/prefetch_data.py --task <task>                 # 预下载到 $BE
 
 `<task>` 取上表任务名（`livecodebench` 只下单 release 的 `test6.jsonl`，累计集用 `livecodebench_release_v6`）。env 变量、依赖版本、离线读取机制见 [references/env-and-portability.md](references/env-and-portability.md)。
 
-`prefetch_data.py` 会逐个 split 打印实际命中的文件，**任一 split 没命中就以非 0 退出并给出排查方向**（网络被拦 / `datasets.json` 的 glob 与仓库布局不符）——不要带着 MISSING 往下跑，否则评测阶段只会看到一句误导性的 `run prefetch_data.py first`。同一 split 可声明多个候选布局（如 `test.jsonl` 与 `data/test-*.parquet`），候选之间是「或」，命中一个即可。
+`prefetch_data.py` 会逐个 split 打印实际命中的文件，**任一 split 没命中就以非 0 退出并给出排查方向**（网络被拦 / `datasets.json` 的 glob 与仓库布局不符）——不要带着 MISSING 往下跑，否则评测阶段只会看到一句误导性的 `run prefetch_data.py first`。
+
+`datasets.json` 里一个 split 的多条路径有两种语义，**不能混**：
+
+- `{"any_of": [...]}` —— 同一份数据的不同**候选布局**（MATH-500 既可能发 `test.jsonl` 也可能发 `data/test-*.parquet`）：按声明顺序取**第一个命中**的候选，其余忽略。缓存里同时存在两种布局（上游迁移 / 旧缓存残留）时也只读一份，样本不会翻倍。
+- `{"all_of": [...]}`（或裸字符串 / 裸列表）—— 必须**全部合并**的分片（LiveCodeBench 累积集 `test.jsonl` … `test6.jsonl`）：缺任一分片即以 PARTIAL 非 0 退出，避免静默少跑样本、指标分母错。
 
 ### 2. 装配 + 评测
 
@@ -118,6 +123,7 @@ python scripts/assemble_and_eval.py --model <model_path> --model_name qwen3_5_mo
 - **`--bf16` 跑基线**：跳过量化，用**同一套 harness** 跑原始模型。两者都要跑，最后报告差值。
 - **`--device_map auto`** 走多卡，省略则单卡 npu:0；输入经 `input_device()` 路由到 embedding 所在卡。
 - **attention 量化默认被拦截**：脚本禁 `--quant_target attn-linear` / `attn-cache`，确需评完整 attention 量化对象要显式加 `--allow_attn_quant`，且先按约束 1 与用户确认取舍。
+- **`--trust_remote_code` 默认关闭**（与 amct CLI 一致）：加载非原生支持架构的模型目录需要它时才显式加，加了就会执行该目录下的自定义建模代码——只对可信目录开，且必须先与用户说明。未开启时脚本会打 `[warn]` 提示可能加载失败，详见约束 12。
 
 ### 3. LiveCodeBench（可选）
 
@@ -126,7 +132,7 @@ python scripts/assemble_and_eval.py --model <model_path> --model_name qwen3_5_mo
 ### 4. 报告结果
 
 - 对比量化与 bf16 的**主指标**（按「任务选择与资源成本」表的默认主指标）。
-- 汇总差值：`python scripts/compare_results.py --bf16 <bf16.log> --quant <quant.log> --metric exact_match --sample_len <N> --limited`。`--metric` 传指标名（`exact_match` / `acc_norm` / `acc` / `pass@1`）或完整结果键（`exact_match,custom-extract`）都能匹配；省略则自动挑选，`_stderr` 键与子任务键会被排除，优先取组聚合键。
+- 汇总差值：`python scripts/compare_results.py --bf16 <bf16.log> --quant <quant.log> --metric exact_match --sample_len <N> --limited`。`--metric` 传指标名（`exact_match` / `acc_norm` / `acc` / `pass@1`）或完整结果键（`exact_match,custom-extract`）都能匹配；省略则自动挑选，`_stderr` 键与子任务键会被排除，优先取组聚合键。lm-eval 任务喂运行日志；LiveCodeBench 喂 `custom_evaluator` 写出的 `*_eval.json`（`--metric pass@1`），**不要喂生成日志**——它没有分数，脚本会直接报错而不是给你一个假的 `delta 0.0`。
 - 必须写明**样本量**与（LiveCodeBench 的）`release_version`。
 - 用了 `--limit` 就写小样本冒烟，不写官方分数；差异落在统计噪声内表述为「无可见损失」，不表述为「量化更好」。
 
@@ -147,16 +153,16 @@ python scripts/assemble_and_eval.py --model <model_path> --model_name qwen3_5_mo
 
 | 文件 | 用途 |
 |---|---|
-| `references/constraints.md` | 11 条关键约束（attention / KV cache、离线数据、PYTHONPATH、OOM、多卡 hook、`--algos` 与 ptq 参数匹配等） |
+| `references/constraints.md` | 13 条关键约束（attention / KV cache、离线数据、PYTHONPATH、OOM、多卡 hook、`--algos` 与 ptq 参数匹配、`--trust_remote_code`、transformers dtype 参数名等） |
 | `references/env-and-portability.md` | 依赖边界、可配置 env、环境模板、新机器部署步骤 |
 | `references/livecodebench.md` | LiveCodeBench 生成 + 官方评分 + 榜单对齐清单 |
-| `scripts/config.py` | env 解析（`AMCT_HOME` / `BENCH_ASSETS` / `HF_ENDPOINT`）+ 加载 `datasets.json`；提供 `local_dataset_map()`（旧名 `local_parquet_map()` 为兼容别名） |
+| `scripts/config.py` | env 解析（`AMCT_HOME` / `BENCH_ASSETS` / `HF_ENDPOINT`）+ 加载 `datasets.json`；提供 `local_dataset_map()`（旧名 `local_parquet_map()` 为兼容别名）与 `split_declaration()` / `resolve_split_files()`（`any_of` 取首个命中布局、`all_of` 合并全部分片） |
 | `scripts/utils.py` | 数据读取（parquet / jsonl）、依赖检查、LiveCodeBench 字段校验、attention 量化保护、结果日志解析 |
-| `scripts/datasets.json` | benchmark 注册表（repo_id、subdir、split → parquet/jsonl/glob），prefetch 与离线 shim 的单一数据源 |
-| `scripts/self_check.py` | 不加载模型、不跑 NPU 的轻量自检：脚本接线、注册表声明、已预下载任务的 split 是否真能解析、SKILL.md 指标列 vs lm-eval task index；`--remote` 再加验注册表 vs 数据集仓真实文件列表 |
+| `scripts/datasets.json` | benchmark 注册表（repo_id、subdir、split → parquet/jsonl/glob，或 `{"any_of": [...]}` / `{"all_of": [...]}`），prefetch 与离线 shim 的单一数据源 |
+| `scripts/self_check.py` | 不加载模型、不跑 NPU 的轻量自检：脚本接线、注册表声明、`any_of`/`all_of` 布局语义（临时目录实测，防样本翻倍）、已预下载任务的 split 是否真能解析、SKILL.md 指标列 vs lm-eval task index；`--remote` 再加验注册表 vs 数据集仓真实文件列表 |
 | `scripts/check_env.py` | 检查运行依赖与 lm-eval 版本；`--livecodebench_score` 加查官方评分 runner |
-| `scripts/prefetch_data.py` | `snapshot_download` 把数据集下到 `$BENCH_ASSETS`，并校验每个 split 是否真命中文件（未命中即非 0 退出） |
+| `scripts/prefetch_data.py` | `snapshot_download` 把数据集下到 `$BENCH_ASSETS`，并校验每个 split 是否真命中文件（`any_of` 未命中、`all_of` 缺分片即非 0 退出） |
 | `scripts/bench_offline.py` | monkeypatch `load_dataset` → fastparquet 读本地 parquet、pandas 读本地 jsonl |
 | `scripts/assemble_and_eval.py` | 装配 fake-quant 模型（KV-safe 目标、`--algos` 校验、ptq 参数落地校验、多卡保留 hook）+ HFLM 评测 + `--bf16` 基线 |
-| `scripts/livecodebench_eval.py` | 装配后生成代码，输出 LiveCodeBench 官方 `custom_evaluator` JSON（同样支持 `--algos`） |
-| `scripts/compare_results.py` | 从 bf16 / quant 日志或 JSON 抽指标并输出差值；日志没有 `[RESULT]` 行时给出可诊断报错 |
+| `scripts/livecodebench_eval.py` | 装配后生成代码，输出 LiveCodeBench 官方 `custom_evaluator` JSON（同样支持 `--algos` / `--trust_remote_code`）；只打 `[lcb-gen]`，分数由官方 evaluator 产出 |
+| `scripts/compare_results.py` | 从 bf16 / quant 日志或 JSON（含官方 lcb_runner `*_eval.json`）抽指标并输出差值；排除 `_stderr` 与 `sample_len` 等非指标键；日志没有 `[RESULT]` 行时给出可诊断报错 |

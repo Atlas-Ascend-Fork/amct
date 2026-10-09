@@ -20,10 +20,43 @@ PREFERRED_METRICS = (
     "math_verify",
 )
 
+# Bookkeeping keys, not scores. `livecodebench_eval.py` reports the sample count
+# and the output paths it wrote; if `sample_len` stayed eligible it would be the
+# only numeric key in a generation-only log, get auto-picked, and print
+# `delta_quant_minus_bf16: 0.0` -- indistinguishable from "quantization is
+# lossless". LiveCodeBench pass@1 comes from the official `lcb_runner`
+# evaluator output (`*_eval.json`), never from the generation log.
+NON_METRIC_KEYS = frozenset(
+    {
+        "sample_len",
+        "samples",
+        "num_samples",
+        "n_samples",
+        "total",
+        "count",
+    }
+)
+
 
 def _load_json(path):
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def _unwrap_lcb_eval(obj):
+    """Return the metrics dict from an official lcb_runner `*_eval.json`.
+
+    `lcb_runner.runner.custom_evaluator` dumps `get_metrics()`' return value,
+    which for the codegeneration scenario is a 3-element list
+    `[pass_at_k, results, final_metadata]`; `pass_at_k` is the dict holding
+    `pass@1` / `pass@5` / ... (plus a per-task `detail` map whose values are
+    lists, so `_flatten` drops them). Accept the list form and the bare dict.
+    """
+    if isinstance(obj, list):
+        for item in obj:
+            if isinstance(item, dict) and any(str(k).startswith("pass@") for k in item):
+                return item
+    return obj
 
 
 def _load_result(path):
@@ -36,19 +69,43 @@ def _load_result(path):
     if not os.path.isfile(path):
         raise SystemExit(f"result file not found: {path}")
     try:
-        return _load_json(path)
+        return _unwrap_lcb_eval(_load_json(path))
     except json.JSONDecodeError:
         pass
     parsed = parse_result_log(path)
     if not parsed:
+        hint = _generation_log_hint(path)
         raise SystemExit(
             f"{path} is not JSON and contains no "
             f"'[RESULT] <tag> <task>: <metrics>' line: the benchmark did not "
             f"finish (interrupted / OOM / crashed before scoring) or its results "
             f"went to another file. Re-run it and pass the log that ends with a "
-            f"[RESULT] line."
+            f"[RESULT] line.{hint}"
         )
     return parsed
+
+
+def _generation_log_hint(path):
+    """Extra hint when the file is a LiveCodeBench *generation* log (no score).
+
+    `livecodebench_eval.py` prints `[lcb-gen]` instead of `[RESULT]` on purpose:
+    that log proves generation finished but carries no pass@1. Naming it here
+    turns a generic "did not finish" into the one action that helps -- score it
+    with the official evaluator and feed the resulting `*_eval.json`.
+    """
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            if not any(line.lstrip().startswith("[lcb-gen]") for line in f):
+                return ""
+    except OSError:
+        return ""
+    return (
+        " This file is a LiveCodeBench *generation* log ([lcb-gen]): it holds no "
+        "score by design. Score it with `python -m "
+        "lcb_runner.runner.custom_evaluator ...`, then pass the "
+        "`*_codegeneration_output_eval.json` it writes (see "
+        "references/livecodebench.md §2)."
+    )
 
 
 def _flatten(obj, prefix=""):
@@ -75,11 +132,18 @@ def _split_key(key):
 
 
 def _candidates(flat):
-    """Numeric, non-stderr candidates: key -> (depth, key, metric_field, metric_name, value)."""
+    """Numeric score candidates: key -> (depth, key, metric_field, metric_name, value).
+
+    `_stderr` keys and bookkeeping keys (NON_METRIC_KEYS) are not scores, so they
+    are dropped here and can never be auto-picked -- or matched by name -- and
+    reported as if they were an accuracy delta.
+    """
     out = {}
     for key, value in flat.items():
         depth, metric_field, metric_name = _split_key(key)
         if metric_name.endswith("_stderr"):
+            continue
+        if metric_name in NON_METRIC_KEYS:
             continue
         out[key] = (depth, key, metric_field, metric_name, value)
     return out
@@ -99,8 +163,11 @@ def _pick_metric(flat, metric):
     cands = _candidates(flat)
     if not cands:
         raise SystemExit(
-            "no numeric metric found in this result file. Expected lm-eval "
-            "[RESULT] lines or a JSON metrics object; parsed keys: "
+            "no numeric score found in this result file. Expected lm-eval "
+            "[RESULT] lines, a JSON metrics object, or the official lcb_runner "
+            "`*_eval.json` (which holds `pass@k`). A LiveCodeBench *generation* "
+            "log carries no score -- feed the evaluator output instead (see "
+            "references/livecodebench.md §2). Parsed keys: "
             f"{sorted(flat) or '<empty>'}"
         )
     available = sorted({c[2] for c in cands.values()})
@@ -115,7 +182,17 @@ def _pick_metric(flat, metric):
             or k.endswith("." + metric)
         }
         if not matches:
-            raise SystemExit(f"metric '{metric}' not found. Available: {available}")
+            hint = (
+                ""
+                if available
+                else (
+                    " (this file has no score key at all: it looks like a "
+                    "generation-only log, not an evaluator result)"
+                )
+            )
+            raise SystemExit(
+                f"metric '{metric}' not found. Available: {available}{hint}"
+            )
         return _select(matches)
 
     for preferred in PREFERRED_METRICS:

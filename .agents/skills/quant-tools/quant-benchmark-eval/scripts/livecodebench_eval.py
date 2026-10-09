@@ -39,6 +39,7 @@ from utils import (  # noqa: E402
     local_dataset_files,
     read_dataset_file,
     validate_lcb_docs,
+    warn_trust_remote_code,
 )
 
 
@@ -168,18 +169,31 @@ def main():
         default="",
         help="optional JSONL with prompt and raw generation for debugging",
     )
+    ap.add_argument(
+        "--trust_remote_code",
+        action="store_true",
+        default=False,
+        help=(
+            "allow HuggingFace to execute custom modeling code from --model. "
+            "Default off, same as amct's own CLI; only enable for a model "
+            "directory you trust (constraints.md #12)."
+        ),
+    )
     a = ap.parse_args()
 
     check_environment()
     from transformers import AutoTokenizer
 
     dmap = a.device_map or None
-    tok = AutoTokenizer.from_pretrained(a.model, use_fast=False, trust_remote_code=True)
+    warn_trust_remote_code(a.model, a.trust_remote_code)
+    tok = AutoTokenizer.from_pretrained(
+        a.model, use_fast=False, trust_remote_code=a.trust_remote_code
+    )
     quant_target = a.quant_target or ""
     if a.bf16:
         tag = "bf16"
         print(f"[bf16] loading original model (no quant, device_map={dmap})...")
-        model = _load_float(a.model, dmap)
+        model = _load_float(a.model, dmap, a.trust_remote_code)
     else:
         tag = "quant"
         if not a.param_dir:
@@ -195,6 +209,7 @@ def main():
             output_dir=a.output_dir,
             allow_attn_quant=a.allow_attn_quant,
             algos=a.algos,
+            trust_remote_code=a.trust_remote_code,
         )
 
     docs = load_lcb_docs(a.dataset_task, a.limit)
@@ -241,8 +256,14 @@ def main():
     write_json(a.output_json, custom_outputs)
     if a.raw_output_jsonl:
         write_jsonl(a.raw_output_jsonl, raw_rows)
+    # Deliberately NOT a `[RESULT]` line: this log only proves generation
+    # finished, it holds no score. compare_results.py parses `[RESULT]` lines,
+    # and tagging `sample_len` as a result made it auto-pick that count and
+    # print `delta_quant_minus_bf16: 0.0` -- i.e. "no accuracy loss" -- for two
+    # logs that were never scored. pass@1 comes from the official evaluator
+    # output below (`*_eval.json`); feed THAT file to compare_results.py.
     print(
-        f"[RESULT] {tag} livecodebench_custom_output: "
+        f"[lcb-gen] {tag} livecodebench_custom_output: "
         f"{{'sample_len': {len(docs)}, 'output_json': {a.output_json!r}, "
         f"'raw_output_jsonl': {a.raw_output_jsonl!r}}}"
     )
@@ -251,6 +272,13 @@ def main():
         "python -m lcb_runner.runner.custom_evaluator "
         f"--scenario codegeneration --release_version {a.release_version} "
         f"--custom_output_file {a.output_json}"
+    )
+    print(
+        "[next] it writes "
+        f"{a.output_json[:-5] if a.output_json.endswith('.json') else a.output_json}"
+        "_codegeneration_output_eval.json; compare the two sides with: "
+        "python scripts/compare_results.py --bf16 <bf16..._eval.json> "
+        "--quant <quant..._eval.json> --metric pass@1"
     )
 
 

@@ -6,6 +6,7 @@ skills:
   - model-adapter
   - quant-run
   - deploy-export
+  - quant-benchmark-eval
 ---
 
 # Quant Implementer Agent
@@ -26,7 +27,7 @@ skills:
 
 ## 执行命令（统一走 $quant-run）
 
-所有实际量化命令——直转评测 / `extract_ptq_data` 校准提取 / PTQ 训练 / PTQ 结果评测——统一走 `$quant-run`（含命令模板、`--model_name`/`--granularity block`/`--quant_dtype` 必填、**加载 PTQ 参数必带与 ptq 一致的 `--algos`**、长命令后台跑 + 轮询、`--start_block_idx` 续跑、产物校验）；部署导出走 `$deploy-export`。本代理按已确认方案驱动这些 skill 执行，不自行拼命令、不判达标（达标 / 收益判读归 `quant-reviewer`）。
+所有实际量化命令——直转评测 / `extract_ptq_data` 校准提取 / PTQ 训练 / PTQ 结果评测——统一走 `$quant-run`（含命令模板、`--model_name`/`--granularity block`/`--quant_dtype` 必填、**加载 PTQ 参数必带与 ptq 一致的 `--algos`**、长命令后台跑 + 轮询、`--start_block_idx` 续跑、产物校验）；部署导出走 `$deploy-export`；用户明确要 PPL 之外的下游口径（mmlu_pro / MATH500 / LiveCodeBench 等生成式 benchmark）时走 `$quant-benchmark-eval`（**按需，不是默认达标路径**；它只评测不量化，需已有直转结果或 ptq 参数）。本代理按已确认方案驱动这些 skill 执行，不自行拼命令、不判达标（达标 / 收益判读归 `quant-reviewer`）。
 
 ## 工作场景识别
 
@@ -37,6 +38,7 @@ skills:
 | 3 | 方案已确认、需评测/训练 | 按命令接口跑 eval / extract / ptq |
 | 4 | 需导出产物 | 调用 `deploy-export` 完成权重导出 + deploy_quantization.md |
 | 5 | reviewer 给出诊断表 | 按诊断逐项修复，不从头重排 |
+| 6 | 用户要下游 benchmark 证据（PPL 之外的生成式任务精度） | 调用 `quant-benchmark-eval`，bf16 与 quant 同口径各跑一遍并对比 |
 
 ## 核心原则
 

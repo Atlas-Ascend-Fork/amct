@@ -12,7 +12,7 @@ import sys
 from glob import glob
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from config import BENCH_ASSETS, HF_ENDPOINT, load_dataset_registry
+from config import BENCH_ASSETS, HF_ENDPOINT, load_dataset_registry, split_declaration
 
 os.environ.setdefault("HF_ENDPOINT", HF_ENDPOINT)
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
@@ -39,16 +39,31 @@ def main():
     print(f"[prefetch] {spec['repo_id']} -> {p}")
     unresolved = []
     for split, rels in spec["splits"].items():
-        if isinstance(rels, str):
-            rels = [rels]
-        found = []
-        for rel in rels:
-            found.extend(glob(os.path.join(dst, rel), recursive=True))
-        if found:
-            print(f"   {split}: OK ({len(found)} files) -> {sorted(found)[:3]}")
-        else:
+        mode, rel_list = split_declaration(rels)
+        per_rel = []
+        for rel in rel_list:
+            per_rel.append((rel, sorted(glob(os.path.join(dst, rel), recursive=True))))
+        found = sorted({fp for _, hits in per_rel for fp in hits})
+        if not found:
             unresolved.append(split)
-            print(f"   {split}: MISSING, looked for {rels} under {dst}")
+            print(f"   {split}: MISSING, looked for {rel_list} under {dst}")
+            continue
+        if mode == "any_of":
+            # Alternatives of one layout: only the first hit is used at eval
+            # time, so report exactly that one (a second layout on disk is
+            # ignored, not merged).
+            winner = next(rel for rel, hits in per_rel if hits)
+            print(f"   {split}: OK (any_of -> {winner})")
+            continue
+        partial = [rel for rel, hits in per_rel if not hits]
+        if len(rel_list) > 1 and partial:
+            # all_of means every declared shard is required (LiveCodeBench's
+            # cumulative set); a partial merge would silently shrink the
+            # benchmark and skew the metric.
+            unresolved.append(split)
+            print(f"   {split}: PARTIAL, all_of missing {partial} under {dst}")
+            continue
+        print(f"   {split}: OK ({len(found)} files) -> {found[:3]}")
     if unresolved:
         # Fail loud: a MISSING split means eval will die later with a confusing
         # FileNotFoundError, or silently fall back to a network read.

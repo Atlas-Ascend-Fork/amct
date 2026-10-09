@@ -47,5 +47,5 @@ quote-style = "preserve"
 
 [tool.codespell]
 # CANN/cann: Huawei product name / org in URLs; nd: tensor dim count variable;
-# CopyIn/vor: AscendC intrinsic names; tbe/te: CANN 编译器组件名（Tensor Boost Engine / Tensor Engine）。
-ignore-words-list = "cann,nd,copyin,vor,fro,tbe,te"
+# CopyIn/vor: AscendC intrinsic names.
+ignore-words-list = "cann,nd,copyin,vor,fro"

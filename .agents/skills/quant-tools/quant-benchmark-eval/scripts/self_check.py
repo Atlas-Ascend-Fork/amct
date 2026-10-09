@@ -20,11 +20,14 @@ import tempfile
 SKILL_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SKILL_DIR)
 
+import config as config_module  # noqa: E402
 from config import (  # noqa: E402
     BENCH_ASSETS,
     DEFAULT_BIT_CONFIG,
     local_dataset_map,
     load_dataset_registry,
+    resolve_split_files,
+    split_declaration,
 )
 from utils import (  # noqa: E402
     NON_LM_EVAL_TASKS,
@@ -84,7 +87,7 @@ def _check_registry():
         # "test" split (lm-eval scores them off "validation"), so a hardcoded
         # split name would fail on valid registry entries.
         for split, rels in spec["splits"].items():
-            rels = [rels] if isinstance(rels, str) else rels
+            _mode, rels = split_declaration(rels)
             if not any(isinstance(rel, str) and rel.strip() for rel in rels):
                 raise AssertionError(
                     f"task '{task}' split '{split}' declares no path/glob"
@@ -93,6 +96,105 @@ def _check_registry():
         os.path.join("amct_pytorch", "configs", "w8a8.yaml")
     ):
         raise AssertionError(f"unexpected DEFAULT_BIT_CONFIG: {DEFAULT_BIT_CONFIG}")
+
+
+def _check_split_layout_semantics():
+    """any_of must not double-read two cached layouts; all_of must merge shards.
+
+    `_resolve_split_files` used to keep *every* existing candidate, so a
+    BENCH_ASSETS holding both `test.jsonl` and `data/test-*.parquet` (upstream
+    layout migration, or leftover cache) made bench_offline concat the same
+    samples twice and every metric silently changed denominator. This runs on a
+    throwaway dir: no NPU, no network, no model.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        os.makedirs(os.path.join(tmp, "data"))
+        for rel in ("test.jsonl", os.path.join("data", "test-00000-of-00001.parquet")):
+            open(os.path.join(tmp, rel), "w", encoding="utf-8").close()
+        got = resolve_split_files(
+            tmp, {"any_of": ["test.jsonl", "data/test-*.parquet"]}
+        )
+        if got != [os.path.join(tmp, "test.jsonl")]:
+            raise AssertionError(f"any_of must pick one layout, got {got}")
+        got = resolve_split_files(
+            tmp, {"any_of": ["nope.jsonl", "data/test-*.parquet"]}
+        )
+        if got != [os.path.join(tmp, "data", "test-00000-of-00001.parquet")]:
+            raise AssertionError(
+                f"any_of must fall through to the next layout, got {got}"
+            )
+        got = resolve_split_files(tmp, {"any_of": ["a.jsonl", "b.jsonl"]})
+        if len(got) != 2:
+            raise AssertionError(
+                f"any_of with no hit must return declared paths for the error, got {got}"
+            )
+        for name in ("test.jsonl", "test2.jsonl", "test3.jsonl"):
+            open(os.path.join(tmp, name), "w", encoding="utf-8").close()
+        got = resolve_split_files(
+            tmp, {"all_of": ["test.jsonl", "test2.jsonl", "test3.jsonl"]}
+        )
+        if len(got) != 3:
+            raise AssertionError(f"all_of must merge every shard, got {got}")
+
+    reg = load_dataset_registry()
+    for task, expected in (
+        ("math500", "any_of"),
+        ("livecodebench_release_v6", "all_of"),
+    ):
+        mode, rels = split_declaration(reg[task]["splits"]["test"])
+        if mode != expected or len(rels) < 2:
+            raise AssertionError(
+                f"datasets.json '{task}' test split must stay '{expected}' with "
+                f"multiple entries, got mode='{mode}' rels={rels}"
+            )
+
+    # End to end through the real registry with a throwaway BENCH_ASSETS: the
+    # two MATH-500 layouts cached at once must resolve to ONE file, and the
+    # LiveCodeBench cumulative set must still merge all six shards.
+    with tempfile.TemporaryDirectory() as cache:
+        m500_dir = os.path.join(cache, reg["math500"]["subdir"], "data")
+        os.makedirs(m500_dir)
+        for rel in (
+            os.path.join(reg["math500"]["subdir"], "test.jsonl"),
+            os.path.join(
+                reg["math500"]["subdir"], "data", "test-00000-of-00001.parquet"
+            ),
+        ):
+            open(os.path.join(cache, rel), "w", encoding="utf-8").close()
+        lcb_dir = os.path.join(cache, reg["livecodebench_release_v6"]["subdir"])
+        os.makedirs(lcb_dir)
+        for rel in split_declaration(reg["livecodebench_release_v6"]["splits"]["test"])[
+            1
+        ]:
+            open(os.path.join(lcb_dir, rel), "w", encoding="utf-8").close()
+
+        saved_assets = config_module.BENCH_ASSETS
+        config_module.BENCH_ASSETS = cache
+        try:
+            mapping = config_module.local_dataset_map()
+        finally:
+            config_module.BENCH_ASSETS = saved_assets
+
+        def _files(task):
+            spec = reg[task]
+            key = (spec["repo_id"], spec.get("dataset_name"))
+            return mapping[key]["test"]
+
+        m500_files = _files("math500")
+        if len(m500_files) != 1:
+            raise AssertionError(
+                f"math500 with both layouts cached must read exactly one file, "
+                f"got {len(m500_files)}: {m500_files}"
+            )
+        lcb_files = _files("livecodebench_release_v6")
+        if len(lcb_files) != 6:
+            raise AssertionError(
+                f"livecodebench_release_v6 must merge all 6 cumulative shards, "
+                f"got {len(lcb_files)}: {lcb_files}"
+            )
+    print(
+        "[self_check] split layout semantics ok (any_of single-layout / all_of merged)"
+    )
 
 
 def _check_prefetched_resolution():
@@ -317,6 +419,7 @@ def main():
     args = ap.parse_args()
     _check_registry()
     _check_prefetched_resolution()
+    _check_split_layout_semantics()
     _check_split_list_arg()
     _check_jsonl_reader()
     _check_lcb_validation()

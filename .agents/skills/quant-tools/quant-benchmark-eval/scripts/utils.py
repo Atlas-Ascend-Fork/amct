@@ -12,6 +12,10 @@ import pandas as pd
 
 ATTN_QUANT_TARGETS = {"attn-linear", "attn-cache"}
 REQUIRED_LCB_FIELDS = ("question_id", "question_content")
+# transformers 4.56 renamed from_pretrained's `torch_dtype` to `dtype`; this repo
+# still pins 4.51 / 4.52 for some models (examples/algorithms/flatquant,
+# experimental DeepSeekV3.2), which reject the new name outright.
+_DTYPE_KWARG_MIN_VERSION = (4, 56)
 
 # Task names this skill accepts that are not lm-eval task names.
 TASK_ALIASES = {"math500": "hendrycks_math500"}
@@ -26,6 +30,40 @@ def read_dataset_file(path):
         return pd.read_json(path, lines=True)
     df = pd.read_parquet(path, engine="fastparquet")
     return _restore_dotted_columns(df)
+
+
+def _version_prefix(version):
+    """Turn "4.52.4" / "5.12.1rc1" into a comparable (4, 52) / (5, 12) tuple."""
+    parts = []
+    for chunk in re.split(r"[.\-+]", str(version)):
+        if not chunk.isdigit():
+            break
+        parts.append(int(chunk))
+    return tuple(parts[:2]) if len(parts) >= 2 else (0, 0)
+
+
+def dtype_kwarg_name():
+    """Weight-dtype kwarg name the installed transformers actually accepts.
+
+    Passing `dtype=` to a 4.52 install does not fail with a clear "unexpected
+    keyword": the value lands in `**kwargs`, gets written into the config and
+    blows up later as `TypeError: Object of type dtype is not JSON serializable`.
+    Resolve the name per version instead of forcing every user onto >=4.56.
+    """
+    try:
+        import transformers
+
+        version = transformers.__version__
+    except Exception:  # pragma: no cover - transformers is a hard dep elsewhere
+        return "torch_dtype"
+    if _version_prefix(version) >= _DTYPE_KWARG_MIN_VERSION:
+        return "dtype"
+    return "torch_dtype"
+
+
+def dtype_kwargs(dtype):
+    """`{<kwarg>: dtype}` for from_pretrained, version-correct (see constraints.md #13)."""
+    return {dtype_kwarg_name(): dtype}
 
 
 def _restore_dotted_columns(df):
@@ -152,6 +190,42 @@ def check_environment(require_lm_eval=False, require_lcb_runner=False):
             parts.append("version mismatch: " + "; ".join(version_mismatch))
         raise RuntimeError("benchmark environment check failed: " + " | ".join(parts))
     print(f"[env] BENCH_ASSETS={BENCH_ASSETS}")
+    print(
+        f"[env] transformers={_installed_version('transformers')} "
+        f"(weight dtype kwarg: {dtype_kwarg_name()})"
+    )
+
+
+def _installed_version(package_name):
+    try:
+        return importlib.metadata.version(package_name)
+    except importlib.metadata.PackageNotFoundError:
+        return "unknown"
+
+
+def warn_trust_remote_code(model_path, enabled):
+    """Mirror amct's CLI convention for `trust_remote_code` (see constraints.md #12).
+
+    `amct_pytorch/cli/llm/args.py` defaults the flag to False and
+    `common/models/llm/common/base.py` warns when it is off. These benchmark
+    scripts used to hardcode True, which silently executes whatever custom
+    modeling code ships in a user-supplied directory; the flag is now explicit
+    and both directions are announced.
+    """
+    if enabled:
+        print(
+            f"[warn] trust_remote_code enabled: custom modeling code under "
+            f"{model_path} WILL be executed. Only pass --trust_remote_code for "
+            f"model directories you trust."
+        )
+    else:
+        print(
+            "[warn] running without --trust_remote_code: some models need it to "
+            "load custom model code. If loading fails with a "
+            "'requires you to execute the modeling file' error, re-run with "
+            "--trust_remote_code (only for a trusted model directory)."
+        )
+    return enabled
 
 
 def parse_result_log(path):
