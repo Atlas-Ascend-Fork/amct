@@ -248,7 +248,7 @@ amct.accuracy_based_auto_calibration(
       record_file = './tmp/record.txt'
       modified_onnx_model = './tmp/modified_model.onnx'
       calibration_model = amct.quantize_model(config_file=config_file,
-                     modified_onnx_model=modified_onnx_model,
+                     modfied_onnx_file=modified_onnx_model,
                      record_file=record_file,
                                               model=ori_model,
                                               input_data=ori_model_input_data)
@@ -271,7 +271,7 @@ amct.accuracy_based_auto_calibration(
 
       ```python
       quant_model_path = './results/user_model'
-      amct.save_model(modified_onnx_file=modified_onnx_file,
+      amct.save_model(modfied_onnx_file=modified_onnx_model,
                       record_file=record_file,
                       save_path=quant_model_path)
       ```
@@ -807,7 +807,6 @@ validate_onnx('./outputs/resnet101_fake_quant_model.onnx', val_data)
 
       ```python
       record_file = './tmp/record.txt'
-      modified_onnx_model = './tmp/modified_model.onnx'
       calibration_model = amct.quantize_preprocess(config_file=config_file,
                                 record_file=record_file,
                                 model=ori_model,
@@ -830,7 +829,7 @@ validate_onnx('./outputs/resnet101_fake_quant_model.onnx', val_data)
       ```python
       modified_onnx_model = './tmp/modified_model.onnx'
       calibration_model = amct.quantize_model(config_file=config_file,
-                            modified_onnx_model=modified_onnx_model,
+                            modfied_onnx_file=modified_onnx_model,
                             record_file=record_file,
                             model=ori_model,
                             input_data=ori_model_input_data)
@@ -853,7 +852,7 @@ validate_onnx('./outputs/resnet101_fake_quant_model.onnx', val_data)
 
       ```python
       quant_model_path = './results/user_model'
-      amct.save_model(modified_onnx_file=modified_onnx_file,
+      amct.save_model(modfied_onnx_file=modified_onnx_model,
                              record_file=record_file,
                              save_path=quant_model_path)
       ```
