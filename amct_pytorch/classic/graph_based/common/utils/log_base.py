@@ -23,6 +23,7 @@ from __future__ import print_function
 import logging
 import os
 from functools import wraps
+from inspect import Parameter, signature
 
 from .util import FILE_MODE
 from .util import DIR_MODE
@@ -59,15 +60,25 @@ def log_split_deco(length=500):
     '''check whether input string length and split it to smaller strings'''
 
     def decorator(func):
+        func_sig = signature(func)
+        parameters = list(func_sig.parameters.values())
+        if parameters and parameters[0].name in ('self', 'cls'):
+            parameters = parameters[1:]
+        if not parameters or parameters[0].kind in (
+            Parameter.VAR_POSITIONAL,
+            Parameter.VAR_KEYWORD,
+        ):
+            raise ValueError('log_split_deco requires a named message parameter')
+        message_parameter = parameters[0].name
+
         @wraps(func)
         def wrapper(*args, **kwargs):
-            if len(args) > 1:
-                args = list(args)
-                args[1] = split_str_by_length(str(args[1]), length)
-            else:
-                input_key = tuple(kwargs.keys())[0]
-                kwargs[input_key] = split_str_by_length(str(kwargs[input_key]), length)
-            return func(*args, **kwargs)
+            bound = func_sig.bind(*args, **kwargs)
+            bound.apply_defaults()
+            bound.arguments[message_parameter] = split_str_by_length(
+                str(bound.arguments[message_parameter]), length
+            )
+            return func(*bound.args, **bound.kwargs)
 
         return wrapper
 
