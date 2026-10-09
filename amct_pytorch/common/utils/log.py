@@ -23,7 +23,7 @@ import logging
 import os
 import stat
 from functools import wraps
-from inspect import signature
+from inspect import Parameter, signature
 
 
 # mode is 640
@@ -67,7 +67,15 @@ def log_split_deco(length=500):
 
     def decorator(func):
         func_sig = signature(func)
-        message_parameter = tuple(func_sig.parameters)[1]
+        parameters = list(func_sig.parameters.values())
+        if parameters and parameters[0].name in ('self', 'cls'):
+            parameters = parameters[1:]
+        if not parameters or parameters[0].kind in (
+            Parameter.VAR_POSITIONAL,
+            Parameter.VAR_KEYWORD,
+        ):
+            raise ValueError('log_split_deco requires a named message parameter')
+        message_parameter = parameters[0].name
 
         @wraps(func)
         def wrapper(*args, **kwargs):

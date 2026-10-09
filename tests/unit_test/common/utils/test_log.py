@@ -61,6 +61,62 @@ def test_log_split_deco_shorter_than_length_returns_single_element():
     assert msg[0] == "short"
 
 
+def test_log_split_deco_plain_function_preserves_module_and_extra_arguments():
+    @log_split_deco(length=5)
+    def plain(message, module_name="AMCT", *extra):
+        return message, module_name, extra
+
+    assert plain("a" * 11, "custom", 7) == (["aaaaa", "aaaaa", "a"], "custom", (7,))
+    assert plain(module_name="custom", message="short") == (["short"], "custom", ())
+
+
+def test_log_split_deco_single_message_parameter():
+    @log_split_deco(length=5)
+    def plain(message):
+        return message
+
+    assert plain("hello") == ["hello"]
+
+
+def test_log_split_deco_static_and_class_methods():
+    class Messages:
+        @staticmethod
+        @log_split_deco(length=5)
+        def static(message, module_name="AMCT"):
+            return message, module_name
+
+        @classmethod
+        @log_split_deco(length=5)
+        def class_method(cls, message, module_name="AMCT"):
+            return cls, message, module_name
+
+    assert Messages.static("hello", module_name="custom") == (["hello"], "custom")
+    assert Messages.class_method(message="hello") == (Messages, ["hello"], "AMCT")
+
+
+def test_log_split_deco_keyword_only_message():
+    @log_split_deco(length=5)
+    def plain(*, message="hello", module_name="AMCT"):
+        return message, module_name
+
+    assert plain(module_name="custom") == (["hello"], "custom")
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda: None,
+        lambda self: None,
+        lambda *args: None,
+        lambda **kwargs: None,
+        lambda self, *args: None,
+    ],
+)
+def test_log_split_deco_rejects_missing_or_variadic_message_at_decoration(func):
+    with pytest.raises(ValueError, match="named message parameter"):
+        log_split_deco()(func)
+
+
 def test_logger_base_is_file_debug_level_true_when_file_handler_at_debug():
     import tempfile
 
