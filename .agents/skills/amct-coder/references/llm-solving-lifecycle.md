@@ -36,8 +36,8 @@ workflow -> adapter PtqUnit + provider batch/GT
 
 - `global_solver.py` 文件存在且有注册装饰器，但当前 `register_solvers()` 只导入 `BlockwiseSolver`，主流程接通的是 `block`。（核对：`rg -n -A4 "def register_solvers" amct_pytorch/common/optimization/__init__.py`）
 - `llm_ptq.run()` 当前在 granularity 分支前先查 registry。（核对：`rg -n "SOLVER_REGISTRY.get" amct_pytorch/workflows/llm_ptq.py`）
-- `model` 分支虽存在，但 `_run_modelwise()` 仍是占位、无条件抛 `ValueError`，即当前默认值对 ptq 不可用。（核对：`grep -n -A3 "def _run_modelwise" amct_pytorch/workflows/llm_ptq.py`，应看到 `raise ValueError`）
-- CLI 默认值应与已注册且可执行的 `block` 一致；当前 `--granularity` 默认值与已注册 solver 的差距是待核验事实，不是已确定的约定。（核对：`rg -n -A3 "granularity" amct_pytorch/cli/llm/args.py`）
+- `model` 分支仍在 `run()` 的分派里，但 `LlmPtqWorkflow.__init__` 先拒绝非 `block` 取值，`_run_modelwise()` 是占位、无条件抛 `ValueError`，在 ptq 路径上不可达——ptq 只接受 `block`。（核对：`grep -n -A6 "def __init__" amct_pytorch/workflows/llm_ptq.py`，应看到 `!= "block"` 的 `raise ValueError`）
+- `--granularity` 默认值已是 `block`，与 `register_solvers()` 实际接通的 solver 一致；改默认值属对外接口变更，不是仓内可自决的实现细节。（核对：`rg -n -A3 "granularity" amct_pytorch/cli/llm/args.py`，应看到 `default='block'`）
 
 ### 当前训练保存活跃链
 

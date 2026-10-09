@@ -24,8 +24,10 @@
      一旦标题改名就会静默失效，用 difflib 近似度兜住；
   4. 核对命令：覆盖文中全部「核对：`cmd`」标记，按断言方向判定——
      必须命中 / 必须无命中 / 命中受路径限制 / 需上下文佐证。
-     非 rg|grep 命令显式列为「待人工执行」；rg 不在 PATH 时降级为等价 GNU grep；
-     工具完全不可执行、或一条都没判定成（零覆盖）都判失败，不静默跳过。
+     工具白名单先于断言方向判定：非 rg|grep 命令一律显式列为「待人工执行」，
+     不落 argv、不执行——带「应无命中」注解的脚本命令同样不例外；
+     rg 不在 PATH 时降级为等价 GNU grep；工具完全不可执行、或一条都没判定成
+     （零覆盖）都判失败，不静默跳过。
 
 用法：
   python .agents/skills/amct-coder/scripts/check_skill.py [--fix-hint] [--verbose]
@@ -33,6 +35,8 @@
 
 退出码：0 = 全部通过；1 = 有失败项（逐项打印）。外链（https://）不检查。
 """
+
+from __future__ import annotations
 
 import argparse
 import difflib
@@ -280,15 +284,17 @@ class Snapshot:
         self.pattern = body[0] if body else ""
         self.paths = body[1:] if len(body) > 1 else []
         self.filters = self.segments[1:]
-        # 断言方向
-        if ABSENT_RE.search(ann):
+        # 工具白名单先判：非 rg/grep 一律 unsupported，绝不进 absent/restricted/present。
+        # 若把断言方向排在前面，一条带「应无命中」的 bash/sh 命令会被判为 absent，
+        # 绕过人工执行跳过，被 argv() 拼好后在 REPO_ROOT 下真的执行。
+        if self.tool not in ("rg", "grep"):
+            self.kind = "unsupported"
+        elif ABSENT_RE.search(ann):
             self.kind = "absent"
         elif ONLY_RE.search(ann) or self.filters:
             self.kind = "restricted"
-        elif self.tool in ("rg", "grep"):
-            self.kind = "present"
         else:
-            self.kind = "unsupported"
+            self.kind = "present"
         m = ONLY_RE.search(ann)
         self.only_prefix = next((g for g in (m.groups() if m else ()) if g), "")
         # 结构性断言的佐证 token：仅单命令组，避免把邻接断言的符号误归属
@@ -310,7 +316,11 @@ class Snapshot:
 
         工具不在 PATH 时原样返回 argv，让 _run 抛 OSError，由调用方判为失败——
         「环境跑不了」不能等同于「断言通过」。
+        只接受 rg/grep：非白名单工具（bash/sh 等）一律不落 argv，把「静默执行
+        任意命令」变成显式报错，即使将来断言方向的分派被改错也不会执行。
         """
+        if self.tool not in ("rg", "grep"):
+            raise ValueError(f"拒绝为非白名单工具构造 argv: {self.tool!r}")
         if self.tool == "rg":
             if RG_BIN:
                 flags = list(dict.fromkeys(["-n", *self.flags]))
@@ -555,6 +565,33 @@ def self_test() -> int:
                 f"unsupported 命令未被显式跳过: skipped={skipped}, kinds={stats['kinds']}"
             )
 
+        # 工具白名单优先级守卫：否定式注解不得让非 rg/grep 命令绕过跳过而被执行。
+        # 三重断言——必须进 skipped、kind 必须是 unsupported、argv() 必须拒绝构造；
+        # 任一条被改回「断言方向优先」都会在此暴露（脚本路径故意指向不存在的文件，
+        # 即使守卫失效也不会执行到任何真命令）。
+        guard_raw = "sh ./no_such_probe_script.sh setup.py"
+        guard_file = Path(td) / "skip_absent.md"
+        guard_file.write_text(
+            f"论断。（核对：`{guard_raw}` 应无命中）\n", encoding="utf-8"
+        )
+        g_issues, g_skipped, g_stats = check_verify_cmds([guard_file])
+        if g_issues or not g_skipped or g_stats["kinds"].get("unsupported") != 1:
+            failures.append(
+                "带「应无命中」的非 rg/grep 命令未被跳过（可能已被真实执行）: "
+                f"issues={g_issues}, skipped={g_skipped}, kinds={g_stats['kinds']}"
+            )
+        snap = Snapshot(guard_file, guard_raw, "（核对： 应无命中）")
+        if snap.kind != "unsupported":
+            failures.append(
+                f"非白名单工具 + 否定式注解未判为 unsupported: kind={snap.kind}"
+            )
+        try:
+            snap.argv()
+        except ValueError:
+            pass
+        else:
+            failures.append("argv() 未拒绝非白名单工具，存在静默执行任意命令的风险")
+
     if failures:
         print(f"SELF-TEST FAILED: {len(failures)} case(s)")
         for x in failures:
@@ -562,7 +599,7 @@ def self_test() -> int:
         return 1
     print(
         f"SELF-TEST OK: {len(SELF_TEST_CASES)} 个核对命令用例 + 3 个节名引用用例"
-        "（含 6 个负向用例均被检出）"
+        "（含 6 个负向用例均被检出）+ 工具白名单优先级守卫 3 项"
     )
     return 0
 
