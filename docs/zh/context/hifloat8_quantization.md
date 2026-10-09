@@ -126,7 +126,7 @@ Cast 是最简单的量化算法，无需校准数据，直接将高精度浮点
 **转换流程：**
 
 1. 激活数据，从 Float16/BFloat16 直转到 HiFloat8 。
-2. 权重数据，离线统计weight最大值，缩放到 HiFloat8 高精度表示范围内。
+2. 权重数据，离线统计weight绝对值最大值，缩放到 HiFloat8 高精度表示范围内。
 
 **适用场景：**
 
@@ -164,7 +164,7 @@ $$
 &... \\ 
 &q_{max511} = 0.99 \times q_{max510} + 0.01 \times batch_{max511} \\ 
 &scale_d = q_{max511} / 16 \\ 
-&scale_w = max(weight) / 16
+&scale_w = max(|weight|) / 16
 \end{align*}
 $$
 

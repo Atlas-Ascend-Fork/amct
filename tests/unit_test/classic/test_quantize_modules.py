@@ -24,7 +24,9 @@ import torch.nn as nn
 from amct_pytorch.classic.quantize_op.ofmr_quant_module import OfmrQuant
 from amct_pytorch.classic.quantize_op.linear_awq_module import LinearAWQuant
 from amct_pytorch.classic.quantize_op.smooth_quant_module import SmoothQuant
-from amct_pytorch.common.utils.vars import INT8
+from amct_pytorch.classic.quantize_op.quantile_module import QuantileQuant
+from amct_pytorch.classic.quantize_op.utils import calculate_hifloat8_weight_scale
+from amct_pytorch.common.utils.vars import HIFLOAT8, INT8
 
 
 def _make_ofmr_config(batch_num=2, strategy="tensor", weight_compress_only=False):
@@ -279,6 +281,63 @@ class TestLinearAWQuantForward(unittest.TestCase):
         out1 = q.fake_quant_forward(x)
         out2 = q.fake_quant_forward(x)  # hits cache
         self.assertEqual(out1.shape, out2.shape)
+
+
+def _make_hif8_weight_only_config(strategy="channel"):
+    """Weight-only HIF8 config consumed by QuantileQuant.__init__ (no calibration)."""
+    return {
+        "batch_num": 1,
+        "inputs_cfg": {"enable_quant": False},
+        "weights_cfg": {"quant_type": HIFLOAT8, "strategy": strategy},
+    }
+
+
+def _make_linear_with_weight(weight):
+    out_f, in_f = weight.shape
+    mod = nn.Linear(in_f, out_f, bias=False)
+    mod.weight = nn.Parameter(weight.clone())
+    return mod
+
+
+class TestHifloat8WeightScaleAbsMax(unittest.TestCase):
+    """HIF8 symmetric weight scale must cover the negative absolute extreme."""
+
+    def test_cast_channel_negative_dominant_row(self):
+        # Row 0 has its largest magnitude on the negative side: scale is 6.25.
+        weight = torch.tensor([[-100.0, 1.0], [1.0, 100.0]])
+        scale_w = calculate_hifloat8_weight_scale(weight, "channel")
+        self.assertEqual(scale_w.tolist(), [6.25, 6.25])
+
+    def test_cast_tensor_negative_dominant(self):
+        # tensor granularity: the global positive max is 1 while abs max is 100.
+        weight = torch.tensor([[-100.0, -1.0], [-2.0, -3.0]])
+        scale_w = calculate_hifloat8_weight_scale(weight, "tensor")
+        self.assertEqual(scale_w.tolist(), [6.25, 6.25])
+
+    def test_cast_positive_dominant(self):
+        # Positive-dominant groups keep max(abs(weight)) / 16.
+        weight = torch.tensor([[100.0, -1.0], [1.0, 64.0]])
+        scale_w = calculate_hifloat8_weight_scale(weight, "channel")
+        self.assertEqual(scale_w.tolist(), [6.25, 4.0])
+
+    def test_cast_all_negative_group_positive_scale(self):
+        # An all-negative group still yields a positive per-channel scale.
+        weight = torch.tensor([[-0.5, -0.1], [-8.0, -2.0], [1.0, 2.0]])
+        scale_w = calculate_hifloat8_weight_scale(weight, "channel")
+        self.assertEqual(scale_w.tolist(), [0.03125, 0.5, 0.125])
+        self.assertNotIn(1.0, scale_w.tolist())
+
+    def test_quantile_channel_negative_dominant_row(self):
+        weight = torch.tensor([[-100.0, 1.0], [1.0, 100.0]])
+        mod = _make_linear_with_weight(weight)
+        q = QuantileQuant(mod, "fc", _make_hif8_weight_only_config("channel"))
+        self.assertEqual(q.scale_w.flatten().tolist(), [6.25, 6.25])
+
+    def test_quantile_tensor_negative_dominant(self):
+        weight = torch.tensor([[-100.0, -1.0], [-2.0, -3.0]])
+        mod = _make_linear_with_weight(weight)
+        q = QuantileQuant(mod, "fc", _make_hif8_weight_only_config("tensor"))
+        self.assertEqual(q.scale_w.flatten().tolist(), [6.25])
 
 
 if __name__ == "__main__":
