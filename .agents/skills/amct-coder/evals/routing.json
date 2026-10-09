@@ -1,0 +1,120 @@
+{
+  "skill_name": "amct-coder",
+  "kind": "routing",
+  "description": "路由回归题集：验证流程选择与委派判断不回退。需 agent 实际作答并按每题 rubric 语义判定，不能由脚本自动判定。",
+  "rubric_rules": {
+    "must_mention": "每个子数组至少命中一项。判语义不判字面，同义表述算命中。只放「正确答案不可能不说到」的内容，不放规则名或工具名——agent 沉默地做对也算对。",
+    "must_not_claim": "任一项的语义出现即失败。只放「任何正确答案都不该断言」的话；不得放裸状态词（「跨端约定核对」「重点核对对象」），因为「这不用叠加跨端约定核对」也会字面命中。答案否定该说法时不算命中。",
+    "allow": "看似违反 must_not_claim、实则被 skill 自身规则要求的对冲表述，命中不扣分。缺这一栏会把合规答案判成失败。"
+  },
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "帮我新增一个 fp8e4m3 的 quant_dtype 并接进 CLI",
+      "expected": "跨端约定核对：命中重点核对对象（新 dtype）+ 对外接口;走 quant-dtype-module 主场景手册,先过既有实现复用",
+      "rubric": {
+        "must_mention": [
+          ["按 SKILL.md 流程走", "先定改动面再动手"],
+          ["跨端约定核对", "跨端约定状态表", "两端核对"],
+          ["quant-dtype-module"],
+          ["重点核对对象", "注册成功不等于可用", "新 dtype 要逐个下游接入点收口"]
+        ],
+        "must_not_claim": [
+          "只读 coding-rules 对应节就够,不用选主场景手册",
+          "不需跨端约定状态表",
+          "注册进 choices 就算接通"
+        ],
+        "allow": []
+      }
+    },
+    {
+      "id": 2,
+      "prompt": "跑一下 qwen3 的直转 eval,看看 PPL",
+      "expected": "委派:运行命令拿结果属执行类 skill,不留在 amct-coder",
+      "rubric": {
+        "must_mention": [["转执行类", "委派", "不留在 amct-coder"]],
+        "must_not_claim": [
+          "由 amct-coder 直接运行评测命令",
+          "本 skill 跑完 eval 后给精度结论"
+        ],
+        "allow": ["若命令失败暴露实现 bug 再回源码诊断"]
+      }
+    },
+    {
+      "id": 3,
+      "prompt": "给 llama 新增一个模型 adapter",
+      "expected": "委派:新增模型适配转 model-adapter skill,amct-coder 不做结构性模型实现",
+      "rubric": {
+        "must_mention": [["model-adapter"]],
+        "must_not_claim": [
+          "在 amct-coder 内完成结构性模型实现",
+          "由本 skill 新增 adapter 与 wrapper 类"
+        ],
+        "allow": ["amct-coder 保留 review 分层、PtqUnit 与下游约定"]
+      }
+    },
+    {
+      "id": 4,
+      "prompt": "这个报错信息没说传了什么参数,帮我改一下报错文案",
+      "expected": "普通局部修复,留在 amct-coder:按 SKILL.md 依次走(选主场景手册→按需细则→交付说明)。改动面已被需求点名到具体函数(点名了函数、只落一处、不触跨端约定、不波及 workflow/solver/quant module/public API/ops build),按 conditional-rules「仓库边界」不整读 repo-map 分档;主场景手册按「选主场景手册」每次都读职责边界与禁止项、其余命中才读,不为改一行文案整读全文;不属跨端约定核对的命中条件(不改行为、不动跨端约定、不触对外接口或重点核对对象、只落在单一一层且未波及上述五层),故不叠加跨端约定核对;范围外的重构不顺手改。交付开头报核对到哪条链路、哪一环没验到,不报文件名清单",
+      "rubric": {
+        "must_mention": [
+          ["留在 amct-coder", "属源码修改", "不委派"],
+          ["不叠加跨端约定核对", "不改行为不动跨端约定", "不用填跨端约定状态表"]
+        ],
+        "must_not_claim": [
+          "为改一行报错文案整读 repo-map 与主场景手册全文",
+          "需要填跨端约定状态表",
+          "顺手把周边代码一起重构"
+        ],
+        "allow": [
+          "说明读到哪一层就停、依据是什么",
+          "说明改动面已被需求点名,故不整读 repo-map 分档",
+          "指出文案改动可能影响依赖该字符串的测试或文档并一并核对",
+          "交付开头报核对到哪条链路、哪一环没验到（报链路而非文件名清单也算对）"
+        ]
+      }
+    },
+    {
+      "id": 5,
+      "prompt": "eval 的 PPL 和直转一样,帮我查为什么",
+      "expected": "行为诊断（不叠加跨端约定核对）:留在 amct-coder,走行为诊断流程（walkthrough 的停止查资料与交付形态）。「PPL 一样」既可能是口径/判读问题也可能是量化没真生效的实现问题,正确答案要先分辨再分流——但只要判定为实现侧就留在本 skill,不整体转判读类 skill",
+      "rubric": {
+        "must_mention": [
+          ["沿源码链路查", "核验", "诊断", "查量化是否真生效", "口径还是实现"]
+        ],
+        "must_not_claim": [
+          "无需查源码即可回答",
+          "直接给精度达标结论",
+          "整体转判读类 skill 后本 skill 不保留任何职责"
+        ],
+        "allow": [
+          "若确认属达标判读则转达标判读类 skill",
+          "算法收益判读转收益判读类 skill",
+          "只在口径或日志字段来自代码问题时诊断"
+        ]
+      }
+    },
+    {
+      "id": 6,
+      "prompt": "ptq_io.py 里 extract 缓存文件名 block_{layer_idx}_{quant_target}_in.pkl 想加个版本号,save_ptq_inps 和 load_ptq_inps 两边一起改",
+      "expected": "跨端约定核对:待改文件能列出、只落在 datasets 一层、不波及 workflow/solver/quant module/public API/ops build、不动对外接口、不属重点核对对象,但改的是 extract 缓存文件命名——保存端与加载端属跨端两端,已写入磁盘的旧缓存目录会读不到;按 conditional-rules「跨端约定核对的做法」叠加跨端约定核对,并按同文件「比例原则」只填触及项",
+      "rubric": {
+        "must_mention": [
+          ["按 SKILL.md 流程走", "先定改动面再动手"],
+          ["跨端约定核对", "两端核对", "跨端约定状态表"],
+          ["已生成的旧缓存目录读不到", "向后兼容", "版本号要让旧数据可辨识或明确声明不兼容"]
+        ],
+        "must_not_claim": [
+          "改动都在一个文件里所以不用核对保存与加载两端",
+          "缓存文件名只是内部实现细节,不影响已生成的 extract 数据"
+        ],
+        "allow": [
+          "确认无既有数据需要兼容（首次生成或可重跑 extract）后说明依据继续",
+          "执行中发现改动面变大即回 conditional-rules「仓库边界」补齐边界声明",
+          "交付开头报核对到哪条链路、哪一环没验到（报链路而非文件名清单也算对）"
+        ]
+      }
+    }
+  ]
+}
