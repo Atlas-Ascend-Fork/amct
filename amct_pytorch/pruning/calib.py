@@ -16,11 +16,13 @@
 # ----------------------------------------------------------------------------
 from __future__ import annotations
 
-from typing import Any, Sequence
+from typing import Any, Optional, Sequence
 
 import torch
 import torch.nn.functional as F
 from torch import nn
+from .context import BatchAdapter, PruneContext
+from .utils import move_batch_to_device
 
 
 def _unwrap_logits(out: Any) -> torch.Tensor:
@@ -44,7 +46,9 @@ def nll_from_logits(logits: torch.Tensor, ids: torch.Tensor) -> tuple[float, int
     return float(nll_sum), int(target.numel())
 
 
-def calib_nll(model: nn.Module, data: Sequence[Any]) -> float:
+def calib_nll(
+    model: nn.Module, data: Sequence[Any], batch_adapter: Optional[BatchAdapter] = None
+) -> float:
     """Mean autoregressive NLL over calibration token batches (label-free, lower is better)."""
     batches = list(data)
     if not batches:
@@ -53,15 +57,19 @@ def calib_nll(model: nn.Module, data: Sequence[Any]) -> float:
     model.eval()
     tot, n_tokens = 0.0, 0
     with torch.no_grad():
-        for c in batches:
-            if c.is_floating_point():
+        context = PruneContext(data=batches, batch_adapter=batch_adapter)
+        for args, kwargs in context.iter_model_inputs():
+            moved_args, moved_kwargs = move_batch_to_device(args, kwargs, device)
+            ids = moved_kwargs.get("input_ids")
+            if ids is None and moved_args:
+                ids = moved_args[0]
+            if not torch.is_tensor(ids) or ids.is_floating_point() or ids.dim() != 2:
                 raise ValueError(
-                    "calib_nll expects integer token-id batches (target of "
-                    f"cross_entropy); got floating-point batch dtype={c.dtype}."
+                    "calib_nll expects integer token-id batches shaped [batch, sequence] "
+                    "as input_ids or the first positional model argument."
                 )
-            c = c.to(device)
-            logits = _unwrap_logits(model(c))
-            nll_sum, n = nll_from_logits(logits, c)
+            logits = _unwrap_logits(model(*moved_args, **moved_kwargs))
+            nll_sum, n = nll_from_logits(logits, ids)
             tot += nll_sum
             n_tokens += n
     return tot / max(n_tokens, 1)

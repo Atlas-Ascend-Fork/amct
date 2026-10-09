@@ -18,6 +18,7 @@
 """Custom calibration batches work throughout sensitivity allocation."""
 
 from dataclasses import dataclass
+import copy
 import logging
 import unittest
 from unittest import mock
@@ -29,6 +30,7 @@ from amct_pytorch.pruning import prune
 from amct_pytorch.pruning import allocation as allocation_module
 from amct_pytorch.pruning.config import PruneConfig
 from amct_pytorch.pruning.report import PruneReport
+from amct_pytorch.pruning.calib import calib_nll
 
 
 class _RecordingHandler(logging.Handler):
@@ -195,6 +197,110 @@ class TestSensitivityBatchAdapter(unittest.TestCase):
             ),
             len(model.layers),
         )
+
+
+class TokenModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.embeddings = nn.Embedding(17, 4)
+        self.layers = nn.ModuleList(
+            [
+                nn.Sequential(nn.Linear(4, 6), nn.GELU(), nn.Linear(6, 4))
+                for _ in range(2)
+            ]
+        )
+        self.classifier = nn.Linear(4, 17)
+
+    def forward(self, input_ids, attention_mask=None):
+        features = self.embeddings(input_ids)
+        for layer in self.layers:
+            features = layer(features)
+        if attention_mask is not None:
+            features = features * attention_mask.unsqueeze(-1)
+        return self.classifier(features)
+
+
+class TestDefaultGuardBatchAdapter(unittest.TestCase):
+    def test_default_guard_matches_plain_token_batches(self):
+        for keyword in (False, True):
+            with self.subTest(keyword=keyword):
+                torch.manual_seed(23)
+                reference = TokenModel().eval()
+                adapted = copy.deepcopy(reference)
+                ids = torch.arange(12).reshape(2, 6)
+                cfg = config()
+                del cfg["allocation"]["guard"]
+                direct_report, adapted_report = PruneReport(), PruneReport()
+                prune(reference, cfg, data=[ids], report=direct_report)
+                calls = []
+
+                def adapter(batch):
+                    calls.append(batch)
+                    return (
+                        ((), {"input_ids": batch.features})
+                        if keyword
+                        else ((batch.features,), {})
+                    )
+
+                messages = []
+                handler = _RecordingHandler(messages)
+                logger = logging.getLogger("Log")
+                logger.addHandler(handler)
+                try:
+                    prune(
+                        adapted,
+                        cfg,
+                        data=[CalibrationBatch(ids)],
+                        batch_adapter=adapter,
+                        report=adapted_report,
+                    )
+                finally:
+                    logger.removeHandler(handler)
+                self.assertFalse(
+                    any(
+                        "calib NLL guard unavailable" in message for message in messages
+                    )
+                )
+                self.assertEqual(
+                    adapted_report.allocation_choice, direct_report.allocation_choice
+                )
+                self.assertEqual(
+                    adapted_report.params_after, direct_report.params_after
+                )
+                self.assertLess(
+                    adapted_report.params_after, adapted_report.params_before
+                )
+                self.assertGreater(len(calls), 2)
+                for key, value in reference.state_dict().items():
+                    torch.testing.assert_close(adapted.state_dict()[key], value)
+                torch.testing.assert_close(adapted(ids), reference(ids))
+
+    def test_calib_nll_adapter_preserves_keyword_inputs(self):
+        torch.manual_seed(23)
+        model = TokenModel().eval()
+        ids = torch.arange(12).reshape(2, 6)
+        expected = calib_nll(model, [ids])
+        value = calib_nll(
+            model,
+            [{"tokens": ids, "source": "calibration"}],
+            batch_adapter=lambda batch: (
+                (),
+                {
+                    "input_ids": batch["tokens"],
+                    "attention_mask": torch.ones_like(batch["tokens"]),
+                },
+            ),
+        )
+        self.assertAlmostEqual(value, expected)
+
+    def test_calib_nll_rejects_non_token_adapter_output(self):
+        model = TokenModel().eval()
+        with self.assertRaisesRegex(ValueError, "token-id"):
+            calib_nll(
+                model,
+                [CalibrationBatch(torch.ones(2, 6))],
+                batch_adapter=lambda batch: ((batch.features,), {}),
+            )
 
 
 if __name__ == "__main__":

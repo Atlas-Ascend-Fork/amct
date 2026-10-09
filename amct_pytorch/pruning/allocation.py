@@ -243,8 +243,8 @@ def _guard_pick(model, base_cfg, keys, ratios, cut, batches, batch_adapter):
         copy.deepcopy(model), base_cfg, keys, [cut] * len(keys), batches, batch_adapter
     )
     try:
-        nll_sens = calib_nll(cand_sens, batches)
-        nll_uni = calib_nll(cand_uni, batches)
+        nll_sens = calib_nll(cand_sens, batches, batch_adapter=batch_adapter)
+        nll_uni = calib_nll(cand_uni, batches, batch_adapter=batch_adapter)
     except (ValueError, AttributeError, TypeError) as exc:
         LOGGER.logw(
             f"[allocation] calib NLL guard unavailable ({type(exc).__name__}); "
