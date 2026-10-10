@@ -81,6 +81,83 @@ class TestPruneMissingModuleLog(unittest.TestCase):
         self.assertIsNone(pruner.get_module('missing_layer'))
 
 
+class TestGlobalAscendOptimized(unittest.TestCase):
+    """global_ascend_optimized is a sticky-OR over the per layer configs"""
+
+    @staticmethod
+    def run_prepare_param(layer_configs):
+        """run prepare_param on a stub model, return the aggregated flag"""
+        model_helper = mock.Mock()
+        model_helper.get_module.return_value = torch.nn.Linear(4, 4)
+
+        record_helper = mock.Mock()
+        record_helper.get_prune_group.return_value = 1
+        record_helper.get_range.return_value = (0, 4)
+
+        producers = []
+        for name in layer_configs:
+            producer = mock.Mock()
+            producer.name = name
+            producers.append(producer)
+        prune_record = mock.Mock()
+        prune_record.producer = producers
+
+        index_helper = object.__new__(PuneIndexHelper)
+        index_helper.param = {}
+        index_helper.model_helper = model_helper
+        index_helper.record = prune_record
+        index_helper.record_helper = record_helper
+        index_helper.global_prune_ratio = None
+        index_helper.global_prune_group = None
+        index_helper.global_ascend_optimized = False
+        index_helper.conf = mock.Mock()
+        index_helper.conf.get_layer_prune_config.side_effect = lambda name: dict(
+            layer_configs[name]
+        )
+
+        index_helper.prepare_param()
+        return index_helper.global_ascend_optimized
+
+    def test_all_layers_enabled(self):
+        """every layer on -> global on"""
+        self.assertTrue(
+            self.run_prepare_param(
+                {
+                    'layer_a': {'ascend_optimized': True},
+                    'layer_b': {'ascend_optimized': True},
+                }
+            )
+        )
+
+    def test_one_layer_enabled(self):
+        """a single layer on is enough to turn the global flag on"""
+        self.assertTrue(
+            self.run_prepare_param(
+                {
+                    'layer_a': {'ascend_optimized': False},
+                    'layer_b': {'ascend_optimized': True},
+                }
+            )
+        )
+
+    def test_all_layers_disabled(self):
+        """the flag stays off only when every layer disables it"""
+        self.assertFalse(
+            self.run_prepare_param(
+                {
+                    'layer_a': {'ascend_optimized': False},
+                    'layer_b': {'ascend_optimized': False},
+                }
+            )
+        )
+
+    def test_single_layer_disabled(self):
+        """one layer record follows its own config"""
+        self.assertFalse(
+            self.run_prepare_param({'layer_a': {'ascend_optimized': False}})
+        )
+
+
 class TestFilterPruneHelper(unittest.TestCase):
     """
     The UT for QuantizeTool
