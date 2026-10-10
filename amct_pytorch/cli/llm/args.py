@@ -19,12 +19,54 @@
 import argparse
 import os
 
+from loguru import logger
+
 from amct_pytorch.common.models.llm.common.deploy_selection import (
     requires_tensor_deploy_config,
     validate_ascend_deploy_args,
     validate_tensor_deploy_args,
 )
 from amct_pytorch.quantization.bit_policy import BitPolicy
+
+# Sentinel telling "the flag was not passed on the command line". Reserved
+# flags use it as their argparse default so an explicit value can be told
+# apart from a missing one.
+_UNSET = object()
+
+# Reserved flags that are documented in the released user guides and appear in
+# existing user scripts, so dropping them would turn those invocations into an
+# argparse error. They currently have no consumer anywhere in the
+# eval / extract_ptq_data / ptq / deploy chain: the passed value is ignored and
+# reset to the documented default, and a warning tells the user the parameter
+# is reserved and not effective yet.
+# Format: (dest, flag, documented default kept on the namespace)
+_RESERVED_NOT_EFFECTIVE_ARGS = (
+    ('min_lr', '--min_lr', 0.0),
+    ('k_size', '--k_size', 128),
+    ('wikitext_final_out', '--wikitext_final_out', ""),
+)
+
+_RESERVED_HELP = (
+    '[RESERVED] Reserved parameter, not effective in the current version: '
+    'no workflow consumes it. Kept for compatibility with existing scripts; '
+    'the passed value is ignored and a warning is printed.'
+)
+
+
+def _ignore_reserved_args(args):
+    """Warn about reserved flags and reset them to their documented defaults."""
+    for dest, flag, default_value in _RESERVED_NOT_EFFECTIVE_ARGS:
+        value = getattr(args, dest, _UNSET)
+        if value is _UNSET:
+            setattr(args, dest, default_value)
+            continue
+        logger.warning(
+            "{} is a reserved parameter and is not effective in the current "
+            "version: the passed value {!r} is ignored.",
+            flag,
+            value,
+        )
+        setattr(args, dest, default_value)
 
 
 def _validate_eval_mode(args):
@@ -146,7 +188,7 @@ def parser_gen(command=None):
     parser.add_argument('--weight_decay', type=float, default=0.0)
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--lr_scheduler', type=str, default='cosine')
-    parser.add_argument('--min_lr', type=float, default=0.0)
+    parser.add_argument('--min_lr', type=float, default=_UNSET, help=_RESERVED_HELP)
     parser.add_argument('--lr_step_size', type=int, default=1)
     parser.add_argument('--lr_gamma', type=float, default=0.1)
     parser.add_argument(
@@ -171,9 +213,7 @@ def parser_gen(command=None):
         default=False,
         help='Use per-tensor statistics in activation clipping.',
     )
-    parser.add_argument(
-        '--k_size', type=int, default=128, help='Learnable hadamard-like matrix size.'
-    )
+    parser.add_argument('--k_size', type=int, default=_UNSET, help=_RESERVED_HELP)
 
     parser.add_argument("--start_block_idx", type=int, default=0)
     parser.add_argument("--end_block_idx", type=int, default=61)
@@ -189,9 +229,11 @@ def parser_gen(command=None):
     parser.add_argument('--attn_linear_param_dir', default="")
     parser.add_argument('--attn_cache_param_dir', default="")
     parser.add_argument('--moe_mlp_param_dir', default="")
-    parser.add_argument('--wikitext_final_out', default="")
+    parser.add_argument('--wikitext_final_out', default=_UNSET, help=_RESERVED_HELP)
 
     args = parser.parse_args()
+
+    _ignore_reserved_args(args)
 
     if (
         command == "deploy"

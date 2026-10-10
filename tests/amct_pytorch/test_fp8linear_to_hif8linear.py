@@ -170,3 +170,108 @@ class TestFP8HIF8(unittest.TestCase):
         LOGGER.info("%s", model)
         quant_out = model(self.test_inputs)
         self.assertIsNotNone(quant_out)
+
+
+class TestHIF8DeployDeqScale(unittest.TestCase):
+    '''ST FOR THE DEPLOY-SIDE DEQUANT SCALE OF FP8HIF8 (issue #222)
+
+    NpuHIF8Linear._init_weight_quant recomputes the HiF8 weight scale from the
+    dequantized FP8 weight instead of reusing the fake-quant scale, so a bug
+    there stays invisible in the fake-quant accuracy results. These cases pin
+    the exported deq_scale to max(abs(weight)) / 16 per output channel, which
+    only holds when the scale covers the negative absolute extreme too.
+    '''
+
+    HIF8_SCOPE = 16.0
+
+    # Every value is exactly representable in bfloat16, so the expected scale
+    # stays free of rounding noise.
+    LAYER1_WEIGHT = torch.tensor(
+        [
+            [-8.0, 0.5, 1.0, 0.25],  # negative extreme dominates
+            [1.0, 2.0, 0.5, -0.125],  # positive extreme dominates
+            [-4.0, -2.0, -1.0, -0.5],  # all negative, no positive max at all
+            [0.5, -0.25, 0.125, 0.0625],  # mixed, |min| > max
+        ]
+    )
+    LAYER2_WEIGHT = torch.tensor(
+        [
+            [-16.0, 1.0, 0.5, 0.25],
+            [0.5, 0.25, -0.125, 0.0625],
+        ]
+    )
+
+    def setUp(self):
+        mock_torch_npu = MagicMock()
+        sys.modules['torch_npu'] = mock_torch_npu
+
+    def tearDown(self):
+        del sys.modules['torch_npu']
+
+    def _build_model(self, block_size=None, weight_scale_inv=1.0):
+        model = FP8Model(4, 4, 2, block_size=block_size).to(torch.bfloat16)
+        with torch.no_grad():
+            for layer, weight in (
+                (model.layer1, self.LAYER1_WEIGHT),
+                (model.layer2, self.LAYER2_WEIGHT),
+            ):
+                layer.weight.copy_(weight.to(torch.bfloat16))
+                layer.weight_scale_inv.fill_(weight_scale_inv)
+        return model
+
+    def _expected_deq_scale(self, weight_scale_inv=1.0):
+        scales = []
+        for weight in (self.LAYER1_WEIGHT, self.LAYER2_WEIGHT):
+            abs_max = weight.abs().max(dim=1).values
+            scales.append(abs_max / weight_scale_inv / self.HIF8_SCOPE)
+        return torch.cat(scales)
+
+    def _convert(self, model):
+        quantize(model)
+        convert(model)
+        for layer in (model.layer1, model.layer2):
+            self.assertEqual(type(layer).__name__, 'NpuHIF8Linear')
+        return model
+
+    @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
+    @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
+    @patch('torch_npu.npu_dynamic_quant', wraps=mock_npu_dynamic_quant)
+    @patch(
+        'amct_pytorch.classic.deploy_op.npu_hif8_quantization_linear.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
+    def test_deq_scale_covers_negative_extreme(self, mock_1, mock_2, mock_3):
+        '''per-channel (block_size=None) export path'''
+        model = self._convert(self._build_model())
+        expected = self._expected_deq_scale()
+        torch.testing.assert_close(model.layer1.deq_scale, expected[:4])
+        torch.testing.assert_close(model.layer2.deq_scale, expected[4:])
+        self.assertTrue(torch.all(model.layer1.deq_scale > 0))
+        self.assertTrue(torch.all(model.layer2.deq_scale > 0))
+        # The all-negative row must not degenerate into the unscaled 1.0 fallback.
+        self.assertNotIn(1.0, model.layer1.deq_scale.tolist())
+
+        quant_out = model(torch.randn(2, 4).to(torch.bfloat16))
+        self.assertIsNotNone(quant_out)
+        self.assertTrue(torch.all(torch.isfinite(quant_out)))
+
+    @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
+    @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
+    @patch('torch_npu.npu_dynamic_quant', wraps=mock_npu_dynamic_quant)
+    @patch(
+        'amct_pytorch.classic.deploy_op.npu_hif8_quantization_linear.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
+    def test_block_deq_scale_covers_negative_extreme(self, mock_1, mock_2, mock_3):
+        '''block quantize export path: the FP8 scale must be divided out first'''
+        weight_scale_inv = 2.0
+        model = self._convert(
+            self._build_model(block_size=2, weight_scale_inv=weight_scale_inv)
+        )
+        expected = self._expected_deq_scale(weight_scale_inv)
+        torch.testing.assert_close(model.layer1.deq_scale, expected[:4])
+        torch.testing.assert_close(model.layer2.deq_scale, expected[4:])
+
+        quant_out = model(torch.randn(2, 4).to(torch.bfloat16))
+        self.assertIsNotNone(quant_out)
+        self.assertTrue(torch.all(torch.isfinite(quant_out)))
