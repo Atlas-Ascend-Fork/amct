@@ -10,12 +10,15 @@ therefore opt-in.
 """
 
 import argparse
+import contextlib
 import fnmatch
+import io
 import os
 import re
 import subprocess
 import sys
 import tempfile
+import types
 
 SKILL_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SKILL_DIR)
@@ -197,6 +200,172 @@ def _check_split_layout_semantics():
     )
 
 
+# Upstream file lists as of 2026-10, used by the offline regression below so
+# `--remote`'s matching logic stays testable without network. Kept minimal: only
+# what each task's `allow_patterns` would keep anyway.
+_FAKE_UPSTREAM = {
+    "TIGER-Lab/MMLU-Pro": [
+        "README.md",
+        "data/test-00000-of-00001.parquet",
+        "data/validation-00000-of-00001.parquet",
+    ],
+    "HuggingFaceH4/MATH-500": [
+        "README.md",
+        "data/test-00000-of-00001.parquet",
+    ],
+    "livecodebench/code_generation_lite": [
+        "README.md",
+        "code_generation_lite.py",
+        "test.jsonl",
+        "test2.jsonl",
+        "test3.jsonl",
+        "test4.jsonl",
+        "test5.jsonl",
+        "test6.jsonl",
+    ],
+    "allenai/ai2_arc": [
+        "README.md",
+        "ARC-Challenge/train-00000-of-00001.parquet",
+        "ARC-Challenge/validation-00000-of-00001.parquet",
+        "ARC-Challenge/test-00000-of-00001.parquet",
+        "ARC-Easy/train-00000-of-00001.parquet",
+        "ARC-Easy/validation-00000-of-00001.parquet",
+        "ARC-Easy/test-00000-of-00001.parquet",
+    ],
+    "aps/super_glue": [
+        "README.md",
+        "boolq/train-00000-of-00001.parquet",
+        "boolq/validation-00000-of-00001.parquet",
+        "copa/train-00000-of-00001.parquet",
+        "copa/validation-00000-of-00001.parquet",
+    ],
+    "baber/piqa": ["README.md", "piqa_train.parquet", "piqa_validation.parquet"],
+    "allenai/sciq": [
+        "README.md",
+        "data/train-00000-of-00001.parquet",
+        "data/validation-00000-of-00001.parquet",
+        "data/test-00000-of-00001.parquet",
+    ],
+}
+
+
+def _run_remote_check(file_lists):
+    """Run `_check_remote_registry` against injected file lists; return problems.
+
+    `huggingface_hub` is swapped for a stub so the *matching logic* is covered
+    offline (this box may have no network, and `--remote` must not be the only
+    thing that can catch a registry regression). Returns the AssertionError text
+    when the check fails, else "".
+    """
+
+    class _FakeApi:
+        def list_repo_files(self, repo_id, repo_type="dataset"):
+            return list(file_lists[repo_id])
+
+    stub = types.ModuleType("huggingface_hub")
+    stub.HfApi = lambda *a, **k: _FakeApi()
+    saved = sys.modules.get("huggingface_hub")
+    sys.modules["huggingface_hub"] = stub
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            _check_remote_registry()
+    except AssertionError as exc:
+        return str(exc)
+    finally:
+        if saved is None:
+            sys.modules.pop("huggingface_hub", None)
+        else:
+            sys.modules["huggingface_hub"] = saved
+    return ""
+
+
+def _check_remote_glob_semantics():
+    """`--remote` must honor any_of / all_of instead of iterating dict keys.
+
+    Regression for the reported false positive: `_check_remote_registry`
+    normalized with `isinstance(rels, str)` only, so a dict declaration stayed a
+    dict and `for rel in rels` yielded the key names `any_of` / `all_of`, which
+    never fnmatch -- `self_check.py --remote` then failed math500, livecodebench
+    and livecodebench_release_v6 against a perfectly correct datasets.json. Also
+    covers the lax `any(...)` that let a missing all_of shard through.
+    """
+    # 1. Normalization: no declaration may leak its mode key as a path.
+    reg = load_dataset_registry()
+    for task, spec in sorted(reg.items()):
+        for split, rels in spec["splits"].items():
+            mode, rel_list = split_declaration(rels)
+            if mode not in ("any_of", "all_of"):
+                raise AssertionError(f"{task}/{split}: bad mode {mode!r}")
+            leaked = [r for r in rel_list if r in ("any_of", "all_of")]
+            if leaked:
+                raise AssertionError(
+                    f"{task}/{split}: mode key leaked into paths {rel_list}"
+                )
+
+    # 2. Matching semantics.
+    if _unmatched_globs(
+        "any_of",
+        ["test.jsonl", "data/test-*.parquet"],
+        ["data/test-00000-of-00001.parquet"],
+    ):
+        raise AssertionError("any_of must pass when one candidate matches")
+    if _unmatched_globs(
+        "any_of",
+        ["test.jsonl", "data/test-*.parquet"],
+        ["test.jsonl", "data/test-00000-of-00001.parquet"],
+    ):
+        raise AssertionError("any_of must pass when BOTH layouts are present")
+    got = _unmatched_globs("any_of", ["a.jsonl", "b.jsonl"], ["c.jsonl"])
+    if got != ["a.jsonl", "b.jsonl"]:
+        raise AssertionError(
+            f"any_of with no hit must report all candidates, got {got}"
+        )
+    got = _unmatched_globs(
+        "all_of", ["test.jsonl", "test2.jsonl"], ["test.jsonl", "test2.jsonl"]
+    )
+    if got:
+        raise AssertionError(f"all_of complete must pass, got {got}")
+    got = _unmatched_globs(
+        "all_of",
+        ["test.jsonl", "test2.jsonl", "test3.jsonl"],
+        ["test.jsonl", "test3.jsonl"],
+    )
+    if got != ["test2.jsonl"]:
+        raise AssertionError(f"all_of must name the missing shard, got {got}")
+
+    # 3. End to end against realistic upstream listings: zero problems.
+    problems = _run_remote_check(_FAKE_UPSTREAM)
+    if problems:
+        raise AssertionError(
+            f"--remote false-positive on a correct registry:\n{problems}"
+        )
+
+    # 4. Negative controls -- it must still catch real drift.
+    broken = {k: list(v) for k, v in _FAKE_UPSTREAM.items()}
+    broken["livecodebench/code_generation_lite"].remove("test3.jsonl")
+    problems = _run_remote_check(broken)
+    if "test3.jsonl" not in problems:
+        raise AssertionError(
+            f"--remote must report a missing all_of shard, got:\n{problems or '<no problems>'}"
+        )
+    broken = {k: list(v) for k, v in _FAKE_UPSTREAM.items()}
+    broken["HuggingFaceH4/MATH-500"] = ["README.md", "test.jsonl"]
+    problems = _run_remote_check(broken)
+    if problems:
+        raise AssertionError(
+            f"MATH-500 shipping only test.jsonl is a valid any_of layout:\n{problems}"
+        )
+    broken = {k: list(v) for k, v in _FAKE_UPSTREAM.items()}
+    broken["allenai/sciq"] = ["README.md"]
+    problems = _run_remote_check(broken)
+    if "sciq" not in problems:
+        raise AssertionError(
+            f"--remote must report a task whose files all vanished, got:\n{problems or '<no problems>'}"
+        )
+    print("[self_check] remote glob semantics ok (any_of one-hit / all_of every shard)")
+
+
 def _check_prefetched_resolution():
     """For every already-prefetched task, each declared split must resolve.
 
@@ -243,6 +412,37 @@ def _dir_has_data_files(subdir, max_depth=3):
     return False
 
 
+def _glob_hits(rel, fetched):
+    """True when one declared path/glob matches at least one fetched file."""
+    return any(fnmatch.fnmatch(f, rel) for f in fetched)
+
+
+def _unmatched_globs(mode, rel_list, fetched):
+    """Declared rels that `fetched` fails to satisfy, per declaration mode.
+
+    Must go through `config.split_declaration()`'s `(mode, rel_list)` -- the
+    historical `isinstance(rels, str)` normalization leaves a dict declaration
+    (`{"any_of": [...]}`) intact, so `for rel in rels` iterated the *key names*
+    `any_of` / `all_of`. Those never fnmatch, and every dict-declared task was
+    reported as "datasets.json does not match upstream repos" -- a false
+    positive that sends you to "fix" a correct registry.
+
+    The two modes also need different strictness:
+
+    - ``any_of`` — alternative layouts of the same data; ONE candidate matching
+      is enough (requiring all would demand a repo ship two layouts at once).
+    - ``all_of`` — shards that all get merged; EVERY one must match. The old
+      blanket `any(...)` was too lax here: a dropped shard (upstream rename,
+      partial mirror) passed the check and then silently evaluated on fewer
+      samples.
+    """
+    if mode == "any_of":
+        return (
+            [] if any(_glob_hits(rel, fetched) for rel in rel_list) else list(rel_list)
+        )
+    return [rel for rel in rel_list if not _glob_hits(rel, fetched)]
+
+
 def _check_remote_registry():
     """Cross-check datasets.json globs against each repo's real file list.
 
@@ -267,12 +467,13 @@ def _check_remote_registry():
         allow = spec.get("allow_patterns", default_allow)
         fetched = [f for f in repo_files if any(fnmatch.fnmatch(f, p) for p in allow)]
         for split, rels in spec["splits"].items():
-            if isinstance(rels, str):
-                rels = [rels]
-            if not any(any(fnmatch.fnmatch(f, rel) for f in fetched) for rel in rels):
+            mode, rel_list = split_declaration(rels)
+            unmatched = _unmatched_globs(mode, rel_list, fetched)
+            if unmatched:
                 problems.append(
-                    f"{task} split '{split}': globs {rels} match none of "
-                    f"{spec['repo_id']} files {fetched[:5]}"
+                    f"{task} split '{split}' ({mode}): declared {rel_list}, "
+                    f"unmatched {unmatched} against {spec['repo_id']} "
+                    f"files {fetched[:5]}"
                 )
         print(f"[self_check] remote ok: {task} ({len(fetched)} fetchable files)")
     if problems:
@@ -420,6 +621,7 @@ def main():
     _check_registry()
     _check_prefetched_resolution()
     _check_split_layout_semantics()
+    _check_remote_glob_semantics()
     _check_split_list_arg()
     _check_jsonl_reader()
     _check_lcb_validation()
