@@ -56,7 +56,7 @@ def _make_input_hook(feats: Dict[int, List[torch.Tensor]], key: int):
         if have >= _TOKEN_CAP:
             return
         x = args[0].detach().reshape(-1, args[0].shape[-1]).float()
-        feats[key].append(x[: _TOKEN_CAP - have])
+        feats[key].append(x[: _TOKEN_CAP - have].clone())
 
     return hook
 
