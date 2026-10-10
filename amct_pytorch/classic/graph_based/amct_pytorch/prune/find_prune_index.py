@@ -87,9 +87,10 @@ class PuneIndexHelper:
                 self.global_prune_ratio = min(
                     self.global_prune_ratio, layer_prune_config.get(PRUNE_RATIO)
                 )
-            if layer_prune_config.get("ascend_optimized") and layer_prune_config.get(
-                "ascend_optimized"
-            ):
+            # sticky-OR across layers: the global flag is on as soon as any
+            # producer layer enables ascend_optimized, and is only off when
+            # every layer in this record disables it explicitly.
+            if layer_prune_config.get('ascend_optimized'):
                 self.global_ascend_optimized = True
 
             prune_range = self.record_helper.get_range(self.record, name)
