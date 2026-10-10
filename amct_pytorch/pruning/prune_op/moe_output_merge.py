@@ -198,12 +198,16 @@ def _fit_gate_row(
 
 def _bake_merged_weights(gate, groups, hidden_list, biases, probs, outs, last_list, x):
     """Bake merged groups: absorber last-layer weight (LS) and router absorbing row (logit-space LS)."""
+    gate_updates = []
     for a, grp in groups.items():
         if len(grp) < 2:
             continue
         w_new, _ = _ls_fit(hidden_list[a], biases[a], probs, outs, grp)
         last_list[a].weight.data = w_new.t().to(last_list[a].weight.dtype).contiguous()
         row, bias_val = _fit_gate_row(gate, x, grp, probs)
+        gate_updates.append((a, row, bias_val))
+    # All fits must use the original router that produced the calibration probs.
+    for a, row, bias_val in gate_updates:
         gate.weight.data[a] = row.to(gate.weight.dtype)
         if bias_val is not None:
             gate.bias.data[a] = bias_val.to(gate.bias.dtype)
