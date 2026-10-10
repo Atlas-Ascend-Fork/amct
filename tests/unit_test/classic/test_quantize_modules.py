@@ -21,12 +21,16 @@ from unittest.mock import patch
 import torch
 import torch.nn as nn
 
-from amct_pytorch.classic.quantize_op.ofmr_quant_module import OfmrQuant
+from amct_pytorch.algorithms import AlgorithmRegistry
+from amct_pytorch.classic.quantize import convert, quantize
 from amct_pytorch.classic.quantize_op.linear_awq_module import LinearAWQuant
+from amct_pytorch.classic.quantize_op.minmax_module import MinMaxQuant
+from amct_pytorch.classic.quantize_op.ofmr_quant_module import OfmrQuant
 from amct_pytorch.classic.quantize_op.smooth_quant_module import SmoothQuant
 from amct_pytorch.classic.quantize_op.quantile_module import QuantileQuant
 from amct_pytorch.classic.quantize_op.utils import calculate_hifloat8_weight_scale
 from amct_pytorch.common.utils.vars import HIFLOAT8, INT8
+from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 
 
 def _make_ofmr_config(batch_num=2, strategy="tensor", weight_compress_only=False):
@@ -77,6 +81,77 @@ class TestOfmrQuantInit(unittest.TestCase):
         cfg = _make_ofmr_config(weight_compress_only=True)
         q = OfmrQuant(mod, "fc", cfg)
         self.assertTrue(q.weight_compress_only)
+
+
+class TestQuantizeSharedModuleAliases(unittest.TestCase):
+    """Quantization must cover every path to a shared supported module."""
+
+    def test_quantize_replaces_each_alias_of_shared_linear(self):
+        shared_linear = nn.Linear(64, 64, bias=False, dtype=torch.bfloat16)
+
+        class SharedLinearModel(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.left = shared_linear
+                self.right = shared_linear
+
+            def forward(self, inputs):
+                return self.left(inputs), self.right(inputs)
+
+        model = SharedLinearModel()
+        with torch.no_grad():
+            weights = torch.arange(4096, dtype=torch.float32).reshape(64, 64)
+            model.left.weight.copy_(weights.to(torch.bfloat16) / 700)
+        inputs = (
+            torch.arange(128, dtype=torch.float32).reshape(2, 64).to(torch.bfloat16)
+            / 100
+        )
+        original_outputs = model(inputs)
+
+        quantize(model)
+
+        self.assertIsInstance(model.left, MinMaxQuant)
+        self.assertIs(model.left, model.right)
+        quantized_outputs = model(inputs)
+        self.assertFalse(torch.equal(quantized_outputs[0], original_outputs[0]))
+        self.assertTrue(torch.equal(quantized_outputs[0], quantized_outputs[1]))
+
+    def test_convert_replaces_each_alias_of_shared_quant_module(self):
+        class DummyQuantModule(BaseQuantizeModule):
+            def __init__(self):
+                super().__init__(None, "shared", {})
+
+            def forward(self, inputs):
+                return inputs
+
+        class DummyDeployModule(nn.Module):
+            def __init__(self, quant_module):
+                super().__init__()
+                self.quant_module = quant_module
+
+            def forward(self, inputs):
+                return self.quant_module(inputs)
+
+        AlgorithmRegistry.register(
+            "shared_alias_test", "Linear", DummyQuantModule, DummyDeployModule
+        )
+        shared_quant_module = DummyQuantModule()
+
+        class SharedQuantModel(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.left = shared_quant_module
+                self.right = shared_quant_module
+
+            def forward(self, inputs):
+                return self.left(inputs), self.right(inputs)
+
+        model = SharedQuantModel()
+        convert(model)
+
+        self.assertIsInstance(model.left, DummyDeployModule)
+        self.assertIsInstance(model.right, DummyDeployModule)
+        self.assertIs(model.left, model.right)
 
 
 class TestSmoothQuantCalculateSmooth(unittest.TestCase):

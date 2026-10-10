@@ -15,7 +15,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-from amct_pytorch.common.utils.model_util import ModuleHelper
+from amct_pytorch.classic.optimizer.module_alias_util import ModuleAliasIndex
 
 
 class BaseModuleFusionPass:
@@ -59,8 +59,8 @@ class BaseModuleFusionPass:
         """
         # Step1: match pattern and record first matched module
         matched_modules = {}
-        model_helper = ModuleHelper(model)
-        for name, module in model_helper.named_module_dict.items():
+        self.module_alias_index = ModuleAliasIndex(model)
+        for name, module in self.module_alias_index.named_module_dict.items():
             if self.match_pattern(module, name):
                 matched_modules[name] = module
 
