@@ -83,8 +83,9 @@ class NpuHIF8Linear(torch.nn.Module):
             fp8_scale = torch.repeat_interleave(fp8_scale, block_w, dim=1)
             fp8_scale = fp8_scale[:n, :k]
         dequant_weight = fp8_weight.to(torch.float32) / fp8_scale
-        weight_max = dequant_weight.max(dim=1, keepdim=True).values
-        scale = (weight_max / 16.0).to(torch.float32).flatten()  # n
+        # HIF8 weight scale is symmetric: cover the larger magnitude per channel.
+        weight_abs_max = dequant_weight.abs().max(dim=1, keepdim=True).values
+        scale = (weight_abs_max / 16.0).to(torch.float32).flatten()  # n
         self.register_buffer('deq_scale', scale)
         import torch_npu
 

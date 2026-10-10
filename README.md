@@ -10,7 +10,7 @@ _昇腾模型压缩工具_
 [![CANN](https://img.shields.io/badge/CANN-%E2%89%A58.5.0-green.svg)](docs/zh/quick_install.md)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.1.0%20%7C%202.7.1-orange.svg)](requirements.txt)
 
-[快速开始](#-快速开始) · [特性](#-核心特性) · [样例](#-文档样例) · [FAQ](#-常见问题) · [贡献](#-参与贡献)
+[快速开始](#quickstart) · [特性](#core) · [样例](#documentsdemo) · [FAQ](#faq) · [贡献](#contribute)
 
 </div>
 
@@ -41,37 +41,36 @@ AMCT 是昇腾 NPU 原生的模型量化压缩工具。量化后模型体积减�
 - **🔢 多精度全栈** —— INT8 / INT4 / MXFP8 / MXFP4 / HiFloat8 任选
 - **🚀 大模型就绪** —— 原生支持 DeepSeek-V3.2 / V4 等前沿模型
 
-
+<a id="core"></a>
 ## ✨ 核心特性
 
 | 特性类别 | 简介 |
-|----------|------|
+| ---------- | ------ |
 | **PTQ 量化算法** | Min-Max / AWQ / GPTQ / SmoothQuant 等训练后量化算法，详见 [算法介绍](docs/zh/algorithm_brief.md) |
 | **HiFloat8 量化** | 华为自研 8-bit 浮点格式，锥形精度 + 大动态范围，详见 [HiFloat8 介绍](docs/zh/context/hifloat8_quantization.md) |
 | **NPU 自定义算子** | 基于NPU的自研算子，Ascend C kernel 实现，详见 [amct_ops](amct_ops/README.md) |
 | **大模型量化** | DeepSeek-V3.2 / V4 量化方案，详见 [DeepSeek-V4](./amct_pytorch/experimental/deepseek-v4/README.md) |
 | **结构化剪枝** | 稠密 FFN 中间维 / CNN 通道 / MoE 专家的结构化剪枝，详见 [结构化剪枝](amct_pytorch/pruning/README.md) |
 
-
 ## 📊 性能收益
 
 量化显著降低部署成本：
 
 | 精度格式 | 仅权重（W） | 全量化（W+A） | 收益 |
-|---------|------------|--------------|------|
+| --------- | ------------ | -------------- | ------ |
 | **INT8** | ✅ Min-Max / AWQ / GPTQ | ✅ Min-Max / SmoothQuant | 体积 **↓50%** · 吞吐 ↑ |
 | **INT4** | ✅ AWQ / GPTQ | ✅ FlatQuant | 体积 **↓75%** · 低带宽友好 |
 | **HiFloat8** | ✅ Cast / Quantile / OFMR | ✅ Cast / Quantile / OFMR | 体积 **↓50%** · 大动态范围 |
 | **MXFP8** | ✅ MXQuant | ✅ MXQuant | 体积 **↓50%** · 高精度 |
 | **MXFP4** | ✅ MXQuant | ✅ MXQuant | 体积 **↓75%** · 微缩浮点 |
 
-
+<a id="quickstart"></a>
 ## 📦 快速开始
 
 ### 环境要求
 
 | 依赖 | 版本 |
-|------|------|
+| ------ | ------ |
 | Python | >=3.9 |
 | PyTorch | 2.7.1 或 2.1.0（NPU 加速后端需使用 CPU 版 PyTorch，并配套 `TorchNPU`） |
 | GCC / CMake / patch | ≥ 7.3 / ≥ 3.16（推荐 3.20） / ≥ 2.7 |
@@ -120,10 +119,11 @@ python3 -c "import amct_pytorch as amct; print(f'successfully installed AMCT ')"
 | [DeepSeek-V4](examples/models/deepseekv4/DeepSeekV4-Flash-Walkthrough.md) | 在 Atlas A3 环境中完成 DeepSeek-V4 Flash 模型的单卡推理，针对一站式平台场景提供标准启动流程和相关配置，帮助用户快速上手完成一次端到端 NPU 推理体验。    |
 | [Qwen3.6-MoE 结构化剪枝](./examples/models/qwen3.6/Qwen3.6-Moe-Pruning.md) | 在 Atlas A3 环境中对 Qwen3.6-MoE 做 MoE 专家结构化剪枝，把单卡装不下的模型压到单卡以内，剪枝后可继续量化。 |
 
+<a id="documentsdemo"></a>
 ## 📖 文档样例
 
 | 主题 | 内容 |
-|------|------|
+| ------ | ------ |
 | [压缩概念](docs/zh/compression_concepts.md) | 量化、稀疏、蒸馏等基础概念 |
 | [LLM量化](docs/zh/AMCT_Pytorch_LLM.md) | 面向大语言模型（LLM）的量化特性 |
 | [压缩特性](docs/README.md) | AMCT 支持的基础压缩特性 |
@@ -153,13 +153,14 @@ amct/
 └── requirements.txt               # Python 第三方依赖
 ```
 
+<a id="faq"></a>
 ## ❓ 常见问题
 
 <details>
 <summary><strong>算法选择：何时使用 AWQ / GPTQ / SmoothQuant？</strong></summary>
 
 | 算法 | 适用场景 | 核心思路 |
-|------|---------|---------|
+| ------ | --------- | --------- |
 | **AWQ** | 大模型 PTQ，追求低量化误差 | 感知激活的权重量化，保护 ~1% 显著权重 |
 | **GPTQ** | 大模型 PTQ，强调逐层优化 | 基于海森矩阵的权重微调，最小化量化误差 |
 | **SmoothQuant** | 激活分布困难场景 | 将激活量化难度迁移至权重，平滑激活异常值 |
@@ -206,11 +207,12 @@ pip3 install build_out/amct_pytorch-${version}-py3-none-linux_${arch}.tar.gz --u
 欢迎加入 AMCT 社区，参与讨论与交流：
 
 | 平台 | 用途 |
-|------|------|
+| ------ | ------ |
 | [GitCode Issue](https://gitcode.com/cann/amct/issues) | 问题反馈、功能建议、技术讨论 |
 | [GitCode Discussions](https://gitcode.com/cann/amct/discussions) | 经验分享、最佳实践、社区互动 |
 | [SIG Discussions](https://gitcode.com/cann/community/blob/master/CANN/sigs/tools/README.md) | 技术决策、问题处理、项目落地 |
 
+<a id="contribute"></a>
 ## 🤝 参与贡献
 
 欢迎贡献代码、算法与文档，详见 [贡献指南](CONTRIBUTING.md)：

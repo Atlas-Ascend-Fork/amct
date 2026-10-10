@@ -35,7 +35,7 @@ class QuantileQuant(BaseQuantizeModule):
     """
     Function: calibration operator to obtain quant factors using quantile algo
     Features:
-        1. Weight max value scaled to 16
+        1. Weight absolute max value scaled to 16
         2. Activation max value = 0.99 * current_max + 0.01 * previous_max
         3. Support HIF8 data type
         4. Support weight per-tensor/per-channel, activation per-tensor/static per-token/dynamic per-token
@@ -108,7 +108,10 @@ class QuantileQuant(BaseQuantizeModule):
         weight_min, weight_max = get_weight_min_max_by_granularity(
             weight_data, quant_config
         )
-        self.scale_w = self.calculate_hif8_scale(weight_max)
+        # HIF8 weights are symmetric, so the scale covers the larger magnitude of the
+        # two extremes of each group.
+        weight_abs_max = torch.maximum(weight_min.abs(), weight_max.abs())
+        self.scale_w = self.calculate_hif8_scale(weight_abs_max)
         self.offset_w = None
         LOGGER.logd(
             "Calculate quantile quant params of layer '{}' success!".format(
@@ -126,7 +129,14 @@ class QuantileQuant(BaseQuantizeModule):
             scale: HIF8 scale factor
         """
         if tensor_max is not None:
-            return (tensor_max / QUANT_SCOPE[HIFLOAT8]).to(torch.float32)
+            scale = (tensor_max / QUANT_SCOPE[HIFLOAT8]).to(torch.float32)
+            # An all-zero weight channel / calibration tensor yields scale == 0, and
+            # fake quant divides by it (quant_dequant_tensor -> tensor / scale), which
+            # turns the zeros into NaN. Substitute a unit scale for exact zeros only:
+            # 0 / 1 -> 0 keeps the all-zero data losslessly zero after dequant.
+            # Deliberately not process_scale() here -- its scale < FLT_EPSILON test
+            # would also lift legitimately tiny scales up to 1.0 and lose precision.
+            return torch.where(scale == 0, torch.ones_like(scale), scale)
         else:
             return tensor_max
 

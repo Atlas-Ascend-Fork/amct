@@ -154,7 +154,6 @@ baseline_cmd = [
     "--bit_config", BF16_BIT_CONFIG,
     "--seq_len", str(SEQ_LEN),
     "--output_dir", baseline_dir,
-    "--wikitext_final_out", baseline_dir / "wikitext",
 ]
 
 show_cmd(baseline_cmd)
@@ -181,7 +180,6 @@ direct_quant_cmd = [
     "--bit_config", W8A8_BIT_CONFIG,
     "--seq_len", str(SEQ_LEN),
     "--output_dir", direct_quant_dir,
-    "--wikitext_final_out", direct_quant_dir / "wikitext",
     "--quant_target", *ALL_QUANT_TARGETS,
 ]
 
@@ -304,7 +302,6 @@ calibrated_eval_cmd = [
     "--bit_config", W8A8_BIT_CONFIG,
     "--seq_len", str(SEQ_LEN),
     "--output_dir", calibrated_eval_dir,
-    "--wikitext_final_out", calibrated_eval_dir / "wikitext",
     "--quant_target", *ALL_QUANT_TARGETS,
     "--moe_mlp_param_dir", MLP_MOE_PARAM_DIR,
     "--attn_linear_param_dir", ATTN_LINEAR_PARAM_DIR,

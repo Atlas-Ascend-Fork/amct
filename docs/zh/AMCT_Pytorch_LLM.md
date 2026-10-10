@@ -274,7 +274,7 @@ python -m amct_pytorch.deploy \
 | `--trust_remote_code` | 默认关闭 | 是否允许 HuggingFace 模型仓执行自定义代码。传入该开关时启用；DeepSeek V3.2、DeepSeek V4 等依赖本地模型实现的模型必须启用，其他模型未启用时会给出 Warning。 |
 | `--device` | `npu:0` | 指定运行设备。建议选择NPU/GPU，以加速计算。 |
 | `--granularity` | `block` | 工作粒度，即量化或处理的单位，按子命令校验合法值：<br> `block`：按模块块处理（更细粒度，可能效果更好但耗时），所有子命令的默认值。<br> `model`：整个模型统一处理（整模型加载后前向，粗粒度，速度快），仅 `eval` 支持，`ptq` 中为预留接口。<br> `tensor`：按张（tensor）粒度转换权重（用于反量化或直转量化），仅 `deploy` 支持。 |
-| `--seed` | `0` | 随机种子，用于控制实验中随机行为的一致性（如数据采样、初始化等），设置为固定值可保证结果可复现。 |
+| `--seed` | `42` | 随机种子，用于控制实验中随机行为的一致性（如数据采样、初始化等），设置为固定值可保证结果可复现。 |
 | `--quant_target` | `[]`（`ptq` / `extract_ptq_data` **必填**；`deploy` 的 blockwise 导出**必填**） | 量化目标，取值：mlp（多层感知机）/ moe（混合专家）/ attn-linear（注意力线性层）/ attn-cache（注意力缓存）。各命令用法不同：`eval` 与 `deploy` 可同时指定多个（如 `--quant_target mlp attn-linear`）；`ptq` / `extract_ptq_data` 一次仅允许一个，多目标请分目标依次执行。`deploy` blockwise 中该参数决定构建并导出哪些量化模块，缺失时会静默导出未量化权重；`granularity=tensor` 时纯反量化（如 FP8/FP4 → BF16 权重转换）不使用该参数，tensorwise 直转量化（部分模型族，如 hy_v3 / glm5_2）仍需指定。 |
 | `--seq_len` | `4096` | 校准和评估时使用的输入序列长度。用于确定模型在处理多长文本时的表现（尤其在量化校准阶段很重要）。 可选值：`1024`、`2048`、`4096`|
 | `--data_dir` | 空字符串（`ptq` / `extract_ptq_data` **必填**） | PTQ 中间数据保存/读取目录：`extract_ptq_data` 的输出目录，`ptq` 从中读取。 |
@@ -295,7 +295,7 @@ python -m amct_pytorch.deploy \
 | 参数 | 默认值 | 含义 |
 |------|------|------|
 | `--eval_mode` | `bf16` | 评估模式，指定模型在计算困惑度（PPL）时使用的精度格式，支持如下两种格式：<br> `bf16`：半精度浮点数（BF16），常用于加速推理并保持较高精度。<br>`quant`：量化模式，可能指 INT8/INT4 等量化格式，用于降低内存和计算开销，但可能牺牲少量精度。 |
-| `--wikitext_final_out` | 空字符串 | WikiText 末端输出路径参数，用于指定WikiText 数据集处理后最终输出的文件路径，目前该参数预留。 |
+| `--wikitext_final_out` | 空字符串 | **【预留参数，暂不生效】** WikiText 末端输出路径参数，用于指定 WikiText 数据集处理后最终输出的文件路径。当前版本主链路（`eval` / `extract_ptq_data` / `ptq` / `deploy`）尚未读取该参数，传入的值不会生效，仅打印告警；参数本身予以保留，后续版本按需接通。 |
 
 说明：
 
@@ -316,7 +316,7 @@ python -m amct_pytorch.deploy \
 | `--bit_config` | `None` | YAML 格式的配置文件路径，该文件定义了具体的位宽策略。如果不提供此参数，则使用默认的 `W16A16` 配置。 |
 | `--algos` | `[]` | 启用的量化算法列表，算法会根据其注册的 `target` 自动应用到模型的权重（weight）、激活值（activation）或结构（structure）上。 |
 | `--is_per_tensor` | `False` | 对于LAC（Learned Activation Clipping，学习式激活裁剪）算法，是否使用 per-tensor统计信息来确定裁剪范围。 |
-| `--k_size` | `128` | 可学习的 Hadamard 类结构变换矩阵的尺寸。 |
+| `--k_size` | `128` | **【预留参数，暂不生效】** 可学习的 Hadamard 类结构变换矩阵的尺寸。当前版本该尺寸由各模型 `quant_module` 决定（固定为 128），该参数尚未接入，传入的值不会生效，仅打印告警；参数本身予以保留，后续版本按需接通。 |
 
 常用 `bit_config`：
 
@@ -324,7 +324,7 @@ python -m amct_pytorch.deploy \
 |------|------|
 | [bf16.yaml](../../amct_pytorch/configs/bf16.yaml) | 全部保持 16 bit。 |
 | [w8a8.yaml](../../amct_pytorch/configs/w8a8.yaml) | 全局 W8A8（权重激活都为8bit）。 |
-| [w4a8.yaml](../../amct_pytorch/configs/w4a8.yaml) | 全局 W4A8（权重8bit，激活4bit）。 |
+| [w4a8.yaml](../../amct_pytorch/configs/w4a8.yaml) | 全局 W4A8（权重4bit，激活8bit）。 |
 | [w4a4.yaml](../../amct_pytorch/configs/w4a4.yaml) | 全局 W4A4（权重激活都为4bit）。 |
 | [example_w4a8.yaml](../../amct_pytorch/configs/example_w4a8.yaml) | 自定义量化方案示例。 |
 
@@ -338,11 +338,11 @@ python -m amct_pytorch.deploy \
 |------|------|------|
 | `--cali_bsz` | `4` | PTQ 校准训练batch size。<br>PTQ过程中，需要使用一小部分数据（称为校准数据集）来调整量化参数（如缩放因子和零点），该参数定义了每次处理多少个样本进行校准。 |
 | `--base_lr` | `1e-5` | 基础学习率，该参数决定了模型参数在每次迭代中更新的步长。 |
-| `--optimizer` | `adamw` | 优化器，指定用于更新模型参数的算法；支持如下几种优化器。<br> `adamw`：Adam的改进版，通常能更好地处理权重衰减。<br>`adam`：经典的Adam优化器。<br/>`sgd`：随机梯度下降。<br/>`cayley：`一种较少见的优化器。 |
+| `--optimizer` | `adamw` | 优化器，指定用于更新模型参数的算法；支持如下几种优化器。<br> `adamw`：Adam的改进版，通常能更好地处理权重衰减。<br>`adam`：经典的Adam优化器。<br/>`sgd`：随机梯度下降。<br/>`signsgd`：基于梯度符号的随机梯度下降变体。 |
 | `--weight_decay` | `0.0` | 权重衰减，适用于部分优化器；一种正则化技术，通过在损失函数中加入一个与权重大小成正比的惩罚项，来防止模型过拟合。值为`0.0`表示在此优化过程中不使用权重衰减。 |
 | `--momentum` | `0.9` | SGD 动量。<br>当使用SGD优化器时，动量可以帮助加速收敛并帮助模型跳出局部最优解,它通过累积之前梯度的指数加权移动平均来更新参数。 |
 | `--lr_scheduler` | `cosine` | 学习率调度器，定义了在训练过程中如何动态地调整学习率；支持如下几种：<br> `none`：学习率保持不变。<br>`cosine`：余弦退火，学习率会按照余弦函数的曲线平滑地降低。<br/>`step`：阶梯式衰减，每隔固定的步数将学习率乘以一个系数。<br/>默认使用`cosine`，因为它能提供更平滑的学习率下降，有助于模型收敛到更好的状态。 |
-| `--min_lr` | `0.0` | 最小学习率参数，当前通用 scheduler 中未直接使用。<br>在使用某些调度器（如`cosine`或`step`）时，可以设置学习率的下限。即使调度器要求继续减小，学习率也不会低于这个值。 |
+| `--min_lr` | `0.0` | **【预留参数，暂不生效】** 最小学习率参数，用于设置学习率的下限。当前版本通用 scheduler 尚未读取该参数（`cosine` 调度器的 `eta_min` 恒为 `base_lr * 1e-3`），传入的值不会生效，仅打印告警；参数本身予以保留，后续版本按需接通。 |
 | `--lr_step_size` | `1` | StepLR 的 step size<br>该参数仅在`--lr_scheduler`设置为`step`时生效，它定义了每隔多少个epoch（轮次）对学习率进行一次衰减。 |
 | `--lr_gamma` | `0.1` | StepLR 的衰减系数。<br>该参数仅在`--lr_scheduler`为`step`时有效，它定义了每次衰减时学习率要乘以的系数。 |
 | `--epochs` | `15` | PTQ 优化 epoch 数，指定了校准和优化过程的总轮数，一个epoch意味着整个校准数据集被遍历一次。 |

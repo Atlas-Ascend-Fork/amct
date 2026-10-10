@@ -40,6 +40,11 @@ from amct_pytorch.common.models.llm.common.weight_path_validation import (
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY, register_dtype
 
 BLOCK = 32
+# Source scales are read one tensor at a time. Handles of the shards holding
+# them stay open for the duration of a single shard conversion, so the bound
+# only protects the file-descriptor count for exotic layouts that spread scales
+# over many shards.
+MAX_OPEN_SCALE_FILES = 8
 
 
 @MODEL_REGISTRY.register(
@@ -259,12 +264,18 @@ class DeepseekV41:
     def _convert_tensorwise_shard_a3(
         self, source_file, model_dir, original_weight_map, quant_layers, loaded_files
     ):
+        # Nothing read for this shard may outlive the call: the workflow hands
+        # the same dict to every shard of the export, so caching processed
+        # source shards there kept all of them resident and made peak host
+        # memory grow with the whole checkpoint instead of the working set of
+        # one shard. Only the source shard is materialised; scales are read one
+        # tensor at a time and never as whole shards.
+        del loaded_files
         source_path = resolve_safetensors_path(
             model_dir, source_file, self.safetensors_files
         )
-        if source_file not in loaded_files:
-            loaded_files[source_file] = load_file(str(source_path), device="cpu")
-        current_state_dict = loaded_files[source_file]
+        current_state_dict = load_file(str(source_path), device="cpu")
+        scale_files = {}
         new_state_dict = {}
         processed = set()
 
@@ -283,26 +294,22 @@ class DeepseekV41:
                 scale_name = weight_name.removesuffix(".weight") + ".scale"
                 if scale_name in original_weight_map:
                     scale_file = original_weight_map[scale_name]
-                    if scale_file not in loaded_files:
-                        scale_path = resolve_safetensors_path(
-                            model_dir, scale_file, self.safetensors_files
-                        )
-                        loaded_files[scale_file] = load_file(
-                            str(scale_path), device="cpu"
-                        )
-                    scale = loaded_files[scale_file].get(scale_name)
-                    if scale is None:
-                        raise ValueError(f"Missing source scale tensor: {scale_name}")
-                    loaded_files[scale_file][scale_name] = self._prepare_a3_scale(
-                        weight, scale
+                    scale = self._read_source_scale(
+                        model_dir, scale_file, scale_name, scale_files
                     )
+                    # The adapted scale reaches convert_state_dict through a
+                    # single-entry overlay, so the loaded shard is never
+                    # mutated and no adapted scale is retained afterwards.
+                    scale_overlay = {
+                        scale_file: {scale_name: self._prepare_a3_scale(weight, scale)}
+                    }
                     weight = convert_state_dict(
                         weight,
                         weight_name,
                         scale_name,
                         original_weight_map,
                         model_dir,
-                        loaded_files,
+                        scale_overlay,
                         block_size=BLOCK,
                         safetensors_files=self.safetensors_files,
                     )
@@ -340,6 +347,33 @@ class DeepseekV41:
         register_dtype()
         payload = quant_payload(DTYPE_REGISTRY.get("int"), weight_name, weight, bit)
         return adapt_ascend_payload(weight_name, payload)
+
+    def _read_source_scale(self, model_dir, scale_file, scale_name, open_files):
+        """Read one source scale tensor without materialising its whole shard.
+
+        ``open_files`` caches ``(handle, names)`` per shard for the duration of
+        a single shard conversion and is bounded by ``MAX_OPEN_SCALE_FILES``;
+        dropping an entry closes its file descriptor. ``names`` is the shard's
+        tensor-name set: ``handle.keys()`` rebuilds a fresh list of Python
+        strings on every call (roughly 0.3-0.6 ms at 2000 tensors, and it grows
+        with the shard), so caching it once per shard keeps the membership
+        check off the per-weight path.
+        """
+        entry = open_files.pop(scale_file, None)
+        if entry is None:
+            scale_path = resolve_safetensors_path(
+                model_dir, scale_file, self.safetensors_files
+            )
+            handle = safe_open(str(scale_path), framework="pt", device="cpu")
+            entry = (handle, frozenset(handle.keys()))
+            while len(open_files) >= MAX_OPEN_SCALE_FILES:
+                open_files.pop(next(iter(open_files)))
+        # Re-insert last so eviction drops the least recently used handle.
+        open_files[scale_file] = entry
+        handle, names = entry
+        if scale_name not in names:
+            raise ValueError(f"Missing source scale tensor: {scale_name}")
+        return handle.get_tensor(scale_name)
 
     @staticmethod
     def _prepare_a3_scale(weight, scale):
