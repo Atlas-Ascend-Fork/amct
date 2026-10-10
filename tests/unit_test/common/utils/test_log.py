@@ -61,6 +61,62 @@ def test_log_split_deco_shorter_than_length_returns_single_element():
     assert msg[0] == "short"
 
 
+def test_log_split_deco_plain_function_preserves_module_and_extra_arguments():
+    @log_split_deco(length=5)
+    def plain(message, module_name="AMCT", *extra):
+        return message, module_name, extra
+
+    assert plain("a" * 11, "custom", 7) == (["aaaaa", "aaaaa", "a"], "custom", (7,))
+    assert plain(module_name="custom", message="short") == (["short"], "custom", ())
+
+
+def test_log_split_deco_single_message_parameter():
+    @log_split_deco(length=5)
+    def plain(message):
+        return message
+
+    assert plain("hello") == ["hello"]
+
+
+def test_log_split_deco_static_and_class_methods():
+    class Messages:
+        @staticmethod
+        @log_split_deco(length=5)
+        def static(message, module_name="AMCT"):
+            return message, module_name
+
+        @classmethod
+        @log_split_deco(length=5)
+        def class_method(cls, message, module_name="AMCT"):
+            return cls, message, module_name
+
+    assert Messages.static("hello", module_name="custom") == (["hello"], "custom")
+    assert Messages.class_method(message="hello") == (Messages, ["hello"], "AMCT")
+
+
+def test_log_split_deco_keyword_only_message():
+    @log_split_deco(length=5)
+    def plain(*, message="hello", module_name="AMCT"):
+        return message, module_name
+
+    assert plain(module_name="custom") == (["hello"], "custom")
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda: None,
+        lambda self: None,
+        lambda *args: None,
+        lambda **kwargs: None,
+        lambda self, *args: None,
+    ],
+)
+def test_log_split_deco_rejects_missing_or_variadic_message_at_decoration(func):
+    with pytest.raises(ValueError, match="named message parameter"):
+        log_split_deco()(func)
+
+
 def test_logger_base_is_file_debug_level_true_when_file_handler_at_debug():
     import tempfile
 
@@ -175,3 +231,58 @@ def test_logger_logw_writes_warning_message():
 def test_logger_is_instantiated():
     assert LOGGER is not None
     assert isinstance(LOGGER, Logger)
+
+
+@pytest.fixture
+def file_logger(tmp_path):
+    """Own and close handlers before temporary log-directory cleanup."""
+    logger = LoggerBase(str(tmp_path), "keyword-message.log")
+    logger.set_debug_level("error", "debug")
+    yield logger, tmp_path / "keyword-message.log"
+    for handler in (logger.console_handler, logger.file_handler):
+        logger.logger.removeHandler(handler)
+        handler.close()
+
+
+@pytest.mark.parametrize(
+    "method,message_name",
+    [
+        ("logd", "debug_message"),
+        ("logi", "info_message"),
+        ("logw", "warning_message"),
+        ("loge", "error_message"),
+    ],
+)
+@pytest.mark.parametrize("module_first", [False, True])
+def test_logger_keyword_order_preserves_complete_message(
+    file_logger, method, message_name, module_first
+):
+    logger, path = file_logger
+    items = [(message_name, "hello world"), ("module_name", "CLI")]
+    if module_first:
+        items.reverse()
+    getattr(logger, method)(**dict(items))
+    logger.file_handler.flush()
+    messages = [line.split("[AMCT]:", 1)[1] for line in path.read_text().splitlines()]
+    assert messages == ["[CLI]: hello world"]
+
+
+@pytest.mark.parametrize("module_first", [False, True])
+def test_logger_keyword_order_preserves_long_message_chunks(file_logger, module_first):
+    logger, path = file_logger
+    items = [("info_message", "a" * 550), ("module_name", "CLI")]
+    if module_first:
+        items.reverse()
+    logger.logi(**dict(items))
+    logger.file_handler.flush()
+    messages = [line.split("[AMCT]:", 1)[1] for line in path.read_text().splitlines()]
+    assert messages == ["[CLI]: " + "a" * 500, "[CLI]: " + "a" * 50]
+
+
+@pytest.mark.parametrize("method", ["logd", "logi", "logw", "loge"])
+def test_logger_positional_message_and_module_compatibility(file_logger, method):
+    logger, path = file_logger
+    getattr(logger, method)("hello world", "CLI")
+    logger.file_handler.flush()
+    messages = [line.split("[AMCT]:", 1)[1] for line in path.read_text().splitlines()]
+    assert messages == ["[CLI]: hello world"]
