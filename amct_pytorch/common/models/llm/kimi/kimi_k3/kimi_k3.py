@@ -9,7 +9,6 @@ import re
 from pathlib import Path
 
 import torch
-import yaml
 from safetensors import safe_open
 from safetensors.torch import load_file, save_file
 
@@ -71,27 +70,6 @@ class KimiK3:
         self.model_path = args.model
         self.quant_dtype = getattr(args, "quant_dtype", "")
         self.quant_target = getattr(args, "quant_target", []) or []
-        output = Path(args.output_dir).resolve()
-        source = Path(self.model_path).resolve()
-        if (
-            output == source
-            or source.is_relative_to(output)
-            or output.is_relative_to(source)
-        ):
-            raise ValueError("Kimi source and output directories must not overlap")
-        if output.exists() and (not output.is_dir() or any(output.iterdir())):
-            raise ValueError("Kimi output directory must be new or empty")
-        bit_config = getattr(args, "bit_config", None)
-        if bit_config:
-            fixed = Path(__file__).resolve().parents[5] / "configs" / "infer_0918.yaml"
-            if yaml.safe_load(
-                Path(bit_config).read_text(encoding="utf-8")
-            ) != yaml.safe_load(fixed.read_text(encoding="utf-8")):
-                raise ValueError(
-                    "Kimi-K3 requires the fixed infer_0918.yaml bit_config"
-                )
-        if set(self.quant_target) - {"moe", "attn-linear"}:
-            raise ValueError("Kimi-K3 tensorwise targets are moe and attn-linear")
         self.config = json.loads(
             (Path(self.model_path) / "config.json").read_text(encoding="utf-8")
         )
@@ -103,12 +81,6 @@ class KimiK3:
                 .get("linear_attn_config", {})
                 .get("full_attn_layers")
             )
-            if not isinstance(layers, list) or any(
-                type(i) is not int or i <= 0 for i in layers
-            ):
-                raise ValueError(
-                    "Kimi-K3 config must define positive full_attn_layers (one-based)"
-                )
             self._tensorwise_mla_layer_indices = {i - 1 for i in layers}
 
     def _load_weight_map(self):
