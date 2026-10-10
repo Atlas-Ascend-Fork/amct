@@ -277,5 +277,70 @@ class TestMergeMutation(unittest.TestCase):
             self.assertFalse(torch.allclose(baked(x), unbaked(x)))
 
 
+class TestMultipleRouterGroups(unittest.TestCase):
+    @staticmethod
+    def _bake(gate, x, groups):
+        torch.manual_seed(42)
+        probs = torch.softmax(gate(x).float(), -1).detach()
+        hidden = [torch.randn(x.shape[0], 3) for _ in range(gate.out_features)]
+        layers = [nn.Linear(3, 2, bias=False) for _ in hidden]
+        outs = torch.stack([layer(h).detach() for layer, h in zip(layers, hidden)])
+        merged = copy.deepcopy(gate)
+        with torch.no_grad():
+            moe_output_merge._bake_merged_weights(
+                merged, groups, hidden, [None] * len(hidden), probs, outs, layers, x
+            )
+        return merged, probs
+
+    def test_uniform_group_probabilities(self):
+        x = torch.zeros(16, 2)
+        gate = nn.Linear(2, 4)
+        with torch.no_grad():
+            gate.weight.zero_()
+            gate.bias.zero_()
+        merged, _ = self._bake(gate, x, {0: [0, 1], 2: [2, 3]})
+        actual = torch.softmax(merged(x)[:, [0, 2]], -1)
+        torch.testing.assert_close(actual, torch.full_like(actual, 0.5))
+
+    def test_weighted_groups_and_singleton(self):
+        groups = {0: [0, 1], 2: [2, 3], 4: [4]}
+        for use_bias in (False, True):
+            with self.subTest(bias=use_bias):
+                x = torch.zeros(16, 2)
+                x[:, 0] = 1
+                gate = nn.Linear(2, 5, bias=use_bias)
+                with torch.no_grad():
+                    gate.weight.zero_()
+                    gate.weight[:, 0] = torch.tensor([0.0, 0.5, 1.0, 1.5, -1.0])
+                    if use_bias:
+                        gate.bias.zero_()
+                merged, probs = self._bake(gate, x, groups)
+                expected = torch.stack(
+                    [probs[:, grp].sum(1) for grp in groups.values()], -1
+                )
+                actual = torch.softmax(merged(x)[:, list(groups)], -1)
+                torch.testing.assert_close(actual, expected, rtol=1e-5, atol=1e-6)
+
+    def test_group_processing_order_independent(self):
+        torch.manual_seed(17)
+        x = torch.randn(32, 3)
+        for use_bias in (False, True):
+            with self.subTest(bias=use_bias):
+                gate = nn.Linear(3, 5, bias=use_bias)
+                forward, _ = self._bake(gate, x, {0: [0, 1], 2: [2, 3], 4: [4]})
+                reverse, _ = self._bake(gate, x, {4: [4], 2: [2, 3], 0: [0, 1]})
+                torch.testing.assert_close(forward.weight, reverse.weight)
+                if use_bias:
+                    torch.testing.assert_close(forward.bias, reverse.bias)
+
+    def test_singleton_router_row_unchanged(self):
+        torch.manual_seed(17)
+        x = torch.randn(32, 3)
+        gate = nn.Linear(3, 5)
+        merged, _ = self._bake(gate, x, {0: [0, 1], 2: [2, 3], 4: [4]})
+        torch.testing.assert_close(merged.weight[4], gate.weight[4], rtol=0, atol=0)
+        torch.testing.assert_close(merged.bias[4], gate.bias[4], rtol=0, atol=0)
+
+
 if __name__ == "__main__":
     unittest.main()
