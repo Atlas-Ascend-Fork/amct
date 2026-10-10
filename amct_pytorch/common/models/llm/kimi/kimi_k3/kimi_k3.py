@@ -236,14 +236,6 @@ class KimiK3:
     ):
         files = collect_safetensors_files(model_dir)
         validate_weight_map(model_dir, original_weight_map, files)
-        for name in original_weight_map:
-            if (
-                name.endswith(".weight_packed")
-                and name.removesuffix(".weight_packed") + ".weight"
-                in original_weight_map
-            ):
-                raise ValueError(f"Duplicate Kimi weight/weight_packed module: {name}")
-
         def load(name):
             if name not in original_weight_map:
                 raise ValueError(f"Missing Kimi weight/scale in index: {name}")
@@ -279,25 +271,6 @@ class KimiK3:
             scale = None
             if lowbit:
                 scale = load(scale_name)
-                if weight.ndim != 2:
-                    raise ValueError(f"Invalid Kimi MX weight shape: {name}")
-                width = weight.shape[-1] * (2 if packed else 1)
-                if (
-                    weight.ndim != 2
-                    or scale.dtype != torch.uint8
-                    or scale.shape != (weight.shape[0], width // 32)
-                    or width % 32
-                ):
-                    raise ValueError(
-                        f"Invalid Kimi MX weight/scale shape or dtype: {name}"
-                    )
-                if packed and weight.dtype not in (torch.uint8, torch.int8):
-                    raise ValueError(f"Kimi packed weight must be INT8/UINT8: {name}")
-                if not packed and weight.dtype not in (
-                    torch.float8_e4m3fn,
-                    torch.float8_e5m2,
-                ):
-                    raise ValueError(f"Kimi MXFP8 weight must have FP8 dtype: {name}")
             if (
                 self.quant_dtype == "mxfp"
                 and module in quant_layers
@@ -313,17 +286,6 @@ class KimiK3:
                 )
             output_name = module + ".weight"
             if self.quant_dtype == "mxfp" and module in quant_layers:
-                if (
-                    weight.ndim != 2
-                    or not weight.is_floating_point()
-                    or weight.numel() == 0
-                    or weight.shape[-1] % 32
-                ):
-                    raise ValueError(
-                        f"Kimi selected weight must be nonempty floating 2-D with groups of 32: {name}"
-                    )
-                if not torch.isfinite(weight).all():
-                    raise ValueError(f"Kimi selected weight must be finite: {name}")
                 payload = quant_payload(
                     QuantDequantMx, output_name, weight, quant_layers[module]
                 )
