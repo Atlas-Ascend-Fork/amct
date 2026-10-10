@@ -56,14 +56,6 @@ class KimiK3:
     def __init__(self, args):
         if getattr(args, "granularity", None) != "tensor":
             raise ValueError("Kimi-K3 supports tensorwise deploy only")
-        if (
-            getattr(args, "deploy_format", "legacy") != "legacy"
-            or getattr(args, "deploy_selection", None) is not None
-            or getattr(args, "quant_layers_config", None)
-        ):
-            raise ValueError(
-                "Kimi-K3 supports legacy deploy without JSON selection only"
-            )
         if getattr(args, "quant_dtype", "") not in ("", None, "mxfp", "bf16"):
             raise ValueError("Kimi-K3 supports mxfp or BF16 tensorwise deploy only")
         self.args = args
