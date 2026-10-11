@@ -67,14 +67,16 @@ class LlmExtractPtqDataWorkflow:
 
     def run(self):
         sink_id = self.setup()
-        if self.granularity == "block":
-            results = self._run_blockwise()
-        else:
-            raise ValueError(
-                f"Currently unsupported granularity '{self.granularity}' for extract ptq data."
-            )
-        logger.remove(sink_id)
-        return results
+        try:
+            if self.granularity == "block":
+                results = self._run_blockwise()
+            else:
+                raise ValueError(
+                    f"Currently unsupported granularity '{self.granularity}' for extract ptq data."
+                )
+            return results
+        finally:
+            logger.remove(sink_id)
 
     def _build_pipeline(self):
         model_cls = MODEL_REGISTRY.get(self.model_name)
