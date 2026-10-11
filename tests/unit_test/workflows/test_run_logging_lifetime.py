@@ -24,7 +24,12 @@ from loguru import logger
 import pytest
 
 from amct_pytorch.common.utils.run_logging import setup_run_logging
+from amct_pytorch.workflows.llm_extract_ptq_data import LlmExtractPtqDataWorkflow
+from amct_pytorch.workflows.llm_ptq import LlmPtqWorkflow
 
+# Import the workflow modules at collection time, before any fixture creates a
+# loguru sink: their transitive imports (e.g. compressed_tensors) reconfigure
+# the root logger with clear_loggers=True and would silently drop that sink.
 pytestmark = pytest.mark.cpu
 
 
