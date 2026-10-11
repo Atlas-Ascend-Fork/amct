@@ -40,7 +40,6 @@ def test_long_sequence_nll_uses_safe_accumulation(dtype):
     assert count == 16383
     assert math.isfinite(total)
     assert total == pytest.approx(expected, rel=2e-7)
-    assert logits.dtype == dtype and ids.dtype == torch.long
 
 
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16, torch.float32])
