@@ -36,6 +36,19 @@ class QuantLinear(nn.Module):
         self.cached_eval_weight = None
         self._cached_transform_key = None
 
+    def _apply(self, fn, recurse=True):
+        result = super()._apply(fn, recurse=recurse)
+        # Quantized weights are derived from the parameters' device and dtype.
+        self.cached_eval_weight = None
+        self._cached_transform_key = None
+        return result
+
+    def _load_from_state_dict(self, *args, **kwargs):
+        # Derived weights must be rebuilt after checkpoint parameters are loaded.
+        self.cached_eval_weight = None
+        self._cached_transform_key = None
+        return super()._load_from_state_dict(*args, **kwargs)
+
     def forward(
         self,
         hidden_states,
