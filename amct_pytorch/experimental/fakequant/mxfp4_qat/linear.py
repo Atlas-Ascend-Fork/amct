@@ -123,7 +123,7 @@ def convert_to_mxfp4_qat(
     Returns:
         The same *module*, with its linear layers replaced.
     """
-    return _convert(module, config, skip_names, prefix="")
+    return _convert(module, config, skip_names, prefix="", replacements={})
 
 
 def _convert(
@@ -131,15 +131,23 @@ def _convert(
     config: MXFP4QATConfig | None,
     skip_names: tuple[str, ...],
     prefix: str,
+    replacements: dict[nn.Module, MXFP4QATLinear],
 ) -> nn.Module:
-    for name, child in list(module.named_children()):
+    # named_children() removes duplicate modules, so an alias could stay in float.
+    for name, child in list(module._modules.items()):
+        if child is None:
+            continue
         path = f"{prefix}{name}"
         if any(pattern in path for pattern in skip_names):
             continue
         if isinstance(child, MXFP4QATLinear):
             continue
         if isinstance(child, nn.Linear):
-            setattr(module, name, MXFP4QATLinear.from_linear(child, config))
+            if child not in replacements:
+                replacements[child] = MXFP4QATLinear.from_linear(child, config)
+            setattr(module, name, replacements[child])
         else:
-            _convert(child, config, skip_names, prefix=f"{path}.")
+            _convert(
+                child, config, skip_names, prefix=f"{path}.", replacements=replacements
+            )
     return module
