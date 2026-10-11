@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+from collections import namedtuple
 from types import SimpleNamespace
 
 import pytest
@@ -83,3 +84,17 @@ def test_public_diagnose_does_not_report_valid_pruned_output_as_failure(kind):
     assert list(state) == list(model.state_dict())
     for name, value in model.state_dict().items():
         torch.testing.assert_close(value, state[name], rtol=0, atol=0)
+
+
+@pytest.mark.parametrize("aux_finite", [True, False])
+@pytest.mark.parametrize("logits_finite", [True, False])
+def test_namedtuple_diagnostic_prefers_named_logits(aux_finite, logits_finite):
+    output_type = namedtuple("DiagnosticOutput", ["aux", "logits"])
+
+    class NamedOutput(nn.Module):
+        def forward(self, inputs):
+            aux = inputs if aux_finite else inputs * torch.nan
+            logits = inputs if logits_finite else inputs * torch.nan
+            return output_type(aux, logits)
+
+    assert _forward_ok(NamedOutput(), torch.ones(3, 4), None) is logits_finite

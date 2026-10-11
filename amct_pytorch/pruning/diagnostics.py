@@ -86,7 +86,7 @@ def _forward_ok(
         model.eval()
         with torch.no_grad():
             out = model(*args, **kwargs)
-        logits = _unwrap_logits(out)
+        logits = out.logits if hasattr(out, "logits") else _unwrap_logits(out)
         return bool(torch.isfinite(logits).all().item())
     except Exception as exc:
         LOGGER.logw(
