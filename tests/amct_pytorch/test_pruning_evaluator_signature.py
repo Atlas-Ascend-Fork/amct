@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import inspect
+
 import pytest
 import torch
 from torch import nn
@@ -136,3 +138,29 @@ def test_none_evaluator_result_remains_rejected():
 
     with pytest.raises(TypeError, match="returned None"):
         _make_evaluator_quality(NoneEvaluator(), 3)(nn.Linear(4, 2))
+
+
+def test_uninspectable_builtin_evaluator_keeps_positional_fallback():
+    class HashCountModel(nn.Identity):
+        def __init__(self):
+            super().__init__()
+            self.hash_calls = 0
+
+        def __hash__(self):
+            self.hash_calls += 1
+            return object.__hash__(self)
+
+    model = HashCountModel()
+    scores = {"existing unrelated score": 0.5}
+
+    class BuiltinEvaluator:
+        evaluate = scores.pop
+
+    evaluator = BuiltinEvaluator()
+    with pytest.raises(ValueError):
+        inspect.signature(evaluator.evaluate)
+    # Real dict.pop(model, iterations) uses iterations as the default value.
+    # Omitting iterations raises KeyError; repeated calls increment hash_calls.
+    assert _make_evaluator_quality(evaluator, 3)(model) == 3.0
+    assert model.hash_calls == 1
+    assert scores == {"existing unrelated score": 0.5}
