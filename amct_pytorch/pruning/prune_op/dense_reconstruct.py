@@ -211,7 +211,9 @@ def _collect_consumer_acts(model, targets, context, device):
         mod = get_submodule(model, cp)
 
         def hook(mod, inp, out, key=id(t)):
-            acts[key].append(inp[0].detach().reshape(-1, inp[0].shape[-1]).float())
+            acts[key].append(
+                inp[0].detach().reshape(-1, inp[0].shape[-1]).float().clone()
+            )
 
         handles.append(mod.register_forward_hook(hook))
 
