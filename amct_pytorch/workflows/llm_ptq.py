@@ -92,16 +92,19 @@ class LlmPtqWorkflow:
 
     def run(self):
         sink_id = self.setup()
-
-        solver_cls = SOLVER_REGISTRY.get(self.granularity)
-        if self.granularity == "block":
-            results = self._run_blockwise(solver_cls)
-        elif self.granularity == "model":
-            results = self._run_modelwise(solver_cls)
-        else:
-            raise ValueError(f"Unsupported solver granularity '{self.granularity}'.")
-        logger.remove(sink_id)
-        return results
+        try:
+            solver_cls = SOLVER_REGISTRY.get(self.granularity)
+            if self.granularity == "block":
+                results = self._run_blockwise(solver_cls)
+            elif self.granularity == "model":
+                results = self._run_modelwise(solver_cls)
+            else:
+                raise ValueError(
+                    f"Unsupported solver granularity '{self.granularity}'."
+                )
+            return results
+        finally:
+            logger.remove(sink_id)
 
     def _prepare_experiment_dirs(self):
         self.args.log_dir = os.path.join(self.args.output_dir, "logs")
