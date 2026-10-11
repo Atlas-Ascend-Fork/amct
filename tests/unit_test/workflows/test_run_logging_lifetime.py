@@ -34,8 +34,8 @@ pytestmark = pytest.mark.cpu
 
 
 WORKFLOWS = [
-    ("llm_ptq", "LlmPtqWorkflow"),
-    ("llm_extract_ptq_data", "LlmExtractPtqDataWorkflow"),
+    ("llm_ptq", LlmPtqWorkflow),
+    ("llm_extract_ptq_data", LlmExtractPtqDataWorkflow),
 ]
 
 
@@ -54,9 +54,8 @@ def tracked_sink(tmp_path):
 
 
 def make_workflow(monkeypatch, entry, sink_id, operation):
-    module_name, class_name = entry
+    module_name, cls = entry
     module = importlib.import_module("amct_pytorch.workflows." + module_name)
-    cls = getattr(module, class_name)
     workflow = cls.__new__(cls)
     workflow.granularity = "block"
     workflow.model_name = "test_model"
