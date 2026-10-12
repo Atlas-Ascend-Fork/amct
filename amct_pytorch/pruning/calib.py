@@ -37,7 +37,7 @@ def _unwrap_logits(out: Any) -> torch.Tensor:
 
 def nll_from_logits(logits: torch.Tensor, ids: torch.Tensor) -> tuple[float, int]:
     """Next-token cross-entropy sum and token count for one batch (logits[:, :-1] vs ids[:, 1:])."""
-    target = ids[:, 1:].reshape(-1)
+    target = ids[:, 1:].reshape(-1).to(torch.long)
     nll_sum = F.cross_entropy(
         logits[:, :-1].reshape(-1, logits.shape[-1]),
         target,
