@@ -411,3 +411,40 @@ def test_quant_dequant_tensor_mxfp8_round_trip_shape():
             elif hasattr(torch.Tensor, "npu"):
                 delattr(torch.Tensor, "npu")
     assert out.shape == t.shape
+
+
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16, torch.float32])
+@pytest.mark.parametrize("power", [-24, -23, -20, -16, -15, -14, -13, 0, 15])
+@pytest.mark.parametrize("length", [32, 50])
+def test_mxfp4_scaling_preserves_representable_power_of_two(dtype, power, length):
+    tensor = torch.zeros((1, length), dtype=dtype, device="cpu")
+    tensor[0, 0] = 2.0**power
+    tensor[0, 1] = -(2.0**power)
+    shared = qu.cal_shared_exponent(tensor)
+    normalized = qu.scale_input_by_shared_exponents(tensor, -shared.to(dtype))
+    assert normalized.dtype == dtype
+    assert torch.isfinite(normalized).all()
+    assert normalized[0, :2].tolist() == [4.0, -4.0]
+    assert torch.count_nonzero(normalized[0, 2:]) == 0
+    encoded = qu.float_to_fp4e2m1(normalized)
+    restored = qu.scale_input_by_shared_exponents(encoded, shared)
+    assert restored.dtype == dtype
+    assert torch.equal(restored, tensor)
+
+
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16, torch.float32])
+def test_mxfp4_scaling_preserves_zero_blocks(dtype):
+    tensor = torch.zeros((2, 50), dtype=dtype, device="cpu")
+    shared = qu.cal_shared_exponent(tensor)
+    scaled = qu.scale_input_by_shared_exponents(tensor, -shared)
+    assert scaled.dtype == dtype
+    assert torch.equal(scaled, tensor)
+
+
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_mxfp4_scaling_retains_mixed_dtype_result(dtype):
+    tensor = torch.tensor([[2.0**-16]], dtype=dtype, device="cpu")
+    shared = torch.tensor([[18.0]], dtype=torch.float16, device="cpu")
+    scaled = qu.scale_input_by_shared_exponents(tensor, shared)
+    assert scaled.dtype == dtype
+    assert scaled.item() == 4.0
