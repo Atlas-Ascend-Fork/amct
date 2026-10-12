@@ -68,7 +68,7 @@ GRANULARITY = "tensor"
 SEQ_LEN = 4096
 NSAMPLES = 128
 
-ALL_QUANT_TARGETS = ["mlp", "moe", "attn-linear", "attn-cache"]
+ALL_QUANT_TARGETS = ["moe", "attn-linear", "attn-cache"]
 PTQ_TARGETS = ["moe"]
 QUANT_DTYPE = "int"
 PTQ_ALGOS = ["lwc"]
