@@ -388,17 +388,17 @@
 </tr>
 <tr id="row2434105415594"><th class="firstcol" valign="top" width="20.52%" id="mcps1.2.3.3.1"><p id="p13434115405916"><a name="p13434115405916"></a><a name="p13434115405916"></a><span>取值范围</span></p>
 </th>
-<td class="cellrowborder" valign="top" width="79.47999999999999%" headers="mcps1.2.3.3.1 "><p id="p8434854105914"><a name="p8434854105914"></a><a name="p8434854105914"></a>8或16</p>
+<td class="cellrowborder" valign="top" width="79.47999999999999%" headers="mcps1.2.3.3.1 "><p id="p8434854105914"><a name="p8434854105914"></a><a name="p8434854105914"></a>[4,6,7,8,16]</p>
 </td>
 </tr>
 <tr id="row10434135414594"><th class="firstcol" valign="top" width="20.52%" id="mcps1.2.3.4.1"><p id="p743495495913"><a name="p743495495913"></a><a name="p743495495913"></a><span>参数说明</span></p>
 </th>
-<td class="cellrowborder" valign="top" width="79.47999999999999%" headers="mcps1.2.3.4.1 "><p id="p135891417116"><a name="p135891417116"></a><a name="p135891417116"></a>当前仅支持配置为8，表示采用INT8量化位宽。</p>
+<td class="cellrowborder" valign="top" width="79.47999999999999%" headers="mcps1.2.3.4.1 "><p id="p135891417116"><a name="p135891417116"></a><a name="p135891417116"></a>激活量化：参数取值为[8,16]<br>权重量化：参数取值为[4,6,7,8]</p>
 </td>
 </tr>
 <tr id="row18435125416596"><th class="firstcol" valign="top" width="20.52%" id="mcps1.2.3.5.1"><p id="p11435954165919"><a name="p11435954165919"></a><a name="p11435954165919"></a><span>推荐配置</span></p>
 </th>
-<td class="cellrowborder" valign="top" width="79.47999999999999%" headers="mcps1.2.3.5.1 "><p id="p943565405919"><a name="p943565405919"></a><a name="p943565405919"></a>-</p>
+<td class="cellrowborder" valign="top" width="79.47999999999999%" headers="mcps1.2.3.5.1 "><p id="p943565405919"><a name="p943565405919"></a><a name="p943565405919"></a>当前仅支持配置为8，表示采用INT8量化位宽。</p>
 </td>
 </tr>
 <tr id="row1743510544597"><th class="firstcol" valign="top" width="20.52%" id="mcps1.2.3.6.1"><p id="p15435175485919"><a name="p15435175485919"></a><a name="p15435175485919"></a>必选或可选</p>
@@ -738,4 +738,3 @@
 </tr>
 </tbody>
 </table>
-

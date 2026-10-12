@@ -237,13 +237,21 @@ def quant_dequant_weight(tensor, wts_type, scale, offset=None, group_size=None):
     quant_weight so per-channel scale (shape [Cout]) broadcasts correctly
     against weight (shape [Cout, Cin, ...]).
     """
-    if not group_size:
+    if group_size:
+        return quant_dequant_tensor(tensor, wts_type, scale, offset, group_size)
+
+    scale = scale.reshape(-1)
+    offset = offset.reshape(-1) if offset is not None else None
+    if tensor.dim() == 2:
         tensor = tensor.transpose(-1, -2).contiguous()
-        scale = scale.reshape(-1)
-        offset = offset.reshape(-1) if offset is not None else None
         dq = quant_dequant_tensor(tensor, wts_type, scale, offset)
         return dq.transpose(-1, -2).contiguous()
-    return quant_dequant_tensor(tensor, wts_type, scale, offset, group_size)
+
+    if scale.numel() > 1:
+        scale = scale.reshape(-1, *([1] * (tensor.dim() - 1)))
+        if offset is not None:
+            offset = offset.reshape(-1, *([1] * (tensor.dim() - 1)))
+    return quant_dequant_tensor(tensor, wts_type, scale, offset)
 
 
 def apply_smooth_weight(smooth_factor, ori_weight):
