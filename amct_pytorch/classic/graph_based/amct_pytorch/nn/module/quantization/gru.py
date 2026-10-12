@@ -247,6 +247,6 @@ class GRUMiddleWare(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_x, grad_h):
-        """backward funtion required by torch torch.autograd"""
+        """backward function required by torch.autograd"""
         ret = (None,) * 11
         return ret

@@ -227,7 +227,7 @@ def parse_dump_data(file_path, with_type=False):
         shape_info = list(np.frombuffer(dump_data[4 : 4 + dim_info * 4], np.float32))
         shape = list(map(int, shape_info))
         info_length = 4 + dim_info * 4
-    # 1) keep same with c++; 2) each amct shoule be same if use this function
+    # 1) keep same with c++; 2) each amct should be same if use this function
     type_mappint = {'0': np.float32, '1': np.double, '2': np.int32, '3': np.float16}
     data_info = np.frombuffer(dump_data[info_length:], type_mappint.get(str(type_info)))
     shape = list(map(int, shape))

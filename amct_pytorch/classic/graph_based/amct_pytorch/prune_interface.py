@@ -57,7 +57,7 @@ def create_prune_retrain_model(model, input_data, config_defination, record_file
     config_file: retrain quantize configuration json file
     model: user pytorch model's model file
     record_file: temporary file to store scale and offset
-    input_data: used to compile model, can be ramdom data
+    input_data: used to compile model, can be random data
 
     Return: model: modified pytorch model for prune.
     """
@@ -107,7 +107,7 @@ def restore_prune_retrain_model(
     Parameter:
     model: user pytorch model's model file
     record_file: temporary file to store scale and offset
-    input_data: used to compile model, can be ramdom data
+    input_data: used to compile model, can be random data
     config_defination: used to make prune config.
     pth_file: user prune training checkpoint file path.
     state_dict_name: key value of weight parameter in pth_file.
