@@ -157,7 +157,11 @@ def _reconstruct_one_target(
         w_sal = _fake_quant_per_outchannel(w_cons, quant_aware_bits)
     else:
         w_sal = w_cons
-    saliency = w_sal.norm(dim=0) * acts_h.pow(2).mean(0).sqrt()
+    # Scale before squaring to preserve finite large and small activation RMS.
+    act_scale = acts_h.abs().amax(dim=0)
+    act_scale = act_scale.masked_fill(act_scale == 0, 1.0)
+    rms = (acts_h / act_scale).square().mean(0).sqrt() * act_scale
+    saliency = w_sal.norm(dim=0) * rms
     keep_idx = topk_keep_indices(saliency, prune_ratio, config.min_neurons)
     if len(keep_idx) >= hidden:
         return
