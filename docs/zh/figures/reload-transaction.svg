@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="600" viewBox="0 0 1400 600" role="img" aria-labelledby="title desc">
+<title id="title">reload 两阶段事务</title>
+<desc id="desc">Reader 先完成所有验证和替换模块构造，再一次性提交到 live model；失败时撤销已经提交的替换。</desc>
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#197D8C"/></marker><marker id="arrowGray" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#667078"/></marker></defs>
+<rect x="0" y="0" width="1400" height="600" fill="white"/>
+<text x="46" y="45" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:30px;font-weight:700;fill:#197D8C;text-anchor:start">reload 的核心：先准备，后提交</text>
+<text x="46" y="77" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#667078;text-anchor:start">这样第二层文件损坏时，第一层不会留在“已经量化、第二层还是浮点”的半成品状态。</text>
+<line x1="46" y1="100" x2="1354" y2="100" stroke="#D5DEDC" stroke-width="2"/>
+<rect x="55" y="175" width="275" height="190" rx="16" fill="#E4ECE6" stroke="#4F856F" stroke-width="2"/>
+<text x="192" y="218" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:23px;font-weight:700;fill:#4F856F;text-anchor:middle">1. Validate</text>
+<text x="192" y="268" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">manifest / 文件</text>
+<text x="192" y="296" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">model_type / dtype</text>
+<text x="192" y="324" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">layer / schema</text>
+<rect x="395" y="175" width="275" height="190" rx="16" fill="#F6EEDB" stroke="#D99A2B" stroke-width="2"/>
+<text x="532" y="218" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:23px;font-weight:700;fill:#D99A2B;text-anchor:middle">2. Stage</text>
+<text x="532" y="268" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">deep copy 原层</text>
+<text x="532" y="296" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">构造 quant module</text>
+<text x="532" y="324" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">加载 tensor 参数</text>
+<rect x="735" y="175" width="275" height="190" rx="16" fill="#E1EEEE" stroke="#4F856F" stroke-width="2"/>
+<text x="872" y="218" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:23px;font-weight:700;fill:#4F856F;text-anchor:middle">3. Commit</text>
+<text x="872" y="268" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">统一 setattr</text>
+<text x="872" y="296" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">安装所有 replacement</text>
+<text x="872" y="324" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">进入 deploy pass</text>
+<line x1="330" y1="270" x2="390" y2="270" stroke="#197D8C" stroke-width="3" marker-end="url(#arrow)"/>
+<line x1="670" y1="270" x2="730" y2="270" stroke="#197D8C" stroke-width="3" marker-end="url(#arrow)"/>
+<line x1="875" y1="365" x2="875" y2="460" stroke="#D86648" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="730" y="470" width="290" height="70" rx="12" fill="#F5E4DE" stroke="#D86648" stroke-width="2"/>
+<text x="875" y="500" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:20px;font-weight:700;fill:#D86648;text-anchor:middle">任一步失败</text>
+<text x="875" y="527" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:16px;font-weight:600;fill:#D86648;text-anchor:middle">逆序 rollback / live model 不变</text>
+<rect x="1090" y="175" width="265" height="190" rx="16" fill="#EEEAE1" stroke="#667078" stroke-width="2"/>
+<text x="1222" y="218" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:23px;font-weight:700;fill:#667078;text-anchor:middle">Live model</text>
+<text x="1222" y="270" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">commit 前：浮点层</text>
+<text x="1222" y="298" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">commit 后：全部量化层</text>
+<text x="1222" y="326" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">失败后：恢复原对象</text>
+<line x1="1020" y1="270" x2="1085" y2="270" stroke="#197D8C" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="55" y="555" width="300" height="35" rx="18" fill="#F6EEDB" stroke="#D99A2B" stroke-width="1.5"/>
+<text x="205.0" y="577.75" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:15px;font-weight:600;fill:#D99A2B;text-anchor:middle">不等于整个 convert 可回滚</text>
+<rect x="380" y="555" width="310" height="35" rx="18" fill="#E4ECE6" stroke="#4F856F" stroke-width="1.5"/>
+<text x="535.0" y="577.75" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:15px;font-weight:600;fill:#197D8C;text-anchor:middle">不重新运行 calibration / Hessian</text>
+<rect x="715" y="555" width="300" height="35" rx="18" fill="#E1EEEE" stroke="#4F856F" stroke-width="1.5"/>
+<text x="865.0" y="577.75" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:15px;font-weight:600;fill:#4F856F;text-anchor:middle">错误发生在第一次 setattr 前</text>
+</svg>

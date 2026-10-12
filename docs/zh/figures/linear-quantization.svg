@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="650" viewBox="0 0 1400 650" role="img" aria-labelledby="title desc">
+<title id="title">线性层量化示意</title>
+<desc id="desc">用 Y = XWᵀ + b 展示原始线性层、量化参数和 W4A16 的含义。</desc>
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#197D8C"/></marker><marker id="arrowGray" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#667078"/></marker></defs>
+<rect x="0" y="0" width="1400" height="650" fill="white"/>
+<text x="46" y="45" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:30px;font-weight:700;fill:#197D8C;text-anchor:start">先看一层 Linear：保存的量化结果到底在改变什么</text>
+<text x="46" y="77" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#667078;text-anchor:start">图中的 q 是存储/计算时的整数表示；部署模块按协议使用 scale 和 offset 还原近似值。</text>
+<line x1="46" y1="100" x2="1354" y2="100" stroke="#D5DEDC" stroke-width="2"/>
+<rect x="45" y="140" width="390" height="180" rx="14" fill="#E4ECE6" stroke="#4F856F" stroke-width="2"/>
+<text x="240" y="180" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:24px;font-weight:700;fill:#4F856F;text-anchor:middle">原始浮点 Linear</text>
+<text x="240" y="232" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:31px;font-weight:700;fill:#197D8C;text-anchor:middle">Y = XWᵀ + b</text>
+<text x="240" y="275" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">X、W、b 是浮点张量</text>
+<line x1="435" y1="230" x2="500" y2="230" stroke="#197D8C" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="500" y="140" width="390" height="180" rx="14" fill="#F6EEDB" stroke="#D99A2B" stroke-width="2"/>
+<text x="695" y="180" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:24px;font-weight:700;fill:#D99A2B;text-anchor:middle">量化参数</text>
+<text x="695" y="225" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:25px;font-weight:600;fill:#24343A;text-anchor:middle">q = clip(round(x / s) + z)</text>
+<text x="695" y="265" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:22px;font-weight:600;fill:#197D8C;text-anchor:middle">反量化：x̂ = (q − z) × s</text>
+<line x1="890" y1="230" x2="955" y2="230" stroke="#197D8C" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="955" y="140" width="390" height="180" rx="14" fill="#E1EEEE" stroke="#4F856F" stroke-width="2"/>
+<text x="1150" y="180" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:24px;font-weight:700;fill:#4F856F;text-anchor:middle">部署执行</text>
+<text x="1150" y="225" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:22px;font-weight:600;fill:#24343A;text-anchor:middle">整数权重 + scale / offset</text>
+<text x="1150" y="268" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">输出接近浮点结果，便于设备执行</text>
+<text x="45" y="385" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:21px;font-weight:700;fill:#197D8C;text-anchor:start">一个测试需要同时说明：</text>
+<rect x="45" y="415" width="205" height="42" rx="18" fill="#E4ECE6" stroke="#4F856F" stroke-width="1.5"/>
+<text x="147.5" y="441.95" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:600;fill:#197D8C;text-anchor:middle">输入 shape：X</text>
+<rect x="270" y="415" width="205" height="42" rx="18" fill="#E4ECE6" stroke="#4F856F" stroke-width="1.5"/>
+<text x="372.5" y="441.95" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:600;fill:#197D8C;text-anchor:middle">权重 shape：W</text>
+<rect x="495" y="415" width="230" height="42" rx="18" fill="#F6EEDB" stroke="#D99A2B" stroke-width="1.5"/>
+<text x="610.0" y="441.95" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:600;fill:#D99A2B;text-anchor:middle">scale / offset shape</text>
+<rect x="745" y="415" width="220" height="42" rx="18" fill="#F6EEDB" stroke="#D99A2B" stroke-width="1.5"/>
+<text x="855.0" y="441.95" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:600;fill:#D99A2B;text-anchor:middle">q 的 dtype / 范围</text>
+<rect x="985" y="415" width="265" height="42" rx="18" fill="#E1EEEE" stroke="#4F856F" stroke-width="1.5"/>
+<text x="1117.5" y="441.95" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:600;fill:#4F856F;text-anchor:middle">输出误差与设备位置</text>
+<rect x="45" y="505" width="1300" height="90" rx="12" fill="#EEEAE1" stroke="#667078" stroke-width="1.5"/>
+<text x="75" y="542" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:19px;font-weight:700;fill:#197D8C;text-anchor:start">W4A16 的白话解释：</text>
+<text x="270" y="542" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:start">权重 W 用 4 bit 量化保存/计算，激活 X 仍按 16 bit（通常 BF16）参与计算。</text>
+<text x="270" y="573" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#667078;text-anchor:start">它描述数据精度组合，不等于“已经生成最终 NPU 二进制”。</text>
+</svg>

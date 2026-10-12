@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="700" viewBox="0 0 1500 700" role="img" aria-labelledby="title desc">
+<title id="title">需求设计测试证据追踪</title>
+<desc id="desc">把 FR-001 到 FR-008 连接到设计模块、自动化测试和可审阅证据。</desc>
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#197D8C"/></marker><marker id="arrowGray" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#667078"/></marker></defs>
+<rect x="0" y="0" width="1500" height="700" fill="white"/>
+<text x="46" y="45" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:30px;font-weight:700;fill:#197D8C;text-anchor:start">从需求到证据：开发者如何快速定位“为什么测、测哪里”</text>
+<text x="46" y="77" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#667078;text-anchor:start">每条链路都回答四个问题：要保证什么、由谁实现、怎样验证、证据在哪里。</text>
+<line x1="46" y1="100" x2="1454" y2="100" stroke="#D5DEDC" stroke-width="2"/>
+<rect x="45" y="155" width="300" height="390" rx="16" fill="#E4ECE6" stroke="#4F856F" stroke-width="2"/>
+<text x="195.0" y="198" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:23px;font-weight:700;fill:#4F856F;text-anchor:middle">需求 FR</text>
+<text x="70" y="245" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#24343A;text-anchor:start">FR-001 旧 API 兼容</text>
+<text x="70" y="283" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#24343A;text-anchor:start">FR-002 分层保存</text>
+<text x="70" y="321" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#24343A;text-anchor:start">FR-003 manifest 完整</text>
+<text x="70" y="359" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#24343A;text-anchor:start">FR-004 三算法恢复</text>
+<text x="70" y="397" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#24343A;text-anchor:start">FR-005 失败不破坏</text>
+<text x="70" y="435" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#24343A;text-anchor:start">FR-006 恢复后部署</text>
+<text x="70" y="473" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#24343A;text-anchor:start">FR-007 输入边界</text>
+<text x="70" y="511" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#24343A;text-anchor:start">FR-008 可审计记录</text>
+<rect x="395" y="155" width="330" height="390" rx="16" fill="#F6EEDB" stroke="#D99A2B" stroke-width="2"/>
+<text x="560.0" y="198" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:23px;font-weight:700;fill:#D99A2B;text-anchor:middle">设计模块</text>
+<text x="420" y="245" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#24343A;text-anchor:start">quantize.py</text>
+<text x="420" y="283" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#24343A;text-anchor:start">QuantResultWriter</text>
+<text x="420" y="321" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#24343A;text-anchor:start">manifest / safetensors</text>
+<text x="420" y="359" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#24343A;text-anchor:start">BaseQuantizeModule</text>
+<text x="420" y="397" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#24343A;text-anchor:start">MinMax / AWQ / GPTQ</text>
+<text x="420" y="435" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#24343A;text-anchor:start">Reader + reload transaction</text>
+<text x="420" y="473" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#24343A;text-anchor:start">ReplaceNpuQuantModulePass</text>
+<rect x="775" y="155" width="330" height="390" rx="16" fill="#E1EEEE" stroke="#4F856F" stroke-width="2"/>
+<text x="940.0" y="198" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:23px;font-weight:700;fill:#4F856F;text-anchor:middle">测试组</text>
+<text x="800" y="245" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#24343A;text-anchor:start">TC-001~006：协议/参数</text>
+<text x="800" y="283" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#24343A;text-anchor:start">TC-007~013：Writer/manifest</text>
+<text x="800" y="321" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#24343A;text-anchor:start">TC-014~019：API/算法</text>
+<text x="800" y="359" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#24343A;text-anchor:start">TC-020~023：正常 reload</text>
+<text x="800" y="397" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#24343A;text-anchor:start">TC-024~030：负例/事务</text>
+<text x="800" y="435" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#24343A;text-anchor:start">TC-031~034：convert/NPU</text>
+<text x="800" y="473" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#24343A;text-anchor:start">TC-035：CI/静态</text>
+<rect x="1155" y="155" width="300" height="390" rx="16" fill="#EEEAE1" stroke="#667078" stroke-width="2"/>
+<text x="1305.0" y="198" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:23px;font-weight:700;fill:#667078;text-anchor:middle">证据 / 限制</text>
+<text x="1180" y="245" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#24343A;text-anchor:start">pytest 结果与命令</text>
+<text x="1180" y="283" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#24343A;text-anchor:start">manifest / unit 文件</text>
+<text x="1180" y="321" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#24343A;text-anchor:start">state_dict / module id</text>
+<text x="1180" y="359" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#24343A;text-anchor:start">PR compile 标签</text>
+<text x="1180" y="397" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#24343A;text-anchor:start">NPU 需真实设备</text>
+<text x="1180" y="435" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#24343A;text-anchor:start">正式大模型 benchmark 不在本 scope</text>
+<line x1="345" y1="350" x2="390" y2="350" stroke="#197D8C" stroke-width="3" marker-end="url(#arrow)"/>
+<line x1="735" y1="350" x2="770" y2="350" stroke="#197D8C" stroke-width="3" marker-end="url(#arrow)"/>
+<line x1="1115" y1="350" x2="1150" y2="350" stroke="#197D8C" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="45" y="590" width="1410" height="58" rx="12" fill="#F6EEDB" stroke="#D99A2B" stroke-width="1.5"/>
+<text x="70" y="626" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:700;fill:#D99A2B;text-anchor:start">阅读建议：</text>
+<text x="170" y="626" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:start">先看需求图确定边界，再看设计图理解对象，最后按测试组查看命令、预期和证据；不要只看总通过数。</text>
+</svg>

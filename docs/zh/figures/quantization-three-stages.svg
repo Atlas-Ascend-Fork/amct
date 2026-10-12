@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="560" viewBox="0 0 1400 560" role="img" aria-labelledby="title desc">
+<title id="title">量化的三个阶段</title>
+<desc id="desc">校准得到统计量，fake quant 使用量化参数模拟低精度，deploy 才把模块替换成设备执行形式。</desc>
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#197D8C"/></marker><marker id="arrowGray" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#667078"/></marker></defs>
+<rect x="0" y="0" width="1400" height="560" fill="white"/>
+<text x="46" y="45" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:30px;font-weight:700;fill:#197D8C;text-anchor:start">量化不是一步完成：校准、fake quant、deploy 各有不同职责</text>
+<text x="46" y="77" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#667078;text-anchor:start">每个阶段的输出不同；保存 artifact 的时点必须对应算法参数已经定稿的时点。</text>
+<line x1="46" y1="100" x2="1354" y2="100" stroke="#D5DEDC" stroke-width="2"/>
+<rect x="45" y="165" width="390" height="220" rx="16" fill="#E4ECE6" stroke="#4F856F" stroke-width="2"/>
+<text x="240" y="207" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:24px;font-weight:700;fill:#4F856F;text-anchor:middle">① 校准 Calibration</text>
+<text x="240" y="245" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:600;fill:#24343A;text-anchor:middle">校准输入 → 统计量</text>
+<text x="240" y="292" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">收集 min/max、scale、Hessian</text>
+<text x="240" y="320" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">不应把未完成状态发布</text>
+<rect x="485" y="165" width="390" height="220" rx="16" fill="#F6EEDB" stroke="#D99A2B" stroke-width="2"/>
+<text x="680" y="207" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:24px;font-weight:700;fill:#D99A2B;text-anchor:middle">② Fake quant</text>
+<text x="680" y="245" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:600;fill:#24343A;text-anchor:middle">scale / offset → q → 反量化</text>
+<text x="680" y="292" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">在浮点框架中模拟低比特误差</text>
+<text x="680" y="320" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">用于检查量化后的行为</text>
+<rect x="925" y="165" width="390" height="220" rx="16" fill="#E1EEEE" stroke="#4F856F" stroke-width="2"/>
+<text x="1120" y="207" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:24px;font-weight:700;fill:#4F856F;text-anchor:middle">③ Deploy</text>
+<text x="1120" y="245" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:600;fill:#24343A;text-anchor:middle">校准态模块 → 部署模块</text>
+<text x="1120" y="292" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">复用既有 ReplaceNpuQuantModulePass</text>
+<text x="1120" y="320" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">生成下游可执行形式</text>
+<line x1="435" y1="275" x2="480" y2="275" stroke="#197D8C" stroke-width="3" marker-end="url(#arrow)"/>
+<line x1="875" y1="275" x2="920" y2="275" stroke="#197D8C" stroke-width="3" marker-end="url(#arrow)"/>
+<text x="45" y="455" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:19px;font-weight:700;fill:#197D8C;text-anchor:start">三类已声明算法在“定稿点”分别写出不同状态：</text>
+<rect x="45" y="480" width="280" height="42" rx="18" fill="#E4ECE6" stroke="#4F856F" stroke-width="1.5"/>
+<text x="185.0" y="506.95" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:600;fill:#197D8C;text-anchor:middle">MinMax：scale / offset</text>
+<rect x="350" y="480" width="280" height="42" rx="18" fill="#F6EEDB" stroke="#D99A2B" stroke-width="1.5"/>
+<text x="490.0" y="506.95" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:600;fill:#D99A2B;text-anchor:middle">AWQ：搜索得到的 scale</text>
+<rect x="655" y="480" width="310" height="42" rx="18" fill="#E1EEEE" stroke="#4F856F" stroke-width="1.5"/>
+<text x="810.0" y="506.95" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:600;fill:#4F856F;text-anchor:middle">GPTQ：优化后的 weight + 参数</text>
+<rect x="1000" y="480" width="300" height="42" rx="18" fill="#EEEAE1" stroke="#667078" stroke-width="1.5"/>
+<text x="1150.0" y="506.95" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:600;fill:#667078;text-anchor:middle">reload 不重新校准 / 搜索</text>
+</svg>

@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="720" viewBox="0 0 1400 720" role="img" aria-labelledby="title desc">
+<title id="title">Classic 量化结果保存与恢复端到端流程</title>
+<desc id="desc">从浮点模型和量化配置开始，经 Week 3 生产端写出 artifact，再由 Week 4 消费端校验并恢复，最后复用原有部署转换。</desc>
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#197D8C"/></marker><marker id="arrowGray" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#667078"/></marker></defs>
+<rect x="0" y="0" width="1400" height="720" fill="white"/>
+<text x="46" y="45" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:30px;font-weight:700;fill:#197D8C;text-anchor:start">Classic artifact：一次量化结果如何跨进程交付</text>
+<text x="46" y="77" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#667078;text-anchor:start">读图顺序：输入 → 生产 → 可交付目录 → 消费 → 部署；下方虚线是未启用 artifact 的旧路径。</text>
+<line x1="46" y1="100" x2="1354" y2="100" stroke="#D5DEDC" stroke-width="2"/>
+<rect x="45" y="170" width="190" height="160" rx="14" fill="#E4ECE6" stroke="#4F856F" stroke-width="2"/>
+<text x="140.0" y="208" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:22px;font-weight:700;fill:#4F856F;text-anchor:middle">输入</text>
+<text x="140.0" y="248" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">浮点模型</text>
+<text x="140.0" y="274" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">量化配置</text>
+<text x="140.0" y="300" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">校准输入</text>
+<rect x="285" y="170" width="235" height="160" rx="14" fill="#E4ECE6" stroke="#4F856F" stroke-width="2"/>
+<text x="402.5" y="208" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:22px;font-weight:700;fill:#4F856F;text-anchor:middle">Week 3 生产端</text>
+<text x="402.5" y="248" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">量化模块定稿</text>
+<text x="402.5" y="274" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">写入每层 unit</text>
+<text x="402.5" y="300" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">最后发布 manifest</text>
+<rect x="565" y="170" width="255" height="160" rx="14" fill="#E1EEEE" stroke="#4F856F" stroke-width="2"/>
+<text x="692.5" y="208" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:22px;font-weight:700;fill:#4F856F;text-anchor:middle">artifact 目录</text>
+<text x="692.5" y="248" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">quant_manifest.json</text>
+<text x="692.5" y="274" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">layer_*.safetensors</text>
+<text x="692.5" y="300" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">SHA-256 / entry digest</text>
+<rect x="865" y="170" width="235" height="160" rx="14" fill="#E4ECE6" stroke="#4F856F" stroke-width="2"/>
+<text x="982.5" y="208" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:22px;font-weight:700;fill:#4F856F;text-anchor:middle">Week 4 消费端</text>
+<text x="982.5" y="248" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">读 manifest</text>
+<text x="982.5" y="274" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">全量校验</text>
+<text x="982.5" y="300" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">staging → commit</text>
+<rect x="1145" y="170" width="210" height="160" rx="14" fill="#E1EEEE" stroke="#4F856F" stroke-width="2"/>
+<text x="1250.0" y="208" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:22px;font-weight:700;fill:#4F856F;text-anchor:middle">部署模型</text>
+<text x="1250.0" y="248" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">复用 deploy pass</text>
+<text x="1250.0" y="274" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:middle">继续推理/下游转换</text>
+<line x1="235" y1="250" x2="285" y2="250" stroke="#197D8C" stroke-width="3" marker-end="url(#arrow)"/>
+<line x1="520" y1="250" x2="565" y2="250" stroke="#197D8C" stroke-width="3" marker-end="url(#arrow)"/>
+<line x1="820" y1="250" x2="865" y2="250" stroke="#197D8C" stroke-width="3" marker-end="url(#arrow)"/>
+<line x1="1100" y1="250" x2="1145" y2="250" stroke="#197D8C" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="580" y="355" width="225" height="38" rx="18" fill="#F6EEDB" stroke="#D99A2B" stroke-width="1.5"/>
+<text x="692.5" y="379.95" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:600;fill:#D99A2B;text-anchor:middle">manifest-last：最后发布</text>
+<text x="692" y="420" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:600;fill:#D99A2B;text-anchor:middle">manifest 出现 = 目录达到可交付状态</text>
+<line x1="692" y1="395" x2="692" y2="335" stroke="#D99A2B" stroke-width="2"/>
+<line x1="160" y1="560" x2="1220" y2="560" stroke="#667078" stroke-width="2" stroke-dasharray="9,8" marker-end="url(#arrow)"/>
+<rect x="45" y="505" width="230" height="70" rx="12" fill="#EEEAE1" stroke="#667078" stroke-width="1.5" stroke-dasharray="7,5"/>
+<text x="160" y="533" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:600;fill:#667078;text-anchor:middle">旧路径（无 quant_result_dir）</text>
+<text x="160" y="558" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:15px;font-weight:400;fill:#667078;text-anchor:middle">当前进程内直接完成量化与转换</text>
+<text x="695" y="520" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:600;fill:#667078;text-anchor:middle">同一份代码仍支持旧 API；此线不产生 artifact</text>
+<rect x="45" y="635" width="250" height="38" rx="18" fill="#F6EEDB" stroke="#D99A2B" stroke-width="1.5"/>
+<text x="170.0" y="659.6" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:16px;font-weight:600;fill:#D99A2B;text-anchor:middle">恢复必须使用同源浮点模型</text>
+<rect x="330" y="635" width="240" height="38" rx="18" fill="#F6EEDB" stroke="#D99A2B" stroke-width="1.5"/>
+<text x="450.0" y="659.6" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:16px;font-weight:600;fill:#D99A2B;text-anchor:middle">artifact 不是最终设备二进制</text>
+<rect x="605" y="635" width="245" height="38" rx="18" fill="#E1EEEE" stroke="#4F856F" stroke-width="1.5"/>
+<text x="727.5" y="659.6" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:16px;font-weight:600;fill:#4F856F;text-anchor:middle">失败时 live model 保持不变</text>
+<rect x="885" y="635" width="250" height="38" rx="18" fill="#F6EEDB" stroke="#D99A2B" stroke-width="1.5"/>
+<text x="1010.0" y="659.6" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:16px;font-weight:600;fill:#D99A2B;text-anchor:middle">NPU/E2E 需真实环境</text>
+</svg>
