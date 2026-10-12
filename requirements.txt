@@ -14,6 +14,10 @@ transformers==5.12.1
 loguru
 accelerate
 compressed_tensors==0.15.0.1
+# Quant result artifacts (amct_pytorch/classic/quant_result.py) and the deploy
+# export path read/write safetensors directly, so declare it explicitly rather
+# than relying on it arriving as a transformers transitive dependency.
+safetensors>=0.4.3
 scipy
 torchao==0.12.0
 einops

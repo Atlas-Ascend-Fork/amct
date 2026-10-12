@@ -15,7 +15,7 @@
 ## 函数原型
 
 ```python
-convert(model)
+convert(model, quant_result_dir=None)
 ```
 
 ## 参数说明
@@ -23,10 +23,16 @@ convert(model)
 | 参数名 | 输入/输出 | 说明                                                         |
 | ------ | --------- | ------------------------------------------------------------ |
 | model  | 输入/输出 | 输入含义：量化校准模型。<br>输出含义：量化部署模型。<br>数据类型：torch.nn.Module。 |
+| quant_result_dir | 输入 | 输入含义：quantize(..., quant_result_dir=...) 生成的已发布量化结果目录；传入时 model 必须是生成该 artifact 时使用的原始浮点模型，接口先恢复校准状态，再执行部署转换。<br>数据类型：string 或 None。默认 None 表示 model 已是量化校准模型，保持原有转换流程。 |
 
 
 ## 返回值说明
+
 量化部署模型。
+
+## 注意事项
+
+convert(..., quant_result_dir=...) 只接受已发布的量化结果目录，即目录中必须存在 quant_manifest.json。未完成校准的目录不是有效 artifact；请先完成校准并调用 finalize_quant_result(model)，或重新执行校准。
 
 ## 调用示例
 ```python

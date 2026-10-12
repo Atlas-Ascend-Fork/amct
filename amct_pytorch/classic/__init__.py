@@ -14,5 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-__all__ = ['quantize', 'convert', 'algorithm_register']
-from .quantize import quantize, convert, algorithm_register
+__all__ = [
+    'quantize',
+    'convert',
+    'algorithm_register',
+    'finalize_quant_result',
+    'cancel_quant_result',
+]
+from .quantize import (
+    quantize,
+    convert,
+    algorithm_register,
+    finalize_quant_result,
+    cancel_quant_result,
+)

@@ -19,8 +19,14 @@ import torch.nn as nn
 
 
 class BaseQuantizeModule(nn.Module):
+    """Base behavior shared by Classic and experimental quantize modules."""
+
     def __init__(self, ori_module, layer_name, quant_config):
         super().__init__()
+        if not isinstance(layer_name, str) or not layer_name:
+            raise ValueError(
+                'layer_name must be a non-empty string, got {!r}.'.format(layer_name)
+            )
         self.ori_module_type = None
         self.act_type = None
         self.wts_type = None
@@ -32,6 +38,9 @@ class BaseQuantizeModule(nn.Module):
 
         self.scale = None
         self.clip_max = None
+
+        self.layer_name = layer_name
+        self.quant_config = quant_config
 
     def forward(self, inputs):
         pass
