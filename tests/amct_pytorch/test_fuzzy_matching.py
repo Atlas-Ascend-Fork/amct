@@ -70,6 +70,18 @@ logger = logging.getLogger(__name__)
 LAYER1 = 'layer1'
 
 
+def _minmax_registry():
+    """Build a fake registry that only registers minmax.
+
+    QuantConfig/AlgorithmField reads the registry's algo table for the src_op
+    duplicate check. A bare Mock() makes algo.get(...).keys() return a
+    non-iterable Mock, so that path raises TypeError. Hence the explicit table.
+    """
+    reg = Mock()
+    reg.algo = {ALGORITHM_MINMAX: {'Linear': None}}
+    return reg
+
+
 class TestCast(unittest.TestCase):
     '''
     ST FOR CAST ALGORITHM
@@ -561,7 +573,7 @@ class TestParserFunctionsAdditional(TestCast):
             },
             'algorithm': {ALGORITHM_MINMAX},
         }
-        quant_config = QuantConfig(config, Mock())
+        quant_config = QuantConfig(config, _minmax_registry())
         all_layer_names = [LAYER1, 'layer2']
 
         _check_fuzzy_config_warnings(all_layer_names, quant_config)
@@ -589,7 +601,7 @@ class TestParserFunctionsAdditional(TestCast):
             'algorithm': {ALGORITHM_MINMAX},
             'skip_layers': ['model.layers.0.down_proj'],
         }
-        quant_config = QuantConfig(config, Mock())
+        quant_config = QuantConfig(config, _minmax_registry())
         all_layer_names = ['model.layers.0.down_proj', 'model.layers.1.down_proj']
 
         _check_fuzzy_config_warnings(all_layer_names, quant_config)
@@ -616,7 +628,7 @@ class TestParserFunctionsAdditional(TestCast):
             },
             'algorithm': {ALGORITHM_MINMAX},
         }
-        quant_config = QuantConfig(config, Mock())
+        quant_config = QuantConfig(config, _minmax_registry())
         all_layer_names = [LAYER1, 'layer2']
 
         _check_fuzzy_config_warnings(all_layer_names, quant_config)
@@ -642,7 +654,7 @@ class TestParserFunctionsAdditional(TestCast):
             },
             'algorithm': {ALGORITHM_MINMAX},
         }
-        quant_config = QuantConfig(config, Mock())
+        quant_config = QuantConfig(config, _minmax_registry())
         registed_alg = Mock()
         registed_alg.algo = {ALGORITHM_MINMAX: {'Linear': None}}
 
@@ -670,7 +682,7 @@ class TestParserFunctionsAdditional(TestCast):
             },
             'algorithm': {ALGORITHM_MINMAX},
         }
-        quant_config = QuantConfig(config, Mock())
+        quant_config = QuantConfig(config, _minmax_registry())
         layer_types = {'Conv2d': ALGORITHM_MINMAX}
         quant_type_comb = 'int8 int8'
 
@@ -701,7 +713,7 @@ class TestParserFunctionsAdditional(TestCast):
             },
             'algorithm': {ALGORITHM_MINMAX},
         }
-        quant_config = QuantConfig(config, Mock())
+        quant_config = QuantConfig(config, _minmax_registry())
 
         layer_config = quant_config.get_layer_config('model.layers.0.down_proj')
         self.assertIsNotNone(layer_config)
@@ -732,7 +744,7 @@ class TestParserFunctionsAdditional(TestCast):
             },
             'algorithm': {ALGORITHM_MINMAX},
         }
-        quant_config = QuantConfig(config, Mock())
+        quant_config = QuantConfig(config, _minmax_registry())
 
         layer_config = quant_config.get_layer_config('model.layers.0.self_attn.q_proj')
         self.assertIsNotNone(layer_config)
@@ -754,7 +766,7 @@ class TestParserFunctionsAdditional(TestCast):
             },
             'algorithm': {ALGORITHM_MINMAX},
         }
-        quant_config = QuantConfig(config, Mock())
+        quant_config = QuantConfig(config, _minmax_registry())
 
         layer_config = quant_config.get_layer_config(LAYER1)
         self.assertIsNotNone(layer_config)
@@ -775,7 +787,7 @@ class TestParserFunctionsAdditional(TestCast):
                 'algorithm': {ALGORITHM_MINMAX},
             },
         }
-        quant_config = QuantConfig(config, Mock())
+        quant_config = QuantConfig(config, _minmax_registry())
 
         layer_config = quant_config.get_layer_config('model.layers.0.up_proj')
         self.assertIsNone(layer_config)
