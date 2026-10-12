@@ -14,6 +14,7 @@
 | 2026-08-31 | 1.00 | Week 3-4 里程碑 | 全文 | 根据 requirement-development 模板补齐 Week 1-4 设计 | sunshine750 |
 | 2026-09-22 | 1.10 | 老师意见 | 摘要、系统上下文、协议、事务和测试追踪 | 增加图例、开发者检查清单 | sunshine750 |
 | 2026-09-22 | 1.20 | 老师意见 | 范围、验证边界、检视记录 | 补充 Qwen3.8-27B 纯 Classic Python API 两卡实机验证，删除平台过程信息 | sunshine750 |
+| 2026-10-12 | 1.30 | fujun19 检视意见 | 2.2、2.3、4.1、9、11 | 同步 API 文档、拆出通用文件工具、删除死代码、前置嵌套层名校验 | sunshine750 |
 
 **关键词：** Classic API、QuantResultWriter、safetensors、manifest-last、reload、事务替换、MinMax、AWQ、GPTQ
 
@@ -243,6 +244,7 @@ load manifest -> 校验目录/模型/unit -> staging replacement modules
 - 复用 `InsertQuantizeModulePass` 执行原有模块插入。
 - 复用 `BaseModuleFusionPass`/`ModuleHelper` 的模块定位和替换能力。
 - 复用既有 MinMax、AWQ、GPTQ forward 和 deploy 计算。
+- 复用 `amct_pytorch.common.utils.file_io` 中的目录校验、文件摘要和原子写入工具；`quant_result.py` 只保留协议、Writer 和 Reader 逻辑。
 - 复用 `ReplaceNpuQuantModulePass`，不在 artifact 模块中生成第二套 deploy 算法。
 
 #### 2.3.5 可扩展性和兼容性
@@ -424,9 +426,10 @@ Runtime layer
 #### 4.1.2 Writer 关键处理
 
 - `validate_quant_result_dir` 要求非空、已有目录且具备读写搜索权限。
+- `_check_expected_units` 在 Writer 创建阶段拒绝重复、非法和互相嵌套的 layer 名称，避免完整写出后才发现不可 reload。
 - `_check_managed_paths_available` 只拒绝 AMCT 自己的目标文件，不删除其它用户文件。
 - `unit_file_name` 将非安全字符归一化，并用反向表拒绝碰撞。
-- `_atomic_write_via` 同目录临时文件、fsync、chmod、replace、目录 fsync。
+- `atomic_write_via` 同目录临时文件、fsync、chmod、replace、目录 fsync。
 - `_verify_unit_file` 写后重新读取 header 和 tensor schema。
 - `_verify_result_dir` 发布前重新验证文件大小、SHA-256、entry digest 和 unit 内容。
 

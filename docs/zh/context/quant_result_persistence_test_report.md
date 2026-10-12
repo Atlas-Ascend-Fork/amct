@@ -4,7 +4,7 @@
 |------------|-----------------|----------|------------|
 | 被测版本 | `d5a2ac8d77a774fe9eff2721f86d98b321548005` | 测试对象 | AMCT PyTorch Classic Week 1-4 artifact P0 |
 | 评审记录 | 老师关于 artifact 协议、注册表复用和验收边界的意见 | 文档范围 | Classic 测试与 Qwen 实机验证分开记录 |
-| 文档修订 | 2026-09-22：补充测试分组解释、图例、状态口径和 Qwen 纯 API 实测 | 当前结论 | 下文结果以 commit `d5a2ac8d` 的历史执行记录为准 |
+| 文档修订 | 2026-10-12：按最新检视意见同步 API 文档、公共文件工具、写入侧嵌套校验和回归结果 | 当前结论 | 最新本地回归：373 passed、13 skipped；历史 Qwen 结果保留为原 commit 记录 |
 
 
 ---
@@ -121,7 +121,7 @@ algorithm_register
 
 | 范围 | 是否完整 | 说明 |
 |------|----------|------|
-| Classic tiny 回归 | 完整 | 35 个 TC、聚焦 432 passed、全目录 388 passed、静态检查通过 |
+| Classic tiny 回归 | 完整 | 36 个 TC、最新聚焦 373 passed、13 skipped，静态检查通过；历史 432 passed 结果保留 |
 | Qwen 纯 API 链路 | 完整 | 模型构建、BF16 baseline、W8A8、mixed W4A8、artifact、fresh-process convert、PPL、generation gate 均有结果 |
 | 27B full GPTQ | 未覆盖 | 需要完整 Hessian、误差补偿、优化后 weight 和新一轮测试 |
 | physical INT8 x INT4 kernel | 未覆盖 | 当前 ABI 中 activation 为 BF16 |
@@ -162,6 +162,7 @@ algorithm_register
 | 模型 | tiny `nn.Linear` 组合；真实 NPU 用例使用同构 tiny 模型 |
 | 数据 | 固定随机种子和 bf16/int8 测试输入；不依赖联网下载 |
 | 测试版本 | commit `d5a2ac8d` |
+| 最新代码修改 | 基线 `4c4a5feb` + 2026-10-12 检视修正（工作区验证记录，提交后以新 commit 补充） |
 
 ## 测试用例
 
@@ -177,6 +178,7 @@ algorithm_register
 | TC-006 | FR-002 | Base 加载 key、shape、dtype 校验 | sunshine750 | 高 | 测试模块已有声明 | 合法和非法 tensors/metadata | 调用 `load_quant_params` | 合法值恢复；未知 key、重复 key、shape/dtype/类型错误被拒绝 | Pass |
 | TC-007 | FR-002 | Writer 写入一个完整 unit | sunshine750 | 高 | 新空结果目录 | layer、tensor、config、module types | 调用 `write_unit` 并读回 | 生成 safetensors，entry 含 schema、size、SHA-256、entry digest | Pass |
 | TC-008 | FR-002 | Writer 防止重复层和文件名碰撞 | sunshine750 | 高 | expected units 含多个层 | 重复 layer、规整后相同文件名 | 连续调用 `write_unit` | 第二次写入失败，不覆盖第一份文件 | Pass |
+| TC-008a | FR-002 | Writer 创建阶段拒绝嵌套 expected units | sunshine750 | 高 | 已创建空结果目录 | `blk`、`blk.fc` | 调用 `QuantResultWriter.create` | 在写出任何文件前抛 ValueError；目录保持为空 | Pass |
 | TC-009 | FR-003 | manifest-last 和发布状态机 | sunshine750 | 高 | 两个 expected units | 只写部分 unit、全部写入、重复 publish | 调用 `publish_if_complete` | 部分写入返回 False 且无 manifest；全部验证后原子发布；发布后不可写 | Pass |
 | TC-010 | FR-003 | writer 写后和发布前完整性复验 | sunshine750 | 高 | 已写 unit | 删除、截断、篡改 unit 或修改 entry | 调用 publish/reader | size、SHA、header、schema、entry digest 任一不符即拒绝 | Pass |
 | TC-011 | FR-003 | manifest 严格 schema | sunshine750 | 高 | 已发布测试 artifact | 缺失字段、未知字段、错误类型和 schema version | 修改 manifest 后调用 `load_quant_manifest` | 只接受精确 schema；非法 manifest 被拒绝 | Pass |
@@ -234,6 +236,7 @@ algorithm_register
 | TC-001~TC-004 | UT | `test_quant_result.py::TestCanonicalJson`、`TestUnitFileName`、`TestResultDirValidation` | 验证纯函数、路径和目录前置条件 |
 | TC-005~TC-006 | UT | `test_quantize_modules.py::TestBaseQuantParamExport`、`TestBaseQuantParamLoad` | 验证 Base 导出/加载协议，不经过完整 API |
 | TC-007~TC-013 | UT/文件集成 | `test_quant_result.py::TestWriterUnitWrites`、`TestStreamingWrite`、`TestManifestPublish`、`TestReadBack`、`TestManifestSchemaIsEnforced`、`TestWriterRefusesUnloadableUnits` | 在临时目录真实写读 JSON 与 safetensors |
+| TC-008a | UT | `test_quant_result.py::TestWriterUnitWrites::test_rejects_nested_expected_units_before_any_file_is_written` | 在 Writer 创建阶段拦截嵌套 layer，保证不会产出不可 reload 的完整 artifact |
 | TC-014~TC-017 | Classic API tiny 集成 | `ptq/test_quantize.py::test_quantize_without_result_dir_creates_nothing`、`test_quantize_without_result_dir_keeps_pass_signature`、`test_weight_only_publishes_without_any_forward`、`test_activation_publishes_only_after_the_last_calibration_batch` | 从公共 `quantize()` 入口验证兼容性和 MinMax 生命周期 |
 | TC-018~TC-019 | 算法 tiny 集成 | `ptq/test_quantize.py::test_awq_is_now_accepted_for_export`、`test_quant_reload.py::TestCalibrationStateEquivalence::test_awq_does_not_persist_weight`、`test_gptq_persists_optimized_weight` | 验证 AWQ/GPTQ 的不同持久化边界 |
 | TC-020~TC-023 | reload tiny 集成 | `test_quant_reload.py::TestReloadHappyPath::test_reload_rebuilds_quant_modules`、`test_reload_covers_activation_minmax`、`test_reload_handles_nested_layer_names` | 通过真实注册表、manifest 和 safetensors 重建三算法及嵌套层 |
@@ -258,18 +261,17 @@ python -m pytest -q \
   tests/unit_test/classic/test_quant_result.py \
   tests/unit_test/classic/test_quant_reload.py \
   tests/unit_test/classic/ptq/test_quantize.py \
-  tests/unit_test/classic/test_quantize_modules.py \
-  tests/amct_pytorch/test_config.py
+  tests/unit_test/classic/test_quantize_modules.py
 ```
 
 实际结果：
 
 ```text
-432 passed, 6 warnings, 3 subtests passed in 26.63s
+373 passed, 13 skipped in 5.05s
 ```
 
-该命令覆盖 Writer/Reader/schema、Base 和三算法参数机制、Classic API、tiny 模型 reload、convert、事务失败路径以及
-可用时的实际 NPU 分支。warning 为环境权限、pytest 配置和 torch_npu internal-format 提示，不是测试失败。
+该命令覆盖 Writer/Reader/schema、Base 和三算法参数机制、Classic API、tiny 模型 reload、convert、事务失败路径以及可用时的实际 NPU 分支。
+13 个 skip 均由当前环境缺少真实 NPU 或 torch_npu 部署条件触发；`tests/amct_pytorch/test_config.py` 在本机因外部 torchaudio ABI 与 transformers 导入链冲突无法收集，未计入本轮结果。
 
 ### 2. Classic 全目录回归
 
@@ -375,6 +377,7 @@ git diff --check
 
 | 检视日期 | 检视人 | 检视结论 | 遗留风险 |
 |----------|--------|----------|----------|
+| 2026-10-12 | fujun19 | 对外 API 与文档需一致；公共目录/文件逻辑应复用；source model 说明需准确；嵌套层名应在写入侧前置拦截 | 详见 #267 修改记录 |
 
 ### 检视问题清单
 
@@ -382,6 +385,11 @@ git diff --check
 
 | 序号 | 问题描述 | 问题类别 | 严重程度 | 责任人 | 计划闭环时间 | 当前状态 |
 |------|----------|----------|----------|--------|--------------|----------|
+| 5 | quantize/convert 标准 API 文档未同步 quant_result_dir | 文档一致性 | 高 | sunshine750 | #267 修正提交 | 已在 #267 更新 docs/zh/api |
+| 6 | quant_result.py 中通用目录和原子写入逻辑应移至公共模块 | 模块职责 | 一般 | sunshine750 | #267 修正提交 | 已新增 common/utils/file_io.py |
+| 7 | validate_source_model 文档说明夸大校验强度 | 文档一致性 | 高 | sunshine750 | #267 修正提交 | 已改为 model_type/torch_dtype 与逐层 staging 校验 |
+| 8 | to_jsonable_lossy 死代码应删除 | 代码维护 | 建议 | sunshine750 | #267 修正提交 | 已连同测试删除 |
+| 9 | 嵌套 layer 名称只读取侧校验，写出后可能不可 reload | 事务完整性 | 高 | sunshine750 | #267 修正提交 | 已在 Writer 创建阶段拒绝 |
 | 1 | 每个用例是否需要补独立 issue 链接 | 用例覆盖 | 低 | PL | 文档评审时 | 待确认 |
 | 2 | TC-025 的额外文件规则是否符合最终协议 | 预期结果 | 中 | PL | 老师确认后 | 待确认 |
 | 3 | NPU tiny E2E 是否足以作为 Week 4 里程碑证据 | 测试结论 | 中 | PL | 里程碑验收时 | 待确认 |
