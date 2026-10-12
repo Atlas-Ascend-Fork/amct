@@ -20,6 +20,7 @@ from amct_pytorch.common.utils.log import LOGGER
 from amct_pytorch.common.config.utils import get_alg_name_from_config
 from amct_pytorch.common.utils.model_util import ModuleHelper
 from amct_pytorch.algorithms import AlgorithmRegistry
+from amct_pytorch.classic.quantize_op.quant_result_mixin import QuantResultSupportMixin
 
 
 class InsertQuantizeModulePass(BaseModuleFusionPass):
@@ -28,17 +29,22 @@ class InsertQuantizeModulePass(BaseModuleFusionPass):
     APIs: match_pattern, do_pass
     """
 
-    def __init__(self, quant_config):
+    def __init__(self, quant_config, quant_result_writer=None):
         """
         Function: init object of insert quantize op quant pass
         Parameter:
             quant_config: dict, config
+            quant_result_writer: optional QuantResultWriter injected into every
+                inserted quantize module so it can dump its quant params at its
+                own finalization point. None means quant results are not
+                persisted.
         Return: None
         """
         super().__init__()
         self.config = quant_config
         self.quant_layers = list(quant_config.keys())
         self.quantize_ops = dict()
+        self.quant_result_writer = quant_result_writer
 
     def match_pattern(self, module, name):
         """
@@ -80,6 +86,14 @@ class InsertQuantizeModulePass(BaseModuleFusionPass):
 
         helper = ModuleHelper(model)
         helper.replace_module_by_name(model, object_name, new_module)
+        if self.quant_result_writer is not None:
+            if not isinstance(new_module, QuantResultSupportMixin):
+                raise TypeError(
+                    "quantize module '{}' of layer '{}' does not implement "
+                    'QuantResultSupportMixin; refusing to attach a quant result '
+                    'writer.'.format(type(new_module).__name__, object_name)
+                )
+            new_module.attach_quant_result_writer(self.quant_result_writer)
         LOGGER.logd(
             "Insert quantize op module to '{}' success!".format(object_name),
             'InsertQuantizeModulePass',

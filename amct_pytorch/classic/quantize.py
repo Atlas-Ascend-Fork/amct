@@ -14,7 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-__all__ = ['quantize', 'convert', 'algorithm_register']
+__all__ = [
+    'quantize',
+    'convert',
+    'algorithm_register',
+    'finalize_quant_result',
+    'cancel_quant_result',
+]
 
 from torch import nn
 
@@ -25,35 +31,209 @@ from amct_pytorch.classic.optimizer import (
     ReplaceNpuQuantModulePass,
 )
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
+from amct_pytorch.classic.quant_result import (
+    QuantResultWriter,
+    compute_model_fingerprint,
+    is_quant_result_supported,
+    reload_quant_params,
+    validate_quant_result_dir,
+)
 from amct_pytorch.common.config import parse_config, set_default_config
+from amct_pytorch.common.config.utils import get_alg_name_from_config
 from amct_pytorch.common.utils.check_params import check_params
+from amct_pytorch.common.utils.log import LOGGER
 
 
-@check_params(model=nn.Module, config=(dict, type(None)))
-def quantize(model, config=None):
+@check_params(
+    model=nn.Module, config=(dict, type(None)), quant_result_dir=(str, type(None))
+)
+def quantize(model, config=None, quant_result_dir=None):
     """
     Function: Modify user's model for quantization
     Parameter: model: user mode instance of Torch.nn.Module
                config: simply config dict from user to set
+               quant_result_dir: optional path of an existing directory to persist
+                   the quant result artifact into. Unrelated files may coexist,
+                   but AMCT never overwrites its own result files. None (default)
+                   keeps the model in-memory only and writes nothing.
     Return: None
     """
     if config is None:
         config = set_default_config()
 
     layer_config = parse_config(model, config, AlgorithmRegistry)
+    if '' in layer_config:
+        # Module replacement is keyed by child name and cannot replace the root.
+        raise ValueError(
+            "the model passed to quantize() is itself a quantizable layer ({}); "
+            "each quantized layer must be a named submodule. Wrap it in a parent "
+            'nn.Module.'.format(type(model).__name__)
+        )
+
+    writer = None
+    if quant_result_dir is not None:
+        writer = _create_quant_result_writer(model, layer_config, quant_result_dir)
 
     optimizer = ModelOptimizer()
-    optimizer.add_pass(InsertQuantizeModulePass(layer_config))
+    optimizer.add_pass(
+        InsertQuantizeModulePass(layer_config, quant_result_writer=writer)
+    )
     optimizer.do_optimizer(model)
 
+    if writer is not None:
+        _finalize_quant_result(model, writer)
 
-@check_params(model=nn.Module)
-def convert(model):
+
+def _check_quant_result_algorithms(model, layer_config):
+    """Screen selected registered quant classes before writing any files.
+
+    Artifact support is declared by the class in ``AlgorithmRegistry.algo``;
+    there is no second algorithm-name allowlist to drift out of sync.  The
+    writer still validates concrete values when each layer reaches finalization.
+    """
+    unsupported = {}
+    modules = dict(model.named_modules())
+    for layer_name, cfg in layer_config.items():
+        algorithm = cfg.get('algorithm') if isinstance(cfg, dict) else None
+        alg_names, _ = get_alg_name_from_config(algorithm)
+        for alg_name in alg_names:
+            module = modules.get(layer_name)
+            source_type = type(module).__name__ if module is not None else None
+            quant_cls = AlgorithmRegistry.algo.get(alg_name, {}).get(source_type)
+            if not is_quant_result_supported(quant_cls):
+                unsupported.setdefault(alg_name, layer_name)
+
+    if unsupported:
+        details = ', '.join(
+            "'{}' (e.g. layer '{}')".format(name, layer)
+            for name, layer in sorted(unsupported.items())
+        )
+        raise ValueError(
+            "quant_result_dir is not supported yet for algorithm(s) {}. "
+            "The selected registered quantize class has no artifact contract; "
+            "run without quant_result_dir, or choose a class that declares "
+            "artifact support.".format(details)
+        )
+
+
+def _create_quant_result_writer(model, layer_config, quant_result_dir):
+    """Validate the target dir, fingerprint the source model, build the writer.
+
+    Ordering matters: the path and the algorithm declarations are checked before
+    fingerprinting, and the fingerprint is taken before any quant module is
+    inserted, so it always describes the original model.
+    """
+    validate_quant_result_dir(quant_result_dir)
+    if len(layer_config) == 0:
+        raise ValueError(
+            "no quantizable layer was found for this model and config, so "
+            "there is no quant result to write to '{}'.".format(quant_result_dir)
+        )
+    _check_quant_result_algorithms(model, layer_config)
+    model_fingerprint = compute_model_fingerprint(model)
+    return QuantResultWriter.create(
+        quant_result_dir, tuple(layer_config.keys()), model_fingerprint
+    )
+
+
+class _QuantResultController:
+    """Owns the deferred publish hook and cleanup for one quantize run."""
+
+    def __init__(self, model, writer):
+        self.model = model
+        self.writer = writer
+        self.handle = model.register_forward_hook(self._publish_if_complete)
+
+    def _publish_if_complete(self, module, args, output):
+        if self.writer.publish_if_complete():
+            self.close()
+
+    def disable_hook(self):
+        """Remove the forward hook without discarding retry state."""
+        if self.handle is not None:
+            self.handle.remove()
+            self.handle = None
+
+    def close(self):
+        self.disable_hook()
+        if getattr(self.model, '_amct_quant_result_controller', None) is self:
+            delattr(self.model, '_amct_quant_result_controller')
+
+
+def _finalize_quant_result(model, writer):
+    """Publish now if complete, otherwise arm an explicit controller hook."""
+    if writer.publish_if_complete():
+        return
+    controller = _QuantResultController(model, writer)
+    model._amct_quant_result_controller = controller
+    pending = writer.pending_units
+    LOGGER.logw(
+        "Quant result '{}' has {} pending unit(s) (e.g. '{}'); the manifest "
+        'will be published after the next successful forward pass. Call '
+        'finalize_quant_result(model) explicitly if calibration has already '
+        'finished, or cancel_quant_result(model) to release the hook and '
+        'remove unpublished units.'.format(writer.result_dir, len(pending), pending[0]),
+        'quantize',
+    )
+
+
+def _get_quant_result_controller(model):
+    controller = getattr(model, '_amct_quant_result_controller', None)
+    if controller is None:
+        raise ValueError(
+            "model has no active quant result controller; quant_result_dir "
+            'was not used or the artifact was already finalized/cancelled.'
+        )
+    return controller
+
+
+def finalize_quant_result(model):
+    """Explicitly publish a deferred quant result after calibration."""
+    controller = _get_quant_result_controller(model)
+    published = controller.writer.publish_if_complete()
+    if published:
+        controller.close()
+        return True
+    return False
+
+
+def cancel_quant_result(model):
+    """Detach the writer hook and remove its unpublished unit files."""
+    controller = _get_quant_result_controller(model)
+    controller.disable_hook()
+    for module in model.modules():
+        detach = getattr(module, 'detach_quant_result_writer', None)
+        if callable(detach):
+            detach()
+    controller.writer.cancel()
+    controller.close()
+    LOGGER.logw(
+        "Cancelled quant result '{}'; unpublished unit files were removed.".format(
+            controller.writer.result_dir
+        ),
+        'quantize',
+    )
+    return False
+
+
+@check_params(model=nn.Module, quant_result_dir=(str, type(None)))
+def convert(model, quant_result_dir=None):
     """
     Function: Convert quantized calibration model to quantized deployment model
-    Parameter: model: quantized calibration model instance of Torch.nn.Module
+    Parameter: model: quantized calibration model instance of Torch.nn.Module.
+                      When quant_result_dir is given, pass the original float
+                      model instead: it is restored to its calibrated state from
+                      the quant result first, then converted.
+               quant_result_dir: str or None, directory of a published quant
+                      result produced by quantize(..., quant_result_dir=...).
+                      None keeps the original in-memory behaviour.
     Return: None
     """
+    if quant_result_dir is not None:
+        # Restores calibration state only; which deploy module each layer becomes
+        # is still decided by ReplaceNpuQuantModulePass below.
+        reload_quant_params(model, quant_result_dir)
+
     optimizer = ModelOptimizer()
     optimizer.add_pass(ReplaceNpuQuantModulePass())
     optimizer.do_optimizer(model)
