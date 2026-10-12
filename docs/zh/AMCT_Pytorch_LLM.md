@@ -324,7 +324,7 @@ python -m amct_pytorch.deploy \
 |------|------|------|
 | `--eval_mode` | `bf16` | 评估模式，指定模型在计算困惑度（PPL）时使用的精度格式，支持如下两种格式：<br> `bf16`：半精度浮点数（BF16），常用于加速推理并保持较高精度。<br>`quant`：量化模式，可能指 INT8/INT4 等量化格式，用于降低内存和计算开销，但可能牺牲少量精度。 |
 | `--dump` | 默认关闭 | 仅用于 `granularity=block` 的 PPL 评估。启用后保存最近一个已完成 block 的输出，并在相同评估配置再次运行时自动续测；PPL 成功输出后自动清理断点目录。 |
-| `--wikitext_final_out` | 空字符串 | WikiText 末端输出路径参数，用于指定WikiText 数据集处理后最终输出的文件路径，目前该参数预留。 |
+| `--wikitext_final_out` | 空字符串 | **【预留参数，暂不生效】** WikiText 末端输出路径参数，用于指定 WikiText 数据集处理后最终输出的文件路径。当前版本主链路（`eval` / `extract_ptq_data` / `ptq` / `deploy`）尚未读取该参数，传入的值不会生效，仅打印告警；参数本身予以保留，后续版本按需接通。 |
 
 说明：
 
