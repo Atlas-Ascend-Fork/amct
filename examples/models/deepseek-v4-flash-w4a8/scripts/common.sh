@@ -36,6 +36,9 @@ EPOCHS="${EPOCHS:-15}"
 BASE_LR="${BASE_LR:-1e-3}"
 # 64GB HBM. Default cali_bsz=4 OOMs once fake-quant experts are resident.
 CALI_BSZ="${CALI_BSZ:-1}"
+# auto: framework parks routed experts on CPU only when one quant block cannot
+# fit on the visible accelerator(s). Framework-side; no sample patch needed.
+EXPERT_OFFLOAD="${EXPERT_OFFLOAD:-auto}"
 
 BF16_BIT_CONFIG="${BF16_BIT_CONFIG:-${AMCT_ROOT}/amct_pytorch/configs/bf16.yaml}"
 # Reuse in-repo bit-width config; int vs mxfp is selected by --quant_dtype.
@@ -82,6 +85,7 @@ print_runtime_args() {
   EPOCHS=${EPOCHS}
   BASE_LR=${BASE_LR}
   CALI_BSZ=${CALI_BSZ}
+  EXPERT_OFFLOAD=${EXPERT_OFFLOAD}
   RUN_MOE_PTQ=${RUN_MOE_PTQ:-0}
 EOF
 }

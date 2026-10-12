@@ -30,6 +30,7 @@ from transformers import AutoModelForCausalLM
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm.common.base import BaseModel
 from amct_pytorch.common.models.llm.common.capture import Catcher
+from amct_pytorch.common.models.llm.common.expert_offload import ExpertOffloadHook
 from amct_pytorch.common.models.llm.common.ptq_units import (
     iter_indexed_units,
     make_ptq_unit,
@@ -53,6 +54,17 @@ from amct_pytorch.common.models.llm.deepseek.deepseek_v4.quant_module import (
 class _NoMoveAlignDevicesHook(AlignDevicesHook):
     def init_hook(self, module):
         return module
+
+
+def _is_host_device(device) -> bool:
+    return str(device) in ("cpu", "meta")
+
+
+def _resolve_path(root, path: str):
+    target = root
+    for part in path.split("."):
+        target = getattr(target, part)
+    return target
 
 
 @MODEL_REGISTRY.register(
@@ -83,6 +95,10 @@ class DeepseekV4(BaseModel):
         self.model = self.empty_weights_model()
         self.num_layers = self.config.n_layers
         self.sharded_block = False
+        # Device map computed while loading a block, reused by _dispatch_block so
+        # placement and hook attachment can never disagree (the quant wrappers
+        # that appear in between change what the offload policy would estimate).
+        self._pending_block_device_map = None
 
     @staticmethod
     def block_size(weight):
@@ -103,13 +119,11 @@ class DeepseekV4(BaseModel):
     @staticmethod
     def _retag_descendant_hooks(root, device_map):
         sorted_entries = sorted(
-            ((p, d) for p, d in device_map.items() if p),
+            ((p, d) for p, d in device_map.items() if p and not _is_host_device(d)),
             key=lambda kv: kv[0].count("."),
         )
         for path, dev in sorted_entries:
-            target = root
-            for part in path.split("."):
-                target = getattr(target, part)
+            target = _resolve_path(root, path)
             for sub in target.modules():
                 hook = getattr(sub, "_hf_hook", None)
                 if hook is None:
@@ -253,6 +267,17 @@ class DeepseekV4(BaseModel):
     def iter_deploy_bindings(self, layer_idx, block):
         yield from super().iter_deploy_bindings(layer_idx, block)
 
+    def iter_offloadable_expert_modules(self, block):
+        """v4 routed experts live at ``ffn.experts.{i}`` (``None`` off-rank)."""
+        ffn = getattr(block, "ffn", None)
+        experts = getattr(ffn, "experts", None)
+        if experts is None:
+            return
+        for idx, expert in enumerate(experts):
+            if expert is None:
+                continue
+            yield f"ffn.experts.{idx}", expert
+
     def iter_ptq_units(self, layer_idx, block, *, for_load=False):
         if "attn-linear" in self.quant_target or "attn-cache" in self.quant_target:
             attn = getattr(block, "attn", None)
@@ -290,12 +315,14 @@ class DeepseekV4(BaseModel):
     def _block_sharded(self, layer_idx):
         """Meta build + per-tensor direct send to target NPU. Avoids the
         ~35 GB CPU staging + 75s Module construction of BaseModel.block."""
+        self._pending_block_device_map = None
         with init_empty_weights():
             block = self.cls(self.config, layer_idx)
 
         device_map = self._build_block_device_map(block)
         if device_map is None:
             device_map = {"": str(self.args.device)}
+        self._pending_block_device_map = device_map
 
         weight_prefix = self.get_layer_weight_prefix(layer_idx)
         weight_map = self._weight_map_cached()
@@ -344,12 +371,26 @@ class DeepseekV4(BaseModel):
         return block
 
     def _build_block_device_map(self, block):
-        """npu:0 = stem; npu:1 = attn proper; npu:2 = attn.indexer (if present);
-        experts round-robin on remaining cards. Returns None for single-NPU."""
+        """Multi-NPU: npu:0 = stem; npu:1 = attn proper; npu:2 = attn.indexer (if
+        present); experts round-robin on the remaining cards.
+
+        Single-NPU: everything on ``args.device`` -- except that the whole layer
+        (all routed experts, doubled by QuantLinear's cached eval weight) does not
+        fit on one accelerator, so ``--expert_offload`` parks the routed experts on
+        CPU and streams them per forward. Returns ``None`` when no map is needed
+        (single accelerator with every expert resident).
+        """
+        stem_device = str(self.args.device)
         n_npu = max(1, torch.npu.device_count())
         if n_npu <= 1:
-            return None
-        device_map = {"": "npu:0"}
+            offload = [path for path, _ in self.iter_offloadable_expert_modules(block)]
+            if not offload or not self._expert_offload_needed(block):
+                return None
+            device_map = {"": stem_device}
+            for path in offload:
+                device_map[path] = "cpu"
+            return device_map
+        device_map = {"": stem_device}
         attn_dev = 1 % n_npu
         device_map["attn"] = f"npu:{attn_dev}"
         reserved = {attn_dev}
@@ -368,14 +409,30 @@ class DeepseekV4(BaseModel):
         return device_map
 
     def _dispatch_block(self, module):
-        device_map = self._build_block_device_map(module)
+        # Reuse the map the block was loaded with: recomputing it here would see
+        # the quant wrappers and could flip the offload decision, leaving experts
+        # on CPU with no streaming hook attached.
+        device_map = self._pending_block_device_map
+        self._pending_block_device_map = None
+        if device_map is None:
+            device_map = self._build_block_device_map(module)
         if device_map is None:
             return super()._dispatch_block(module)
+        stem_device = device_map.get("", str(self.args.device))
         for path, dev in sorted(device_map.items(), key=lambda kv: kv[0].count(".")):
-            target = module if path == "" else module
-            if path:
-                for part in path.split("."):
-                    target = getattr(target, part)
+            target = _resolve_path(module, path) if path else module
+            if path and _is_host_device(dev):
+                # Weights are already on the host: ExpertOffloadHook snapshots them
+                # there and streams them onto the stem device around each forward.
+                add_hook_to_module(
+                    target,
+                    ExpertOffloadHook(
+                        execution_device=stem_device,
+                        offload=True,
+                        place_submodules=True,
+                    ),
+                )
+                continue
             hook = _NoMoveAlignDevicesHook(
                 execution_device=dev,
                 io_same_device=(path == ""),
