@@ -31,11 +31,14 @@ if [ -d "${MOE_PARAM_DIR}" ] && [ -n "$(ls -A "${MOE_PARAM_DIR}" 2>/dev/null || 
   EVAL_EXTRA+=(--moe_mlp_param_dir "${MOE_PARAM_DIR}")
 fi
 
-# Stock `python3 -m amct_pytorch.eval` OOMs on one 64GB NPU (whole block on
-# npu:0). Use the sample-local expert-offload wrapper; see README + upstream Issue.
+# One 64GB NPU cannot hold a whole quant block (256 routed experts, each weight
+# doubled by QuantLinear's cached_eval_weight). `--expert_offload auto` (the
+# default) detects this and streams routed experts from host memory; see README
+# and upstream Issue #248. Set EXPERT_OFFLOAD=on/off to override.
 # shellcheck disable=SC2086
-python3 "${SCRIPT_DIR}/eval_quant_expert_offload.py" \
+python3 -m amct_pytorch.eval \
   --trust_remote_code \
+  --expert_offload "${EXPERT_OFFLOAD}" \
   --model "${MODEL}" \
   --model_name "${MODEL_NAME}" \
   --seq_len "${SEQ_LEN}" \

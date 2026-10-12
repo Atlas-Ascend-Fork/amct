@@ -295,12 +295,14 @@ python -m amct_pytorch.deploy \
 | 参数 | 默认值 | 含义 |
 |------|------|------|
 | `--eval_mode` | `bf16` | 评估模式，指定模型在计算困惑度（PPL）时使用的精度格式，支持如下两种格式：<br> `bf16`：半精度浮点数（BF16），常用于加速推理并保持较高精度。<br>`quant`：量化模式，可能指 INT8/INT4 等量化格式，用于降低内存和计算开销，但可能牺牲少量精度。 |
+| `--expert_offload` | `auto` | MoE routed expert 的 CPU offload 策略，作用于 `eval` / `extract_ptq_data` 的 blockwise 流程（`ptq` 逐 unit 上下卡，不受该参数影响）。取值：<br> `auto`：仅在可见加速卡只有 1 张、且按 `bit_config` 估算单个 decoder block（`eval_mode=quant` 时按 2 倍权重计，因 `QuantLinear` 会为每个权重额外缓存一份反量化副本 `cached_eval_weight`）超过该卡显存 75% 时开启；<br> `on` / `off`：强制开启 / 关闭。<br> 开启后 routed expert 常驻主机内存，前向时逐个搬运到执行卡（等价于 `ptq` 路径已有的逐 expert `.to(device)` / `.cpu()`）。用 H2D 带宽换 HBM：单卡跑大 MoE 模型（如 DeepSeek-V4-Flash 每层 256 个 routed expert）时可避免整层上卡 OOM，但明显慢于全部常驻。 |
 | `--wikitext_final_out` | 空字符串 | **【预留参数，暂不生效】** WikiText 末端输出路径参数，用于指定 WikiText 数据集处理后最终输出的文件路径。当前版本主链路（`eval` / `extract_ptq_data` / `ptq` / `deploy`）尚未读取该参数，传入的值不会生效，仅打印告警；参数本身予以保留，后续版本按需接通。 |
 
 说明：
 
 - `eval_mode=bf16` 时，`bit_config` 中不应存在低于 16 bit 的 linear/cache 配置。
 - `eval_mode=quant` 时，如果 `bit_config` 没有任何低于 16 bit 的配置，会构建量化模块但关闭量化器。
+- `--expert_offload` 无法估算显存（拿不到设备总显存或 block 大小）时按关闭处理并打印告警；此时若确实 OOM，请显式传 `--expert_offload on`。
 
 ### 数据提取参数
 

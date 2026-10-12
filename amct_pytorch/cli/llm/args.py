@@ -176,6 +176,19 @@ def parser_gen(command=None):
     )
 
     parser.add_argument(
+        '--expert_offload',
+        type=str,
+        default='auto',
+        choices=['auto', 'on', 'off'],
+        help='Park routed MoE experts in host memory and stream them onto the '
+        'accelerator one at a time during blockwise eval / extract_ptq_data. '
+        '"auto" (default) enables it only when a single accelerator is visible '
+        'and one decoder layer is estimated not to fit on it; "on"/"off" force '
+        'the behavior. Offloading trades H2D bandwidth for HBM, so it is slower '
+        'than a fully resident layer.',
+    )
+
+    parser.add_argument(
         '--cali_bsz', type=int, default=4, help='Batch size default is 4.'
     )
     parser.add_argument(

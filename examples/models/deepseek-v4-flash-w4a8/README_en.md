@@ -26,7 +26,7 @@ Example: `source /home/developer/Ascend/cann/set_env.sh`. Set `HF_ENDPOINT` if c
 - `ptq_mlp.sh` SKIPs unless `RUN_MOE_PTQ=1`
 - Per format: extract → PTQ(attn) → quant eval
 - Artifact paths are placeholders. Do not commit data or weights
-- **Quant eval (single-NPU OOM + sample patch)**: The result table was measured on **one NPU + a sample-local monkeypatch**, not multi-NPU sharding. Bare `python3 -m amct_pytorch.eval` sets `sharded_block=True`; on one card `_build_block_device_map` returns `None` and the whole block (all 256 routed experts) lands on `npu:0` and OOMs. Per-expert moves exist only on the PTQ path (`llm_ptq.py`). This sample's `eval_quant.sh` calls [`scripts/eval_quant_expert_offload.py`](scripts/eval_quant_expert_offload.py): park routed experts on CPU after `_dispatch_block`, then `.to(npu:0)` one expert at a time in MoE `forward`. **No changes under `amct_pytorch/`**. Upstream: [Issue #248](https://gitcode.com/cann/amct/issues/248). The same-model [W4A4 sample](../deepseekv4/README_en.md) records 2×Atlas A3; this sample reproduces on one card via the patch above.
+- **Quant eval (single-NPU expert CPU offload)**: The result table was measured on **one NPU**, not multi-NPU sharding. A single 64GB card cannot hold one quant block: under `eval_mode=quant` every `QuantLinear` keeps an equal-sized dequantized twin of its weight (`cached_eval_weight`), so a layer with 256 routed experts needs ~2x its bf16 footprint. The framework flag `--expert_offload` (default `auto`) detects this and parks routed experts in host memory, streaming them onto `npu:0` one at a time during forward (the eval-side counterpart of the per-expert moves the `ptq` path already does) -- no sample-local patch required. `eval_quant.sh` forwards it through `EXPERT_OFFLOAD` (default `auto`); override with `EXPERT_OFFLOAD=on/off`. Upstream: [Issue #248](https://gitcode.com/cann/amct/issues/248). The same-model [W4A4 sample](../deepseekv4/README_en.md) records 2×Atlas A3 (multi-card device map; `auto` never offloads with more than one visible accelerator), this sample reproduces on one card via the framework offload.
 
 ### Time
 
@@ -37,7 +37,7 @@ Single `npu:0`; `lwc` + `lac`, `epochs=15`, `nsamples=128`, `cali_bsz=1`, `seq_l
 | extract (attn + moe) | ~5.3 h | Each target's block loop was ~2 h 39 min (43 layers, ~222 s/layer) |
 | Attention `lwc`+`lac` (each dtype) | ~30 h (1806 min) | Stable stretch ~**42 min/layer** × 43 layers. This is the table's quant time |
 | Full MoE `lwc`+`lac` | **weeks to hundreds of days (1 NPU)** | See below. Default is MoE direct quant |
-| Quant eval | ~6.5–7 h / format | Measured mxfp block loop 6 h 39 min (one NPU + `eval_quant_expert_offload.py`, experts one at a time); int is the same order |
+| Quant eval | ~6.5–7 h / format | Measured mxfp block loop 6 h 39 min (one NPU, experts streamed one at a time, H2D-bandwidth bound); int is the same order. The framework-side `--expert_offload` (since Issue #248) moves the same bytes but drops the per-move hook attach/detach and `empty_cache`, so treat that measurement as the reference |
 | BF16 eval | ~1.5–2 h | Measured block loop ~1 h 30 min |
 
 **Full MoE extrapolation (one `npu:0`):**

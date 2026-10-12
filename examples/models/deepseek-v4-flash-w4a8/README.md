@@ -26,7 +26,7 @@ CLI 入口：`python3 -m amct_pytorch.eval` / `extract_ptq_data` / `ptq`。
 - `ptq_mlp.sh` 默认 SKIP；仅当显式 `RUN_MOE_PTQ=1` 时才跑全量专家 PTQ（不作为社区样例默认路径）
 - 每种格式：extract → PTQ(attn) → 量化评估（加载 attn PTQ 参数；MoE 按 bit_config 直转）
 - 产物目录为相对占位路径，不提交数据/权重
-- **量化评估（单卡 OOM 与样例补丁）**：结果表在**单卡 + 样例本地 monkeypatch**下测得，不是多卡分片。裸跑 `python3 -m amct_pytorch.eval` 时，`llm_eval` 开 `sharded_block=True`，单卡下 `_build_block_device_map` 返回 `None`，整层（含 256 个 routed expert）一次上 `npu:0` 会 OOM；逐 expert 上下卡只在 PTQ 路径（`llm_ptq.py`）存在。本样例 `eval_quant.sh` 调用 [`scripts/eval_quant_expert_offload.py`](scripts/eval_quant_expert_offload.py)：在 `_dispatch_block` 后把 routed expert park 到 CPU，MoE `forward` 里用到哪个再 `.to(npu:0)`。`amct_pytorch/` **零改动**。上游跟踪：[Issue #248](https://gitcode.com/cann/amct/issues/248)。同模型 [W4A4 样例](../deepseekv4/README.md) 评测环境是 2×Atlas A3（多卡 device map），本样例用单卡 + 上述补丁复现结果表。
+- **量化评估（单卡 expert CPU offload）**：结果表在**单卡**下测得，不是多卡分片。单张 64GB 卡放不下一个量化 block：`eval_mode=quant` 下每个 `QuantLinear` 会为权重额外缓存一份等大的反量化副本（`cached_eval_weight`），256 个 routed expert 的一层约需 2× bf16 显存。框架侧 `--expert_offload`（默认 `auto`）会自动判定并把 routed expert 常驻主机内存、前向时逐个搬到 `npu:0`（等价于 `ptq` 路径已有的逐 expert 上下卡），无需样例外挂补丁。`eval_quant.sh` 通过 `EXPERT_OFFLOAD`（默认 `auto`）透传该参数，可用 `EXPERT_OFFLOAD=on/off` 覆盖。上游跟踪：[Issue #248](https://gitcode.com/cann/amct/issues/248)。同模型 [W4A4 样例](../deepseekv4/README.md) 评测环境是 2×Atlas A3（多卡 device map，`auto` 策略在多卡下不启用 offload），本样例用单卡 + 框架 offload 复现结果表。
 
 ### 时间消耗评估
 
@@ -37,7 +37,7 @@ CLI 入口：`python3 -m amct_pytorch.eval` / `extract_ptq_data` / `ptq`。
 | extract（attn + moe） | 约 5.3 h | 实测：每个 target 的 block 循环约 2 h 39 min（43 层，约 222 s/层），两个 target 合计 |
 | Attention `lwc`+`lac` PTQ（每种 dtype） | 约 30 h（1806 min） | 实测稳定段约 **42 min/层** × 43 层。结果表「量化时长」按此口径 |
 | 全量 MoE `lwc`+`lac` | **数周至数百天（单卡）** | 见下方外推；故默认不做，改为 MoE 直转 |
-| 量化评估 | 约 6.5–7 h / 格式 | 实测 mxfp 的 block 循环 6 h 39 min（单卡 + `eval_quant_expert_offload.py` 专家逐个上下卡）；int 同量级 |
+| 量化评估 | 约 6.5–7 h / 格式 | 实测 mxfp 的 block 循环 6 h 39 min（单卡 + 专家逐个上下卡，受 H2D 带宽限制）；int 同量级。框架侧 `--expert_offload`（Issue #248 后）搬运次数相同但去掉了每次搬运的 hook 摘挂与 `empty_cache`，实测口径以此为准 |
 | BF16 评估 | 约 1.5–2 h | 实测 block 循环约 1 h 30 min |
 
 **全量 MoE 外推（单卡 `npu:0`）：**

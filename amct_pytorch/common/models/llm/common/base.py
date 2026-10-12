@@ -19,7 +19,10 @@ from abc import ABCMeta
 from functools import partial
 import gc
 import torch
+import torch.nn as nn
 from accelerate import init_empty_weights
+from accelerate.hooks import add_hook_to_module
+from accelerate.utils import set_module_tensor_to_device
 from compressed_tensors.utils.safetensors_load import get_weight_mappings
 from loguru import logger
 from safetensors import safe_open
@@ -34,6 +37,11 @@ from amct_pytorch.common.datasets.ptq_io import (
 from amct_pytorch.common.models.llm.common.capture import (
     Catcher,
     register_forward_hooks,
+)
+from amct_pytorch.common.models.llm.common.expert_offload import (
+    ExpertOffloadHook,
+    estimate_module_bytes,
+    should_offload_experts,
 )
 from amct_pytorch.common.models.llm.common.ptq_params import (
     PtqParamHandler,
@@ -84,6 +92,12 @@ class BaseModel(metaclass=ABCMeta):
         self.ptq_param_store = PtqParamStore(
             self.ptq_param_handler, partial(self.iter_ptq_units, for_load=True)
         )
+        # `--expert_offload`: park routed experts in host memory and stream them
+        # onto the accelerator one at a time (see common/expert_offload.py).
+        self.expert_offload = getattr(args, "expert_offload", "auto")
+        # Set by _build_block_for_forward so the offload policy can be resolved
+        # *before* quant wrappers exist (adapters place weights while loading).
+        self.pending_quant_block = False
 
     @staticmethod
     def block_size(weight):
@@ -419,6 +433,7 @@ class BaseModel(metaclass=ABCMeta):
         return results
 
     def _build_block_for_forward(self, layer_idx, use_quant_block=False):
+        self.pending_quant_block = use_quant_block
         if use_quant_block:
             block = self.build_quant_block(layer_idx)
             self.load_selected_layer_ptq_params(layer_idx, block, strict=False)
@@ -426,4 +441,92 @@ class BaseModel(metaclass=ABCMeta):
         return self.block(layer_idx)
 
     def _dispatch_block(self, module):
-        return module.to(self.args.device)
+        offload = self._resolve_expert_offload_paths(module)
+        if not offload:
+            return module.to(self.args.device)
+        self._move_block_tensors(
+            module, self.args.device, skip=[path for path, _ in offload]
+        )
+        self._attach_expert_offload_hooks(module, offload)
+        return module
+
+    # ------------------------------------------------------------------
+    # Expert CPU offload (see common/expert_offload.py for the policy)
+    # ------------------------------------------------------------------
+    def iter_offloadable_expert_modules(self, block):
+        """Yield ``(dotted_path, module)`` for routed experts that can stream.
+
+        Default: every ``nn.ModuleList`` descendant named ``experts`` holding more
+        than one entry. Packed-expert wrappers are skipped: their per-expert views
+        share one storage, so moving them one at a time frees no device memory.
+        Adapters with a different layout override this.
+        """
+        for path, module in block.named_modules():
+            if not path or path.rsplit(".", 1)[-1] != "experts":
+                continue
+            if not isinstance(module, nn.ModuleList) or len(module) <= 1:
+                continue
+            if hasattr(module, "packed_experts") or hasattr(module, "expert_modules"):
+                continue
+            for idx, expert in enumerate(module):
+                if expert is None:
+                    continue
+                yield f"{path}.{idx}", expert
+
+    def _block_is_quantized(self, block):
+        """Whether ``block`` will carry QuantLinear's duplicated eval weight."""
+        if getattr(self, "pending_quant_block", False):
+            return True
+        return any(isinstance(mod, QuantLinear) for mod in block.modules())
+
+    def _expert_offload_needed(self, block):
+        return should_offload_experts(
+            getattr(self, "expert_offload", "auto"),
+            quantized=self._block_is_quantized(block),
+            block_bytes=estimate_module_bytes(block),
+            device=getattr(self.args, "device", None),
+        )
+
+    def _resolve_expert_offload_paths(self, block):
+        """Experts to park on CPU for this block; empty when offload is unused."""
+        if str(getattr(self, "expert_offload", "auto")).strip().lower() == "off":
+            return []
+        candidates = list(self.iter_offloadable_expert_modules(block))
+        if not candidates:
+            return []
+        if not self._expert_offload_needed(block):
+            return []
+        return candidates
+
+    def _move_block_tensors(self, module, device, skip=()):
+        """Move every tensor of ``module`` to ``device`` except those in ``skip``.
+
+        ``nn.Module.to()`` is all-or-nothing; skipped subtrees stay where they are
+        so an offload hook can snapshot them from host memory without ever
+        materializing them on the accelerator.
+        """
+        prefixes = tuple(f"{path}." for path in skip)
+        groups = (module.named_parameters(), module.named_buffers())
+        for tensors in groups:
+            for name, tensor in tensors:
+                if prefixes and name.startswith(prefixes):
+                    continue
+                if tensor is None or tensor.is_meta:
+                    continue
+                set_module_tensor_to_device(module, name, device, value=tensor.data)
+
+    def _attach_expert_offload_hooks(self, module, offload):
+        for _, expert in offload:
+            add_hook_to_module(
+                expert,
+                ExpertOffloadHook(
+                    execution_device=self.args.device,
+                    offload=True,
+                    place_submodules=True,
+                ),
+            )
+        logger.debug(
+            "Expert CPU offload enabled: {} routed expert(s) stream onto {}.",
+            len(offload),
+            self.args.device,
+        )
