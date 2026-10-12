@@ -40,7 +40,6 @@ import hashlib
 import json
 import os
 import re
-import stat
 import uuid
 
 import copy
@@ -50,6 +49,12 @@ import torch.nn as nn
 from safetensors import safe_open
 from safetensors.torch import save_file
 
+from amct_pytorch.common.utils.file_io import (
+    atomic_write_via,
+    file_sha256_hex,
+    validate_writable_directory,
+    write_text_atomically,
+)
 from amct_pytorch.common.utils.log import LOGGER
 
 MANIFEST_NAME = 'quant_manifest.json'
@@ -85,14 +90,9 @@ _REQUIRED_SOURCE_MODEL_FIELDS = ('model_type', 'torch_dtype')
 _REQUIRED_TENSOR_FIELDS = ('key', 'dtype', 'shape')
 _DIGEST_PATTERN = re.compile(r'sha256:[0-9a-f]{64}')
 
-# 640 for files, matching amct_log conventions.
-_FILE_MODE = stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP
-
 _UNSAFE_NAME_CHARS = re.compile(r'[^0-9a-zA-Z_]')
-_HASH_CHUNK_SIZE = 1024 * 1024
 # Fields derived from the file itself, therefore excluded from entry_digest.
 _DERIVED_ENTRY_FIELDS = ('file_size', 'sha256', 'entry_digest')
-_ADDRESS_PATTERN = re.compile(r'0x[0-9a-fA-F]{6,}')
 
 
 def is_quant_result_supported(quant_cls):
@@ -143,29 +143,7 @@ def digest_of(data):
 
 def sha256_of_file(file_path):
     """Prefixed SHA-256 of a file, read in bounded chunks."""
-    hasher = hashlib.sha256()
-    with open(file_path, 'rb') as file_handle:
-        for chunk in iter(lambda: file_handle.read(_HASH_CHUNK_SIZE), b''):
-            hasher.update(chunk)
-    return _prefixed(hasher.hexdigest())
-
-
-def _byte_view(tensor):
-    """Flat contiguous uint8 view of a CPU tensor, dtype-agnostic.
-
-    ``Tensor.numpy()`` refuses bfloat16/float8 dtypes, so reinterpret the raw
-    storage as uint8 first. Flattening before the view keeps non-contiguous and
-    0-d inputs working.
-    """
-    return tensor.detach().reshape(-1).contiguous().view(torch.uint8)
-
-
-def update_hash_with_tensor(hasher, tensor, chunk_elems=_HASH_CHUNK_SIZE):
-    """Fold a tensor's raw bytes into ``hasher`` without materializing a copy."""
-    byte_view = _byte_view(tensor.cpu())
-    total = byte_view.numel()
-    for start in range(0, total, chunk_elems):
-        hasher.update(byte_view[start : start + chunk_elems].numpy().tobytes())
+    return _prefixed(file_sha256_hex(file_path))
 
 
 def dtype_name(dtype):
@@ -244,66 +222,6 @@ def _strict_mapping(mapping, path):
     return result
 
 
-def to_jsonable_lossy(value):
-    """Coerce anything into a stable digestible form, stringifying unknowns.
-
-    Only for the *fingerprint* of a source model config: a HuggingFace
-    ``config.to_dict()`` may legitimately carry arbitrary objects, and the
-    fingerprint only needs to be deterministic and change-detecting, never
-    reversible. Never use this for ``quant_config`` or ``non_tensor_params`` --
-    those must survive a reload, so they go through the strict
-    :func:`to_jsonable`.
-    """
-    if value is None or isinstance(value, (bool, int, str)):
-        return value
-    if isinstance(value, float):
-        if value != value or value in (float('inf'), float('-inf')):
-            return repr(value)
-        return value
-    if isinstance(value, torch.dtype):
-        return dtype_name(value)
-    if isinstance(value, torch.Tensor):
-        return {
-            'dtype': dtype_name(value.dtype),
-            'shape': list(value.shape),
-            'sha256': tensor_bytes_sha256(value),
-        }
-    if isinstance(value, (bytes, bytearray)):
-        return bytes(value).hex()
-    if isinstance(value, dict):
-        return {
-            (key if isinstance(key, str) else _stringify_unknown(key)): (
-                to_jsonable_lossy(item)
-            )
-            for key, item in value.items()
-        }
-    if isinstance(value, (set, frozenset)):
-        return sorted((to_jsonable_lossy(item) for item in value), key=canonical_json)
-    if isinstance(value, (list, tuple)):
-        return [to_jsonable_lossy(item) for item in value]
-    return _stringify_unknown(value)
-
-
-def _stringify_unknown(value):
-    """Stable string form for a type JSON cannot represent.
-
-    ``str()`` of many objects embeds the memory address, which would make the
-    fingerprint differ between runs; fall back to the qualified type name then.
-    """
-    text = str(value)
-    if _ADDRESS_PATTERN.search(text):
-        value_type = type(value)
-        return '{}.{}'.format(value_type.__module__, value_type.__qualname__)
-    return text
-
-
-def tensor_bytes_sha256(tensor):
-    """Prefixed SHA-256 over the raw bytes of a tensor."""
-    hasher = hashlib.sha256()
-    update_hash_with_tensor(hasher, tensor)
-    return _prefixed(hasher.hexdigest())
-
-
 def unit_file_name(layer_name):
     """Map a layer name to its unit file name.
 
@@ -358,103 +276,12 @@ def validate_quant_result_dir(quant_result_dir):
     rejected. Other directory entries may coexist with the artifact; the writer
     checks its own manifest and unit paths separately and never overwrites them.
     """
-    if not isinstance(quant_result_dir, str):
-        raise TypeError(
-            "quant_result_dir must be a str path or None, got {}.".format(
-                type(quant_result_dir).__name__
-            )
-        )
-    if quant_result_dir.strip() == '':
-        raise ValueError(
-            "quant_result_dir must be a non-empty path; pass None to disable "
-            "quant result persistence."
-        )
-
-    target = os.path.abspath(os.path.expanduser(quant_result_dir))
-    if not os.path.exists(target):
-        raise ValueError(
-            "quant_result_dir '{}' must be an existing directory; create it "
-            "before calling quantize().".format(target)
-        )
-    if not os.path.isdir(target):
-        raise ValueError(
-            "quant_result_dir '{}' must be an existing directory, not a file.".format(
-                target
-            )
-        )
-    if not os.access(target, os.R_OK | os.W_OK | os.X_OK):
-        raise ValueError(
-            "quant_result_dir '{}' must be readable, writable, and searchable.".format(
-                target
-            )
-        )
-    return target
-
-
-def temp_name_for(file_path):
-    """Same-directory temp name for an atomic write of ``file_path``."""
-    return os.path.join(
-        os.path.dirname(file_path),
-        '.{}.{}.tmp'.format(os.path.basename(file_path), os.getpid()),
+    return validate_writable_directory(
+        quant_result_dir,
+        name='quant_result_dir',
+        type_hint='str path or None',
+        empty_hint='pass None to disable quant result persistence',
     )
-
-
-def _atomic_write_via(file_path, write_payload):
-    """Atomically produce file_path: temp file -> fsync -> os.replace.
-
-    ``write_payload(tmp_path)`` does the actual writing, so a large tensor
-    payload can stream straight to disk instead of being serialized into a bytes
-    object first. Temp file and target share a directory, hence a filesystem.
-    """
-    tmp_path = temp_name_for(file_path)
-    try:
-        write_payload(tmp_path)
-        _fsync_file(tmp_path)
-        os.chmod(tmp_path, _FILE_MODE)
-        os.replace(tmp_path, file_path)
-    except BaseException:
-        # Leave no partial file behind, for any failure including interrupts.
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
-        raise
-    _fsync_dir(os.path.dirname(file_path))
-
-
-def _fsync_file(file_path):
-    """Flush a just-written file's contents to stable storage."""
-    file_descriptor = os.open(file_path, os.O_RDONLY)
-    try:
-        os.fsync(file_descriptor)
-    finally:
-        os.close(file_descriptor)
-
-
-def _fsync_dir(directory):
-    """fsync a directory so a rename is durable; best effort by platform."""
-    try:
-        dir_fd = os.open(directory, os.O_RDONLY)
-    except OSError:
-        return
-    try:
-        os.fsync(dir_fd)
-    except OSError:
-        pass
-    finally:
-        os.close(dir_fd)
-
-
-def _write_text_atomically(file_path, text):
-    """Atomically write UTF-8 text (used for the manifest)."""
-
-    def _write(tmp_path):
-        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
-        file_descriptor = os.open(tmp_path, flags, _FILE_MODE)
-        with os.fdopen(file_descriptor, 'w', encoding='utf-8') as handle:
-            handle.write(text)
-            handle.flush()
-            os.fsync(handle.fileno())
-
-    _atomic_write_via(file_path, _write)
 
 
 def _source_model_type(model):
@@ -564,6 +391,7 @@ class QuantResultWriter:
                 )
         if len(set(units)) != len(units):
             raise ValueError("expected quant result unit names contain duplicates.")
+        _check_no_nested_units(units)
         return tuple(units)
 
     @classmethod
@@ -664,7 +492,7 @@ class QuantResultWriter:
         header = unit_header(self._artifact_id, layer_name, entry['entry_digest'])
         # save_file streams straight to the temp path: a large tensor payload is
         # never serialized into an in-memory bytes object first.
-        _atomic_write_via(
+        atomic_write_via(
             file_path,
             lambda tmp_path: save_file(tensors, tmp_path, metadata=header),
         )
@@ -806,7 +634,7 @@ class QuantResultWriter:
             'source_model': self._model_fingerprint,
             'units': [self._entries[unit] for unit in self._expected_units],
         }
-        _write_text_atomically(self.manifest_path, canonical_json(manifest) + '\n')
+        write_text_atomically(self.manifest_path, canonical_json(manifest) + '\n')
         self._published = True
         LOGGER.logi(
             "Published quant result manifest '{}' with {} unit(s).".format(
@@ -1079,6 +907,7 @@ def _validate_units(units, result_dir):
                 "quant manifest lists file '{}' more than once.".format(entry['file'])
             )
         seen_files.add(entry['file'])
+    _check_no_nested_units(seen_layers)
 
 
 def validate_result_directory(quant_result_dir, manifest):
@@ -1153,11 +982,13 @@ def read_quant_unit(quant_result_dir, layer_name, manifest=None):
 
 
 def validate_source_model(model, source_model):
-    """The float model handed to reload must be the one that was calibrated.
+    """Validate the source model's quantization identity before staging.
 
-    Compared on model type, structure/config digest and full state_dict digest,
-    so a different architecture, a changed dtype or shape, or any altered weight
-    is refused before a single module is touched.
+    Only model type and source dtype are compared here. The artifact is
+    intentionally reusable across checkpoints that share this quantization
+    identity. Layer paths, original module types, and tensor dtypes and shapes
+    are validated while each replacement is staged, before any live module is
+    modified.
     """
     # Shape first: a non-mapping must fail as a validation error, not as an
     # AttributeError from inside the strict conversion.
@@ -1228,7 +1059,8 @@ def _check_no_nested_units(layer_names):
         nested = [name for name in ordered if name.startswith(prefix)]
         if nested:
             raise ValueError(
-                "quant result cannot be reloaded: layer '{}' contains layer(s) {}, "
+                "quant result cannot contain nested units: layer '{}' contains "
+                "layer(s) {}, "
                 'so replacing it would discard them.'.format(outer, nested)
             )
 

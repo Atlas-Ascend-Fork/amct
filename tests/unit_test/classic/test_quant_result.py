@@ -42,7 +42,6 @@ from amct_pytorch.classic.quant_result import (
     read_quant_unit,
     resolve_unit_path,
     to_jsonable,
-    to_jsonable_lossy,
     unit_file_name,
     validate_quant_result_dir,
     validate_result_directory,
@@ -132,20 +131,6 @@ class TestCanonicalJson:
     def test_to_jsonable_error_names_the_offending_path(self):
         with pytest.raises(TypeError, match=r'quant_config\.a\.b'):
             to_jsonable({'a': {'b': object()}})
-
-    def test_lossy_converter_stringifies_unknowns_for_fingerprints_only(self):
-        payload = to_jsonable_lossy(
-            {'obj': nn.Linear(2, 2), 'dev': torch.device('cpu'), 'inf': float('inf')}
-        )
-        # Only needs to be deterministic and digestible, never reversible.
-        assert canonical_json(payload)
-        assert to_jsonable_lossy(torch.zeros(2, 3))['shape'] == [2, 3]
-
-    def test_lossy_converter_is_stable_across_instances(self):
-        first = to_jsonable_lossy({'m': nn.Linear(2, 2)})
-        second = to_jsonable_lossy({'m': nn.Linear(2, 2)})
-        # Distinct objects at distinct addresses must digest identically.
-        assert canonical_json(first) == canonical_json(second)
 
 
 class TestUnitFileName:
@@ -388,6 +373,13 @@ class TestWriterUnitWrites:
         with pytest.raises(ValueError):
             QuantResultWriter.create(str(tmp_path / 'bad'), units, SOURCE_MODEL)
 
+    def test_rejects_nested_expected_units_before_any_file_is_written(self, tmp_path):
+        result_dir = tmp_path / 'out'
+        result_dir.mkdir()
+        with pytest.raises(ValueError, match='would discard'):
+            QuantResultWriter.create(str(result_dir), ('blk', 'blk.fc'), SOURCE_MODEL)
+        assert list(result_dir.iterdir()) == []
+
     def test_no_temp_file_survives_a_failed_write(self, tmp_path, monkeypatch):
         writer = _writer(tmp_path, units=('fc1',))
         import amct_pytorch.classic.quant_result as quant_result
@@ -422,7 +414,9 @@ class TestStreamingWrite:
         # save_file(tensors, path) streams to disk. The earlier save(...) -> bytes
         # form buffered the whole payload, which for a GPTQ weight is hundreds of
         # MiB of avoidable peak memory.
-        assert seen['path'] == quant_result.temp_name_for(
+        from amct_pytorch.common.utils.file_io import temp_name_for
+
+        assert seen['path'] == temp_name_for(
             os.path.join(writer.result_dir, entry['file'])
         )
         assert os.path.basename(seen['path']).startswith('.')
