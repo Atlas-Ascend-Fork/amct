@@ -15,7 +15,7 @@
 ## 函数原型
 
 ```python
-quantize(model, config)
+quantize(model, config=None, quant_result_dir=None)
 ```
 
 ## 参数说明
@@ -44,6 +44,15 @@ quantize(model, config)
 </td>
 <td class="cellrowborder" valign="top" width="81.19%" headers="mcps1.1.4.1.3 "><p id="p129452810402"><a name="p129452810402"></a><a name="p129452810402"></a><span>含义：量化配置。</span></p>
 <p id="p334514515403"><a name="p334514515403"></a><a name="p334514515403"></a><span>数据类型：自定义dict，其中包含weight/input/algorithm/skip_layers的配置，详细配置参数请参见</span><a href="#section1536112219183" target="_blank" rel="noopener noreferrer">config详细配置</a><span>。</span></p>
+</td>
+</tr>
+<tr id="rowQuantResultDir"><td class="cellrowborder" valign="top" width="8.76%" headers="mcps1.1.4.1.1 "><p id="pQuantResultDir">quant_result_dir</p>
+</td>
+<td class="cellrowborder" valign="top" width="10.05%" headers="mcps1.1.4.1.2 "><p id="pQuantResultDirType">输入</p>
+</td>
+<td class="cellrowborder" valign="top" width="81.19%" headers="mcps1.1.4.1.3 "><p id="pQuantResultDirDesc">含义：保存量化结果 artifact 的目录。目录必须已由调用方创建；目录中允许存在无关文件，但 AMCT 不会覆盖自身生成的 quant_manifest.json 和 *.safetensors 文件。</p>
+<p>该目录中的所有量化单元校验完成后，AMCT 最后写入 quant_manifest.json；缺少该文件的目录不是完整 artifact。</p>
+<p>数据类型：string 或 None。默认 None 表示不保存量化结果，保持原有仅内存校准流程。</p>
 </td>
 </tr>
 </tbody>
@@ -190,6 +199,10 @@ quantize(model, config)
 ## 返回值说明
 
 无
+
+## 量化结果生命周期说明
+
+quantize(..., quant_result_dir=...) 在仍有量化单元未生成时会挂载根模型 forward hook。校准 forward 成功且所有单元完成后，接口自动写入 quant_manifest.json 并移除 hook。请确保最后一次校准 forward 覆盖根模型；未完成校准的目录不会生成 manifest，也不是有效量化结果目录。
 
 ## 调用示例
 
