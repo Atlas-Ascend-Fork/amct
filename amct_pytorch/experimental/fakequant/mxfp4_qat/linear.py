@@ -113,41 +113,77 @@ def convert_to_mxfp4_qat(
     rather than left in float. Already converted ``MXFP4QATLinear`` layers are
     skipped, so calling this twice is a no-op.
 
+    Modules are tracked by identity, so linear layers registered under several
+    aliases (including ``nn.Linear`` subclasses that define ``__eq__`` without
+    ``__hash__``) are converted once and every alias sees the same replacement.
+
     Args:
         module: Root module to rewrite.
         config: Settings applied to every replaced layer.
         skip_names: Substrings matched against the dotted module path. A match
             skips that submodule and everything below it, which is the usual way
-            to keep sensitive layers (``"lm_head"``, ``"embed"``) in float.
+            to keep sensitive layers (``"lm_head"``, ``"embed"``) in float. A
+            module reached through *any* matching path stays float through all
+            of its aliases, and so do modules inside a skipped container.
 
     Returns:
         The same *module*, with its linear layers replaced.
     """
-    return _convert(module, config, skip_names, prefix="", replacements={})
+    skipped_ids = _collect_skipped_ids(module, skip_names, prefix="", skipped=set())
+    return _convert(module, config, prefix="", replacements={}, skipped_ids=skipped_ids)
+
+
+def _collect_skipped_ids(
+    module: nn.Module,
+    skip_names: tuple[str, ...],
+    prefix: str,
+    skipped: set[int],
+) -> set[int]:
+    """Collect ids of modules reached through any path matching *skip_names*.
+
+    The walk has no side effects. A matched path marks the submodule itself and,
+    because the whole subtree is meant to stay float, also marks everything
+    below it; aliases elsewhere then skip the very same objects.
+    """
+    for name, child in module._modules.items():
+        if child is None:
+            continue
+        path = f"{prefix}{name}"
+        matched = any(pattern in path for pattern in skip_names)
+        if matched:
+            skipped.add(id(child))
+        if isinstance(child, MXFP4QATLinear):
+            continue
+        if matched or not isinstance(child, nn.Linear):
+            _collect_skipped_ids(child, skip_names, prefix=f"{path}.", skipped=skipped)
+    return skipped
 
 
 def _convert(
     module: nn.Module,
     config: MXFP4QATConfig | None,
-    skip_names: tuple[str, ...],
     prefix: str,
-    replacements: dict[nn.Module, MXFP4QATLinear],
+    replacements: dict[int, MXFP4QATLinear],
+    skipped_ids: set[int],
 ) -> nn.Module:
     # named_children() removes duplicate modules, so an alias could stay in float.
     for name, child in list(module._modules.items()):
-        if child is None:
-            continue
-        path = f"{prefix}{name}"
-        if any(pattern in path for pattern in skip_names):
+        if child is None or id(child) in skipped_ids:
             continue
         if isinstance(child, MXFP4QATLinear):
             continue
         if isinstance(child, nn.Linear):
-            if child not in replacements:
-                replacements[child] = MXFP4QATLinear.from_linear(child, config)
-            setattr(module, name, replacements[child])
+            # Key by identity: hashing *child* would break ``nn.Linear``
+            # subclasses that define ``__eq__`` with ``__hash__ = None``.
+            if id(child) not in replacements:
+                replacements[id(child)] = MXFP4QATLinear.from_linear(child, config)
+            setattr(module, name, replacements[id(child)])
         else:
             _convert(
-                child, config, skip_names, prefix=f"{path}.", replacements=replacements
+                child,
+                config,
+                prefix=f"{prefix}{name}.",
+                replacements=replacements,
+                skipped_ids=skipped_ids,
             )
     return module

@@ -61,12 +61,50 @@ def test_conversion_preserves_shared_linear_across_different_containers():
     assert isinstance(model["left"][0], MXFP4QATLinear)
 
 
-def test_conversion_still_honors_skip_names_for_a_shared_reference():
+def test_conversion_keeps_a_shared_reference_float_when_any_path_is_skipped():
     model = SharedLinear()
     original = model.first
     convert_to_mxfp4_qat(model, MXFP4QATConfig(backend="torch"), skip_names=("second",))
-    assert isinstance(model.first, MXFP4QATLinear)
+    assert model.first is original
     assert model.second is original
+    assert not isinstance(model.first, MXFP4QATLinear)
+    assert not isinstance(model.second, MXFP4QATLinear)
+
+
+class SharedContainer(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.first = nn.Sequential(nn.Linear(32, 4))
+        self.second = self.first
+
+
+def test_conversion_skips_shared_container_descendants_through_every_alias():
+    model = SharedContainer()
+    original = model.first[0]
+    convert_to_mxfp4_qat(model, MXFP4QATConfig(backend="torch"), skip_names=("first",))
+    assert model.first[0] is original
+    assert model.second[0] is original
+    assert not isinstance(model.first[0], MXFP4QATLinear)
+
+
+class UnhashableLinear(nn.Linear):
+    def __eq__(self, other):
+        return isinstance(other, UnhashableLinear)
+
+    __hash__ = None  # type: ignore[assignment]
+
+
+def test_conversion_handles_linear_subclasses_that_define_eq_without_hash():
+    shared = UnhashableLinear(32, 4)
+    weight, bias = shared.weight, shared.bias
+    model = nn.ModuleDict(
+        {"left": nn.Sequential(shared), "right": nn.Sequential(shared)}
+    )
+    assert convert_to_mxfp4_qat(model, MXFP4QATConfig(backend="torch")) is model
+    assert isinstance(model["left"][0], MXFP4QATLinear)
+    assert model["left"][0] is model["right"][0]
+    assert model["left"][0].weight is weight
+    assert model["left"][0].bias is bias
 
 
 @pytest.mark.parametrize("shape", [(0, 32), (2, 0, 64), (0, 17), (2, 0), (0,)])
