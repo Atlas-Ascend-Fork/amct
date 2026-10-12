@@ -913,7 +913,7 @@ def _no_feasible_ratio(
     from .compat import detect_backend
 
     empty = PruneReport(
-        backend=str(detect_backend(model)),
+        backend=detect_backend(model).name,
         params_before=params_before,
         params_after=params_before,
     )

@@ -81,6 +81,8 @@ def test_unreachable_budget_warns_and_flags_no_exception(caplog):
     assert budget_warnings(caplog.records), "an unreachable budget must emit a warning"
     assert res.budget_unreachable is True
     assert res.chosen_ratio is None and res.applied is False
+    assert res.report is not None
+    assert res.report.backend == "torch"
     assert res.prunable_fraction == pytest.approx(FFN_PARAMS / TOTAL_PARAMS, rel=1e-6)
 
 
