@@ -137,12 +137,37 @@ class _KvDeployTestMixin(unittest.TestCase):
         self.assertIs(cache.update, original_update)
 
 
-class TestDeepseekV3AttentionDeploy(_KvDeployTestMixin):
+class _FakeNpuImportMixin(_KvDeployTestMixin):
+    """Installs the stub only for the import, then puts sys.modules back.
+
+    The stub has to exist while the deploy module is imported, but it must not
+    outlive this class: it lacks most of the real torch_npu surface, so leaking it
+    breaks any later test whose code path reaches torch_npu (GPTQ's
+    ``torch_npu.npu.is_available()``, for one).
+    """
+
+    __test__ = False
+
+    @classmethod
+    def _install_stub_for_import(cls):
+        cls._saved_module = sys.modules.get('torch_npu')
+        _install_fake_torch_npu()
+
+    @classmethod
+    def tearDownClass(cls):
+        saved = getattr(cls, '_saved_module', None)
+        if saved is not None:
+            sys.modules['torch_npu'] = saved
+        else:
+            sys.modules.pop('torch_npu', None)
+
+
+class TestDeepseekV3AttentionDeploy(_FakeNpuImportMixin):
     __test__ = True
 
     @classmethod
     def setUpClass(cls):
-        _install_fake_torch_npu()
+        cls._install_stub_for_import()
         from amct_pytorch.classic.deploy_op.npu_quantization_deepseekv3_attention import (
             NpuDeepseekV3AttentionQuant,
         )
@@ -150,12 +175,12 @@ class TestDeepseekV3AttentionDeploy(_KvDeployTestMixin):
         cls.module_cls = NpuDeepseekV3AttentionQuant
 
 
-class TestLongcatFlashMLADeploy(_KvDeployTestMixin):
+class TestLongcatFlashMLADeploy(_FakeNpuImportMixin):
     __test__ = True
 
     @classmethod
     def setUpClass(cls):
-        _install_fake_torch_npu()
+        cls._install_stub_for_import()
         from amct_pytorch.classic.deploy_op.npu_quantization_longcat_flashmla import (
             NpuLongcatFlashMLA,
         )
