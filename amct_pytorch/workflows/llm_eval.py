@@ -51,6 +51,11 @@ class LlmEvalWorkflow:
         self.dump = bool(getattr(args, "dump", False))
         if self.dump and self.granularity != "block":
             raise ValueError("--dump only supports eval with granularity 'block'.")
+        if self.dump and args.model_name == "glm5_2":
+            raise ValueError(
+                "--dump does not support glm5_2: its cross-block DSA indexer state "
+                "cannot currently be restored from an eval checkpoint."
+            )
         self.eval_mode = args.eval_mode
         self.pipeline = None
         self.data_provider = None

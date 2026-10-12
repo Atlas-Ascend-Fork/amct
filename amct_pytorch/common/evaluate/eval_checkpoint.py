@@ -105,6 +105,17 @@ def build_eval_signature(args, num_layers: int) -> dict:
     """Build the normalized identity of a blockwise eval run."""
     targets = sorted(set(args.quant_target))
     is_bf16 = args.eval_mode == "bf16"
+    quantizer_options = {}
+    if not is_bf16:
+        if args.quant_dtype == "fp":
+            quantizer_options["block_size_col"] = int(
+                getattr(args, "block_size_col", 128)
+            )
+            quantizer_options["scale_dtype"] = getattr(args, "scale_dtype", "fp32")
+        if "lac" in getattr(args, "algos", []):
+            quantizer_options["is_per_tensor"] = bool(
+                getattr(args, "is_per_tensor", False)
+            )
     ptq_param_dirs = {}
     if not is_bf16:
         for target in targets:
@@ -124,6 +135,7 @@ def build_eval_signature(args, num_layers: int) -> dict:
         "bit_config_name": _bit_config_name(args),
         "effective_bit_config": _effective_bit_config(args),
         "ptq_param_dirs": ptq_param_dirs,
+        "quantizer_options": quantizer_options,
     }
 
 

@@ -121,6 +121,8 @@ python -m amct_pytorch.eval \
 
 #### Blockwise 断点续测
 
+GLM-5.2 存在尚未保存和恢复的跨 block DSA indexer 状态，当前不支持 `--dump`，启用时会在评估开始前报错。
+
 在 blockwise PPL 评估命令中增加 `--dump`，可以在每个 block 完成后保存其 CPU 输出：
 
 ```bash

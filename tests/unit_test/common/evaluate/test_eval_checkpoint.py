@@ -60,6 +60,37 @@ def _make_args(tmp_path, **overrides):
     return SimpleNamespace(**defaults)
 
 
+@pytest.mark.parametrize(
+    "parameter, value",
+    [("block_size_col", 1), ("scale_dtype", "e8m0"), ("is_per_tensor", True)],
+)
+def test_signature_distinguishes_quantizer_options(tmp_path, parameter, value):
+    first = _make_args(tmp_path, quant_dtype="fp")
+    second = _make_args(tmp_path, quant_dtype="fp", **{parameter: value})
+    assert build_eval_signature(first, 4) != build_eval_signature(second, 4)
+
+
+@pytest.mark.parametrize(
+    "eval_mode, quant_dtype, algos", [("bf16", "fp", ["lac"]), ("quant", "int", [])]
+)
+def test_signature_ignores_inactive_quantizer_options(
+    tmp_path, eval_mode, quant_dtype, algos
+):
+    first = _make_args(
+        tmp_path, eval_mode=eval_mode, quant_dtype=quant_dtype, algos=algos
+    )
+    second = _make_args(
+        tmp_path,
+        eval_mode=eval_mode,
+        quant_dtype=quant_dtype,
+        algos=algos,
+        block_size_col=1,
+        scale_dtype="e8m0",
+        is_per_tensor=True,
+    )
+    assert build_eval_signature(first, 4) == build_eval_signature(second, 4)
+
+
 def test_signature_normalizes_target_order_and_ignores_irrelevant_config(tmp_path):
     first = _make_args(tmp_path)
     second = _make_args(

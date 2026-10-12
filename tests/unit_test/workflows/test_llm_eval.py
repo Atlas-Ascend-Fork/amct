@@ -894,6 +894,13 @@ def test_init_applies_seed_from_args(monkeypatch):
     assert workflow.seed == 13
 
 
+@pytest.mark.parametrize("eval_mode", ["bf16", "quant"])
+def test_init_rejects_dump_for_glm5_2(eval_mode):
+    wf = _make_eval_workflow(model_name="glm5_2", dump=True, eval_mode=eval_mode)
+    with pytest.raises(ValueError, match="cross-block"):
+        LlmEvalWorkflow(wf.args)
+
+
 def test_init_rejects_dump_for_modelwise_eval(monkeypatch):
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.seed_everything", lambda seed: None
