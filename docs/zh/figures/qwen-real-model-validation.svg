@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="760" viewBox="0 0 1600 760" role="img" aria-labelledby="title desc">
+  <title id="title">Qwen3.8-27B 纯 Classic Python API 实测链路</title>
+  <desc id="desc">从完整 BF16 checkpoint 和两卡 nn.Module 构建，到 algorithm_register、quantize、496 unit artifact、fresh-process convert、PPL 和 generation gate 的纯 Classic Python API 测试流程。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#197D8C"/></marker>
+  </defs>
+  <rect width="1600" height="760" fill="white"/>
+  <text x="50" y="48" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:31px;font-weight:700;fill:#197D8C">Qwen3.8-27B：纯 Classic Python API 实测链路</text>
+  <text x="50" y="82" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;fill:#667078">不调用 AMCT CLI、parser_gen 或 LLM workflow；全程使用 public API 完成量化、落盘、恢复、转换和验证。</text>
+  <line x1="50" y1="106" x2="1550" y2="106" stroke="#D5DEDC" stroke-width="2"/>
+
+  <rect x="50" y="150" width="340" height="300" rx="16" fill="#E1EEEE" stroke="#197D8C" stroke-width="2"/>
+  <text x="220" y="195" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:22px;font-weight:700;fill:#197D8C;text-anchor:middle">1. 完整模型</text>
+  <text x="220" y="235" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">33 个文件 / 18 个分片</text>
+  <text x="220" y="265" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">1,199/1,199 tensor</text>
+  <text x="220" y="295" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">27.78B BF16 nn.Module</text>
+  <text x="220" y="325" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">496 个 language Linear</text>
+  <text x="220" y="365" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:16px;fill:#667078;text-anchor:middle">先确认 checkpoint 完整</text>
+
+  <rect x="430" y="150" width="340" height="300" rx="16" fill="#E4ECE6" stroke="#4F856F" stroke-width="2"/>
+  <text x="600" y="195" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:22px;font-weight:700;fill:#4F856F;text-anchor:middle">2. 两卡放置</text>
+  <text x="600" y="235" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">31 层 → npu:0</text>
+  <text x="600" y="265" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">33 层 → npu:1</text>
+  <text x="600" y="295" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">embedding / MTP → npu:0</text>
+  <text x="600" y="325" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">final norm / lm_head → npu:1</text>
+  <text x="600" y="365" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:16px;fill:#667078;text-anchor:middle">无 CPU/meta 残留</text>
+
+  <rect x="810" y="150" width="340" height="300" rx="16" fill="#F6EEDB" stroke="#D99A2B" stroke-width="2"/>
+  <text x="980" y="195" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:22px;font-weight:700;fill:#D99A2B;text-anchor:middle">3. 量化与落盘</text>
+  <text x="980" y="235" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">algorithm_register</text>
+  <text x="980" y="265" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">quantize(..., quant_result_dir)</text>
+  <text x="980" y="295" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">496 unit artifact</text>
+  <text x="980" y="325" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">只保存 finalized clip_factor</text>
+  <text x="980" y="365" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:16px;fill:#667078;text-anchor:middle">不复制 52GB checkpoint</text>
+
+  <rect x="1190" y="150" width="360" height="300" rx="16" fill="#E1EEEE" stroke="#806D9E" stroke-width="2"/>
+  <text x="1370" y="195" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:22px;font-weight:700;fill:#806D9E;text-anchor:middle">4. 跨进程恢复</text>
+  <text x="1370" y="235" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">producer 与 deploy 分进程</text>
+  <text x="1370" y="265" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">校验 checkpoint fingerprint</text>
+  <text x="1370" y="295" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">reload artifact</text>
+  <text x="1370" y="325" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">amct_pytorch.convert</text>
+  <text x="1370" y="365" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:16px;fill:#667078;text-anchor:middle">真正验证跨进程边界</text>
+
+  <line x1="390" y1="300" x2="424" y2="300" stroke="#197D8C" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="770" y1="300" x2="804" y2="300" stroke="#197D8C" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="1150" y1="300" x2="1184" y2="300" stroke="#197D8C" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <rect x="50" y="490" width="470" height="180" rx="14" fill="#E4ECE6" stroke="#4F856F" stroke-width="2"/>
+  <text x="80" y="525" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:20px;font-weight:700;fill:#4F856F">BF16 baseline</text>
+  <text x="80" y="560" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A">WikiText-2 72×4096</text>
+  <text x="80" y="590" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A">PPL 6.9534372879</text>
+  <text x="80" y="625" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:15px;fill:#667078">作为 W8A8 和 mixed W4A8 的对照</text>
+
+  <rect x="560" y="490" width="470" height="180" rx="14" fill="#E1EEEE" stroke="#197D8C" stroke-width="2"/>
+  <text x="590" y="525" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:20px;font-weight:700;fill:#197D8C">W8A8</text>
+  <text x="590" y="560" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A">496 unit PASS；496 个 W8 module</text>
+  <text x="590" y="590" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A">PPL 7.0308233570</text>
+  <text x="590" y="625" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:15px;fill:#667078">GSM8K batch-8 8/8 PASS</text>
+
+  <rect x="1070" y="490" width="480" height="180" rx="14" fill="#F6EEDB" stroke="#D99A2B" stroke-width="2"/>
+  <text x="1100" y="525" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:20px;font-weight:700;fill:#D99A2B">mixed W4A8</text>
+  <text x="1100" y="560" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A">496 unit PASS；400 packed W4 + 96 W8</text>
+  <text x="1100" y="590" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A">PPL 7.1221962920</text>
+  <text x="1100" y="625" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:15px;fill:#667078">single-record GSM8K PASS</text>
+
+  <rect x="50" y="700" width="1500" height="38" rx="10" fill="#F6EEDB" stroke="#D99A2B" stroke-width="2"/>
+  <text x="75" y="725" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:15px;fill:#24343A">边界：算法为 diagonal-Hessian GPTQ clipping 近似，不是 full GPTQ；mixed W4A8 不宣称物理 INT8 x INT4 kernel；15,268 样本正式 accuracy benchmark 不用 generation gate 替代。</text>
+</svg>

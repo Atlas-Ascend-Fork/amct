@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="600" viewBox="0 0 1400 600" role="img" aria-labelledby="title desc">
+<title id="title">量化粒度对比</title>
+<desc id="desc">同一权重矩阵使用每张量、每通道或每组 scale 时，scale 的数量和形状不同。</desc>
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#197D8C"/></marker><marker id="arrowGray" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#667078"/></marker></defs>
+<rect x="0" y="0" width="1400" height="600" fill="white"/>
+<text x="46" y="45" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:30px;font-weight:700;fill:#197D8C;text-anchor:start">scale 放在哪里：per-tensor、per-channel、per-group</text>
+<text x="46" y="77" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#667078;text-anchor:start">粒度决定误差和存储开销；测试必须核对 scale 的 shape，而不是只看文件存在。</text>
+<line x1="46" y1="100" x2="1354" y2="100" stroke="#D5DEDC" stroke-width="2"/>
+<rect x="45" y="150" width="390" height="300" rx="16" fill="#E4ECE6" stroke="#4F856F" stroke-width="2"/>
+<text x="240" y="190" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:24px;font-weight:700;fill:#4F856F;text-anchor:middle">Per-tensor</text>
+<text x="240" y="225" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:600;fill:#24343A;text-anchor:middle">整张 W 共用 1 个 scale</text>
+<rect x="125" y="255" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="151" y="255" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="177" y="255" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="203" y="255" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="229" y="255" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="255" y="255" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="281" y="255" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="307" y="255" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="125" y="281" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="151" y="281" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="177" y="281" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="203" y="281" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="229" y="281" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="255" y="281" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="281" y="281" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="307" y="281" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="125" y="307" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="151" y="307" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="177" y="307" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="203" y="307" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="229" y="307" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="255" y="307" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="281" y="307" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="307" y="307" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="125" y="333" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="151" y="333" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="177" y="333" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="203" y="333" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="229" y="333" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="255" y="333" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="281" y="333" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="307" y="333" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<text x="240" y="390" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:700;fill:#4F856F;text-anchor:middle">scale: [1]</text>
+<text x="240" y="425" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:15px;font-weight:400;fill:#667078;text-anchor:middle">颜色 = 共享同一组 scale</text>
+<rect x="485" y="150" width="390" height="300" rx="16" fill="#F6EEDB" stroke="#D99A2B" stroke-width="2"/>
+<text x="680" y="190" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:24px;font-weight:700;fill:#D99A2B;text-anchor:middle">Per-channel</text>
+<text x="680" y="225" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:600;fill:#24343A;text-anchor:middle">每个输出通道 1 个 scale</text>
+<rect x="565" y="255" width="24" height="24" rx="3" fill="#D99A2B" opacity="0.9"/>
+<rect x="591" y="255" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="617" y="255" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="643" y="255" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="669" y="255" width="24" height="24" rx="3" fill="#D99A2B" opacity="0.9"/>
+<rect x="695" y="255" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="721" y="255" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="747" y="255" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="565" y="281" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="591" y="281" width="24" height="24" rx="3" fill="#D99A2B" opacity="0.9"/>
+<rect x="617" y="281" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="643" y="281" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="669" y="281" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="695" y="281" width="24" height="24" rx="3" fill="#D99A2B" opacity="0.9"/>
+<rect x="721" y="281" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="747" y="281" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="565" y="307" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="591" y="307" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="617" y="307" width="24" height="24" rx="3" fill="#D99A2B" opacity="0.9"/>
+<rect x="643" y="307" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="669" y="307" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="695" y="307" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="721" y="307" width="24" height="24" rx="3" fill="#D99A2B" opacity="0.9"/>
+<rect x="747" y="307" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="565" y="333" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="591" y="333" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="617" y="333" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="643" y="333" width="24" height="24" rx="3" fill="#D99A2B" opacity="0.9"/>
+<rect x="669" y="333" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="695" y="333" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="721" y="333" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="747" y="333" width="24" height="24" rx="3" fill="#D99A2B" opacity="0.9"/>
+<text x="680" y="390" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:700;fill:#D99A2B;text-anchor:middle">scale: [out_features]</text>
+<text x="680" y="425" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:15px;font-weight:400;fill:#667078;text-anchor:middle">颜色 = 共享同一组 scale</text>
+<rect x="925" y="150" width="390" height="300" rx="16" fill="#E1EEEE" stroke="#4F856F" stroke-width="2"/>
+<text x="1120" y="190" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:24px;font-weight:700;fill:#4F856F;text-anchor:middle">Per-group</text>
+<text x="1120" y="225" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:600;fill:#24343A;text-anchor:middle">每个通道再按列分组</text>
+<rect x="1005" y="255" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="1031" y="255" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="1057" y="255" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="1083" y="255" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="1109" y="255" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="1135" y="255" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="1161" y="255" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="1187" y="255" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="1005" y="281" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="1031" y="281" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="1057" y="281" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="1083" y="281" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="1109" y="281" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="1135" y="281" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="1161" y="281" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="1187" y="281" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="1005" y="307" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="1031" y="307" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="1057" y="307" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="1083" y="307" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="1109" y="307" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="1135" y="307" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="1161" y="307" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="1187" y="307" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="1005" y="333" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="1031" y="333" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="1057" y="333" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="1083" y="333" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="1109" y="333" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="1135" y="333" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<rect x="1161" y="333" width="24" height="24" rx="3" fill="#D5DEDC" opacity="0.9"/>
+<rect x="1187" y="333" width="24" height="24" rx="3" fill="#4F856F" opacity="0.9"/>
+<text x="1120" y="390" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:700;fill:#4F856F;text-anchor:middle">scale: [out, groups]</text>
+<text x="1120" y="425" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:15px;font-weight:400;fill:#667078;text-anchor:middle">颜色 = 共享同一组 scale</text>
+<rect x="45" y="490" width="1270" height="65" rx="12" fill="#EEEAE1" stroke="#667078" stroke-width="1.5"/>
+<text x="70" y="530" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:700;fill:#197D8C;text-anchor:start">读测试结果：</text>
+<text x="190" y="530" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:400;fill:#24343A;text-anchor:start">先确认 scale / offset 是否与算法声明一致，再比较输出误差、文件大小和设备性能。</text>
+</svg>

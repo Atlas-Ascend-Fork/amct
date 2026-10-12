@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1300" height="720" viewBox="0 0 1300 720" role="img" aria-labelledby="title desc">
+<title id="title">Classic 测试金字塔</title>
+<desc id="desc">从快速单元测试到 tiny 集成、真实 NPU/E2E 和 CI 静态检查，说明每层测试回答的问题。</desc>
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#197D8C"/></marker><marker id="arrowGray" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#667078"/></marker></defs>
+<rect x="0" y="0" width="1300" height="720" fill="white"/>
+<text x="46" y="45" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:30px;font-weight:700;fill:#197D8C;text-anchor:start">测试金字塔：每层回答不同问题</text>
+<text x="46" y="77" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:400;fill:#667078;text-anchor:start">432 passed 和 388 passed 只说明对应历史命令通过；不能替代未执行的真实大模型或 NPU 结论。</text>
+<line x1="46" y1="100" x2="1254" y2="100" stroke="#D5DEDC" stroke-width="2"/>
+<polygon points="80,610 690,610 600,500 170,500" fill="#E4ECE6" stroke="#4F856F" stroke-width="2"/>
+<polygon points="170,490 600,490 520,390 250,390" fill="#F6EEDB" stroke="#D99A2B" stroke-width="2"/>
+<polygon points="250,380 520,380 455,285 315,285" fill="#E1EEEE" stroke="#4F856F" stroke-width="2"/>
+<polygon points="315,275 455,275 400,185 370,185" fill="#EEEAE1" stroke="#667078" stroke-width="2"/>
+<text x="385" y="233" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;font-weight:700;fill:#667078;text-anchor:middle">CI / 静态</text>
+<text x="385" y="334" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:700;fill:#4F856F;text-anchor:middle">NPU / E2E</text>
+<text x="385" y="444" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:19px;font-weight:700;fill:#D99A2B;text-anchor:middle">tiny 集成</text>
+<text x="385" y="570" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:21px;font-weight:700;fill:#4F856F;text-anchor:middle">UT / 协议单元测试</text>
+<rect x="760" y="180" width="480" height="90" rx="12" fill="#EEEAE1" stroke="#667078" stroke-width="1.7"/>
+<text x="780" y="210" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:700;fill:#667078;text-anchor:start">CI / 静态</text>
+<text x="780" y="237" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:15px;font-weight:400;fill:#24343A;text-anchor:start">导入、格式、compileall、PR compile</text>
+<text x="780" y="259" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:14px;font-weight:400;fill:#667078;text-anchor:start">回答：代码能否进入流水线？</text>
+<rect x="760" y="300" width="480" height="90" rx="12" fill="#E1EEEE" stroke="#4F856F" stroke-width="1.7"/>
+<text x="780" y="330" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:700;fill:#4F856F;text-anchor:start">NPU / E2E</text>
+<text x="780" y="357" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:15px;font-weight:400;fill:#24343A;text-anchor:start">设备、device、deploy 前向、等价性</text>
+<text x="780" y="379" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:14px;font-weight:400;fill:#667078;text-anchor:start">回答：真实设备链路是否可执行？</text>
+<rect x="760" y="420" width="480" height="90" rx="12" fill="#F6EEDB" stroke="#D99A2B" stroke-width="1.7"/>
+<text x="780" y="450" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:700;fill:#D99A2B;text-anchor:start">tiny 集成</text>
+<text x="780" y="477" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:15px;font-weight:400;fill:#24343A;text-anchor:start">真实 manifest、safetensors、注册表、事务</text>
+<text x="780" y="499" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:14px;font-weight:400;fill:#667078;text-anchor:start">回答：模块协作是否正确？</text>
+<rect x="760" y="540" width="480" height="90" rx="12" fill="#E4ECE6" stroke="#4F856F" stroke-width="1.7"/>
+<text x="780" y="570" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;font-weight:700;fill:#4F856F;text-anchor:start">UT / 协议</text>
+<text x="780" y="597" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:15px;font-weight:400;fill:#24343A;text-anchor:start">canonical JSON、digest、schema、路径</text>
+<text x="780" y="619" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:14px;font-weight:400;fill:#667078;text-anchor:start">回答：最小规则是否正确？</text>
+<rect x="760" y="650" width="235" height="35" rx="18" fill="#E1EEEE" stroke="#4F856F" stroke-width="1.5"/>
+<text x="877.5" y="672.75" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:15px;font-weight:600;fill:#4F856F;text-anchor:middle">Pass = 实际执行并通过</text>
+<rect x="1010" y="650" width="235" height="35" rx="18" fill="#F6EEDB" stroke="#D99A2B" stroke-width="1.5"/>
+<text x="1127.5" y="672.75" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:15px;font-weight:600;fill:#D99A2B;text-anchor:middle">Block = 环境不具备</text>
+</svg>

@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="760" viewBox="0 0 1600 760" role="img" aria-labelledby="title desc">
+  <title id="title">Qwen 纯 API 实测的关键决策和边界</title>
+  <desc id="desc">解释 mixed W4A8 的显存与精度取舍、W4A8 数值行为与物理 INT8 x INT4 kernel 的区别，以及本轮不使用 full GPTQ 的原因。</desc>
+  <rect width="1600" height="760" fill="white"/>
+  <text x="50" y="48" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:31px;font-weight:700;fill:#197D8C">Qwen 纯 API 实测：三个关键决策</text>
+  <text x="50" y="82" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;fill:#667078">目标不是把所有算法做满，而是先把 27B 两卡上的 Classic API、artifact、fresh-process convert 和部署链路验干净。</text>
+  <line x1="50" y1="106" x2="1550" y2="106" stroke="#D5DEDC" stroke-width="2"/>
+
+  <rect x="50" y="140" width="470" height="300" rx="16" fill="#E1EEEE" stroke="#197D8C" stroke-width="2"/>
+  <text x="285" y="180" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:22px;font-weight:700;fill:#197D8C;text-anchor:middle">为什么用 mixed W4A8</text>
+  <text x="285" y="220" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">400 个 MLP / W4 + 96 个主 Q/K/V / W8</text>
+  <text x="285" y="252" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">W8A8 PPL 7.0308233570</text>
+  <text x="285" y="284" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">mixed W4A8 PPL 7.1221962920</text>
+  <text x="285" y="316" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">PPL 增加 0.091372935</text>
+  <text x="285" y="348" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">部署显存少约 9.48 GiB</text>
+  <text x="285" y="400" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:15px;fill:#667078;text-anchor:middle">结论：用较小精度损失换明显显存收益</text>
+
+  <rect x="560" y="140" width="470" height="300" rx="16" fill="#F6EEDB" stroke="#D99A2B" stroke-width="2"/>
+  <text x="795" y="180" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:22px;font-weight:700;fill:#D99A2B;text-anchor:middle">为什么不是物理 8×4 kernel</text>
+  <text x="795" y="220" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">activation 先做 dynamic INT8 quantize</text>
+  <text x="795" y="252" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">随后 dequantize 回 BF16</text>
+  <text x="795" y="284" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">matmul 使用 BF16 activation × packed W4</text>
+  <text x="795" y="316" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">packed W4 权重存储成立</text>
+  <text x="795" y="348" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">A8 数值行为成立</text>
+  <text x="795" y="400" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:15px;fill:#667078;text-anchor:middle">不能宣称 physical INT8 x INT4 kernel</text>
+
+  <rect x="1070" y="140" width="480" height="300" rx="16" fill="#E4ECE6" stroke="#4F856F" stroke-width="2"/>
+  <text x="1310" y="180" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:22px;font-weight:700;fill:#4F856F;text-anchor:middle">为什么本轮不用 full GPTQ</text>
+  <text x="1310" y="220" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">目标是验证 artifact / API 链路</text>
+  <text x="1310" y="252" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">当前只收集 diagonal Hessian</text>
+  <text x="1310" y="284" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">只保存 clip_factor</text>
+  <text x="1310" y="316" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">不做 Hessian inverse</text>
+  <text x="1310" y="348" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:17px;fill:#24343A;text-anchor:middle">不做逐权重误差补偿</text>
+  <text x="1310" y="400" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:15px;fill:#667078;text-anchor:middle">不能把近似实现冒充 full GPTQ</text>
+
+  <rect x="50" y="480" width="1500" height="180" rx="16" fill="#E1EEEE" stroke="#806D9E" stroke-width="2"/>
+  <text x="80" y="520" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:22px;font-weight:700;fill:#806D9E">怎么判断测试完整性</text>
+  <text x="80" y="560" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;fill:#24343A">Classic tiny 回归：完整；35 个 TC、432/388 回归和静态检查均通过。</text>
+  <text x="80" y="595" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;fill:#24343A">Qwen 纯 API 链路：完整；27.78B 两卡模型、496 unit artifact、fresh-process convert、PPL 和 generation gate 均有证据。</text>
+  <text x="80" y="630" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:18px;fill:#24343A">未覆盖项：27B full GPTQ、physical INT8 x INT4 kernel、15,268 样本正式 accuracy benchmark。</text>
+
+  <rect x="50" y="690" width="1500" height="38" rx="10" fill="#F6EEDB" stroke="#D99A2B" stroke-width="2"/>
+  <text x="75" y="715" style="font-family:Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif;font-size:15px;fill:#24343A">口径：对声明的 artifact/API 链路，测试完整；对更大的算法和发布验收，明确列为未覆盖，不混写为通过。</text>
+</svg>
