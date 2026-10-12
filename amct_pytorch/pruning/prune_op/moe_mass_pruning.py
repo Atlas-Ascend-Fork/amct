@@ -56,6 +56,8 @@ class ActivationCounter:
         if topk_idx is None:
             return
         flat_idx = topk_idx.reshape(-1)
+        if flat_idx.numel() == 0:
+            return
 
         if self.counts is None:
             n = self.num_experts or (int(flat_idx.max().item()) + 1)

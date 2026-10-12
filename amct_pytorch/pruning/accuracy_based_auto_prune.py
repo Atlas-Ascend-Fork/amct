@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import copy
 import math
+import sys
 from collections import namedtuple
 from dataclasses import dataclass, field, fields
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple, Union
@@ -523,7 +524,8 @@ def _make_ppl_quality(model, eval_batches, batch_adapter) -> QualityFn:
 
     def quality(candidate):
         # Compute the ratio directly to avoid exponentiating two large PPL values.
-        return math.exp(baseline - mean_nll(candidate))
+        log_ratio = baseline - mean_nll(candidate)
+        return math.exp(min(log_ratio, math.log(sys.float_info.max)))
 
     return quality
 
@@ -575,19 +577,28 @@ def _make_evaluator_quality(evaluator: Any, eval_iterations: int) -> QualityFn:
         )
 
     try:
-        params = inspect.signature(evaluator.evaluate).parameters
-        accepts_iterations = len(params) >= 2 or any(
-            p.kind == inspect.Parameter.VAR_POSITIONAL for p in params.values()
-        )
+        signature = inspect.signature(evaluator.evaluate)
     except (TypeError, ValueError):
-        accepts_iterations = True
+        iteration_mode = "positional"
+    else:
+        try:
+            signature.bind(None, eval_iterations)
+            iteration_mode = "positional"
+        except TypeError:
+            if "iterations" in signature.parameters:
+                signature.bind(None, iterations=eval_iterations)
+                iteration_mode = "keyword"
+            else:
+                signature.bind(None)
+                iteration_mode = "none"
 
     def quality(m: nn.Module) -> float:
-        score = (
-            evaluator.evaluate(m, eval_iterations)
-            if accepts_iterations
-            else evaluator.evaluate(m)
-        )
+        if iteration_mode == "positional":
+            score = evaluator.evaluate(m, eval_iterations)
+        elif iteration_mode == "keyword":
+            score = evaluator.evaluate(m, iterations=eval_iterations)
+        else:
+            score = evaluator.evaluate(m)
         if score is None:
             raise TypeError(
                 "evaluator.evaluate(...) returned None. The accuracy abstraction must return a "
@@ -902,7 +913,7 @@ def _no_feasible_ratio(
     from .compat import detect_backend
 
     empty = PruneReport(
-        backend=str(detect_backend(model)),
+        backend=detect_backend(model).name,
         params_before=params_before,
         params_after=params_before,
     )
