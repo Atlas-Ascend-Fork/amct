@@ -20,6 +20,12 @@ AMCT工具还提供了面向大语言模型（LLM）的量化功能，详情请�
 
 2. 用户调用[convert](./zh/api/convert.md)接口，将量化校准算子转换为NPU对应的量化部署算子，并输出量化部署模型（类型为torch.nn.Module）。
 
+以下文档描述 [PR #267](https://gitcode.com/cann/amct/merge_requests/267) 中的候选功能；该实现尚未合入 master，当前发布版本暂不支持以下文档中的 `quant_result_dir` 参数。
+
+- [Classic 量化结果持久化与恢复需求说明](./zh/context/quant_result_persistence_requirement.md)
+- [Classic 量化结果持久化与恢复设计说明](./zh/context/quant_result_persistence_design.md)
+- [Classic 量化结果持久化与恢复测试报告](./zh/context/quant_result_persistence_test_report.md)
+
 ## 调用示例
 
 以下是关键步骤的代码示例，不能直接拷贝编译运行，仅供参考。
