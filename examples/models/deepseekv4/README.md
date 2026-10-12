@@ -38,7 +38,7 @@ QUANT_TARGET=moe bash scripts/extract_ptq_data.sh
 
 `--nsamples` 受磁盘预算约束：提取钩子落盘的是 `attn_norm` / `ffn_norm` 的输出，而 `Block.forward` 会先经 `hc_pre` 把 Hyper-Connection 的 hc 维（`hc_mult=4`）加权求和收敛成 `[b, s, d]`，RMSNorm 再 `.to(dtype)` 转回 bf16，因此落盘张量是 3D bf16，每样本每层约 32 MiB（`seq_len 4096 × hidden 4096 × 2 B`）；`nsamples=128` 时单 target 需约 172 GiB，本样例取 16（16 样本 × 43 层 ≈ 21.5 GiB）。
 
-> **第三步必须复用同一个 `NSAMPLES` 取值**（脚本默认已对齐为 16）：PTQ 的 cosine 学习率调度按 `T_max = epochs × (nsamples // cali_bsz)` 计算周期，而实际优化步数由本步提取出的样本数决定。若第三步沿用 CLI 默认的 `nsamples=128`，周期会是真实步数的 8 倍，训练结束时学习率仍停在 `base_lr` 的约 96%，`lwc/lac` 的裁剪系数几乎没有退火。
+> **第三步必须复用同一个 `NSAMPLES` 取值**（脚本默认已对齐为 16）：PTQ 的 cosine 学习率调度按 `T_max = epochs × ((nsamples + cali_bsz - 1) // cali_bsz)` 计算周期，而实际优化步数由本步提取出的样本数决定。若第三步沿用 CLI 默认的 `nsamples=128`，周期会是真实步数的 8 倍，训练结束时学习率仍停在 `base_lr` 的约 96%，`lwc/lac` 的裁剪系数几乎没有退火。
 
 ### 第三步：PTQ 训练
 
