@@ -72,4 +72,6 @@ def calib_nll(
             nll_sum, n = nll_from_logits(logits, ids)
             tot += nll_sum
             n_tokens += n
-    return tot / max(n_tokens, 1)
+    if n_tokens == 0:
+        raise ValueError("calib_nll needs at least one next-token target.")
+    return tot / n_tokens
