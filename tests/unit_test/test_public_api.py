@@ -48,6 +48,106 @@ GRAPH_INIT = (
 
 # Module whose ``__all__`` must reach the top level via wildcard re-export.
 GRAPH_MODULE = "amct_pytorch.classic.graph_based.amct_pytorch"
+GRAPH_PROTO_PACKAGE = f"{GRAPH_MODULE}.proto"
+PROTO_DIR = GRAPH_INIT.parent / "proto"
+GENERATED_PROTO_MODULES = (
+    "calibration_config_pytorch_pb2",
+    "retrain_config_pytorch_pb2",
+    "distill_config_pytorch_pb2",
+    "scale_offset_record_pytorch_pb2",
+    "quant_calibration_config_pytorch_pb2",
+)
+
+
+def _is_unbuilt_source_tree_import_error(exc, proto_dir=PROTO_DIR):
+    """Return whether ``exc`` identifies a missing generated module in proto/."""
+    if not isinstance(exc, ImportError):
+        return False
+
+    message = str(exc)
+    for module_name in GENERATED_PROTO_MODULES:
+        if (proto_dir / f"{module_name}.py").is_file():
+            continue
+
+        full_name = f"{GRAPH_PROTO_PACKAGE}.{module_name}"
+        if isinstance(exc, ModuleNotFoundError) and exc.name == full_name:
+            return True
+
+        if exc.name != GRAPH_PROTO_PACKAGE:
+            continue
+        import_error_messages = (
+            f"cannot import name '{module_name}' from '{GRAPH_PROTO_PACKAGE}'",
+            "cannot import name "
+            f"'{module_name}' from partially initialized module '{GRAPH_PROTO_PACKAGE}'",
+        )
+        if any(part in message for part in import_error_messages):
+            return True
+
+    return False
+
+
+@pytest.mark.parametrize(
+    ("error_type", "error_name", "message", "module_exists", "expected"),
+    [
+        (
+            ImportError,
+            GRAPH_PROTO_PACKAGE,
+            f"cannot import name '{GENERATED_PROTO_MODULES[0]}' "
+            f"from '{GRAPH_PROTO_PACKAGE}'",
+            False,
+            True,
+        ),
+        (
+            ImportError,
+            GRAPH_PROTO_PACKAGE,
+            f"cannot import name '{GENERATED_PROTO_MODULES[0]}' from partially "
+            f"initialized module '{GRAPH_PROTO_PACKAGE}' (most likely due to a circular import)",
+            False,
+            True,
+        ),
+        (
+            ModuleNotFoundError,
+            f"{GRAPH_PROTO_PACKAGE}.{GENERATED_PROTO_MODULES[0]}",
+            f"No module named '{GRAPH_PROTO_PACKAGE}.{GENERATED_PROTO_MODULES[0]}'",
+            False,
+            True,
+        ),
+        (ImportError, GRAPH_PROTO_PACKAGE, "synthetic API regression", False, False),
+        (
+            ImportError,
+            GRAPH_PROTO_PACKAGE,
+            f"cannot import name 'unrelated_symbol' from '{GRAPH_PROTO_PACKAGE}'",
+            False,
+            False,
+        ),
+        (
+            ModuleNotFoundError,
+            "transformers",
+            "No module named 'transformers'",
+            False,
+            False,
+        ),
+        (
+            ImportError,
+            GRAPH_PROTO_PACKAGE,
+            f"cannot import name '{GENERATED_PROTO_MODULES[0]}' "
+            f"from '{GRAPH_PROTO_PACKAGE}'",
+            True,
+            False,
+        ),
+    ],
+)
+def test_unbuilt_source_tree_skip_only_matches_missing_generated_proto(
+    tmp_path, error_type, error_name, message, module_exists, expected
+):
+    proto_dir = tmp_path / "proto"
+    proto_dir.mkdir()
+    if module_exists:
+        (proto_dir / f"{GENERATED_PROTO_MODULES[0]}.py").touch()
+
+    exc = error_type(message, name=error_name)
+    assert _is_unbuilt_source_tree_import_error(exc, proto_dir) is expected
+
 
 # Baseline anchor: a hand-picked subset that MUST always be public. This guards
 # against the ``__all__`` list being accidentally emptied or gutted -- in that
@@ -140,7 +240,11 @@ def test_top_level_interfaces_importable_when_built():
 
         importlib.import_module(GRAPH_MODULE)
     except ImportError as exc:
-        pytest.skip(f"graph-based package not importable in this environment: {exc}")
+        if _is_unbuilt_source_tree_import_error(exc):
+            pytest.skip(
+                f"graph-based package not built (generated protobuf missing): {exc}"
+            )
+        raise
 
     expected = _module_dunder_all(GRAPH_INIT)
     assert expected, "graph module __all__ unexpectedly empty"
@@ -207,7 +311,9 @@ def test_non_graph_interfaces_importable_when_built():
     try:
         import amct_pytorch
     except ImportError as exc:
-        pytest.skip(f"amct_pytorch not importable in this environment: {exc}")
+        if _is_unbuilt_source_tree_import_error(exc):
+            pytest.skip(f"amct_pytorch not built (generated protobuf missing): {exc}")
+        raise
 
     missing = [n for n in NON_GRAPH_INTERFACES if not hasattr(amct_pytorch, n)]
     assert not missing, (
