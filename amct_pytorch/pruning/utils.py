@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import copy
+from collections.abc import Mapping
 from typing import Dict, List, Sequence, Tuple
 
 import torch
@@ -387,7 +388,7 @@ def move_batch_to_device(
             return tuple(move(x) for x in value)
         if isinstance(value, list):
             return [move(x) for x in value]
-        if isinstance(value, dict):
+        if isinstance(value, Mapping):
             return {k: move(v) for k, v in value.items()}
         return value
 
