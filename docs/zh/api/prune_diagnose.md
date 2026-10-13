@@ -45,7 +45,7 @@ prune_diagnose(model, data=None, config=None, prune_ratio=0.5, tolerance=0.05)
 </td>
 <td class="cellrowborder" valign="top" width="78.21%" headers="mcps1.1.4.1.3 "><p id="zh-cn_topic_0000002600000501_p105000010010"><a name="zh-cn_topic_0000002600000501_p105000010010"></a><a name="zh-cn_topic_0000002600000501_p105000010010"></a>含义：校准/评估数据；方差类方法与 acc 二分搜索需要，为 None 时跳过对应检查。</p>
 <p id="zh-cn_topic_0000002600000501_p105000010011"><a name="zh-cn_topic_0000002600000501_p105000010011"></a><a name="zh-cn_topic_0000002600000501_p105000010011"></a>默认值：None。</p>
-<p id="zh-cn_topic_0000002600000501_p105000010012"><a name="zh-cn_topic_0000002600000501_p105000010012"></a><a name="zh-cn_topic_0000002600000501_p105000010012"></a>数据类型：Tensor、list、DataLoader 等可迭代对象，或 None。</p>
+<p id="zh-cn_topic_0000002600000501_p105000010012"><a name="zh-cn_topic_0000002600000501_p105000010012"></a><a name="zh-cn_topic_0000002600000501_p105000010012"></a>数据类型：Tensor、list、DataLoader 等可迭代对象，或 None。一次性迭代器会缓冲后供各诊断阶段复用，请提供可存入内存的有限数据集。</p>
 </td>
 </tr>
 <tr id="zh-cn_topic_0000002600000501_row105000010004"><td class="cellrowborder" valign="top" width="13.78%" headers="mcps1.1.4.1.1 "><p id="zh-cn_topic_0000002600000501_p105000010013"><a name="zh-cn_topic_0000002600000501_p105000010013"></a><a name="zh-cn_topic_0000002600000501_p105000010013"></a>config</p>
