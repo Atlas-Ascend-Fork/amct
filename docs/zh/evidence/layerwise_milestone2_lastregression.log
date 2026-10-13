@@ -1,0 +1,19 @@
+...................................s.................................... [ 13%]
+........................................................................ [ 27%]
+...........................................ssssssssssss................. [ 41%]
+........................................................................ [ 55%]
+........................................................................ [ 69%]
+........................................................................ [ 83%]
+........................................................................ [ 97%]
+...............                                                          [100%]
+=========================== short test summary info ============================
+SKIPPED [1] tests/unit_test/classic/ptq/test_quantize.py:568: no Ascend NPU available
+SKIPPED [3] tests/unit_test/classic/test_quant_reload.py:871: deploy conversion requires the real torch_npu
+SKIPPED [1] tests/unit_test/classic/test_quant_reload.py:910: deploy conversion requires the real torch_npu
+SKIPPED [1] tests/unit_test/classic/test_quant_reload.py:919: deploy conversion requires the real torch_npu
+SKIPPED [1] tests/unit_test/classic/test_quant_reload.py:925: deploy conversion requires the real torch_npu
+SKIPPED [1] tests/unit_test/classic/test_quant_reload.py:934: deploy conversion requires the real torch_npu
+SKIPPED [1] tests/unit_test/classic/test_quant_reload.py:970: requires an NPU device
+SKIPPED [1] tests/unit_test/classic/test_quant_reload.py:988: requires an NPU device
+SKIPPED [3] tests/unit_test/classic/test_quant_reload.py:1015: requires an NPU device
+506 passed, 13 skipped in 33.89s

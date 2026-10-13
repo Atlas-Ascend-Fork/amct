@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650"><defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#667078"/></marker></defs><rect width="1200" height="650" fill="#F6F3EC"/>
+<text x="42" y="52" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="30" fill="#182027" font-weight="700" text-anchor="start">文本先编码拼接，再切成等长 token 窗口</text>
+<text x="42" y="88" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#667078" font-weight="400" text-anchor="start">例子仅说明顺序：真实 token 由模型 tokenizer 决定</text>
+<line x1="42" y1="108" x2="1158" y2="108" stroke="#D5D0C5" stroke-width="2"/>
+<rect x="42" y="165" width="230" height="180" rx="5" fill="#E1EEEE" stroke="#197D8C" stroke-width="1.5"/>
+<text x="157.0" y="199" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#197D8C" font-weight="700" text-anchor="middle">本地 Dataset</text>
+<text x="157.0" y="232" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">load_from_disk</text>
+<text x="157.0" y="259" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">单 split / text 列</text>
+<text x="157.0" y="286" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">文本非空且可编码</text>
+<rect x="355" y="165" width="325" height="180" rx="5" fill="#E4ECE6" stroke="#4F856F" stroke-width="1.5"/>
+<text x="517.5" y="199" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#4F856F" font-weight="700" text-anchor="middle">顺序编码并拼接</text>
+<text x="517.5" y="232" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">text 0 → tokens 0…5</text>
+<text x="517.5" y="259" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">text 1 → tokens 6…11</text>
+<text x="517.5" y="286" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">总量达到 n × seq_len</text>
+<line x1="272" y1="255" x2="350" y2="255" stroke="#667078" stroke-width="2" marker-end="url(#a)"/>
+<rect x="770" y="165" width="375" height="180" rx="5" fill="#EAE4F0" stroke="#806D9E" stroke-width="1.5"/>
+<text x="957.5" y="199" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#806D9E" font-weight="700" text-anchor="middle">固定窗口</text>
+<text x="957.5" y="232" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">样本 0：[t0 t1 t2 t3]</text>
+<text x="957.5" y="259" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">样本 1：[t4 t5 t6 t7]</text>
+<text x="957.5" y="286" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">每个样本 shape = [1, 4]</text>
+<line x1="680" y1="255" x2="765" y2="255" stroke="#667078" stroke-width="2" marker-end="url(#a)"/>
+<text x="75" y="440" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="24" fill="#197D8C" font-weight="700" text-anchor="start">样本关系</text>
+<text x="285" y="440" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="27" fill="#182027" font-weight="700" text-anchor="start">num_samples = batch_num × batch_size</text>
+<text x="75" y="495" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="24" fill="#D86648" font-weight="700" text-anchor="start">边界</text>
+<text x="285" y="495" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="21" fill="#182027" font-weight="400" text-anchor="start">文本为空、token 不足、多个 split：明确失败，不补造样本。</text>
+<line x1="42" y1="590" x2="1158" y2="590" stroke="#D5D0C5" stroke-width="2"/>
+<text x="42" y="622" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="700" text-anchor="start">固定样本数与窗口长度，使后续 Extract 的输入规模可解释、可复现。</text>
+</svg>

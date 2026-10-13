@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650"><defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#667078"/></marker></defs><rect width="1200" height="650" fill="#F6F3EC"/>
+<text x="42" y="52" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="30" fill="#182027" font-weight="700" text-anchor="start">pipeline 来自 config，缺省值由 model 类型决定</text>
+<text x="42" y="88" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#667078" font-weight="400" text-anchor="start">入口校验先于 Adapter 构造；数据内容和运行时结构在后续阶段检查</text>
+<line x1="42" y1="108" x2="1158" y2="108" stroke="#D5D0C5" stroke-width="2"/>
+<rect x="42" y="160" width="245" height="145" rx="5" fill="#E1EEEE" stroke="#197D8C" stroke-width="1.5"/>
+<text x="164.5" y="194" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#197D8C" font-weight="700" text-anchor="middle">公共 quantize()</text>
+<text x="164.5" y="227" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">model / config</text>
+<text x="164.5" y="254" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">quant_result_dir</text>
+<rect x="380" y="155" width="330" height="150" rx="5" fill="#E1EEEE" stroke="#197D8C" stroke-width="1.5"/>
+<text x="545.0" y="189" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#197D8C" font-weight="700" text-anchor="middle">未指定 pipeline</text>
+<text x="545.0" y="222" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">nn.Module → full</text>
+<text x="545.0" y="249" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">本地目录 str → layerwise</text>
+<rect x="380" y="370" width="330" height="150" rx="5" fill="#EAE4F0" stroke="#806D9E" stroke-width="1.5"/>
+<text x="545.0" y="404" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#806D9E" font-weight="700" text-anchor="middle">显式 pipeline</text>
+<text x="545.0" y="437" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">full 或 layerwise</text>
+<text x="545.0" y="464" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">非法值 / 类型直接报错</text>
+<path d="M 287 230 H 335 V 230 H 375" fill="none" stroke="#667078" stroke-width="2" marker-end="url(#a)"/>
+<path d="M 335 230 V 445 H 375" fill="none" stroke="#667078" stroke-width="2" marker-end="url(#a)"/>
+<rect x="800" y="155" width="350" height="150" rx="5" fill="#E4ECE6" stroke="#4F856F" stroke-width="1.5"/>
+<text x="975.0" y="189" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#4F856F" font-weight="700" text-anchor="middle">合法组合</text>
+<text x="975.0" y="222" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">full + nn.Module</text>
+<text x="975.0" y="249" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">layerwise + 本地目录 str</text>
+<rect x="800" y="370" width="350" height="150" rx="5" fill="#F7E8E1" stroke="#D86648" stroke-width="1.5"/>
+<text x="975.0" y="404" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#D86648" font-weight="700" text-anchor="middle">明确拒绝</text>
+<text x="975.0" y="437" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">layerwise + nn.Module</text>
+<text x="975.0" y="464" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">full + str：当前未实现</text>
+<line x1="710" y1="230" x2="795" y2="230" stroke="#667078" stroke-width="2" marker-end="url(#a)"/>
+<line x1="710" y1="445" x2="795" y2="445" stroke="#667078" stroke-width="2" marker-end="url(#a)"/>
+<path d="M 710 420 H 758 V 275 H 795" fill="none" stroke="#667078" stroke-width="2" marker-end="url(#a)"/>
+<line x1="42" y1="590" x2="1158" y2="590" stroke="#D5D0C5" stroke-width="2"/>
+<text x="42" y="622" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="700" text-anchor="start">一个 API 保留整网入口，并新增本地目录的逐层编排；不新增 pipeline 关键字参数。</text>
+</svg>

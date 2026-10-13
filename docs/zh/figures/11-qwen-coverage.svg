@@ -1,0 +1,233 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650"><defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#667078"/></marker></defs><rect width="1200" height="650" fill="#F6F3EC"/>
+<text x="42" y="52" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="30" fill="#182027" font-weight="700" text-anchor="start">Qwen3-0.6B：28 层分别产生三个 FFN Linear unit</text>
+<text x="42" y="88" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#667078" font-weight="400" text-anchor="start">历史 CPU 功能冒烟覆盖全部 84 个参数单元；每层静态路径另有一个 MLP 输入缓存</text>
+<line x1="42" y1="108" x2="1158" y2="108" stroke="#D5D0C5" stroke-width="2"/>
+<rect x="42" y="145" width="148" height="77" rx="5" fill="#F6F3EC" stroke="#D5D0C5"/>
+<text x="54" y="170" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#182027" font-weight="700" text-anchor="start">Layer 0</text>
+<rect x="54" y="182" width="33" height="26" fill="#EAE4F0" stroke="#806D9E"/>
+<text x="70.5" y="201" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#806D9E" font-weight="700" text-anchor="middle">G</text>
+<rect x="96" y="182" width="33" height="26" fill="#E4ECE6" stroke="#4F856F"/>
+<text x="112.5" y="201" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#4F856F" font-weight="700" text-anchor="middle">U</text>
+<rect x="138" y="182" width="33" height="26" fill="#E1EEEE" stroke="#197D8C"/>
+<text x="154.5" y="201" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#197D8C" font-weight="700" text-anchor="middle">D</text>
+<rect x="203" y="145" width="148" height="77" rx="5" fill="#F6F3EC" stroke="#D5D0C5"/>
+<text x="215" y="170" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#182027" font-weight="700" text-anchor="start">Layer 1</text>
+<rect x="215" y="182" width="33" height="26" fill="#EAE4F0" stroke="#806D9E"/>
+<text x="231.5" y="201" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#806D9E" font-weight="700" text-anchor="middle">G</text>
+<rect x="257" y="182" width="33" height="26" fill="#E4ECE6" stroke="#4F856F"/>
+<text x="273.5" y="201" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#4F856F" font-weight="700" text-anchor="middle">U</text>
+<rect x="299" y="182" width="33" height="26" fill="#E1EEEE" stroke="#197D8C"/>
+<text x="315.5" y="201" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#197D8C" font-weight="700" text-anchor="middle">D</text>
+<rect x="364" y="145" width="148" height="77" rx="5" fill="#F6F3EC" stroke="#D5D0C5"/>
+<text x="376" y="170" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#182027" font-weight="700" text-anchor="start">Layer 2</text>
+<rect x="376" y="182" width="33" height="26" fill="#EAE4F0" stroke="#806D9E"/>
+<text x="392.5" y="201" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#806D9E" font-weight="700" text-anchor="middle">G</text>
+<rect x="418" y="182" width="33" height="26" fill="#E4ECE6" stroke="#4F856F"/>
+<text x="434.5" y="201" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#4F856F" font-weight="700" text-anchor="middle">U</text>
+<rect x="460" y="182" width="33" height="26" fill="#E1EEEE" stroke="#197D8C"/>
+<text x="476.5" y="201" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#197D8C" font-weight="700" text-anchor="middle">D</text>
+<rect x="525" y="145" width="148" height="77" rx="5" fill="#F6F3EC" stroke="#D5D0C5"/>
+<text x="537" y="170" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#182027" font-weight="700" text-anchor="start">Layer 3</text>
+<rect x="537" y="182" width="33" height="26" fill="#EAE4F0" stroke="#806D9E"/>
+<text x="553.5" y="201" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#806D9E" font-weight="700" text-anchor="middle">G</text>
+<rect x="579" y="182" width="33" height="26" fill="#E4ECE6" stroke="#4F856F"/>
+<text x="595.5" y="201" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#4F856F" font-weight="700" text-anchor="middle">U</text>
+<rect x="621" y="182" width="33" height="26" fill="#E1EEEE" stroke="#197D8C"/>
+<text x="637.5" y="201" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#197D8C" font-weight="700" text-anchor="middle">D</text>
+<rect x="686" y="145" width="148" height="77" rx="5" fill="#F6F3EC" stroke="#D5D0C5"/>
+<text x="698" y="170" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#182027" font-weight="700" text-anchor="start">Layer 4</text>
+<rect x="698" y="182" width="33" height="26" fill="#EAE4F0" stroke="#806D9E"/>
+<text x="714.5" y="201" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#806D9E" font-weight="700" text-anchor="middle">G</text>
+<rect x="740" y="182" width="33" height="26" fill="#E4ECE6" stroke="#4F856F"/>
+<text x="756.5" y="201" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#4F856F" font-weight="700" text-anchor="middle">U</text>
+<rect x="782" y="182" width="33" height="26" fill="#E1EEEE" stroke="#197D8C"/>
+<text x="798.5" y="201" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#197D8C" font-weight="700" text-anchor="middle">D</text>
+<rect x="847" y="145" width="148" height="77" rx="5" fill="#F6F3EC" stroke="#D5D0C5"/>
+<text x="859" y="170" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#182027" font-weight="700" text-anchor="start">Layer 5</text>
+<rect x="859" y="182" width="33" height="26" fill="#EAE4F0" stroke="#806D9E"/>
+<text x="875.5" y="201" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#806D9E" font-weight="700" text-anchor="middle">G</text>
+<rect x="901" y="182" width="33" height="26" fill="#E4ECE6" stroke="#4F856F"/>
+<text x="917.5" y="201" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#4F856F" font-weight="700" text-anchor="middle">U</text>
+<rect x="943" y="182" width="33" height="26" fill="#E1EEEE" stroke="#197D8C"/>
+<text x="959.5" y="201" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#197D8C" font-weight="700" text-anchor="middle">D</text>
+<rect x="1008" y="145" width="148" height="77" rx="5" fill="#F6F3EC" stroke="#D5D0C5"/>
+<text x="1020" y="170" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#182027" font-weight="700" text-anchor="start">Layer 6</text>
+<rect x="1020" y="182" width="33" height="26" fill="#EAE4F0" stroke="#806D9E"/>
+<text x="1036.5" y="201" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#806D9E" font-weight="700" text-anchor="middle">G</text>
+<rect x="1062" y="182" width="33" height="26" fill="#E4ECE6" stroke="#4F856F"/>
+<text x="1078.5" y="201" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#4F856F" font-weight="700" text-anchor="middle">U</text>
+<rect x="1104" y="182" width="33" height="26" fill="#E1EEEE" stroke="#197D8C"/>
+<text x="1120.5" y="201" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#197D8C" font-weight="700" text-anchor="middle">D</text>
+<rect x="42" y="238" width="148" height="77" rx="5" fill="#F6F3EC" stroke="#D5D0C5"/>
+<text x="54" y="263" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#182027" font-weight="700" text-anchor="start">Layer 7</text>
+<rect x="54" y="275" width="33" height="26" fill="#EAE4F0" stroke="#806D9E"/>
+<text x="70.5" y="294" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#806D9E" font-weight="700" text-anchor="middle">G</text>
+<rect x="96" y="275" width="33" height="26" fill="#E4ECE6" stroke="#4F856F"/>
+<text x="112.5" y="294" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#4F856F" font-weight="700" text-anchor="middle">U</text>
+<rect x="138" y="275" width="33" height="26" fill="#E1EEEE" stroke="#197D8C"/>
+<text x="154.5" y="294" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#197D8C" font-weight="700" text-anchor="middle">D</text>
+<rect x="203" y="238" width="148" height="77" rx="5" fill="#F6F3EC" stroke="#D5D0C5"/>
+<text x="215" y="263" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#182027" font-weight="700" text-anchor="start">Layer 8</text>
+<rect x="215" y="275" width="33" height="26" fill="#EAE4F0" stroke="#806D9E"/>
+<text x="231.5" y="294" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#806D9E" font-weight="700" text-anchor="middle">G</text>
+<rect x="257" y="275" width="33" height="26" fill="#E4ECE6" stroke="#4F856F"/>
+<text x="273.5" y="294" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#4F856F" font-weight="700" text-anchor="middle">U</text>
+<rect x="299" y="275" width="33" height="26" fill="#E1EEEE" stroke="#197D8C"/>
+<text x="315.5" y="294" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#197D8C" font-weight="700" text-anchor="middle">D</text>
+<rect x="364" y="238" width="148" height="77" rx="5" fill="#F6F3EC" stroke="#D5D0C5"/>
+<text x="376" y="263" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#182027" font-weight="700" text-anchor="start">Layer 9</text>
+<rect x="376" y="275" width="33" height="26" fill="#EAE4F0" stroke="#806D9E"/>
+<text x="392.5" y="294" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#806D9E" font-weight="700" text-anchor="middle">G</text>
+<rect x="418" y="275" width="33" height="26" fill="#E4ECE6" stroke="#4F856F"/>
+<text x="434.5" y="294" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#4F856F" font-weight="700" text-anchor="middle">U</text>
+<rect x="460" y="275" width="33" height="26" fill="#E1EEEE" stroke="#197D8C"/>
+<text x="476.5" y="294" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#197D8C" font-weight="700" text-anchor="middle">D</text>
+<rect x="525" y="238" width="148" height="77" rx="5" fill="#F6F3EC" stroke="#D5D0C5"/>
+<text x="537" y="263" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#182027" font-weight="700" text-anchor="start">Layer 10</text>
+<rect x="537" y="275" width="33" height="26" fill="#EAE4F0" stroke="#806D9E"/>
+<text x="553.5" y="294" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#806D9E" font-weight="700" text-anchor="middle">G</text>
+<rect x="579" y="275" width="33" height="26" fill="#E4ECE6" stroke="#4F856F"/>
+<text x="595.5" y="294" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#4F856F" font-weight="700" text-anchor="middle">U</text>
+<rect x="621" y="275" width="33" height="26" fill="#E1EEEE" stroke="#197D8C"/>
+<text x="637.5" y="294" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#197D8C" font-weight="700" text-anchor="middle">D</text>
+<rect x="686" y="238" width="148" height="77" rx="5" fill="#F6F3EC" stroke="#D5D0C5"/>
+<text x="698" y="263" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#182027" font-weight="700" text-anchor="start">Layer 11</text>
+<rect x="698" y="275" width="33" height="26" fill="#EAE4F0" stroke="#806D9E"/>
+<text x="714.5" y="294" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#806D9E" font-weight="700" text-anchor="middle">G</text>
+<rect x="740" y="275" width="33" height="26" fill="#E4ECE6" stroke="#4F856F"/>
+<text x="756.5" y="294" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#4F856F" font-weight="700" text-anchor="middle">U</text>
+<rect x="782" y="275" width="33" height="26" fill="#E1EEEE" stroke="#197D8C"/>
+<text x="798.5" y="294" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#197D8C" font-weight="700" text-anchor="middle">D</text>
+<rect x="847" y="238" width="148" height="77" rx="5" fill="#F6F3EC" stroke="#D5D0C5"/>
+<text x="859" y="263" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#182027" font-weight="700" text-anchor="start">Layer 12</text>
+<rect x="859" y="275" width="33" height="26" fill="#EAE4F0" stroke="#806D9E"/>
+<text x="875.5" y="294" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#806D9E" font-weight="700" text-anchor="middle">G</text>
+<rect x="901" y="275" width="33" height="26" fill="#E4ECE6" stroke="#4F856F"/>
+<text x="917.5" y="294" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#4F856F" font-weight="700" text-anchor="middle">U</text>
+<rect x="943" y="275" width="33" height="26" fill="#E1EEEE" stroke="#197D8C"/>
+<text x="959.5" y="294" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#197D8C" font-weight="700" text-anchor="middle">D</text>
+<rect x="1008" y="238" width="148" height="77" rx="5" fill="#F6F3EC" stroke="#D5D0C5"/>
+<text x="1020" y="263" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#182027" font-weight="700" text-anchor="start">Layer 13</text>
+<rect x="1020" y="275" width="33" height="26" fill="#EAE4F0" stroke="#806D9E"/>
+<text x="1036.5" y="294" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#806D9E" font-weight="700" text-anchor="middle">G</text>
+<rect x="1062" y="275" width="33" height="26" fill="#E4ECE6" stroke="#4F856F"/>
+<text x="1078.5" y="294" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#4F856F" font-weight="700" text-anchor="middle">U</text>
+<rect x="1104" y="275" width="33" height="26" fill="#E1EEEE" stroke="#197D8C"/>
+<text x="1120.5" y="294" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#197D8C" font-weight="700" text-anchor="middle">D</text>
+<rect x="42" y="331" width="148" height="77" rx="5" fill="#F6F3EC" stroke="#D5D0C5"/>
+<text x="54" y="356" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#182027" font-weight="700" text-anchor="start">Layer 14</text>
+<rect x="54" y="368" width="33" height="26" fill="#EAE4F0" stroke="#806D9E"/>
+<text x="70.5" y="387" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#806D9E" font-weight="700" text-anchor="middle">G</text>
+<rect x="96" y="368" width="33" height="26" fill="#E4ECE6" stroke="#4F856F"/>
+<text x="112.5" y="387" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#4F856F" font-weight="700" text-anchor="middle">U</text>
+<rect x="138" y="368" width="33" height="26" fill="#E1EEEE" stroke="#197D8C"/>
+<text x="154.5" y="387" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#197D8C" font-weight="700" text-anchor="middle">D</text>
+<rect x="203" y="331" width="148" height="77" rx="5" fill="#F6F3EC" stroke="#D5D0C5"/>
+<text x="215" y="356" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#182027" font-weight="700" text-anchor="start">Layer 15</text>
+<rect x="215" y="368" width="33" height="26" fill="#EAE4F0" stroke="#806D9E"/>
+<text x="231.5" y="387" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#806D9E" font-weight="700" text-anchor="middle">G</text>
+<rect x="257" y="368" width="33" height="26" fill="#E4ECE6" stroke="#4F856F"/>
+<text x="273.5" y="387" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#4F856F" font-weight="700" text-anchor="middle">U</text>
+<rect x="299" y="368" width="33" height="26" fill="#E1EEEE" stroke="#197D8C"/>
+<text x="315.5" y="387" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#197D8C" font-weight="700" text-anchor="middle">D</text>
+<rect x="364" y="331" width="148" height="77" rx="5" fill="#F6F3EC" stroke="#D5D0C5"/>
+<text x="376" y="356" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#182027" font-weight="700" text-anchor="start">Layer 16</text>
+<rect x="376" y="368" width="33" height="26" fill="#EAE4F0" stroke="#806D9E"/>
+<text x="392.5" y="387" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#806D9E" font-weight="700" text-anchor="middle">G</text>
+<rect x="418" y="368" width="33" height="26" fill="#E4ECE6" stroke="#4F856F"/>
+<text x="434.5" y="387" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#4F856F" font-weight="700" text-anchor="middle">U</text>
+<rect x="460" y="368" width="33" height="26" fill="#E1EEEE" stroke="#197D8C"/>
+<text x="476.5" y="387" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#197D8C" font-weight="700" text-anchor="middle">D</text>
+<rect x="525" y="331" width="148" height="77" rx="5" fill="#F6F3EC" stroke="#D5D0C5"/>
+<text x="537" y="356" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#182027" font-weight="700" text-anchor="start">Layer 17</text>
+<rect x="537" y="368" width="33" height="26" fill="#EAE4F0" stroke="#806D9E"/>
+<text x="553.5" y="387" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#806D9E" font-weight="700" text-anchor="middle">G</text>
+<rect x="579" y="368" width="33" height="26" fill="#E4ECE6" stroke="#4F856F"/>
+<text x="595.5" y="387" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#4F856F" font-weight="700" text-anchor="middle">U</text>
+<rect x="621" y="368" width="33" height="26" fill="#E1EEEE" stroke="#197D8C"/>
+<text x="637.5" y="387" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#197D8C" font-weight="700" text-anchor="middle">D</text>
+<rect x="686" y="331" width="148" height="77" rx="5" fill="#F6F3EC" stroke="#D5D0C5"/>
+<text x="698" y="356" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#182027" font-weight="700" text-anchor="start">Layer 18</text>
+<rect x="698" y="368" width="33" height="26" fill="#EAE4F0" stroke="#806D9E"/>
+<text x="714.5" y="387" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#806D9E" font-weight="700" text-anchor="middle">G</text>
+<rect x="740" y="368" width="33" height="26" fill="#E4ECE6" stroke="#4F856F"/>
+<text x="756.5" y="387" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#4F856F" font-weight="700" text-anchor="middle">U</text>
+<rect x="782" y="368" width="33" height="26" fill="#E1EEEE" stroke="#197D8C"/>
+<text x="798.5" y="387" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#197D8C" font-weight="700" text-anchor="middle">D</text>
+<rect x="847" y="331" width="148" height="77" rx="5" fill="#F6F3EC" stroke="#D5D0C5"/>
+<text x="859" y="356" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#182027" font-weight="700" text-anchor="start">Layer 19</text>
+<rect x="859" y="368" width="33" height="26" fill="#EAE4F0" stroke="#806D9E"/>
+<text x="875.5" y="387" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#806D9E" font-weight="700" text-anchor="middle">G</text>
+<rect x="901" y="368" width="33" height="26" fill="#E4ECE6" stroke="#4F856F"/>
+<text x="917.5" y="387" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#4F856F" font-weight="700" text-anchor="middle">U</text>
+<rect x="943" y="368" width="33" height="26" fill="#E1EEEE" stroke="#197D8C"/>
+<text x="959.5" y="387" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#197D8C" font-weight="700" text-anchor="middle">D</text>
+<rect x="1008" y="331" width="148" height="77" rx="5" fill="#F6F3EC" stroke="#D5D0C5"/>
+<text x="1020" y="356" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#182027" font-weight="700" text-anchor="start">Layer 20</text>
+<rect x="1020" y="368" width="33" height="26" fill="#EAE4F0" stroke="#806D9E"/>
+<text x="1036.5" y="387" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#806D9E" font-weight="700" text-anchor="middle">G</text>
+<rect x="1062" y="368" width="33" height="26" fill="#E4ECE6" stroke="#4F856F"/>
+<text x="1078.5" y="387" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#4F856F" font-weight="700" text-anchor="middle">U</text>
+<rect x="1104" y="368" width="33" height="26" fill="#E1EEEE" stroke="#197D8C"/>
+<text x="1120.5" y="387" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#197D8C" font-weight="700" text-anchor="middle">D</text>
+<rect x="42" y="424" width="148" height="77" rx="5" fill="#F6F3EC" stroke="#D5D0C5"/>
+<text x="54" y="449" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#182027" font-weight="700" text-anchor="start">Layer 21</text>
+<rect x="54" y="461" width="33" height="26" fill="#EAE4F0" stroke="#806D9E"/>
+<text x="70.5" y="480" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#806D9E" font-weight="700" text-anchor="middle">G</text>
+<rect x="96" y="461" width="33" height="26" fill="#E4ECE6" stroke="#4F856F"/>
+<text x="112.5" y="480" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#4F856F" font-weight="700" text-anchor="middle">U</text>
+<rect x="138" y="461" width="33" height="26" fill="#E1EEEE" stroke="#197D8C"/>
+<text x="154.5" y="480" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#197D8C" font-weight="700" text-anchor="middle">D</text>
+<rect x="203" y="424" width="148" height="77" rx="5" fill="#F6F3EC" stroke="#D5D0C5"/>
+<text x="215" y="449" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#182027" font-weight="700" text-anchor="start">Layer 22</text>
+<rect x="215" y="461" width="33" height="26" fill="#EAE4F0" stroke="#806D9E"/>
+<text x="231.5" y="480" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#806D9E" font-weight="700" text-anchor="middle">G</text>
+<rect x="257" y="461" width="33" height="26" fill="#E4ECE6" stroke="#4F856F"/>
+<text x="273.5" y="480" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#4F856F" font-weight="700" text-anchor="middle">U</text>
+<rect x="299" y="461" width="33" height="26" fill="#E1EEEE" stroke="#197D8C"/>
+<text x="315.5" y="480" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#197D8C" font-weight="700" text-anchor="middle">D</text>
+<rect x="364" y="424" width="148" height="77" rx="5" fill="#F6F3EC" stroke="#D5D0C5"/>
+<text x="376" y="449" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#182027" font-weight="700" text-anchor="start">Layer 23</text>
+<rect x="376" y="461" width="33" height="26" fill="#EAE4F0" stroke="#806D9E"/>
+<text x="392.5" y="480" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#806D9E" font-weight="700" text-anchor="middle">G</text>
+<rect x="418" y="461" width="33" height="26" fill="#E4ECE6" stroke="#4F856F"/>
+<text x="434.5" y="480" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#4F856F" font-weight="700" text-anchor="middle">U</text>
+<rect x="460" y="461" width="33" height="26" fill="#E1EEEE" stroke="#197D8C"/>
+<text x="476.5" y="480" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#197D8C" font-weight="700" text-anchor="middle">D</text>
+<rect x="525" y="424" width="148" height="77" rx="5" fill="#F6F3EC" stroke="#D5D0C5"/>
+<text x="537" y="449" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#182027" font-weight="700" text-anchor="start">Layer 24</text>
+<rect x="537" y="461" width="33" height="26" fill="#EAE4F0" stroke="#806D9E"/>
+<text x="553.5" y="480" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#806D9E" font-weight="700" text-anchor="middle">G</text>
+<rect x="579" y="461" width="33" height="26" fill="#E4ECE6" stroke="#4F856F"/>
+<text x="595.5" y="480" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#4F856F" font-weight="700" text-anchor="middle">U</text>
+<rect x="621" y="461" width="33" height="26" fill="#E1EEEE" stroke="#197D8C"/>
+<text x="637.5" y="480" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#197D8C" font-weight="700" text-anchor="middle">D</text>
+<rect x="686" y="424" width="148" height="77" rx="5" fill="#F6F3EC" stroke="#D5D0C5"/>
+<text x="698" y="449" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#182027" font-weight="700" text-anchor="start">Layer 25</text>
+<rect x="698" y="461" width="33" height="26" fill="#EAE4F0" stroke="#806D9E"/>
+<text x="714.5" y="480" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#806D9E" font-weight="700" text-anchor="middle">G</text>
+<rect x="740" y="461" width="33" height="26" fill="#E4ECE6" stroke="#4F856F"/>
+<text x="756.5" y="480" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#4F856F" font-weight="700" text-anchor="middle">U</text>
+<rect x="782" y="461" width="33" height="26" fill="#E1EEEE" stroke="#197D8C"/>
+<text x="798.5" y="480" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#197D8C" font-weight="700" text-anchor="middle">D</text>
+<rect x="847" y="424" width="148" height="77" rx="5" fill="#F6F3EC" stroke="#D5D0C5"/>
+<text x="859" y="449" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#182027" font-weight="700" text-anchor="start">Layer 26</text>
+<rect x="859" y="461" width="33" height="26" fill="#EAE4F0" stroke="#806D9E"/>
+<text x="875.5" y="480" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#806D9E" font-weight="700" text-anchor="middle">G</text>
+<rect x="901" y="461" width="33" height="26" fill="#E4ECE6" stroke="#4F856F"/>
+<text x="917.5" y="480" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#4F856F" font-weight="700" text-anchor="middle">U</text>
+<rect x="943" y="461" width="33" height="26" fill="#E1EEEE" stroke="#197D8C"/>
+<text x="959.5" y="480" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#197D8C" font-weight="700" text-anchor="middle">D</text>
+<rect x="1008" y="424" width="148" height="77" rx="5" fill="#F6F3EC" stroke="#D5D0C5"/>
+<text x="1020" y="449" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#182027" font-weight="700" text-anchor="start">Layer 27</text>
+<rect x="1020" y="461" width="33" height="26" fill="#EAE4F0" stroke="#806D9E"/>
+<text x="1036.5" y="480" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#806D9E" font-weight="700" text-anchor="middle">G</text>
+<rect x="1062" y="461" width="33" height="26" fill="#E4ECE6" stroke="#4F856F"/>
+<text x="1078.5" y="480" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#4F856F" font-weight="700" text-anchor="middle">U</text>
+<rect x="1104" y="461" width="33" height="26" fill="#E1EEEE" stroke="#197D8C"/>
+<text x="1120.5" y="480" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="16" fill="#197D8C" font-weight="700" text-anchor="middle">D</text>
+<text x="50" y="553" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#182027" font-weight="400" text-anchor="start">G = gate_proj     U = up_proj     D = down_proj</text>
+<text x="740" y="553" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="27" fill="#D99A2B" font-weight="700" text-anchor="start">28 × 3 = 84 units</text>
+<line x1="42" y1="590" x2="1158" y2="590" stroke="#D5D0C5" stroke-width="2"/>
+<text x="42" y="622" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="700" text-anchor="start">全层覆盖 + 参数文件 + fresh reload + finite，只证明功能闭环，不代表精度或 NPU 性能。</text>
+</svg>

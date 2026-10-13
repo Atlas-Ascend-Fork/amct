@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650"><defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#667078"/></marker></defs><rect width="1200" height="650" fill="#F6F3EC"/>
+<text x="42" y="52" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="30" fill="#182027" font-weight="700" text-anchor="start">缓存需要同时通过身份匹配与文件完整性检查</text>
+<text x="42" y="88" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#667078" font-weight="400" text-anchor="start">当前数据身份只有路径；tokenizer 摘要只覆盖可选 tokenizer.json</text>
+<line x1="42" y1="108" x2="1158" y2="108" stroke="#D5D0C5" stroke-width="2"/>
+<rect x="42" y="155" width="345" height="215" rx="5" fill="#E1EEEE" stroke="#197D8C" stroke-width="1.5"/>
+<text x="214.5" y="189" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#197D8C" font-weight="700" text-anchor="middle">身份字段</text>
+<text x="214.5" y="222" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">模型路径 + config/权重指纹</text>
+<text x="214.5" y="249" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">dataset 规范化路径</text>
+<text x="214.5" y="276" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">tokenizer 路径 / JSON 摘要</text>
+<text x="214.5" y="303" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">样本数、batch、长度、hook</text>
+<rect x="440" y="155" width="300" height="215" rx="5" fill="#E4ECE6" stroke="#4F856F" stroke-width="1.5"/>
+<text x="590.0" y="189" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#4F856F" font-weight="700" text-anchor="middle">文件字段</text>
+<text x="590.0" y="222" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">每层 pkl 文件名</text>
+<text x="590.0" y="249" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">文件 size</text>
+<text x="590.0" y="276" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">文件 SHA-256</text>
+<text x="590.0" y="303" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">目标文件集合</text>
+<rect x="810" y="155" width="345" height="135" rx="5" fill="#E4ECE6" stroke="#4F856F" stroke-width="1.5"/>
+<text x="982.5" y="189" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#4F856F" font-weight="700" text-anchor="middle">两组都匹配</text>
+<text x="982.5" y="222" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">直接进入 PTQ</text>
+<text x="982.5" y="249" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">完整缓存可以复用</text>
+<rect x="810" y="330" width="345" height="135" rx="5" fill="#F7E8E1" stroke="#D86648" stroke-width="1.5"/>
+<text x="982.5" y="364" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#D86648" font-weight="700" text-anchor="middle">缺失 / 损坏 / 不匹配</text>
+<text x="982.5" y="397" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">清理该 target 旧缓存</text>
+<text x="982.5" y="424" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">全量重抽</text>
+<rect x="440" y="430" width="300" height="120" rx="5" fill="#F6EEDB" stroke="#D99A2B" stroke-width="1.5"/>
+<text x="590.0" y="464" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#D99A2B" font-weight="700" text-anchor="middle">身份 AND 文件</text>
+<text x="590.0" y="497" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">全部匹配才复用</text>
+<text x="590.0" y="524" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">任一不符就重抽</text>
+<path d="M 387 260 H 411 V 490 H 435" fill="none" stroke="#667078" stroke-width="2" marker-end="url(#a)"/>
+<line x1="590" y1="370" x2="590" y2="425" stroke="#667078" stroke-width="2" marker-end="url(#a)"/>
+<path d="M 740 490 H 780 V 220 H 805" fill="none" stroke="#667078" stroke-width="2" marker-end="url(#a)"/>
+<path d="M 780 490 V 396 H 805" fill="none" stroke="#667078" stroke-width="2" marker-end="url(#a)"/>
+<text x="42" y="420" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#806D9E" font-weight="700" text-anchor="start">不进入 key</text>
+<text x="42" y="462" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="20" fill="#182027" font-weight="400" text-anchor="start">bit / 算法 / 求解超参</text>
+<text x="42" y="507" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="19" fill="#667078" font-weight="400" text-anchor="start">它们不改变原模型输入激活。</text>
+<line x1="42" y1="590" x2="1158" y2="590" stroke="#D5D0C5" stroke-width="2"/>
+<text x="42" y="622" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="700" text-anchor="start">同路径覆盖数据仍可能误用旧缓存；应固定数据目录版本，后续补内容摘要。</text>
+</svg>
