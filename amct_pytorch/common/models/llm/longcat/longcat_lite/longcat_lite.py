@@ -55,6 +55,7 @@ def _save_tensor(path: str, tensors: list[torch.Tensor]):
     name="longcat_lite",
     task="llm",
     family="longcat",
+    model_type="longcat_flash",
     description="LongCat-Flash-Lite model adapter",
 )
 class LongcatLite(BaseModel):

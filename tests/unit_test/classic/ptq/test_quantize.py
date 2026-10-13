@@ -171,8 +171,8 @@ def test_quantize_passes_user_config_through():
     assert args[1] is user_cfg
 
 
-def test_quantize_rejects_non_module_model():
-    with pytest.raises(TypeError):
+def test_quantize_string_model_infers_layerwise_and_rejects_missing_path():
+    with pytest.raises(ValueError, match="does not exist"):
         quantize("not_a_module")
 
 

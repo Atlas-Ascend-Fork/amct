@@ -25,6 +25,7 @@ from amct_pytorch.common.models.llm.qwen.qwen3_5.qwen3_5_moe import Qwen3_5Moe
     name="qwen3_6_moe",
     task="llm",
     family="qwen",
+    model_type="qwen3_6_moe",
     description="Qwen3.6 moe model adapter",
 )
 class Qwen3_6Moe(Qwen3_5Moe):

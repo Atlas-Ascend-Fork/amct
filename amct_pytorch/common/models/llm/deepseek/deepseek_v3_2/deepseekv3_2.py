@@ -38,6 +38,7 @@ from amct_pytorch.common.datasets.ptq_io import save_ptq_kwargs
     name="deepseek_v3_2",
     task="llm",
     family="deepseek",
+    model_type="deepseek_v32",
     description="DeepSeek V3.2 model adapter",
 )
 class DeepseekV32(BaseModel):

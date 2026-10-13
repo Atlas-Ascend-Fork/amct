@@ -59,6 +59,7 @@ class _NoMoveAlignDevicesHook(AlignDevicesHook):
     name="deepseek_v4",
     task="llm",
     family="deepseek",
+    model_type="deepseek_v4",
     description="DeepSeek V4 model adapter",
 )
 class DeepseekV4(BaseModel):

@@ -56,6 +56,7 @@ def remap_hyv3_keys(state_dict):
     name="hy_v3",
     task="llm",
     family="hyv3",
+    model_type="hy_v3",
     description="Tencent HunYuan V3 (Hy3-preview) model adapter",
     force=True,
 )
