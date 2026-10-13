@@ -16,6 +16,7 @@
 # ----------------------------------------------------------------------------
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -163,6 +164,8 @@ def prune_diagnose(
     tolerance: float = 0.05,
 ) -> DiagnosisReport:
     """Check whether pruning works on the model (dry-run on a copy; original untouched)."""
+    if isinstance(data, Iterator):
+        data = list(data)
     cfg_obj = (
         config
         if isinstance(config, PruneConfig)
