@@ -104,11 +104,12 @@ def _block_view(x: torch.Tensor, block_size: int) -> tuple[torch.Tensor, int]:
     x_fp = x.to(torch.float32)
     if pad:
         x_fp = F.pad(x_fp, (0, pad))
-    return x_fp.reshape(*x_fp.shape[:-1], -1, block_size), pad
+    n_block = x_fp.shape[-1] // block_size
+    return x_fp.reshape(*x_fp.shape[:-1], n_block, block_size), pad
 
 
 def _unpad(blocked: torch.Tensor, last_dim: int, pad: int) -> torch.Tensor:
-    flat = blocked.reshape(*blocked.shape[:-2], -1)
+    flat = blocked.reshape(*blocked.shape[:-2], blocked.shape[-2] * blocked.shape[-1])
     return flat[..., :last_dim] if pad else flat
 
 
