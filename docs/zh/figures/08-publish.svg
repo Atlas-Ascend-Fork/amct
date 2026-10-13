@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650"><defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#667078"/></marker></defs><rect width="1200" height="650" fill="#F6F3EC"/>
+<text x="42" y="52" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="30" fill="#182027" font-weight="700" text-anchor="start">manifest-last 让“有文件”与“完整交付”分开</text>
+<text x="42" y="88" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#667078" font-weight="400" text-anchor="start">状态由 Writer 的 expected units 与文件复验决定</text>
+<line x1="42" y1="108" x2="1158" y2="108" stroke="#D5D0C5" stroke-width="2"/>
+<rect x="42" y="175" width="237" height="160" rx="5" fill="#E1EEEE" stroke="#197D8C" stroke-width="1.5"/>
+<text x="160.5" y="209" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#197D8C" font-weight="700" text-anchor="middle">计划</text>
+<text x="160.5" y="242" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">冻结 expected units</text>
+<text x="160.5" y="269" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">登记源模型身份</text>
+<line x1="279" y1="255" x2="329" y2="255" stroke="#667078" stroke-width="2" marker-end="url(#a)"/>
+<rect x="335" y="175" width="237" height="160" rx="5" fill="#EAE4F0" stroke="#806D9E" stroke-width="1.5"/>
+<text x="453.5" y="209" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#806D9E" font-weight="700" text-anchor="middle">写 unit</text>
+<text x="453.5" y="242" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">参数 → safetensors</text>
+<text x="453.5" y="269" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">每个文件原子写入</text>
+<line x1="572" y1="255" x2="622" y2="255" stroke="#667078" stroke-width="2" marker-end="url(#a)"/>
+<rect x="628" y="175" width="237" height="160" rx="5" fill="#F6EEDB" stroke="#D99A2B" stroke-width="1.5"/>
+<text x="746.5" y="209" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#D99A2B" font-weight="700" text-anchor="middle">完整性复验</text>
+<text x="746.5" y="242" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">无 pending units</text>
+<text x="746.5" y="269" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">重验 schema 与摘要</text>
+<line x1="865" y1="255" x2="915" y2="255" stroke="#667078" stroke-width="2" marker-end="url(#a)"/>
+<rect x="921" y="175" width="237" height="160" rx="5" fill="#E4ECE6" stroke="#4F856F" stroke-width="1.5"/>
+<text x="1039.5" y="209" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#4F856F" font-weight="700" text-anchor="middle">发布</text>
+<text x="1039.5" y="242" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">quant_manifest.json</text>
+<text x="1039.5" y="269" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">Reader 可以校验加载</text>
+<rect x="175" y="420" width="390" height="120" rx="5" fill="#F7E8E1" stroke="#D86648" stroke-width="1.5"/>
+<text x="370.0" y="454" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#D86648" font-weight="700" text-anchor="middle">中断或校验失败</text>
+<text x="370.0" y="487" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">可能留下部分 unit 文件</text>
+<text x="370.0" y="514" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">没有 manifest，不可当成完整结果</text>
+<rect x="680" y="420" width="390" height="120" rx="5" fill="#E4ECE6" stroke="#4F856F" stroke-width="1.5"/>
+<text x="875.0" y="454" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#4F856F" font-weight="700" text-anchor="middle">重新尝试</text>
+<text x="875.0" y="487" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">使用新的结果目录重新 PTQ</text>
+<text x="875.0" y="514" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">完整激活缓存可单独复用</text>
+<path d="M 454 335 V 414" fill="none" stroke="#667078" stroke-width="2" marker-end="url(#a)"/>
+<path d="M 746 335 V 385 H 365 V 414" fill="none" stroke="#667078" stroke-width="2" marker-end="url(#a)"/>
+<line x1="42" y1="590" x2="1158" y2="590" stroke="#D5D0C5" stroke-width="2"/>
+<text x="42" y="622" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="700" text-anchor="start">不提供 per-unit PTQ resume；“写出后中断”的严格故障注入仍需补测。</text>
+</svg>

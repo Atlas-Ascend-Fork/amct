@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650"><defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#667078"/></marker></defs><rect width="1200" height="650" fill="#F6F3EC"/>
+<text x="42" y="52" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="30" fill="#182027" font-weight="700" text-anchor="start">按证据种类给结论，不把所有 PASS 混成一种证明</text>
+<text x="42" y="88" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#667078" font-weight="400" text-anchor="start">历史运行日期：2026-09-23；本次 2026-09-28 为源码、脚本和留存日志复核</text>
+<line x1="42" y1="108" x2="1158" y2="108" stroke="#D5D0C5" stroke-width="2"/>
+<rect x="42" y="145" width="260" height="65" rx="5" fill="#E4ECE6" stroke="#4F856F" stroke-width="1.5"/>
+<text x="172.0" y="179" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#4F856F" font-weight="700" text-anchor="middle">单测 / mock</text>
+<text x="340" y="185" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="21" fill="#182027" font-weight="400" text-anchor="start">79 passed；检查分派、缓存调用次数、solver 组件</text>
+<rect x="42" y="226" width="260" height="65" rx="5" fill="#E4ECE6" stroke="#4F856F" stroke-width="1.5"/>
+<text x="172.0" y="260" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#4F856F" font-weight="700" text-anchor="middle">相关回归</text>
+<text x="340" y="266" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="21" fill="#182027" font-weight="400" text-anchor="start">506 passed / 13 skipped；350 passed / 13 skipped</text>
+<rect x="42" y="307" width="260" height="65" rx="5" fill="#E1EEEE" stroke="#197D8C" stroke-width="1.5"/>
+<text x="172.0" y="341" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#197D8C" font-weight="700" text-anchor="middle">Qwen CPU 功能</text>
+<text x="340" y="347" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="21" fill="#182027" font-weight="400" text-anchor="start">28 层 / 84 units；1 × 16 token；fresh reload / finite</text>
+<rect x="42" y="388" width="260" height="65" rx="5" fill="#F6EEDB" stroke="#D99A2B" stroke-width="1.5"/>
+<text x="172.0" y="422" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#D99A2B" font-weight="700" text-anchor="middle">待补真实断言</text>
+<text x="340" y="428" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="21" fill="#182027" font-weight="400" text-anchor="start">缓存确实未重抽；写出部分 unit 后失败；AWQ 阈值</text>
+<rect x="42" y="469" width="260" height="65" rx="5" fill="#F7E8E1" stroke="#D86648" stroke-width="1.5"/>
+<text x="172.0" y="503" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#D86648" font-weight="700" text-anchor="middle">待补独立验收</text>
+<text x="340" y="509" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="21" fill="#182027" font-weight="400" text-anchor="start">代表性精度 / PPL；NPU deploy；峰值内存与吞吐</text>
+<line x1="42" y1="590" x2="1158" y2="590" stroke="#D5D0C5" stroke-width="2"/>
+<text x="42" y="622" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="700" text-anchor="start">测试集合有重叠，不相加；历史 Qwen 只有脚本和报告摘录，缺完整独立运行日志。</text>
+</svg>

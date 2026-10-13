@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650"><defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#667078"/></marker></defs><rect width="1200" height="650" fill="#F6F3EC"/>
+<text x="42" y="52" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="30" fill="#182027" font-weight="700" text-anchor="start">工作缓存、量化参数与源模型是三种不同资产</text>
+<text x="42" y="88" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#667078" font-weight="400" text-anchor="start">结果目录保存恢复所需量化参数，不是完整低比特模型权重包</text>
+<line x1="42" y1="108" x2="1158" y2="108" stroke="#D5D0C5" stroke-width="2"/>
+<rect x="42" y="165" width="345" height="320" rx="5" fill="#E1EEEE" stroke="#197D8C" stroke-width="1.5"/>
+<text x="214.5" y="199" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#197D8C" font-weight="700" text-anchor="middle">源模型目录</text>
+<text x="214.5" y="232" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">config.json</text>
+<text x="214.5" y="259" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">model.safetensors / shards</text>
+<text x="214.5" y="286" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">tokenizer.json 等</text>
+<text x="214.5" y="313" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">  </text>
+<text x="214.5" y="340" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">提供原始架构与浮点权重</text>
+<text x="214.5" y="367" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">fresh reload 需要对应源模型</text>
+<rect x="428" y="165" width="345" height="320" rx="5" fill="#E4ECE6" stroke="#4F856F" stroke-width="1.5"/>
+<text x="600.5" y="199" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#4F856F" font-weight="700" text-anchor="middle">work_dir/ptq_data/mlp</text>
+<text x="600.5" y="232" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">block_0_mlp_in.pkl</text>
+<text x="600.5" y="259" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">…</text>
+<text x="600.5" y="286" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">cache_manifest.json</text>
+<text x="600.5" y="313" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">  </text>
+<text x="600.5" y="340" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">中间激活；可重建、可复用</text>
+<text x="600.5" y="367" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">独立于每次 PTQ 结果</text>
+<rect x="815" y="165" width="345" height="320" rx="5" fill="#F6EEDB" stroke="#D99A2B" stroke-width="1.5"/>
+<text x="987.5" y="199" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#D99A2B" font-weight="700" text-anchor="middle">quant_result_dir</text>
+<text x="987.5" y="232" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">每 Linear 一个 safetensors</text>
+<text x="987.5" y="259" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">quant_manifest.json</text>
+<text x="987.5" y="286" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">  </text>
+<text x="987.5" y="313" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">量化参数与配置、身份</text>
+<text x="987.5" y="340" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">发布后按 manifest 加载</text>
+<text x="987.5" y="367" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">失败重做使用新目录</text>
+<text x="42" y="550" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="24" fill="#806D9E" font-weight="700" text-anchor="start">fresh 原模型 + V2 参数 artifact  →  reload_quant_params()  →  MinMaxQuant</text>
+<line x1="42" y1="590" x2="1158" y2="590" stroke="#D5D0C5" stroke-width="2"/>
+<text x="42" y="622" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="700" text-anchor="start">目录不能重叠；cache manifest 和 quant manifest 分别代表两种不同完成状态。</text>
+</svg>
