@@ -21,16 +21,26 @@ from __future__ import annotations
 
 import json
 import os
+import hashlib
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import torch
+from safetensors import safe_open
+
 from amct_pytorch.algorithms import AlgorithmRegistry
 from amct_pytorch.common.config import set_default_config
 from amct_pytorch.common.config.fields import QuantConfig
+from amct_pytorch.common.datasets.ptq_provider import LlmPtqDataProvider
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm import available_llm_adapters, register_llm_models
+from amct_pytorch.common.optimization import SOLVER_REGISTRY, register_solvers
+from amct_pytorch.classic.quant_result import QuantResultWriter, dtype_name
 from amct_pytorch.quantization.bit_policy import BitPolicy
+from amct_pytorch.quantization.dtypes import register_dtype
+from amct_pytorch.algorithms.quant import register_algorithms
 
 
 _SUPPORTED_ALGORITHM = "minmax"
@@ -115,6 +125,16 @@ class LayerwiseQuantizationPlan:
     args: LayerwiseArgs
     adapter: Any
     model_config: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class PlannedLinearUnit:
+    """One reloadable Linear unit in a layer's persisted plan."""
+
+    layer_idx: int
+    relative_name: str
+    layer_name: str
+    skip: bool
 
 
 def load_model_config(model_path: str) -> tuple[str, dict[str, Any]]:
@@ -254,6 +274,7 @@ def build_args_from_config(
         calibration_shape_config
     )
     model_target = "moe" if _is_moe_model(model_config) else "mlp"
+    _reject_moe_target(model_target, model_config)
     bit_policy = BitPolicy({"w_bits": w_bits, "a_bits": a_bits})
     bit_policy.a_dynamic = activation_dynamic
 
@@ -345,6 +366,723 @@ def prepare_layerwise_quantization(
     )
 
 
+def run_layerwise_quantization(plan: LayerwiseQuantizationPlan) -> str:
+    """Run Extract and PTQ for one prepared layerwise target."""
+    args = plan.args
+    adapter = plan.adapter
+    target = _single_target(args.quant_target)
+    _register_layerwise_components()
+    _prepare_result_directory(args.quant_result_dir)
+
+    unit_plan = _plan_linear_units(adapter, args)
+    expected_units = tuple(unit.layer_name for unit in unit_plan if not unit.skip)
+    source_model = _source_model_fingerprint(adapter)
+    writer = QuantResultWriter.create(
+        args.quant_result_dir, expected_units, source_model
+    )
+    data_provider = LlmPtqDataProvider(args, adapter)
+
+    samples = None
+    cache_valid = _has_valid_activation_cache(adapter, args, target)
+    if _needs_extract(args) and not cache_valid:
+        samples = load_calibration_data(adapter)
+        try:
+            _run_extract(adapter, args, samples, target)
+            _publish_activation_cache_manifest(adapter, args, target)
+        finally:
+            _release_device(samples)
+
+    _run_ptq(adapter, args, data_provider, writer)
+    if not writer.publish_if_complete():
+        raise RuntimeError(
+            "layerwise quantization finished with pending units: {}.".format(
+                ", ".join(writer.pending_units)
+            )
+        )
+    return args.quant_result_dir
+
+
+def _register_layerwise_components() -> None:
+    register_algorithms()
+    register_dtype()
+    register_solvers()
+
+
+def _single_target(targets: list[str]) -> str:
+    if not isinstance(targets, (list, tuple)) or len(targets) != 1:
+        raise ValueError("pipeline='layerwise' supports exactly one quant target.")
+    target = targets[0]
+    if target not in {"mlp", "moe"}:
+        raise ValueError(
+            "pipeline='layerwise' supports target 'mlp' or 'moe', got {!r}.".format(
+                target
+            )
+        )
+    return target
+
+
+def _prepare_result_directory(result_dir: str) -> None:
+    os.makedirs(result_dir, exist_ok=True)
+    if not os.path.isdir(result_dir):
+        raise ValueError(
+            "quant_result_dir '{}' must be a directory.".format(result_dir)
+        )
+    if not os.access(result_dir, os.R_OK | os.W_OK | os.X_OK):
+        raise ValueError(
+            "quant_result_dir '{}' must be readable, writable, and searchable.".format(
+                result_dir
+            )
+        )
+    if os.path.lexists(os.path.join(result_dir, "quant_manifest.json")):
+        raise FileExistsError(
+            "quant result manifest already exists in '{}'; use a new result directory.".format(
+                result_dir
+            )
+        )
+
+
+def _plan_linear_units(adapter, args) -> tuple[PlannedLinearUnit, ...]:
+    """Build one stable plan shared by writer validation, cache and PTQ."""
+    units = []
+    for layer_idx in range(_num_layers(adapter)):
+        block = adapter.build_quant_block(layer_idx)
+        try:
+            mlp = _planned_mlp(adapter, block)
+            for name, _module in mlp.named_children():
+                if name not in {"gate_proj", "up_proj", "down_proj"}:
+                    continue
+                _linear_child(mlp, name)
+                layer_name = _linear_layer_name(adapter, layer_idx, name)
+                units.append(
+                    PlannedLinearUnit(
+                        layer_idx=layer_idx,
+                        relative_name=name,
+                        layer_name=layer_name,
+                        skip=_should_skip_names(
+                            name, layer_name, skip_layers=args.skip_layers
+                        ),
+                    )
+                )
+        finally:
+            _release_device(block)
+    if not units:
+        raise ValueError("the adapter produced no layerwise Linear units.")
+    if len(set(unit.layer_name for unit in units)) != len(units):
+        raise ValueError("layerwise Linear unit names are not globally unique.")
+    return tuple(units)
+
+
+def _planned_mlp(adapter, block) -> torch.nn.Module:
+    mlp = getattr(block, "mlp", None)
+    if mlp is None:
+        raise ValueError("layerwise P0 expects each decoder block to expose 'mlp'.")
+    if hasattr(mlp, "experts"):
+        raise ValueError(
+            "layerwise P0 does not support routed MoE experts; use a registered "
+            "dense model."
+        )
+    return mlp
+
+
+def _linear_child(mlp: torch.nn.Module, name: str) -> torch.nn.Linear:
+    """Resolve the original Linear in either a plain or quantized MLP."""
+    module = getattr(mlp, name)
+    linear = getattr(module, "linear", None)
+    if isinstance(linear, torch.nn.Linear):
+        return linear
+    if isinstance(module, torch.nn.Linear):
+        return module
+    raise TypeError(
+        "layerwise P0 expects MLP child '{}' to be nn.Linear or a wrapper with "
+        "a .linear nn.Linear, got {}.".format(name, type(module).__name__)
+    )
+
+
+def _linear_layer_name(adapter, layer_idx: int, relative_name: str) -> str:
+    prefix = getattr(adapter, "get_layer_weight_prefix", None)
+    weight_prefix = (
+        prefix(layer_idx) if callable(prefix) else "model.layers.{}.".format(layer_idx)
+    )
+    return "{}mlp.{}".format(weight_prefix, relative_name)
+
+
+def _should_skip_names(*names, skip_layers) -> bool:
+    return any(name in skip_layers for name in names)
+
+
+def _num_layers(adapter) -> int:
+    num_layers = getattr(adapter, "num_layers", None)
+    if type(num_layers) is not int or num_layers <= 0:
+        raise ValueError("adapter must expose a positive integer num_layers.")
+    return num_layers
+
+
+def _source_model_fingerprint(adapter):
+    """Build the artifact identity expected by QuantResultWriter/reload."""
+    config = getattr(adapter, "config", None)
+    return {
+        "model_type": getattr(config, "model_type", adapter.args.model_name),
+        "torch_dtype": _source_model_dtype(adapter),
+    }
+
+
+def _activation_cache_model_fingerprint(adapter):
+    """Build the stronger identity used to validate activation caches."""
+    config = getattr(adapter, "config", None)
+    config_dict = (
+        config.to_dict() if hasattr(config, "to_dict") else plan_model_config(adapter)
+    )
+    config_text = _canonical_json(_jsonable_lossy(config_dict))
+    return {
+        "model_type": getattr(config, "model_type", adapter.args.model_name),
+        "config_sha256": "sha256:" + hashlib.sha256(config_text.encode()).hexdigest(),
+        "state_dict_sha256": _checkpoint_state_dict_sha256(adapter),
+    }
+
+
+def _source_model_dtype(adapter):
+    config = getattr(adapter, "config", None)
+    configured = getattr(config, "torch_dtype", None)
+    if configured is None:
+        to_dict = getattr(config, "to_dict", None)
+        if callable(to_dict):
+            config_dict = to_dict()
+            if isinstance(config_dict, dict):
+                configured = config_dict.get("torch_dtype")
+    if isinstance(configured, torch.dtype):
+        return dtype_name(configured)
+    if isinstance(configured, str) and configured:
+        return dtype_name(configured)
+    for _name, tensor in _checkpoint_tensors(adapter):
+        return dtype_name(tensor.dtype)
+    return "unknown"
+
+
+def plan_model_config(adapter):
+    return (
+        getattr(adapter, "args", None).model_config
+        if hasattr(adapter.args, "model_config")
+        else {}
+    )
+
+
+def _checkpoint_state_dict_sha256(adapter):
+    """Match the tensor-byte digest computed by compute_model_fingerprint()."""
+    hasher = hashlib.sha256()
+    for name, tensor in _checkpoint_tensors(adapter):
+        hasher.update(
+            _canonical_json(
+                {
+                    "key": name,
+                    "dtype": str(tensor.dtype).removeprefix("torch."),
+                    "shape": list(tensor.shape),
+                }
+            ).encode()
+        )
+        _hash_tensor_bytes(hasher, tensor)
+    return "sha256:" + hasher.hexdigest()
+
+
+def _checkpoint_tensors(adapter):
+    for name in sorted(_weight_map(adapter)):
+        file_name = _weight_map(adapter)[name]
+        if file_name != os.path.basename(file_name):
+            raise ValueError(
+                "checkpoint weight mapping contains an unsafe path: {}.".format(
+                    file_name
+                )
+            )
+        file_path = os.path.join(adapter.args.model, file_name)
+        with safe_open(file_path, framework="pt", device="cpu") as file_handle:
+            if name not in file_handle.keys():
+                raise KeyError(
+                    "checkpoint file '{}' is missing tensor '{}'.".format(
+                        file_path, name
+                    )
+                )
+            yield name, file_handle.get_tensor(name)
+
+
+def _hash_tensor_bytes(hasher, tensor) -> None:
+    byte_view = tensor.detach().reshape(-1).contiguous().view(torch.uint8)
+    for start in range(0, byte_view.numel(), 1024 * 1024):
+        hasher.update(byte_view[start : start + 1024 * 1024].numpy().tobytes())
+
+
+def _weight_map(adapter):
+    cached = getattr(adapter, "_weight_map", None)
+    if cached is not None:
+        return cached
+    model_path = adapter.args.model
+    index_path = os.path.join(model_path, "model.safetensors.index.json")
+    single_path = os.path.join(model_path, "model.safetensors")
+    if os.path.isfile(index_path):
+        with open(index_path, encoding="utf-8") as handle:
+            mapping = json.load(handle)["weight_map"]
+    elif os.path.isfile(single_path):
+        with safe_open(single_path, framework="pt") as handle:
+            mapping = {name: "model.safetensors" for name in handle.keys()}
+    else:
+        raise FileNotFoundError(
+            "model directory '{}' has no safetensors index or model.safetensors.".format(
+                model_path
+            )
+        )
+    setattr(adapter, "_weight_map", mapping)
+    return mapping
+
+
+def _canonical_json(data) -> str:
+    return json.dumps(
+        data, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
+    )
+
+
+def _jsonable_lossy(value):
+    if value is None or isinstance(value, (bool, int, str)):
+        return value
+    if isinstance(value, float):
+        return repr(value)
+    if isinstance(value, torch.Tensor):
+        return {"dtype": str(value.dtype), "shape": list(value.shape)}
+    if isinstance(value, dict):
+        return {str(key): _jsonable_lossy(item) for key, item in value.items()}
+    if callable(value):
+        return "{}.{}".format(type(value).__module__, type(value).__qualname__)
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [_jsonable_lossy(item) for item in value]
+    return str(value)
+
+
+def load_calibration_data(adapter):
+    """Load tokenized calibration samples from the configured local dataset."""
+    args = adapter.args
+    if args.dataset is None:
+        raise ValueError(
+            "pipeline='layerwise' requires config.dataset to be a local dataset path."
+        )
+    if not isinstance(args.dataset, str):
+        raise TypeError("config.dataset must be a str path.")
+    dataset_path = os.path.abspath(os.path.expanduser(args.dataset))
+    if not os.path.isdir(dataset_path):
+        raise ValueError(
+            "config.dataset '{}' must be an existing directory.".format(dataset_path)
+        )
+
+    from datasets import load_from_disk
+
+    dataset = load_from_disk(dataset_path)
+    if hasattr(dataset, "keys") and callable(dataset.keys):
+        splits = list(dataset.keys())
+        if len(splits) != 1:
+            raise ValueError(
+                "dataset '{}' must contain exactly one split, got {}.".format(
+                    dataset_path, splits
+                )
+            )
+        dataset = dataset[splits[0]]
+    if "text" not in dataset.column_names:
+        raise ValueError(
+            "dataset '{}' must contain a 'text' string column, got columns {}.".format(
+                dataset_path, list(dataset.column_names)
+            )
+        )
+
+    tokens = []
+    for record in dataset:
+        text = record["text"]
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError(
+                "dataset '{}' contains an empty or non-string 'text' item.".format(
+                    dataset_path
+                )
+            )
+        encoded = list(adapter.tokenizer.encode(text))
+        if not encoded:
+            raise ValueError(
+                "dataset '{}' contains a 'text' item that tokenizes to zero tokens.".format(
+                    dataset_path
+                )
+            )
+        tokens.extend(encoded)
+        if len(tokens) >= args.nsamples * args.seq_len:
+            break
+    required_tokens = args.nsamples * args.seq_len
+    if len(tokens) < required_tokens:
+        raise ValueError(
+            "dataset '{}' has only {} usable token(s); {} are required for {} sample(s) "
+            "of length {}.".format(
+                dataset_path, len(tokens), required_tokens, args.nsamples, args.seq_len
+            )
+        )
+    return [
+        torch.tensor(
+            tokens[index * args.seq_len : (index + 1) * args.seq_len], dtype=torch.long
+        ).unsqueeze(0)
+        for index in range(args.nsamples)
+    ]
+
+
+def _needs_extract(args) -> bool:
+    return args.a_bits < 16 and not args.activation_dynamic and "minmax" in args.algos
+
+
+def _run_extract(adapter, args, samples, target: str) -> None:
+    hook_name = getattr(adapter, "ffn_norm_name", "post_attention_layernorm")
+    _reset_activation_cache(args.data_dir)
+    inter_io = adapter.do_embedding_forward(samples, hook_name=hook_name)
+    try:
+        for layer_idx in range(_num_layers(adapter)):
+            inter_io = adapter.do_block_forward(
+                layer_idx, inter_io, hook_name=hook_name
+            )
+    finally:
+        _release_device(inter_io)
+
+
+def _reset_activation_cache(data_dir: str) -> None:
+    """Remove only an incomplete cache; a valid cache is never re-extracted."""
+    os.makedirs(data_dir, exist_ok=True)
+    for name in os.listdir(data_dir):
+        path = os.path.join(data_dir, name)
+        if os.path.isfile(path) or os.path.islink(path):
+            os.remove(path)
+        else:
+            shutil.rmtree(path)
+
+
+def _activation_cache_manifest(args, adapter, target: str) -> dict:
+    files = [
+        "block_{}_{}_in.pkl".format(index, target)
+        for index in range(_num_layers(adapter))
+    ]
+    payload = {
+        "format": "amct-layerwise-activation-cache",
+        "schema_version": 1,
+        "model_path": os.path.realpath(args.model),
+        "model_fingerprint": _activation_cache_model_fingerprint(adapter),
+        "model_type": getattr(adapter.config, "model_type", None),
+        "dataset": os.path.realpath(args.dataset),
+        "tokenizer": {
+            "path": os.path.realpath(args.model),
+            "sha256": _optional_file_sha256(os.path.join(args.model, "tokenizer.json")),
+        },
+        "num_samples": args.nsamples,
+        "batch_size": args.cali_bsz,
+        "seq_len": args.seq_len,
+        "target": target,
+        "hook": getattr(adapter, "ffn_norm_name", "post_attention_layernorm"),
+        "sampling": {"order": "dataset", "concatenate": True, "seed": 0},
+    }
+    payload["cache_key"] = (
+        "sha256:" + hashlib.sha256(_canonical_json(payload).encode()).hexdigest()
+    )
+    payload["files"] = [
+        {
+            "name": name,
+            "size": os.path.getsize(os.path.join(args.data_dir, name)),
+            "sha256": _file_sha256(os.path.join(args.data_dir, name)),
+        }
+        for name in files
+    ]
+    return payload
+
+
+def _publish_activation_cache_manifest(adapter, args, target: str) -> None:
+    manifest = _activation_cache_manifest(args, adapter, target)
+    path = os.path.join(args.data_dir, "cache_manifest.json")
+    temporary = path + ".tmp"
+    with open(temporary, "w", encoding="utf-8") as handle:
+        handle.write(_canonical_json(manifest) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary, path)
+
+
+def _has_valid_activation_cache(adapter, args, target: str) -> bool:
+    path = os.path.join(args.data_dir, "cache_manifest.json")
+    if not os.path.isfile(path):
+        return False
+    try:
+        with open(path, encoding="utf-8") as handle:
+            manifest = json.load(handle)
+        expected_manifest = _activation_cache_manifest(args, adapter, target)
+        if manifest.get("cache_key") != expected_manifest["cache_key"]:
+            return False
+        if manifest.get("files") != expected_manifest["files"]:
+            return False
+        return True
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return False
+
+
+def _select_solver_cls(algorithms: list[str]):
+    for name in algorithms:
+        if name == "minmax":
+            continue
+        item = _algorithm_registry_item(name)
+        if item.metadata.get("solver", "block") != "calibrate":
+            return SOLVER_REGISTRY.get("block")
+    return SOLVER_REGISTRY.get("calibrate")
+
+
+def _algorithm_registry_item(name):
+    from amct_pytorch.algorithms import ALGO_REGISTRY
+
+    return ALGO_REGISTRY.get_item(name)
+
+
+def _run_ptq(adapter, args, data_provider, writer: QuantResultWriter) -> None:
+    solver_cls = _select_solver_cls(args.algos)
+    grouped_units = _group_planned_units(_plan_linear_units(adapter, args))
+    for layer_idx in range(_num_layers(adapter)):
+        block = adapter.build_quant_block(layer_idx)
+        try:
+            mlp = _planned_mlp(adapter, block)
+            block_inputs = None
+            block_kwargs = {}
+            if _needs_extract(args):
+                block_inputs, block_kwargs = _load_block_inputs(
+                    data_provider, layer_idx, target=args.quant_target[0]
+                )
+                block_inputs = _to_device(block_inputs, args.device)
+                captured = _capture_linear_inputs(mlp, block_inputs)
+            else:
+                captured = None
+            for planned in grouped_units.get(layer_idx, []):
+                if planned.skip:
+                    continue
+                _quantize_linear(
+                    adapter,
+                    args,
+                    data_provider,
+                    solver_cls,
+                    mlp,
+                    planned,
+                    captured,
+                    writer,
+                )
+        finally:
+            _release_device(block)
+
+
+def _load_block_inputs(data_provider, layer_idx: int, target: str):
+    from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit
+
+    unit = make_ptq_unit(target, "mlp", layer_idx, None)
+    return data_provider.load_unit_inputs(unit)
+
+
+def _group_planned_units(unit_plan):
+    grouped = {}
+    for unit in unit_plan:
+        grouped.setdefault(unit.layer_idx, []).append(unit)
+    return grouped
+
+
+def _capture_linear_inputs(mlp: torch.nn.Module, inputs: torch.Tensor):
+    """Capture each MLP Linear's real input without relying on target naming."""
+    captured = {}
+    hooks = []
+
+    def capture(name):
+        def hook(_module, args, _output=None):
+            captured[name] = args[0].detach()
+
+        return hook
+
+    try:
+        for name, _module in mlp.named_children():
+            if name not in {"gate_proj", "up_proj", "down_proj"}:
+                continue
+            hooks.append(mlp.get_submodule(name).register_forward_hook(capture(name)))
+        if len(hooks) != 3:
+            raise ValueError(
+                "layerwise P0 expects gate_proj, up_proj, and down_proj Linear modules, "
+                "got {}.".format(len(hooks))
+            )
+        with torch.no_grad():
+            _forward_mlp_for_capture(mlp, inputs)
+        expected = {"gate_proj", "up_proj", "down_proj"}
+        if set(captured) != expected:
+            missing = sorted(expected - set(captured))
+            raise RuntimeError(
+                "failed to capture MLP Linear input(s): {}.".format(", ".join(missing))
+            )
+    finally:
+        for hook in hooks:
+            hook.remove()
+    return captured
+
+
+def _forward_mlp_for_capture(mlp: torch.nn.Module, inputs: torch.Tensor) -> None:
+    """Run the gated MLP while preserving each wrapped Linear's actual input."""
+    if type(mlp).__name__ != "QuantGatedMLP":
+        mlp(inputs)
+        return
+    gate = mlp.gate_proj(inputs)
+    up = mlp.up_proj(inputs)
+    mlp.down_proj(mlp.act_fn(gate) * up)
+
+
+def _quantize_linear(
+    adapter, args, data_provider, solver_cls, mlp, planned, captured, writer
+) -> None:
+    module = _linear_child(mlp, planned.relative_name)
+    if _needs_extract(args):
+        inputs = captured.get(planned.relative_name)
+        if inputs is None:
+            raise FileNotFoundError(
+                "activation cache is missing input for layerwise unit '{}'.".format(
+                    planned.layer_name
+                )
+            )
+    else:
+        inputs = torch.zeros((1, module.in_features), device=args.device)
+    if inputs.dtype != module.weight.dtype:
+        inputs = inputs.to(module.weight.dtype)
+    unit = _make_linear_unit(args, planned, module)
+    batch = data_provider.build_unit_batch(unit, inputs, {}, None)
+    solver = solver_cls(args, planned.layer_idx, module)
+    if type(solver.model).__name__ != "MinMaxQuant":
+        quant_module = _build_classic_minmax(module, planned.layer_name, args)
+        for data_batch in batch.data_loader:
+            quant_module(_unpack_single(data_batch))
+    else:
+        quant_module = solver.model
+    tensors, metadata = _export_quant_params(quant_module.export_quant_params())
+    writer.write_unit(
+        layer_name=planned.layer_name,
+        tensors=tensors,
+        non_tensor_params=metadata,
+        quant_config=_unit_quant_config(args),
+        quant_module_type="MinMaxQuant",
+        ori_module_type=type(module).__name__,
+    )
+    _release_device(quant_module)
+    module = None
+
+
+def _original_module(module):
+    return getattr(module, "ori_module", module)
+
+
+def _unit_quant_config(args) -> dict:
+    config = {
+        "batch_num": args.batch_num,
+        "weights_cfg": {
+            "quant_type": "int8" if args.w_bits == 8 else "int4",
+            "symmetric": args.weight_symmetric,
+            "strategy": args.weight_strategy,
+        },
+        "inputs_cfg": {"enable_quant": False},
+        "algorithm": {"minmax": {}},
+    }
+    if args.group_size is not None:
+        config["weights_cfg"]["group_size"] = args.group_size
+    if args.a_bits < 16:
+        config["inputs_cfg"] = {
+            "enable_quant": True,
+            "quant_type": "int8",
+            "symmetric": args.activation_symmetric,
+            "strategy": args.activation_strategy,
+            "dynamic": False,
+        }
+    return config
+
+
+def _export_quant_params(result):
+    if isinstance(result, tuple) and len(result) == 2:
+        tensors, metadata = result
+    else:
+        tensors, metadata = result, {}
+    tensors = tensors or {}
+    metadata = metadata or {}
+    checked_tensors = {}
+    for key, value in tensors.items():
+        if isinstance(value, torch.Tensor):
+            checked_tensors[key] = value.detach().cpu().contiguous()
+        else:
+            metadata[key] = value
+    return checked_tensors, metadata
+
+
+def _make_linear_unit(args, planned, module):
+    from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit
+
+    return make_ptq_unit(
+        "mlp",
+        planned.relative_name,
+        planned.layer_idx,
+        module,
+        {"layer_name": planned.layer_name},
+    )
+
+
+def _build_classic_minmax(module, layer_name, args):
+    from amct_pytorch.algorithms.quant import register_algorithms
+    from amct_pytorch.classic.quantize_op.minmax_module import MinMaxQuant
+
+    register_algorithms()
+    return MinMaxQuant(module, layer_name, _unit_quant_config(args))
+
+
+def _unpack_single(data_batch):
+    if isinstance(data_batch, (tuple, list)):
+        if len(data_batch) != 1:
+            raise ValueError(
+                "layerwise calibration expects one input tensor per batch."
+            )
+        return data_batch[0]
+    return data_batch
+
+
+def _to_device(value, device: str):
+    if isinstance(value, torch.Tensor):
+        return value.to(device)
+    if isinstance(value, tuple):
+        return tuple(_to_device(item, device) for item in value)
+    if isinstance(value, list):
+        return [_to_device(item, device) for item in value]
+    if isinstance(value, dict):
+        return {key: _to_device(item, device) for key, item in value.items()}
+    return value
+
+
+def _release_device(value) -> None:
+    if isinstance(value, torch.nn.Module):
+        value.to("cpu")
+    elif isinstance(value, list):
+        for item in value:
+            _release_device(item)
+    elif isinstance(value, tuple):
+        for item in value:
+            _release_device(item)
+    del value
+    gc_collect()
+
+
+def gc_collect() -> None:
+    import gc
+
+    gc.collect()
+    npu = getattr(torch, "npu", None)
+    if callable(getattr(npu, "is_available", None)) and npu.is_available():
+        torch.npu.empty_cache()
+
+
+def _file_sha256(path: str) -> str:
+    hasher = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            hasher.update(chunk)
+    return "sha256:" + hasher.hexdigest()
+
+
+def _optional_file_sha256(path: str):
+    return _file_sha256(path) if os.path.isfile(path) else None
+
+
 def _check_layerwise_p0_config(parsed: QuantConfig) -> None:
     algorithms = parsed.algorithm.names
     if algorithms not in ([], [_SUPPORTED_ALGORITHM]):
@@ -393,6 +1131,22 @@ def _check_layerwise_p0_config(parsed: QuantConfig) -> None:
             "pipeline='layerwise' currently supports static MinMax activation only; "
             "config.quant_cfg.inputs.dynamic must be False or omitted."
         )
+
+
+def _reject_moe_target(model_target: str, model_config: dict[str, Any]) -> None:
+    if model_target != "moe":
+        return
+    raise ValueError(
+        "pipeline='layerwise' P0 supports registered dense FFN models only; "
+        "model '{}' declares routed MoE fields {}.".format(
+            getattr(model_config, "model_type", "unknown"),
+            ", ".join(
+                field
+                for field in _MOE_CONFIG_FIELDS
+                if type(model_config.get(field)) is int and model_config[field] > 0
+            ),
+        )
+    )
 
 
 def _check_layerwise_config_structure(config: dict) -> None:

@@ -17,17 +17,30 @@
 
 import importlib
 import json
+import os
 from types import SimpleNamespace
+from dataclasses import dataclass
 
 import pytest
+import torch
+from datasets import Dataset
+from pathlib import Path
+from safetensors.torch import save_file
 from torch import nn
 
 from amct_pytorch.classic.layerwise import (
     LayerwiseQuantizationPlan,
     build_args_from_config,
+    load_calibration_data,
     load_model_config,
+    _needs_extract,
     prepare_layerwise_quantization,
     resolve_model_name,
+)
+from amct_pytorch.classic.quant_result import (
+    compute_model_fingerprint,
+    load_quant_manifest,
+    reload_quant_params,
 )
 from amct_pytorch.common.utils.registry_factory import Registry
 
@@ -78,6 +91,177 @@ class _FakeAdapter:
     def __init__(self, args):
         self.args = args
         type(self).calls.append(args)
+
+
+@dataclass
+class _MockQwenArgs:
+    model: str
+    model_name: str
+    quant_result_dir: str
+    quant_target: list
+    quant_dtype: str
+    w_bits: int
+    a_bits: int
+    bit_policy: object
+    algos: list
+    batch_num: int
+    cali_bsz: int
+    nsamples: int
+    seq_len: int
+    device: str
+    work_dir: str
+    data_dir: str
+    output_dir: str
+    skip_layers: set
+    dataset: object
+    trust_remote_code: bool
+    weight_strategy: str
+    weight_symmetric: bool
+    activation_strategy: object
+    activation_symmetric: object
+    activation_dynamic: bool
+    group_size: object
+    granularity: str = "block"
+    solver: str = "calibrate"
+    start_block_idx: int = 0
+    end_block_idx: int = 2**31 - 1
+    attn_linear_param_dir: str = ""
+    attn_cache_param_dir: str = ""
+    moe_mlp_param_dir: str = ""
+
+
+class _MockMLP(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.gate_proj = nn.Linear(4, 8)
+        self.up_proj = nn.Linear(4, 8)
+        self.down_proj = nn.Linear(8, 4)
+
+    def forward(self, x):
+        return self.down_proj(
+            torch.nn.functional.silu(self.gate_proj(x)) * self.up_proj(x)
+        )
+
+
+class _WrappedMockMLP(_MockMLP):
+    """Shape-compatible with Qwen adapters whose build_quant_block wraps Linear."""
+
+    def __init__(self):
+        super().__init__()
+        gate_linear = self.gate_proj
+        up_linear = self.up_proj
+        down_linear = self.down_proj
+        self.gate_proj = nn.Module()
+        self.gate_proj.linear = gate_linear
+        self.up_proj = nn.Module()
+        self.up_proj.linear = up_linear
+        self.down_proj = nn.Module()
+        self.down_proj.linear = down_linear
+
+
+class _MockQwenAdapter:
+    ffn_norm_name = "post_attention_layernorm"
+
+    def __init__(self, args):
+        self.args = args
+        self.config = SimpleNamespace(
+            model_type="qwen3", to_dict=lambda: {"model_type": "qwen3"}
+        )
+        self.tokenizer = SimpleNamespace(encode=lambda text: list(text.encode("utf-8")))
+        self.num_layers = 2
+        self.extract_calls = []
+
+    def get_layer_weight_prefix(self, layer_idx):
+        return "model.layers.{}.".format(layer_idx)
+
+    def build_quant_block(self, layer_idx):
+        return SimpleNamespace(mlp=_MockMLP())
+
+    def do_embedding_forward(self, samples, hook_name=None):
+        self.extract_calls.append(("embedding", len(samples), hook_name))
+        return [torch.randn(1, 3, 4, dtype=torch.float32) for _ in samples]
+
+    def do_block_forward(self, layer_idx, samples, hook_name=None):
+        self.extract_calls.append(("block", layer_idx, hook_name))
+        payload = torch.randn(1, len(samples), 3, 4)
+        torch.save(
+            payload,
+            os.path.join(self.args.data_dir, "block_{}_mlp_in.pkl".format(layer_idx)),
+        )
+        return [item for item in payload[0]]
+
+    def load_unit_inputs(self, data_dir, unit):
+        from amct_pytorch.common.datasets.ptq_io import load_ptq_inps
+
+        return load_ptq_inps(data_dir, unit.kind, unit.layer_idx)
+
+
+def _mock_args(tmp_path, static_activation=False):
+    result_dir = tmp_path / "result"
+    work_dir = tmp_path / "work"
+    return _MockQwenArgs(
+        model=str(tmp_path / "model"),
+        model_name="qwen3",
+        quant_result_dir=str(result_dir),
+        quant_target=["mlp"],
+        quant_dtype="int",
+        w_bits=8,
+        a_bits=8 if static_activation else 16,
+        bit_policy=SimpleNamespace(w_bits=8, a_bits=8 if static_activation else 16),
+        algos=["minmax"],
+        batch_num=2,
+        cali_bsz=1,
+        nsamples=2,
+        seq_len=3,
+        device="cpu",
+        work_dir=str(work_dir),
+        data_dir=str(work_dir / "ptq_data" / "mlp"),
+        output_dir=str(work_dir),
+        skip_layers=set(),
+        dataset=str(tmp_path / "dataset") if static_activation else None,
+        trust_remote_code=False,
+        weight_strategy="channel",
+        weight_symmetric=True,
+        activation_strategy="tensor" if static_activation else None,
+        activation_symmetric=True if static_activation else None,
+        activation_dynamic=False,
+        group_size=None,
+    )
+
+
+def _write_dataset(tmp_path, texts):
+    Dataset.from_dict({"text": texts}).save_to_disk(str(tmp_path / "dataset"))
+
+
+def _write_checkpoint(tmp_path):
+    model_dir = tmp_path / "model"
+    model_dir.mkdir()
+    (model_dir / "config.json").write_text(
+        json.dumps({"model_type": "qwen3"}), encoding="utf-8"
+    )
+    tensors = {
+        "model.embed_tokens.weight": torch.randn(2, 4),
+        "model.layers.0.mlp.gate_proj.weight": torch.randn(8, 4),
+        "model.layers.1.mlp.up_proj.weight": torch.randn(8, 4),
+    }
+    save_file(tensors, str(model_dir / "model.safetensors"))
+    return tensors
+
+
+def _fingerprint_config():
+    return SimpleNamespace(model_type="qwen3", to_dict=lambda: {"model_type": "qwen3"})
+
+
+def _write_matching_checkpoint(tmp_path, model):
+    """Write only the model state to keep the mock checkpoint small but exact."""
+    model_dir = tmp_path / "matching-model"
+    model_dir.mkdir()
+    (model_dir / "config.json").write_text(
+        json.dumps({"model_type": "qwen3"}), encoding="utf-8"
+    )
+    state = {key: value.detach().cpu() for key, value in model.state_dict().items()}
+    save_file(state, str(model_dir / "model.safetensors"))
+    return str(model_dir)
 
 
 class TestPipelineDispatch:
@@ -180,8 +364,13 @@ class TestPipelineDispatch:
     def test_public_layerwise_does_not_silently_claim_completion(
         self, monkeypatch, quantize_module
     ):
+        # Week 6-8 replaced the temporary Week 5 failure with the real run.
+        # The same test now guards that the private preparation boundary is
+        # still the only public hand-off.
         plan = SimpleNamespace(
-            args=SimpleNamespace(model_name="fake", quant_target=["mlp"])
+            args=SimpleNamespace(model_name="fake", quant_target=["mlp"]),
+            adapter=None,
+            model_config={},
         )
         layerwise_module = importlib.import_module("amct_pytorch.classic.layerwise")
         monkeypatch.setattr(
@@ -189,7 +378,7 @@ class TestPipelineDispatch:
             "prepare_layerwise_quantization",
             lambda *args: plan,
         )
-        with pytest.raises(NotImplementedError, match="Extract/PTQ"):
+        with pytest.raises(AttributeError, match="quant_result_dir"):
             quantize_module.quantize(
                 "/local/model",
                 config={"pipeline": "layerwise"},
@@ -316,13 +505,13 @@ class TestBuildArgsFromConfig:
         assert args.group_size == 64
         assert args.weight_strategy == "group"
 
-    def test_infers_single_moe_target_from_model_config(self, tmp_path):
-        args = self._build(
-            tmp_path,
-            model_config={"model_type": "qwen3_moe", "num_experts": 8},
-        )
-        assert args.quant_target == ["moe"]
-        assert args.data_dir.endswith("/ptq_data/moe")
+    def test_rejects_moe_outside_layerwise_p0(self, tmp_path):
+        model_config = {"model_type": "qwen3_moe", "num_experts": 8}
+        with pytest.raises(ValueError, match="dense FFN"):
+            self._build(
+                tmp_path,
+                model_config=model_config,
+            )
 
     @pytest.mark.parametrize(
         "shape_fields,expected",
@@ -646,3 +835,194 @@ def test_qwen3_registration_exposes_model_type_metadata():
     models_module.register_llm_models(model_type="qwen3")
     item = registry_module.MODEL_REGISTRY.get_item("qwen3")
     assert item.metadata["model_type"] == "qwen3"
+
+
+class TestWeek6CalibrationData:
+    def test_concatenates_and_cuts_exact_token_windows(self, tmp_path):
+        _write_dataset(tmp_path, ["abcdef", "ghij", "klm"])
+        adapter = SimpleNamespace(
+            args=_mock_args(tmp_path, static_activation=True),
+            tokenizer=SimpleNamespace(encode=lambda text: list(text.encode())),
+        )
+        samples = load_calibration_data(adapter)
+        assert len(samples) == 2
+        assert all(sample.shape == (1, 3) for sample in samples)
+        assert samples[0].tolist() == [
+            [97, 98, 99],
+        ]
+
+    def test_rejects_empty_text_and_insufficient_tokens(self, tmp_path):
+        _write_dataset(tmp_path, ["", "abc"])
+        adapter = SimpleNamespace(
+            args=_mock_args(tmp_path, static_activation=True),
+            tokenizer=SimpleNamespace(encode=lambda text: list(text.encode())),
+        )
+        with pytest.raises(ValueError, match="empty"):
+            load_calibration_data(adapter)
+
+        _write_dataset(tmp_path, ["abc"])
+        with pytest.raises(ValueError, match="usable token"):
+            load_calibration_data(adapter)
+
+    def test_needs_extract_branches(self, tmp_path):
+        assert _needs_extract(_mock_args(tmp_path, static_activation=False)) is False
+        assert _needs_extract(_mock_args(tmp_path, static_activation=True)) is True
+
+
+class TestSourceFingerprint:
+    def test_streamed_checkpoint_digest_matches_full_model(self, tmp_path):
+        tensors = _write_checkpoint(tmp_path)
+        adapter = SimpleNamespace(
+            args=_mock_args(tmp_path), config=_fingerprint_config()
+        )
+        full_model = nn.Module()
+        full_model.config = _fingerprint_config()
+        for name, tensor in tensors.items():
+            parent, attr = name.rsplit(".", 1)
+            current = full_model
+            for part in parent.split("."):
+                child = getattr(current, part, None)
+                if child is None:
+                    child = nn.Module()
+                    setattr(current, part, child)
+                current = child
+            setattr(current, attr, nn.Parameter(tensor))
+        full_model.config = adapter.config
+        assert source_fingerprint_matches(adapter, full_model)
+
+
+def source_fingerprint_matches(adapter, full_model):
+    from amct_pytorch.classic.layerwise import _source_model_fingerprint
+
+    actual = _source_model_fingerprint(adapter)
+    expected = compute_model_fingerprint(full_model)
+    print("actual", actual)
+    print("expected", expected)
+    return actual == expected
+
+
+class TestLayerwiseEndToEnd:
+    def _prepare(self, tmp_path, static_activation):
+        _write_checkpoint(tmp_path)
+        args = _mock_args(tmp_path, static_activation=static_activation)
+        if static_activation:
+            _write_dataset(tmp_path, ["abcdefghij" for _ in range(2)])
+        adapter = _MockQwenAdapter(args)
+        plan = LayerwiseQuantizationPlan(
+            args=args, adapter=adapter, model_config={"model_type": "qwen3"}
+        )
+        return plan
+
+    def _run(self, plan):
+        from amct_pytorch.classic.layerwise import run_layerwise_quantization
+
+        return run_layerwise_quantization(plan)
+
+    def test_weight_only_uses_no_dataset_and_publishes_v2(self, tmp_path):
+        plan = self._prepare(tmp_path, static_activation=False)
+        result_dir = self._run(plan)
+
+        assert plan.adapter.extract_calls == []
+        assert plan.args.dataset is None
+        manifest = load_quant_manifest(result_dir)
+        assert len(manifest["units"]) == 6
+        assert [entry["layer_name"] for entry in manifest["units"]] == [
+            "model.layers.0.mlp.gate_proj",
+            "model.layers.0.mlp.up_proj",
+            "model.layers.0.mlp.down_proj",
+            "model.layers.1.mlp.gate_proj",
+            "model.layers.1.mlp.up_proj",
+            "model.layers.1.mlp.down_proj",
+        ]
+        assert all(
+            entry["quant_module_type"] == "MinMaxQuant" for entry in manifest["units"]
+        )
+        assert all(
+            [item["key"] for item in entry["tensors"]] == ["scale_w"]
+            for entry in manifest["units"]
+        )
+
+    def test_static_minmax_extracts_and_writes_activation_params(self, tmp_path):
+        plan = self._prepare(tmp_path, static_activation=True)
+        result_dir = self._run(plan)
+
+        assert len(plan.adapter.extract_calls) == 3
+        manifest = load_quant_manifest(result_dir)
+        assert len(manifest["units"]) == 6
+        assert all(
+            [item["key"] for item in entry["tensors"]] == ["scale_w"]
+            for entry in manifest["units"]
+        )
+        cache_manifest = json.loads(
+            Path(plan.args.data_dir, "cache_manifest.json").read_text(encoding="utf-8")
+        )
+        assert len(cache_manifest["files"]) == 2
+        assert cache_manifest["cache_key"].startswith("sha256:")
+
+    def test_complete_activation_cache_is_reused(self, tmp_path):
+        plan = self._prepare(tmp_path, static_activation=True)
+        self._run(plan)
+        first_calls = len(plan.adapter.extract_calls)
+
+        plan.args.quant_result_dir = str(tmp_path / "result-2")
+        result_2 = self._run(plan)
+        assert len(plan.adapter.extract_calls) == first_calls
+        assert load_quant_manifest(result_2)["format"] == "amct-quant-result-manifest"
+
+    def test_corrupt_activation_cache_is_re_extracted(self, tmp_path):
+        plan = self._prepare(tmp_path, static_activation=True)
+        self._run(plan)
+        first_calls = len(plan.adapter.extract_calls)
+        cache_file = Path(plan.args.data_dir, "block_0_mlp_in.pkl")
+        cache_file.write_bytes(b"corrupt")
+
+        plan.args.quant_result_dir = str(tmp_path / "result-2")
+        self._run(plan)
+        assert len(plan.adapter.extract_calls) > first_calls
+
+    def test_failure_leaves_no_manifest(self, tmp_path):
+        plan = self._prepare(tmp_path, static_activation=False)
+        original = plan.adapter.build_quant_block
+
+        def fail_on_second(layer_idx):
+            if layer_idx == 1:
+                raise RuntimeError("intentional PTQ failure")
+            return original(layer_idx)
+
+        plan.adapter.build_quant_block = fail_on_second
+        with pytest.raises(RuntimeError, match="intentional"):
+            self._run(plan)
+        assert not Path(plan.args.quant_result_dir, "quant_manifest.json").exists()
+
+    def test_artifact_reloads_into_fresh_dense_model(self, tmp_path):
+        model = nn.Module()
+        model.config = _fingerprint_config()
+        layers = nn.ModuleList([nn.Module() for _ in range(2)])
+        backbone = nn.Module()
+        backbone.layers = layers
+        model.model = backbone
+        for layer in layers:
+            layer.mlp = _MockMLP()
+        plan = self._prepare(tmp_path, static_activation=False)
+        plan.args.model = _write_matching_checkpoint(tmp_path, model)
+        result_dir = self._run(plan)
+        reloaded = reload_quant_params(model, result_dir)
+        assert reloaded is model
+        assert isinstance(layers[0].mlp.gate_proj, nn.Module)
+        assert type(layers[0].mlp.gate_proj).__name__ == "MinMaxQuant"
+
+    def test_plan_accepts_quant_linear_wrapped_dense_mlp(self, tmp_path):
+        _write_checkpoint(tmp_path)
+        args = _mock_args(tmp_path)
+        adapter = _MockQwenAdapter(args)
+
+        adapter.build_quant_block = lambda layer_idx: SimpleNamespace(
+            mlp=_WrappedMockMLP()
+        )
+        plan = LayerwiseQuantizationPlan(
+            args=args, adapter=adapter, model_config={"model_type": "qwen3"}
+        )
+        result_dir = self._run(plan)
+        manifest = load_quant_manifest(result_dir)
+        assert len(manifest["units"]) == 6
+        assert all(entry["ori_module_type"] == "Linear" for entry in manifest["units"])

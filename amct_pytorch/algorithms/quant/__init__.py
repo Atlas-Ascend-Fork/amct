@@ -41,6 +41,7 @@ def register_algorithms():
     from .let import LET  # noqa: F401
     from .flatquant import FlatQuant  # noqa: F401
     from .gptq import GPTQ  # noqa: F401
+    from .minmax import MinMax  # noqa: F401
 
     _REGISTERED = True
 

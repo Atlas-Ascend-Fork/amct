@@ -121,20 +121,15 @@ def _quantize_full(model, config, quant_result_dir):
         _finalize_quant_result(model, writer)
 
 
-
 def _quantize_layerwise(model_path, config, quant_result_dir):
-    """Build the Week 5 hand-off; Extract and PTQ are added in later slices."""
+    """Run the Classic layerwise pipeline and return its result directory."""
     from amct_pytorch.classic.layerwise import prepare_layerwise_quantization
+    from amct_pytorch.classic.layerwise import run_layerwise_quantization
 
     plan = prepare_layerwise_quantization(model_path, config, quant_result_dir)
-    raise NotImplementedError(
-        "pipeline='layerwise' preparation succeeded for adapter '{}' and target "
-        "'{}', but Extract/PTQ execution is not connected to the Classic entry "
-        "yet.".format(plan.args.model_name, plan.args.quant_target[0])
-    )
+    return run_layerwise_quantization(plan)
 
 
-D
 def _check_quant_result_algorithms(model, layer_config):
     """Screen selected registered quant classes before writing any files.
 
