@@ -53,13 +53,14 @@ def scale_fp32_to_u64(weight_scale):
 def pack_4bit(x: torch.Tensor):
     """
     Pack int4 weight for W4A8 MoEGMM. Each two int4 numbers are packed into one byte.
+    After transposing, the first number is stored in the low nibble and the second in the high nibble.
     """
     assert x.dtype == torch.int8
     x = x.T.contiguous()  # pack along output channel dim.
     shape = x.shape
     x = x.view(-1, 2)
-    # for example, 5(0b00000101) << 4 -> 0b01010000, -7 (0b11111001) & 0b00001111 -> 0b00001001,
-    # then 0b01010000 | 0b00001001 -> 0b01011001
+    # The first value occupies the low nibble; the second occupies the high nibble.
+    # For [5, -7]: (-7 << 4) | (5 & 0x0F) -> 0b10010101 (int8 value -107).
     x1 = x[:, 0]
     x2 = x[:, 1]
     y_x2 = torch.bitwise_left_shift(x2, 4)
