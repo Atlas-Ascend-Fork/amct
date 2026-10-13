@@ -402,7 +402,12 @@ def test_eval_run_blockwise_streams_head_logits_on_workflow_device(
     ]
 
 
-def test_eval_run_blockwise_resumes_after_last_completed_block(monkeypatch, tmp_path):
+@pytest.mark.parametrize("reject_state", [False, True])
+def test_eval_run_blockwise_resumes_after_last_completed_block(
+    monkeypatch, tmp_path, reject_state
+):
+    fake_logger = MagicMock()
+    monkeypatch.setattr("amct_pytorch.workflows.llm_eval.logger", fake_logger)
     samples = [torch.tensor([[1, 2, 3, 4]])]
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.get_wiki_inputs",
@@ -426,6 +431,13 @@ def test_eval_run_blockwise_resumes_after_last_completed_block(monkeypatch, tmp_
     wf.pipeline = MagicMock()
     wf.pipeline.tokenizer = MagicMock()
     wf.pipeline.num_layers = 4
+    model_state = [{"prev_topk_indices": torch.zeros(1, 1, 1, dtype=torch.int32)}]
+    wf.pipeline.export_eval_state.return_value = model_state
+    if reject_state:
+        wf.pipeline.restore_eval_state.side_effect = [
+            ValueError("missing indices"),
+            None,
+        ]
     wf.pipeline.do_embedding_forward.return_value = [torch.tensor([99.0])]
 
     def forward_block(layer_idx, inter_io, **kwargs):
@@ -436,16 +448,32 @@ def test_eval_run_blockwise_resumes_after_last_completed_block(monkeypatch, tmp_
     wf.pipeline.do_head_forward.return_value = iter([torch.randn(1, 3, 10)])
 
     manager = EvalCheckpointManager(wf.args, num_layers=4)
-    manager.save(1, [torch.tensor([1.0])])
+    manager.save(1, [torch.tensor([1.0])], model_state)
 
     result = wf._run_blockwise()  # pylint: disable=protected-access
 
     assert result == pytest.approx(7.5)
-    assert processed_layers == [2, 3]
-    completed_idx, inter_io = manager.load()
+    assert processed_layers == ([0, 1, 2, 3] if reject_state else [2, 3])
+    assert wf.pipeline.restore_eval_state.call_args_list[0].args[1] == 1
+    restored_state = wf.pipeline.restore_eval_state.call_args_list[0].args[0]
+    torch.testing.assert_close(
+        restored_state[0]["prev_topk_indices"],
+        model_state[0]["prev_topk_indices"],
+    )
+    if reject_state:
+        assert wf.pipeline.restore_eval_state.call_args.args[:2] == (None, -1)
+        assert wf.pipeline.restore_eval_state.call_args.args[2][0].item() == 99.0
+    completed_idx, inter_io, saved_state = manager.load()
     assert completed_idx == 3
     assert torch.equal(inter_io[0], torch.tensor([3.0]))
     wf.pipeline.do_embedding_forward.assert_called_once()
+    assert fake_logger.warning.call_count == (2 if reject_state else 1)
+    assert fake_logger.warning.call_args_list[0].args[1:] == ("qwen3", "bf16")
+    torch.testing.assert_close(
+        saved_state[0]["prev_topk_indices"],
+        model_state[0]["prev_topk_indices"],
+    )
+    assert not any("Resume" in call.args[0] for call in fake_logger.info.call_args_list)
 
 
 def test_eval_run_blockwise_reuses_embedding_when_checkpoint_is_corrupt(
@@ -476,6 +504,7 @@ def test_eval_run_blockwise_reuses_embedding_when_checkpoint_is_corrupt(
     wf.pipeline.tokenizer = MagicMock()
     wf.pipeline.num_layers = 2
     wf.pipeline.do_embedding_forward.return_value = embedding_output
+    wf.pipeline.export_eval_state.return_value = None
 
     def forward_block(layer_idx, inter_io, **kwargs):
         if layer_idx == 0:
@@ -487,7 +516,7 @@ def test_eval_run_blockwise_reuses_embedding_when_checkpoint_is_corrupt(
 
     manager = EvalCheckpointManager(wf.args, num_layers=2)
     manager.run_dir.mkdir(parents=True)
-    manager.checkpoint_path.write_bytes(b"not a torch checkpoint")
+    (manager.run_dir / "qwen3_bf16_0.pt").write_bytes(b"not a torch checkpoint")
 
     result = wf._run_blockwise()  # pylint: disable=protected-access
 
@@ -521,7 +550,7 @@ def test_eval_run_removes_checkpoint_only_after_success_log(monkeypatch, tmp_pat
     wf.run()
 
     assert events == ["ppl_log", "cleanup", "remove_log_sink"]
-    assert not manager.run_dir.exists()
+    assert list(manager.run_dir.iterdir()) == []
 
 
 def test_eval_run_preserves_checkpoint_when_eval_fails(monkeypatch, tmp_path):
@@ -541,7 +570,7 @@ def test_eval_run_preserves_checkpoint_when_eval_fails(monkeypatch, tmp_path):
     with pytest.raises(RuntimeError, match="interrupted"):
         wf.run()
 
-    assert manager.checkpoint_path.exists()
+    assert (manager.run_dir / "qwen3_bf16_0.pt").exists()
     fake_logger.remove.assert_called_once_with("sink")
 
 
@@ -895,10 +924,9 @@ def test_init_applies_seed_from_args(monkeypatch):
 
 
 @pytest.mark.parametrize("eval_mode", ["bf16", "quant"])
-def test_init_rejects_dump_for_glm5_2(eval_mode):
+def test_init_accepts_dump_for_glm5_2(eval_mode):
     wf = _make_eval_workflow(model_name="glm5_2", dump=True, eval_mode=eval_mode)
-    with pytest.raises(ValueError, match="cross-block"):
-        LlmEvalWorkflow(wf.args)
+    assert LlmEvalWorkflow(wf.args).dump
 
 
 def test_init_rejects_dump_for_modelwise_eval(monkeypatch):

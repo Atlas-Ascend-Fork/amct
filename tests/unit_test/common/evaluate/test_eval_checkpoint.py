@@ -16,211 +16,113 @@
 # ----------------------------------------------------------------------------
 
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 import torch
 
-from amct_pytorch.common.evaluate.eval_checkpoint import (
-    EvalCheckpointManager,
-    build_eval_signature,
-)
-from amct_pytorch.quantization.bit_policy import BitPolicy
+from amct_pytorch.common.evaluate.eval_checkpoint import EvalCheckpointManager
 
 
-def _make_args(tmp_path, **overrides):
-    defaults = {
-        "model": "/models/qwen",
-        "model_name": "qwen3_5",
-        "eval_mode": "quant",
-        "quant_dtype": "int",
-        "quant_target": ["mlp", "attn-linear"],
-        "algos": ["lwc", "lac"],
-        "seq_len": 4096,
-        "seed": 42,
-        "bit_config": None,
-        "bit_policy": BitPolicy(
-            {
-                "w_bits": 4,
-                "a_bits": 8,
-                "attn-linear": {
-                    "o_proj": {"w_bits": 8, "a_bits": 16},
-                },
-                "mlp": {
-                    "down_proj": {"w_bits": 4, "a_bits": 16},
-                },
-                "attn-cache": {"k": 8, "v": 8},
-            }
-        ),
-        "attn_linear_param_dir": "",
-        "attn_cache_param_dir": "",
-        "moe_mlp_param_dir": "",
-        "output_dir": str(tmp_path),
-    }
-    defaults.update(overrides)
-    return SimpleNamespace(**defaults)
-
-
-@pytest.mark.parametrize(
-    "parameter, value",
-    [("block_size_col", 1), ("scale_dtype", "e8m0"), ("is_per_tensor", True)],
-)
-def test_signature_distinguishes_quantizer_options(tmp_path, parameter, value):
-    first = _make_args(tmp_path, quant_dtype="fp")
-    second = _make_args(tmp_path, quant_dtype="fp", **{parameter: value})
-    assert build_eval_signature(first, 4) != build_eval_signature(second, 4)
-
-
-@pytest.mark.parametrize(
-    "eval_mode, quant_dtype, algos", [("bf16", "fp", ["lac"]), ("quant", "int", [])]
-)
-def test_signature_ignores_inactive_quantizer_options(
-    tmp_path, eval_mode, quant_dtype, algos
-):
-    first = _make_args(
-        tmp_path, eval_mode=eval_mode, quant_dtype=quant_dtype, algos=algos
+def _manager(tmp_path, **overrides):
+    args = dict(
+        model_name="qwen3",
+        quant_dtype="int",
+        eval_mode="quant",
+        output_dir=str(tmp_path),
     )
-    second = _make_args(
-        tmp_path,
-        eval_mode=eval_mode,
-        quant_dtype=quant_dtype,
-        algos=algos,
-        block_size_col=1,
-        scale_dtype="e8m0",
-        is_per_tensor=True,
+    args.update(overrides)
+    return EvalCheckpointManager(SimpleNamespace(**args), 20)
+
+
+def test_latest_output_replaces_previous_and_resumes(tmp_path):
+    manager = _manager(tmp_path)
+    manager.save(2, [torch.tensor([2.0])])
+    manager.save(12, [torch.tensor([12.0])])
+    assert [p.name for p in manager.run_dir.iterdir()] == ["qwen3_int_12.pt"]
+    block_idx, outputs, state = _manager(tmp_path, algos=["lac"], seq_len=1024).load()
+    assert state is None
+    assert block_idx == 12
+    assert torch.equal(outputs[0], torch.tensor([12.0]))
+
+
+def test_load_selects_largest_numeric_block(tmp_path):
+    manager = _manager(tmp_path)
+    manager.save(2, [torch.tensor([2.0])])
+    torch.save(
+        {"completed_block_idx": 12, "inter_io": [torch.tensor([12.0])]},
+        manager.run_dir / "qwen3_int_12.pt",
     )
-    assert build_eval_signature(first, 4) == build_eval_signature(second, 4)
+    assert manager.load()[0] == 12
 
 
-def test_signature_normalizes_target_order_and_ignores_irrelevant_config(tmp_path):
-    first = _make_args(tmp_path)
-    second = _make_args(
-        tmp_path,
-        quant_target=["attn-linear", "mlp", "mlp"],
-        bit_policy=BitPolicy(
-            {
-                "w_bits": 4,
-                "a_bits": 8,
-                "attn-linear": {
-                    "o_proj": {"w_bits": 8, "a_bits": 16},
-                },
-                "mlp": {
-                    "down_proj": {"w_bits": 4, "a_bits": 16},
-                },
-                "attn-cache": {"q": 4, "k": 4, "p": 4, "v": 4},
-            }
-        ),
-    )
-
-    assert build_eval_signature(first, num_layers=32) == build_eval_signature(
-        second, num_layers=32
-    )
-
-
-def test_signature_changes_when_relevant_nested_config_changes(tmp_path):
-    first = _make_args(tmp_path, quant_target=["attn-linear"])
-    second = _make_args(
-        tmp_path,
-        quant_target=["attn-linear"],
-        bit_policy=BitPolicy(
-            {
-                "w_bits": 4,
-                "a_bits": 8,
-                "attn-linear": {
-                    "o_proj": {"w_bits": 4, "a_bits": 16},
-                },
-            }
-        ),
-    )
-
-    assert build_eval_signature(first, 32) != build_eval_signature(second, 32)
-
-
-def test_signature_preserves_algorithm_order(tmp_path):
-    first = _make_args(tmp_path, algos=["lwc", "lac"])
-    second = _make_args(tmp_path, algos=["lac", "lwc"])
-
-    assert build_eval_signature(first, 32) != build_eval_signature(second, 32)
-
-
-def test_signature_resolves_missing_cache_bits_to_sixteen(tmp_path):
-    omitted = _make_args(
-        tmp_path,
-        quant_target=["attn-cache"],
-        bit_policy=BitPolicy({"attn-cache": {"k": 8, "v": 8}}),
-    )
-    explicit = _make_args(
-        tmp_path,
-        quant_target=["attn-cache"],
-        bit_policy=BitPolicy({"attn-cache": {"q": 16, "k": 8, "p": 16, "v": 8}}),
-    )
-
-    assert build_eval_signature(omitted, 32) == build_eval_signature(explicit, 32)
-
-
-def test_signature_changes_when_relevant_ptq_parameter_changes(tmp_path):
-    param_dir = tmp_path / "ptq_params"
-    param_dir.mkdir()
-    param_file = param_dir / "layer_0_mlp.pt"
-    param_file.write_bytes(b"first")
-    args = _make_args(
-        tmp_path,
-        quant_target=["mlp"],
-        moe_mlp_param_dir=str(param_dir),
-    )
-    first = build_eval_signature(args, 32)
-
-    param_file.write_bytes(b"second")
-    second = build_eval_signature(args, 32)
-
-    assert first != second
-
-
-def test_bf16_signature_ignores_quantization_config(tmp_path):
-    first = _make_args(tmp_path, eval_mode="bf16", quant_target=[])
-    second = _make_args(
-        tmp_path,
-        eval_mode="bf16",
-        quant_target=[],
-        bit_policy=BitPolicy({"w_bits": 16, "a_bits": 16}),
-        algos=[],
-    )
-
-    first_signature = build_eval_signature(first, 32)
-    second_signature = build_eval_signature(second, 32)
-    assert first_signature["effective_bit_config"] == {"mode": "bf16"}
-    assert second_signature["effective_bit_config"] == {"mode": "bf16"}
-
-
-def test_checkpoint_replaces_previous_block_and_loads_latest(tmp_path):
-    manager = EvalCheckpointManager(_make_args(tmp_path), num_layers=4)
-    manager.save(0, [torch.tensor([1.0])])
-    manager.save(1, [torch.tensor([2.0])])
-
-    completed_idx, inter_io = manager.load()
-
-    assert completed_idx == 1
-    assert torch.equal(inter_io[0], torch.tensor([2.0]))
-    assert sorted(path.name for path in manager.run_dir.iterdir()) == ["checkpoint.pt"]
-
-
-def test_checkpoint_rejects_signature_mismatch(tmp_path):
-    manager = EvalCheckpointManager(_make_args(tmp_path), num_layers=4)
-    manager.save(0, [torch.tensor([1.0])])
-    payload = torch.load(manager.checkpoint_path, weights_only=True)
-    payload["signature"]["seq_len"] = 1024
-    torch.save(payload, manager.checkpoint_path)
-
-    with pytest.raises(ValueError, match="signature"):
-        manager.load()
-
-
-def test_corrupt_checkpoint_is_removed_and_restarts_from_zero(tmp_path):
-    manager = EvalCheckpointManager(_make_args(tmp_path), num_layers=4)
-    manager.run_dir.mkdir(parents=True, exist_ok=True)
-    manager.checkpoint_path.write_bytes(b"not a torch checkpoint")
-
+def test_cleanup_preserves_other_models_and_dtypes(tmp_path):
+    manager = _manager(tmp_path)
+    other = _manager(tmp_path, model_name="qwen3_5")
+    bf16 = _manager(tmp_path, eval_mode="bf16")
+    for item in (manager, other, bf16):
+        item.save(0, [torch.tensor([1.0])])
+    manager.cleanup()
+    assert other.load()[0] == 0
+    assert bf16.load()[0] == 0
     assert manager.load() is None
-    assert not manager.checkpoint_path.exists()
 
-    manager.save(0, [torch.tensor([3.0])])
-    assert manager.checkpoint_path.exists()
+
+def test_corrupt_latest_falls_back_and_removes_incomplete_write(tmp_path):
+    manager = _manager(tmp_path)
+    manager.save(2, [torch.tensor([2.0])])
+    corrupt = manager.run_dir / "qwen3_int_12.pt"
+    corrupt.write_bytes(b"invalid")
+    temporary = manager.run_dir / "qwen3_int_13.pt.tmp"
+    temporary.write_bytes(b"incomplete")
+    assert manager.load()[0] == 2
+    assert not corrupt.exists()
+    assert not temporary.exists()
+
+
+def test_failed_save_keeps_previous_checkpoint(tmp_path):
+    manager = _manager(tmp_path)
+    manager.save(2, [torch.tensor([2.0])])
+    with patch(
+        "amct_pytorch.common.evaluate.eval_checkpoint.torch.save",
+        side_effect=OSError("disk full"),
+    ):
+        with pytest.raises(OSError, match="disk full"):
+            manager.save(3, [torch.tensor([3.0])])
+    assert manager.load()[0] == 2
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"completed_block_idx": 0, "inter_io": ["invalid"]},
+        {"completed_block_idx": 1, "inter_io": [torch.tensor([1.0])]},
+        {"completed_block_idx": 0, "inter_io": []},
+    ],
+)
+def test_invalid_checkpoint_restarts(tmp_path, payload):
+    manager = _manager(tmp_path)
+    manager.run_dir.mkdir(parents=True)
+    torch.save(payload, manager.run_dir / "qwen3_int_0.pt")
+    assert manager.load() is None
+
+
+def test_missing_checkpoint_creates_directory(tmp_path):
+    manager = _manager(tmp_path)
+    assert manager.load() is None
+    assert manager.run_dir.is_dir()
+
+
+def test_model_state_round_trip(tmp_path):
+    manager = _manager(tmp_path, model_name="glm5_2")
+    indices = torch.tensor([[[0, 1]]], dtype=torch.int32)
+    manager.save(
+        2,
+        [torch.zeros(1, 1, 4)],
+        model_state=[{"prev_topk_indices": indices, "use_cache": False}],
+    )
+    block_idx, outputs, state = manager.load()
+    assert block_idx == 2
+    assert outputs[0].shape == (1, 1, 4)
+    assert torch.equal(state[0]["prev_topk_indices"], indices)
+    assert state[0]["use_cache"] is False

@@ -121,7 +121,7 @@ python -m amct_pytorch.eval \
 
 #### Blockwise 断点续测
 
-GLM-5.2 存在尚未保存和恢复的跨 block DSA indexer 状态，当前不支持 `--dump`，启用时会在评估开始前报错。
+GLM-5.2 使用 `--dump` 时，会在同一个断点文件中额外保存各评估样本的完整 forward kwargs，并将 block 返回的 DSA indexer 索引更新到 `prev_topk_indices`。每层统一覆盖 kwargs，不保留各层历史；后续层提取对应样本的 `prev_topk_indices`，由 attention 自身决定重新计算还是共享索引。恢复时若还有 block 需要执行，但 kwargs 缺失或索引不是 Tensor，则放弃该断点，从第 0 层重新评估。其他模型不要求存在额外 kwargs 状态。
 
 在 blockwise PPL 评估命令中增加 `--dump`，可以在每个 block 完成后保存其 CPU 输出：
 
@@ -139,14 +139,15 @@ python -m amct_pytorch.eval \
   --dump
 ```
 
-断点保存在 `output_dir/temp/eval/<run_name>/checkpoint.pt`。同一任务仅保留最近一个已完成
-block 的输出；重新执行相同命令时会从下一个 block 继续。恢复前仍会执行 embedding，以初始化
+断点保存在 `output_dir/temp/eval/<model_name>_<quant_dtype>_<block_id>.pt`，block 下标从 0 开始，
+BF16 评估的类型字段固定为 `bf16`。同一模型名和类型仅保留最近一个已完成 block 的输出；
+再次运行时从最大有效 block 下标的下一个 block 继续。恢复前仍会执行 embedding，以初始化
 模型所需的 position、attention mask 等状态。
 
-`run_name` 包含模型、评估模式、量化类型、排序后的 `quant_target`、保持传参顺序的算法列表、
-YAML 名称和 8 位配置签名。配置签名使用本次 `quant_target` 实际生效的 bit 配置，并包含 PTQ
-参数文件内容指纹，避免不同配置误用同一断点。PPL 成功输出后会自动删除对应任务目录；运行中断或
-评估失败时保留断点。保存采用临时文件原子替换，因此写入期间最多需要约两份 checkpoint 的磁盘空间。
+启用 `--dump` 时会提醒当前模型名和类型，不再校验模型路径、算法、YAML 或量化参数。
+用户需自行确认断点与当前评估配置一致；配置不一致时先删除对应文件。同名同类型的评估不要并行运行。
+PPL 成功输出后只删除当前模型名和类型的断点文件，保留公共目录及其他任务文件；运行中断或
+评估失败时保留断点。保存采用临时文件原子替换，新文件保存成功后删除旧文件，写入期间最多需要约两份 checkpoint 的磁盘空间。
 
 `eval`相关启动指令也可参考[eval.sh](../../examples/eval.sh)
 
@@ -325,7 +326,7 @@ python -m amct_pytorch.deploy \
 | 参数 | 默认值 | 含义 |
 |------|------|------|
 | `--eval_mode` | `bf16` | 评估模式，指定模型在计算困惑度（PPL）时使用的精度格式，支持如下两种格式：<br> `bf16`：半精度浮点数（BF16），常用于加速推理并保持较高精度。<br>`quant`：量化模式，可能指 INT8/INT4 等量化格式，用于降低内存和计算开销，但可能牺牲少量精度。 |
-| `--dump` | 默认关闭 | 仅用于 `granularity=block` 的 PPL 评估。启用后保存最近一个已完成 block 的输出，并在相同评估配置再次运行时自动续测；PPL 成功输出后自动清理断点目录。 |
+| `--dump` | 默认关闭 | 仅用于 `granularity=block` 的 PPL 评估。按模型名和类型保存最近一个已完成 block 的输出并自动续测，用户自行保证配置一致；PPL 成功输出后清理对应断点文件。 |
 | `--wikitext_final_out` | 空字符串 | **【预留参数，暂不生效】** WikiText 末端输出路径参数，用于指定 WikiText 数据集处理后最终输出的文件路径。当前版本主链路（`eval` / `extract_ptq_data` / `ptq` / `deploy`）尚未读取该参数，传入的值不会生效，仅打印告警；参数本身予以保留，后续版本按需接通。 |
 
 说明：

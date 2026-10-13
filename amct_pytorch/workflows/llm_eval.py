@@ -51,11 +51,6 @@ class LlmEvalWorkflow:
         self.dump = bool(getattr(args, "dump", False))
         if self.dump and self.granularity != "block":
             raise ValueError("--dump only supports eval with granularity 'block'.")
-        if self.dump and args.model_name == "glm5_2":
-            raise ValueError(
-                "--dump does not support glm5_2: its cross-block DSA indexer state "
-                "cannot currently be restored from an eval checkpoint."
-            )
         self.eval_mode = args.eval_mode
         self.pipeline = None
         self.data_provider = None
@@ -156,28 +151,36 @@ class LlmEvalWorkflow:
     def _run_blockwise(
         self,
     ):
+        if getattr(self, "dump", False):
+            self.checkpoint_manager = EvalCheckpointManager(
+                self.args, self.pipeline.num_layers
+            )
+            logger.warning(
+                "Dump enabled: model_name={}, quant_dtype={}. Ensure existing checkpoints "
+                "match the model and evaluation configuration you intend to use.",
+                self.checkpoint_manager.model_name,
+                self.checkpoint_manager.quant_dtype,
+            )
         tokenizer = self.pipeline.tokenizer
         samples = get_wiki_inputs(tokenizer, self.seq_len)
         logger.info("Loaded {} eval samples for blockwise eval.", len(samples))
         inter_io = self.pipeline.do_embedding_forward(samples, self.args.output_dir)
         start_layer_idx = 0
-        if getattr(self, "dump", False):
-            self.checkpoint_manager = EvalCheckpointManager(
-                self.args, self.pipeline.num_layers
-            )
-            if self.checkpoint_manager.checkpoint_path.exists():
-                restored = self.checkpoint_manager.load()
-                if restored is not None:
-                    del inter_io
-                    completed_block_idx, inter_io = restored
-                    start_layer_idx = completed_block_idx + 1
-                    logger.info(
-                        "Resume blockwise eval from block {} using checkpoint '{}'.",
-                        start_layer_idx,
-                        self.checkpoint_manager.checkpoint_path,
+        if self.checkpoint_manager is not None:
+            restored = self.checkpoint_manager.load()
+            if restored is not None:
+                completed_block_idx, restored_io, model_state = restored
+                try:
+                    self.pipeline.restore_eval_state(
+                        model_state, completed_block_idx, restored_io
                     )
-            else:
-                self.checkpoint_manager.load()
+                except ValueError as error:
+                    logger.warning("Discard unusable eval checkpoint state: {}", error)
+                    self.pipeline.restore_eval_state(None, -1, inter_io)
+                else:
+                    inter_io = restored_io
+                    start_layer_idx = completed_block_idx + 1
+                del restored, restored_io, model_state
         use_quant_block, enable_quant, eval_message = self._resolve_eval_states()
         logger.info(eval_message)
         for layer_idx in tqdm(
@@ -191,7 +194,9 @@ class LlmEvalWorkflow:
                 enable_quant=enable_quant,
             )
             if self.checkpoint_manager is not None:
-                self.checkpoint_manager.save(layer_idx, inter_io)
+                self.checkpoint_manager.save(
+                    layer_idx, inter_io, self.pipeline.export_eval_state()
+                )
 
         ppl = wikitext2_ppl(
             self.pipeline.do_head_forward(inter_io),

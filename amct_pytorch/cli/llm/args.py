@@ -231,13 +231,12 @@ def parser_gen(command=None):
     parser.add_argument('--moe_mlp_param_dir', default="")
     parser.add_argument('--wikitext_final_out', default=_UNSET, help=_RESERVED_HELP)
 
-    if command == "eval":
-        parser.add_argument(
-            '--dump',
-            action='store_true',
-            default=False,
-            help='Save and resume blockwise eval checkpoints (granularity=block only).',
-        )
+    parser.add_argument(
+        '--dump',
+        action='store_true',
+        default=False,
+        help='Only for eval: save and resume blockwise checkpoints (granularity=block only).',
+    )
 
     args = parser.parse_args()
 

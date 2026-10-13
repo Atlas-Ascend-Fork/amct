@@ -455,22 +455,138 @@ class TestGLM5_2BlockMethods:
             lambda self, layer_idx, use_quant_block=False: fake_block,
         )
         result = getattr(model, "_build_block_for_forward")(0)
-        result.forward()
-        assert getattr(model, "_dsa_topk_indices") is fake_topk
+        result.forward(
+            position_embeddings=(fake_hidden, fake_hidden),
+            use_cache=False,
+            extra={"values": [fake_hidden]},
+        )
+        state = model.export_eval_state()
+        torch.testing.assert_close(state[0]["prev_topk_indices"], fake_topk)
+        torch.testing.assert_close(state[0]["position_embeddings"][0], fake_hidden)
+        assert state[0]["use_cache"] is False
+        torch.testing.assert_close(state[0]["extra"]["values"][0], fake_hidden)
 
-    def test_get_block_forward_kwargs_injects_topk(self, monkeypatch):
-        """get_block_forward_kwargs injects prev_topk_indices when available."""
+    @pytest.mark.parametrize("checkpoint_layer", [0, 1, 2])
+    def test_indexshare_resumes_each_sample_and_refreshes_full(
+        self, monkeypatch, tmp_path, checkpoint_layer
+    ):
+        model = self._make_model(monkeypatch)
+        model.config.indexer_types = ["full", "shared", "shared", "full"]
+        model.num_layers = 4
+        seen = []
+
+        class FakeBlock:
+            def __init__(self, layer_idx):
+                self.layer_idx = layer_idx
+
+            def forward(self, hidden_states, prev_topk_indices=None):
+                seen.append(prev_topk_indices)
+                indices = (
+                    hidden_states[..., :1].to(torch.int32)
+                    if self.layer_idx in (0, 3)
+                    else prev_topk_indices
+                )
+                return hidden_states + indices.to(hidden_states.dtype), indices
+
+        monkeypatch.setattr(
+            "amct_pytorch.common.models.llm.common.base.BaseModel._build_block_for_forward",
+            lambda self, layer_idx, use_quant_block=False: FakeBlock(layer_idx),
+        )
+        samples = [torch.ones(1, 4, 1), torch.full((1, 4, 1), 3.0)]
+        block = model._build_block_for_forward(0)
+        outputs = [block.forward(sample)[0] for sample in samples]
+        from amct_pytorch.common.evaluate.eval_checkpoint import EvalCheckpointManager
+
+        args = SimpleNamespace(
+            model_name="glm5_2",
+            quant_dtype="int",
+            eval_mode="quant",
+            output_dir=str(tmp_path),
+        )
+        manager = EvalCheckpointManager(args, 4)
+
+        def resume(layer_idx, outputs):
+            state = model.export_eval_state()
+            manager.save(layer_idx, outputs, state)
+            completed_idx, restored_outputs, state = manager.load()
+            restored_model = self._make_model(monkeypatch)
+            restored_model.config.indexer_types = ["full", "shared", "shared", "full"]
+            restored_model.num_layers = 4
+            restored_model.restore_eval_state(state, completed_idx, restored_outputs)
+            return restored_model, restored_outputs
+
+        if checkpoint_layer == 0:
+            model, outputs = resume(0, outputs)
+        for layer_idx in (1, 2):
+            block = model._build_block_for_forward(layer_idx)
+            outputs = [block.forward(sample)[0] for sample in outputs]
+            if checkpoint_layer == layer_idx:
+                model, outputs = resume(layer_idx, outputs)
+        assert seen[2][0, 0, 0] == 1
+        assert seen[3][0, 0, 0] == 3
+        assert seen[4][0, 0, 0] == 1
+        assert seen[5][0, 0, 0] == 3
+        block = model._build_block_for_forward(3)
+        outputs = [block.forward(sample)[0] for sample in outputs]
+        assert seen[-2][0, 0, 0] == 1
+        assert seen[-1][0, 0, 0] == 3
+        torch.testing.assert_close(outputs[0], torch.full((1, 4, 1), 8.0))
+        torch.testing.assert_close(outputs[1], torch.full((1, 4, 1), 24.0))
+
+        continuous_model = self._make_model(monkeypatch)
+        continuous_model.config.indexer_types = ["full", "shared", "shared", "full"]
+        continuous_model.num_layers = 4
+        continuous_outputs = samples
+        for layer_idx in range(4):
+            block = continuous_model._build_block_for_forward(layer_idx)
+            continuous_outputs = [
+                block.forward(sample)[0] for sample in continuous_outputs
+            ]
+        for resumed, continuous in zip(outputs, continuous_outputs):
+            torch.testing.assert_close(resumed, continuous)
+
+    def test_missing_kwargs_rejected_only_for_glm_resume(self, monkeypatch):
+        model = self._make_model(monkeypatch)
+        model.config.indexer_types = ["full", "shared"]
+        with pytest.raises(ValueError, match="kwargs"):
+            model.restore_eval_state(None, 0, [torch.ones(1, 2, 1)])
+        model.config.indexer_types = ["full", "full"]
+        with pytest.raises(ValueError, match="kwargs"):
+            model.restore_eval_state(None, 0, [torch.ones(1, 2, 1)])
+        model.restore_eval_state(None, -1, [torch.ones(1, 2, 1)])
+        model.restore_eval_state(None, 1, [torch.ones(1, 2, 1)])
+        from amct_pytorch.common.models.llm.common.base import BaseModel
+
+        BaseModel.restore_eval_state(model, None, 0, [torch.ones(1, 2, 1)])
+
+    @pytest.mark.parametrize(
+        "indices",
+        [
+            None,
+            "invalid",
+            [0, 1],
+        ],
+    )
+    def test_restore_rejects_invalid_indexer_state(self, monkeypatch, indices):
+        model = self._make_model(monkeypatch)
+        model.config.indexer_types = ["full", "shared"]
+        state = [{"prev_topk_indices": indices}]
+        with pytest.raises(ValueError, match="indexer state"):
+            model.restore_eval_state(state, 0, [torch.ones(1, 2, 1)])
+        assert model.export_eval_state() == []
+
+    def test_get_block_forward_kwargs_keeps_per_sample_topk_out(self, monkeypatch):
+        """Shared kwargs must not contain a single sample's IndexShare state."""
         model = self._make_model(monkeypatch)
         fake_topk = torch.tensor([[1, 2], [3, 4]])
-        setattr(model, "_dsa_topk_indices", fake_topk)
+        model._block_forward_kwargs = [{"prev_topk_indices": fake_topk}]
         kwargs = model.get_block_forward_kwargs()
-        assert "prev_topk_indices" in kwargs
-        assert kwargs["prev_topk_indices"] is fake_topk
+        assert "prev_topk_indices" not in kwargs
 
     def test_get_block_forward_kwargs_no_topk(self, monkeypatch):
         """get_block_forward_kwargs omits prev_topk_indices when None."""
         model = self._make_model(monkeypatch)
-        setattr(model, "_dsa_topk_indices", None)
+        model._block_forward_kwargs = []
         kwargs = model.get_block_forward_kwargs()
         assert "prev_topk_indices" not in kwargs
 
