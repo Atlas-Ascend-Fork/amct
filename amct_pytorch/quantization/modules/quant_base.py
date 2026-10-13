@@ -158,6 +158,8 @@ class WeightQuantizer(torch.nn.Module):
 
     def export_deploy(self, x):
         x, quantize_algo = self.algo_forward(x)
+        if self.bits == 16:
+            return {"qweight": x.detach().cpu()}
         if quantize_algo is not None:
             export_fn = getattr(quantize_algo, "export_deploy", None)
             if not callable(export_fn):
