@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650"><defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#667078"/></marker></defs><rect width="1200" height="650" fill="#F6F3EC"/>
+<text x="42" y="52" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="30" fill="#182027" font-weight="700" text-anchor="start">三个 Linear 各有真实输入，down_proj 接收门控后的结果</text>
+<text x="42" y="88" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#667078" font-weight="400" text-anchor="start">一个 MLP 输入缓存，经当前 block 前向，得到三个独立校准输入</text>
+<line x1="42" y1="108" x2="1158" y2="108" stroke="#D5D0C5" stroke-width="2"/>
+<rect x="42" y="245" width="170" height="100" rx="5" fill="#E1EEEE" stroke="#197D8C" stroke-width="1.5"/>
+<text x="127.0" y="279" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#197D8C" font-weight="700" text-anchor="middle">hidden x</text>
+<text x="127.0" y="312" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">MLP 输入</text>
+<rect x="290" y="150" width="240" height="100" rx="5" fill="#EAE4F0" stroke="#806D9E" stroke-width="1.5"/>
+<text x="410.0" y="184" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#806D9E" font-weight="700" text-anchor="middle">gate_proj</text>
+<text x="410.0" y="217" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">输入：x</text>
+<rect x="290" y="370" width="240" height="100" rx="5" fill="#E4ECE6" stroke="#4F856F" stroke-width="1.5"/>
+<text x="410.0" y="404" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#4F856F" font-weight="700" text-anchor="middle">up_proj</text>
+<text x="410.0" y="437" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">输入：x</text>
+<rect x="605" y="150" width="180" height="100" rx="5" fill="#EAE4F0" stroke="#806D9E" stroke-width="1.5"/>
+<text x="695.0" y="184" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#806D9E" font-weight="700" text-anchor="middle">SiLU</text>
+<text x="695.0" y="217" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">激活函数</text>
+<rect x="830" y="275" width="100" height="85" rx="5" fill="#F6EEDB" stroke="#D99A2B" stroke-width="1.5"/>
+<text x="880.0" y="309" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#D99A2B" font-weight="700" text-anchor="middle">×</text>
+<rect x="985" y="275" width="175" height="105" rx="5" fill="#E1EEEE" stroke="#197D8C" stroke-width="1.5"/>
+<text x="1072.5" y="309" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#197D8C" font-weight="700" text-anchor="middle">down_proj</text>
+<text x="1072.5" y="342" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">输入：门控结果</text>
+<path d="M 212 295 H 250 V 200 H 285" fill="none" stroke="#667078" stroke-width="2" marker-end="url(#a)"/>
+<path d="M 250 295 V 420 H 285" fill="none" stroke="#667078" stroke-width="2" marker-end="url(#a)"/>
+<line x1="530" y1="200" x2="600" y2="200" stroke="#667078" stroke-width="2" marker-end="url(#a)"/>
+<path d="M 785 200 H 880 V 270" fill="none" stroke="#667078" stroke-width="2" marker-end="url(#a)"/>
+<path d="M 530 420 H 880 V 365" fill="none" stroke="#667078" stroke-width="2" marker-end="url(#a)"/>
+<line x1="930" y1="317" x2="980" y2="317" stroke="#667078" stroke-width="2" marker-end="url(#a)"/>
+<text x="60" y="532" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="27" fill="#182027" font-weight="700" text-anchor="start">y = down_proj(SiLU(gate_proj(x)) × up_proj(x))</text>
+<line x1="42" y1="590" x2="1158" y2="590" stroke="#D5D0C5" stroke-width="2"/>
+<text x="42" y="622" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="700" text-anchor="start">QuantLinear 包装器通过 .linear 取出真实 nn.Linear；每个 Linear 是一个 artifact unit。</text>
+</svg>

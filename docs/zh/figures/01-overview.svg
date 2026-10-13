@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650"><defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#667078"/></marker></defs><rect width="1200" height="650" fill="#F6F3EC"/>
+<text x="42" y="52" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="30" fill="#182027" font-weight="700" text-anchor="start">四周分别解决一个问题，再组成完整功能链路</text>
+<text x="42" y="88" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="17" fill="#667078" font-weight="400" text-anchor="start">实线表示当前路径；图中阶段是职责划分，不代表性能比例</text>
+<line x1="42" y1="108" x2="1158" y2="108" stroke="#D5D0C5" stroke-width="2"/>
+<rect x="42" y="170" width="260" height="160" rx="5" fill="#E1EEEE" stroke="#197D8C" stroke-width="1.5"/>
+<text x="172.0" y="204" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#197D8C" font-weight="700" text-anchor="middle">Week 5 · 入口</text>
+<text x="172.0" y="237" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">本地模型 + config</text>
+<text x="172.0" y="264" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">确定路径与支持边界</text>
+<line x1="304" y1="250" x2="323" y2="250" stroke="#667078" stroke-width="2" marker-end="url(#a)"/>
+<rect x="327" y="170" width="260" height="160" rx="5" fill="#E4ECE6" stroke="#4F856F" stroke-width="1.5"/>
+<text x="457.0" y="204" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#4F856F" font-weight="700" text-anchor="middle">Week 6 · 数据</text>
+<text x="457.0" y="237" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">静态量化才 Extract</text>
+<text x="457.0" y="264" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">逐层缓存与完整性</text>
+<line x1="589" y1="250" x2="608" y2="250" stroke="#667078" stroke-width="2" marker-end="url(#a)"/>
+<rect x="612" y="170" width="260" height="160" rx="5" fill="#EAE4F0" stroke="#806D9E" stroke-width="1.5"/>
+<text x="742.0" y="204" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#806D9E" font-weight="700" text-anchor="middle">Week 7 · PTQ</text>
+<text x="742.0" y="237" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">真实 Linear 校准</text>
+<text x="742.0" y="264" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">参数 artifact 最后发布</text>
+<line x1="874" y1="250" x2="893" y2="250" stroke="#667078" stroke-width="2" marker-end="url(#a)"/>
+<rect x="897" y="170" width="260" height="160" rx="5" fill="#F6EEDB" stroke="#D99A2B" stroke-width="1.5"/>
+<text x="1027.0" y="204" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#D99A2B" font-weight="700" text-anchor="middle">Week 8 · 验证</text>
+<text x="1027.0" y="237" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">Qwen3-0.6B CPU</text>
+<text x="1027.0" y="264" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">fresh reload + 前向</text>
+<rect x="90" y="392" width="460" height="135" rx="5" fill="#E4ECE6" stroke="#4F856F" stroke-width="1.5"/>
+<text x="320.0" y="426" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#4F856F" font-weight="700" text-anchor="middle">已实现与留存证据</text>
+<text x="320.0" y="459" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">28 层 / 84 units；量化参数可恢复</text>
+<text x="320.0" y="486" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">三组回归日志分别报告，不相加</text>
+<rect x="650" y="392" width="460" height="135" rx="5" fill="#F7E8E1" stroke="#D86648" stroke-width="1.5"/>
+<text x="880.0" y="426" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="22" fill="#D86648" font-weight="700" text-anchor="middle">仍需接入或补验</text>
+<text x="880.0" y="459" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">统一 Solver 调度；数据内容指纹</text>
+<text x="880.0" y="486" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="400" text-anchor="middle">代表性精度、NPU 部署、性能</text>
+<line x1="42" y1="590" x2="1158" y2="590" stroke="#D5D0C5" stroke-width="2"/>
+<text x="42" y="622" font-family="Noto Sans CJK SC,Microsoft YaHei,sans-serif" font-size="18" fill="#182027" font-weight="700" text-anchor="start">功能冒烟证明链路可执行；算法质量与部署收益需要独立验收。</text>
+</svg>
