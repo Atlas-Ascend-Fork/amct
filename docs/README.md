@@ -1027,12 +1027,12 @@ AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模
    amct\_pytorch/auto\_channel\_prune\_search.py下的TaylorLossSensitivity方法，简要流程如下：
 
    ```python
-   from amct.common.auto_channel_prune.sensitivity_base import SensitivityBase
+   from amct_pytorch.common.auto_channel_prune.sensitivity_base import SensitivityBase
    
-   class Sensitivity(SensitivityBase)
-       def __init__(self)
+   class Sensitivity(SensitivityBase):
+       def __init__(self):
            pass
-       def setup_initialization(self, graph_tuple, input_data, test_iteration):
+       def setup_initialization(self, graph_tuple, input_data, test_iteration, output_nodes=None):
            # 必要的初始化
            # graph_tuple (graph, graph_info)
            pass
@@ -1044,10 +1044,10 @@ AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模
 3. （可选，由用户补充处理）实现搜索算法search\_alg模块，需要用户实现channel\_prune\_search回调接口，根据通道敏感度与通道稀疏收益进行稀疏通道搜索。可参考系统默认search\_alg模块：_AMCT安装目录_/amct\_pytorch/common/auto\_channel\_prune/search\_channel\_base.py文件中GreedySearch方法。
 
    ```python
-   from amct.common.auto_channel_prune.search_channel_base import SearchChannelBase
+   from amct_pytorch.common.auto_channel_prune.search_channel_base import SearchChannelBase
    
-   class Search(SearchChannelBase)
-       def __init__(self)
+   class Search(SearchChannelBase):
+       def __init__(self):
            # 初始化
            pass
    
