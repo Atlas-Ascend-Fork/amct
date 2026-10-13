@@ -17,6 +17,8 @@
 # ----------------------------------------------------------------------------
 import copy
 import inspect
+import subprocess
+import sys
 from unittest.mock import patch
 
 import pytest
@@ -270,6 +272,38 @@ def test_dynamic_adapters_are_serializable(tmp_path):
     assert isinstance(loaded.self_attn, type(fused.self_attn))
     assert isinstance(loaded.mlp, type(fused.mlp))
     assert isinstance(loaded.self_attn.shared_quantize, IdentityQuant)
+
+
+def test_dynamic_adapters_load_in_fresh_process(tmp_path):
+    layer = _qwen('eager').model.layers[0]
+    layer.self_attn = build_local_adapter('qwen3_attention', layer.self_attn, 'int8')
+    layer.mlp = build_local_adapter('qwen3_mlp', layer.mlp, 'int8')
+    path = tmp_path / 'fused-qwen3-fresh-process.pt'
+    torch.save(layer, path)
+
+    child_code = '''
+from unittest.mock import patch
+with patch('transformers.utils.is_torchaudio_available', return_value=False):
+    import torch
+    import amct_pytorch.classic.deploy_op.local_dynamic as local_dynamic
+    assert not hasattr(local_dynamic, 'FusedQwen3Attention')
+    layer = torch.load(r'PATH', weights_only=False)
+    assert type(layer.self_attn).__name__ == 'FusedQwen3Attention'
+    assert type(layer.mlp).__name__ == 'FusedQwen3MLP'
+    assert layer.self_attn._amct_adapter_id == 'qwen3_attention'
+    assert layer.mlp._amct_adapter_id == 'qwen3_mlp'
+    from amct_pytorch.classic.deploy_op.shared_quantize import SharedDynamicQuantize
+    assert isinstance(layer.self_attn.shared_quantize, SharedDynamicQuantize)
+    print('FRESH_PROCESS_LOAD_OK')
+    '''.replace('PATH', str(path))
+    result = subprocess.run(
+        [sys.executable, '-c', child_code],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert 'FRESH_PROCESS_LOAD_OK' in result.stdout
 
 
 def test_vit_fused_layer_preserves_layer_type_and_output_capture():

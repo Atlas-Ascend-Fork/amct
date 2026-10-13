@@ -250,7 +250,7 @@ def test_convert_parameter_mismatch_keeps_independent_quantization():
     layer(torch.randn(2, 4))
     norm = layer.input_layernorm.pre_op
     old_weight = norm.weight.clone()
-    layer.self_attn.k_proj.scale_d = layer.self_attn.k_proj.scale_d * 2
+    layer.self_attn.k_proj.shared_param_mode = None
     ApplyScalingFusionPass().run(layer)
     assert layer.input_layernorm is norm
     torch.testing.assert_close(norm.weight, old_weight)

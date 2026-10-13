@@ -36,6 +36,7 @@ class Member(nn.Module):
         self.offset_d = None
         self.input_quant_disabled = False
         self.smooth_scale_skipped = False
+        self.shared_param_mode = None
 
     def forward(self, x, pertoken_scale=None):
         return self.linear(x)
@@ -69,9 +70,7 @@ class Model(nn.Module):
 
 def _dynamic_norm_quant(model, norm_name, members, target_ref, adapter):
     old_norm = model.get_submodule(norm_name)
-    for ref in members:
-        model.get_submodule(ref).scale_d = None
-    return LayerNormQuant(
+    module = LayerNormQuant(
         pre_op=old_norm,
         scaling_layers=tuple(model.get_submodule(ref) for ref in members),
         member_refs=members,
@@ -82,6 +81,10 @@ def _dynamic_norm_quant(model, norm_name, members, target_ref, adapter):
         batch_num=1,
         dynamic_per_token=True,
     )
+    for member in module.scaling_layers:
+        member.scale_d = None
+        member.shared_param_mode = 'dynamic'
+    return module
 
 
 def test_dynamic_fusion_replaces_attention_and_mlp_without_replacing_layer():
@@ -134,6 +137,11 @@ def test_static_fusion_keeps_fused_pre_op_and_disables_member_inputs():
     model.layer.input_layernorm.status = 'calibrated'
     model.layer.input_layernorm.smooth_factor = torch.tensor([[1.0, 2.0, 4.0, 8.0]])
     model.layer.input_layernorm.activation_scale = torch.tensor([0.1])
+    for member in (
+        model.layer.self_attn.q_proj,
+        model.layer.self_attn.k_proj,
+    ):
+        member.shared_param_mode = 'static'
 
     ApplyScalingFusionPass().run(model)
 
@@ -171,6 +179,32 @@ def test_adapter_failure_keeps_norm_and_weights_unmodified(monkeypatch):
     assert isinstance(model.layer.input_layernorm, nn.LayerNorm)
 
 
+def test_shared_parameter_mode_mismatch_skips_fusion_without_weight_changes():
+    model = Model()
+    model.layer.input_layernorm = LayerNormQuant(
+        model.layer.input_layernorm,
+        (model.layer.self_attn.q_proj, model.layer.self_attn.k_proj),
+        ('layer.self_attn.q_proj', 'layer.self_attn.k_proj'),
+        'layer.self_attn',
+        'qwen3_attention',
+        'smoothquant',
+        'tensor',
+        1,
+    )
+    wrapper = model.layer.input_layernorm
+    wrapper.status = 'calibrated'
+    wrapper.smooth_factor = torch.tensor([[1.0, 2.0, 4.0, 8.0]])
+    wrapper.activation_scale = torch.tensor([0.1])
+    before = {id(value): value.clone() for value in model.parameters()}
+
+    ApplyScalingFusionPass().run(model)
+
+    assert isinstance(model.layer.input_layernorm, nn.LayerNorm)
+    for value in model.parameters():
+        torch.testing.assert_close(value, before[id(value)])
+    assert not model.layer.self_attn.q_proj.smooth_scale_skipped
+
+
 def test_single_member_static_smooth_retains_input_quantization():
     model = Model()
     model.layer.input_layernorm = LayerNormQuant(
@@ -187,6 +221,7 @@ def test_single_member_static_smooth_retains_input_quantization():
     wrapper.status = 'calibrated'
     wrapper.smooth_factor = torch.tensor([[1.0, 2.0, 4.0, 8.0]])
     wrapper.activation_scale = torch.tensor([0.1])
+    wrapper.scaling_layers[0].shared_param_mode = 'static'
     ApplyScalingFusionPass().run(model)
     assert not model.layer.self_attn.q_proj.input_quant_disabled
     assert model.layer.self_attn.q_proj.smooth_scale_skipped

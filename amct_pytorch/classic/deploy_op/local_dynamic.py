@@ -32,8 +32,19 @@ _ADAPTER_BUILDERS = {
     ),
     'qwen3_mlp': ('llm/qwen/qwen3/fused_modules.py', 'qwen3_mlp'),
     'vit_attention': ('vit/fused_modules.py', 'vit_attention'),
+    'vit_attention_legacy': ('vit/fused_modules.py', 'vit_attention'),
     'vit_mlp': ('vit/fused_modules.py', 'vit_mlp'),
+    'vit_mlp_legacy': ('vit/fused_modules.py', 'vit_mlp'),
 }
+_ADAPTER_FORWARDS = {
+    'qwen3_attention': ('llm/qwen/qwen3/fused_modules.py', '_attention_forward'),
+    'qwen3_mlp': ('llm/qwen/qwen3/fused_modules.py', '_mlp_forward'),
+    'vit_attention': ('vit/fused_modules.py', '_attention_forward'),
+    'vit_attention_legacy': ('vit/fused_modules.py', '_legacy_attention_forward'),
+    'vit_mlp': ('vit/fused_modules.py', '_mlp_forward'),
+    'vit_mlp_legacy': ('vit/fused_modules.py', '_legacy_mlp_forward'),
+}
+_ADAPTER_REDUCE_VERSION = 1
 
 
 def build_local_adapter(adapter, original, act_type):
@@ -45,32 +56,57 @@ def build_local_adapter(adapter, original, act_type):
     return builder(original, act_type)
 
 
-def make_local_adapter(original, forward, act_type):
+def make_local_adapter(adapter, original, act_type):
+    '''Build a local adapter from an already loaded adapter builder.'''
+    if adapter not in _ADAPTER_BUILDERS:
+        raise ValueError(f'unsupported dynamic adapter: {adapter}')
+    relative, forward_name = _ADAPTER_FORWARDS[adapter]
+    forward = getattr(_load_adapter_module(relative), forward_name)
     # Keep native attributes, training state and hooks. Copy registration maps so
     # adding the shared quantizer does not modify the original module.
     fused = copy.copy(original)
-    fused.__class__ = _adapter_type(type(original), forward)
+    fused.__class__ = _adapter_type(type(original), forward, adapter)
     for name in ('_modules', '_parameters', '_buffers'):
         setattr(fused, name, getattr(original, name).copy())
+    fused._amct_adapter_id = adapter
     fused.shared_quantize = SharedDynamicQuantize(act_type)
     fused.shared_quantize.train(original.training)
     return fused
 
 
-def _register_adapter_type(adapter_type):
-    # torch.save serializes a module by its class's module and qualname. Keep
-    # dynamically generated adapters in this importable namespace so a saved
-    # deployment model can be restored in a fresh process.
-    setattr(sys.modules[__name__], adapter_type.__name__, adapter_type)
-    return adapter_type
+def _reduce_adapter(self):
+    # Pickle checks __reduce__ before it tries to import the dynamic class by
+    # name. A stable adapter id and version let a fresh process rebuild the
+    # adapter without relying on runtime module registration.
+    return _rebuild_adapter, (
+        self._amct_adapter_id,
+        _ADAPTER_REDUCE_VERSION,
+        type(self).__mro__[1],
+        self.__dict__,
+    )
+
+
+def _rebuild_adapter(adapter, version, original_type, state):
+    if version != _ADAPTER_REDUCE_VERSION:
+        raise ValueError(f'unsupported local adapter serialization version: {version}')
+    if adapter not in _ADAPTER_BUILDERS:
+        raise ValueError(f'unsupported dynamic adapter: {adapter}')
+    relative, forward_name = _ADAPTER_FORWARDS[adapter]
+    forward = getattr(_load_adapter_module(relative), forward_name)
+    adapter_type = _adapter_type(original_type, forward, adapter)
+    instance = adapter_type.__new__(adapter_type)
+    instance.__dict__.update(state)
+    return instance
 
 
 @lru_cache(maxsize=None)
-def _adapter_type(original_type, forward):
+def _adapter_type(original_type, forward, adapter):
     adapter_type = type(
-        f'Fused{original_type.__name__}', (original_type,), {'forward': forward}
+        f'Fused{original_type.__name__}',
+        (original_type,),
+        {'forward': forward, '__reduce__': _reduce_adapter},
     )
-    return _register_adapter_type(adapter_type)
+    return adapter_type
 
 
 @lru_cache(maxsize=None)

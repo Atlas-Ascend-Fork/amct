@@ -74,25 +74,27 @@ class ApplyScalingFusionPass(BaseModuleFusionPass):
         )
 
     def _check_shared_parameters(self, module, members):
+        expected_mode = 'dynamic' if module.dynamic_per_token else 'static'
         for member in members:
-            pairs = [
-                (member.scale_d, module.activation_scale),
-                (member.offset_d, module.activation_offset),
-            ]
-            if module.algorithm == 'smoothquant':
-                pairs.append((member.scale, module.smooth_factor))
-            for actual, expected in pairs:
-                if actual is None or expected is None:
-                    if actual is not expected:
-                        raise ValueError(
-                            'member parameters differ from calibrated pre_op parameters'
-                        )
-                elif actual.shape != expected.shape or not torch.equal(
-                    actual, expected
-                ):
-                    raise ValueError(
-                        'member parameters differ from calibrated pre_op parameters'
-                    )
+            if getattr(member, 'shared_param_mode', None) != expected_mode:
+                raise ValueError(
+                    f'member shared parameters mode must be {expected_mode!r}'
+                )
+
+        if module.dynamic_per_token:
+            if any(member.scale_d is not None for member in members):
+                raise ValueError('dynamic shared input must not have static scales')
+        elif module.activation_scale is None:
+            raise ValueError('activation_scale is missing')
+
+        if module.algorithm == 'smoothquant':
+            if module.smooth_factor is None:
+                raise ValueError('smooth_factor is missing')
+            if (
+                not torch.isfinite(module.smooth_factor).all()
+                or (module.smooth_factor <= 0).any()
+            ):
+                raise ValueError('smooth_factor must be finite and positive')
 
     def _build_replacement(self, model, module, members):
         if module.dynamic_per_token:

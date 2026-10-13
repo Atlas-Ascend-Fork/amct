@@ -20,12 +20,10 @@ from amct_pytorch.classic.deploy_op.local_dynamic import make_local_adapter
 
 
 def vit_attention(attention, act_type='int8'):
-    forward = (
-        _attention_forward
-        if hasattr(attention, 'q_proj')
-        else _legacy_attention_forward
+    adapter = (
+        'vit_attention' if hasattr(attention, 'q_proj') else 'vit_attention_legacy'
     )
-    return make_local_adapter(attention, forward, act_type)
+    return make_local_adapter(adapter, attention, act_type)
 
 
 def _attention(self, query, key, value, mask, dropout, **kwargs):
@@ -90,8 +88,8 @@ def _legacy_attention_forward(self, hidden_states, **kwargs):
 
 
 def vit_mlp(mlp, act_type='int8'):
-    forward = _mlp_forward if hasattr(mlp, 'fc1') else _legacy_mlp_forward
-    return make_local_adapter(mlp, forward, act_type)
+    adapter = 'vit_mlp' if hasattr(mlp, 'fc1') else 'vit_mlp_legacy'
+    return make_local_adapter(adapter, mlp, act_type)
 
 
 def _mlp_forward(self, hidden_states):

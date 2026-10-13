@@ -197,6 +197,8 @@ def test_shared_buffers_follow_deployment_member_device():
     model.pre.status = 'calibrated'
     model.pre.activation_scale = torch.tensor([0.1])
     model.pre.activation_offset = None
+    for member in (model.m0, model.m1):
+        member.shared_param_mode = 'static'
     ApplyScalingFusionPass().run(model)
     assert model.pre.shared.act_scale.device.type == 'meta'
     assert model.pre.shared.act_offset.device.type == 'meta'
