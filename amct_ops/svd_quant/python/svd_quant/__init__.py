@@ -12,8 +12,16 @@ __all__ = [
     'svd_quant',
 ]
 
+import importlib.util
 import os
 import torch
 
-_lib_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "libsvd_quant.so")
+_lib_spec = importlib.util.find_spec("libsvd_quant")
+_lib_path = (
+    _lib_spec.origin
+    if _lib_spec is not None and _lib_spec.origin is not None
+    else os.path.join(os.path.dirname(os.path.abspath(__file__)), "libsvd_quant.so")
+)
+if not os.path.isfile(_lib_path):
+    raise ImportError("Unable to locate the libsvd_quant extension")
 torch.ops.load_library(_lib_path)
