@@ -118,7 +118,8 @@ def generate_tensor_quant_config(plan, cache_scheme=None):
 def get_quant_ignore_linear_names(block, weight_prefix):
     """Return weight names of non-quantized Linear modules in a block.
 
-    QuantLinear modules are skipped (already quantized). PlainLinear and
+    QuantLinear modules using the floating bypass are collected. Quantized
+    QuantLinear modules are skipped. PlainLinear and
     raw nn.Linear modules are collected as ignore entries.
     """
     quant_linear_prefixes = tuple(
@@ -134,6 +135,10 @@ def get_quant_ignore_linear_names(block, weight_prefix):
 
     names = []
     for name, module in block.named_modules():
+        if isinstance(module, QuantLinear):
+            if module.w_bits == 16:
+                names.append(f"{weight_prefix}{name}")
+            continue
         if isinstance(module, PlainLinear):
             names.append(f"{weight_prefix}{name}")
             continue
