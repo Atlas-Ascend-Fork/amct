@@ -38,6 +38,7 @@ from amct_pytorch.quantization.bit_policy import ensure_bit_policy
     name="qwen3",
     task="llm",
     family="qwen",
+    model_type="qwen3",
     description="Qwen3 dense model adapter",
 )
 class Qwen3(BaseModel):

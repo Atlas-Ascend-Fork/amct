@@ -15,10 +15,38 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+from importlib import import_module
+
+
 _REGISTERED = False
 
+_MODEL_TYPE_REGISTRATIONS = {
+    "deepseek_v32": (
+        "deepseek_v3_2",
+        ".deepseek.deepseek_v3_2.deepseekv3_2",
+    ),
+    "deepseek_v4": ("deepseek_v4", ".deepseek.deepseek_v4.deepseekv4"),
+    "longcat_flash": ("longcat_lite", ".longcat.longcat_lite.longcat_lite"),
+    "longcat_next": ("longcat_next", ".longcat.longcat_next.longcat_next"),
+    "qwen3": ("qwen3", ".qwen.qwen3.qwen3"),
+    "qwen3_moe": ("qwen3_moe", ".qwen.qwen3.qwen3_moe"),
+    "qwen3_5": ("qwen3_5", ".qwen.qwen3_5.qwen3_5"),
+    "qwen3_5_moe": ("qwen3_5_moe", ".qwen.qwen3_5.qwen3_5_moe"),
+    "qwen3_6_moe": ("qwen3_6_moe", ".qwen.qwen3_6.qwen3_6_moe"),
+    "qwen3_next": ("qwen3_next", ".qwen.qwen3_next.qwen3_next"),
+    "glm5": ("glm5", ".glm.glm5.glm5"),
+    "hy_v3": ("hy_v3", ".hyv3.hyv3"),
+    "glm_moe_dsa": ("glm5_2", ".glm.glm5_2.glm5_2"),
+}
 
-def register_llm_models():
+
+def register_llm_models(model_type=None):
+    if model_type is not None:
+        registration = _MODEL_TYPE_REGISTRATIONS.get(model_type)
+        if registration is not None:
+            import_module(registration[1], package=__name__)
+        return
+
     global _REGISTERED
     if _REGISTERED:
         return
@@ -41,4 +69,12 @@ def register_llm_models():
     _REGISTERED = True
 
 
-__all__ = ["register_llm_models"]
+def available_llm_adapters():
+    """Return adapter names keyed by HuggingFace model_type without importing them."""
+    return {
+        adapter_name: model_type
+        for model_type, (adapter_name, _) in _MODEL_TYPE_REGISTRATIONS.items()
+    }
+
+
+__all__ = ["available_llm_adapters", "register_llm_models"]

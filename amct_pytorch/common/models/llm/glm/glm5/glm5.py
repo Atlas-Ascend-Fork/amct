@@ -30,6 +30,7 @@ CUR_DIR = os.path.dirname(__file__)
     name="glm5",
     task="llm",
     family="glm",
+    model_type="glm5",
     description="GLM-5.1 model adapter",
 )
 class GLM5(DeepseekV32):

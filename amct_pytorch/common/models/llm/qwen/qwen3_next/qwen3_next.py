@@ -44,6 +44,7 @@ from amct_pytorch.common.models.llm.qwen.qwen3_next.quant_module import (
     name="qwen3_next",
     task="llm",
     family="qwen",
+    model_type="qwen3_next",
     description="Qwen3 Next model adapter",
 )
 class Qwen3Next(BaseModel):

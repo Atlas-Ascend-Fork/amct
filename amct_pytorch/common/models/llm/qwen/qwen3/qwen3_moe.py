@@ -40,6 +40,7 @@ from amct_pytorch.common.models import MODEL_REGISTRY
     name='qwen3_moe',
     task='llm',
     family='qwen',
+    model_type='qwen3_moe',
     description='Qwen3 MoE model adapter',
 )
 class Qwen3Moe(BaseModel):
