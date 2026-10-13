@@ -178,11 +178,17 @@ def scale_input_by_shared_exponents(input_tensor, shared_exponents, block_size=3
         torch.tensor, shape is same with input_tensor
     """
     n = input_tensor.shape[-1]
+    # FP16 factors can overflow or underflow before multiplication.
+    factor_dtype = (
+        torch.float32
+        if shared_exponents.dtype == torch.float16
+        else shared_exponents.dtype
+    )
     expanded_tensor = torch.repeat_interleave(
-        torch.pow(2, shared_exponents), repeats=block_size, dim=-1
+        torch.pow(2, shared_exponents.to(factor_dtype)), repeats=block_size, dim=-1
     )[..., :n]
     result = input_tensor * expanded_tensor
-    return result
+    return result.to(torch.promote_types(input_tensor.dtype, shared_exponents.dtype))
 
 
 @torch.no_grad()
