@@ -18,6 +18,7 @@
 """Deploy-only selection schema, glob semantics and argument contract."""
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -26,6 +27,7 @@ from amct_pytorch.common.models.llm.common.deploy_selection import (
     DeploySelection,
     load_deploy_selection,
     match_deploy_modules,
+    requires_tensor_deploy_config,
     validate_ascend_deploy_args,
     validate_tensor_deploy_args,
 )
@@ -35,6 +37,45 @@ from amct_pytorch.quantization.bit_policy import BitPolicy
 def test_tensor_validation_skips_model_without_json_deploy_config():
     args = SimpleNamespace(model_name="deepseek_v4", quant_dtype="")
     validate_tensor_deploy_args(args)
+
+
+def test_hyv3_uses_json_tensor_deploy_config():
+    assert requires_tensor_deploy_config(SimpleNamespace(model_name="hy_v3"))
+
+
+def test_hyv3_json_selects_legacy_tensorwise_layers():
+    config_path = (
+        Path(__file__).parents[6] / "amct_pytorch/configs/deploy/hyv3_tensor_w8a8.json"
+    )
+    selection = load_deploy_selection(config_path)
+    expected = {
+        "model.layers.0.self_attn.q_proj",
+        "model.layers.0.self_attn.k_proj",
+        "model.layers.0.self_attn.v_proj",
+        "model.layers.0.mlp.gate_proj",
+        "model.layers.0.mlp.up_proj",
+        "model.layers.0.mlp.down_proj",
+        "model.layers.1.mlp.experts.0.gate_proj",
+        "model.layers.1.mlp.experts.0.up_proj",
+        "model.layers.1.mlp.experts.0.down_proj",
+        "model.layers.1.mlp.shared_mlp.gate_proj",
+        "model.layers.1.mlp.shared_mlp.up_proj",
+        "model.layers.1.mlp.shared_mlp.down_proj",
+        "model.layers.2.self_attn.o_proj",
+    }
+    unselected = {
+        "model.layers.2.eh_proj",
+        "model.layers.1.mlp.router.gate",
+        "model.embed_tokens",
+        "lm_head",
+    }
+
+    selected, counts = match_deploy_modules(expected | unselected, selection)
+
+    assert selected == expected
+    assert counts["model.layers.*.eh_proj"] == 1
+    assert counts["model.embed_tokens"] == 1
+    assert counts["lm_head"] == 1
 
 
 def test_load_defaults_and_deduplicates(tmp_path):
@@ -123,15 +164,15 @@ def test_duplicate_rules_do_not_double_count():
 
 
 def _args(**overrides):
-    args = dict(
-        deploy_format="ascend",
-        model_name="glm5_2",
-        granularity="tensor",
-        quant_dtype="int",
-        quant_layers_config="layers.json",
-        bit_policy=BitPolicy({"w_bits": 8, "a_bits": 8}),
-        algos=[],
-    )
+    args = {
+        "deploy_format": "ascend",
+        "model_name": "glm5_2",
+        "granularity": "tensor",
+        "quant_dtype": "int",
+        "quant_layers_config": "layers.json",
+        "bit_policy": BitPolicy({"w_bits": 8, "a_bits": 8}),
+        "algos": [],
+    }
     args.update(overrides)
     return SimpleNamespace(**args)
 

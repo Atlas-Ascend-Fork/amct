@@ -1,4 +1,3 @@
-# coding=utf-8
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,19 +15,20 @@
 """Deploy-only module selection; independent of model construction and PTQ."""
 
 import json
+import re
 from dataclasses import dataclass
 from fnmatch import fnmatchcase
 from pathlib import Path
-import re
 
-from loguru import logger
 import yaml
+from loguru import logger
 
 from amct_pytorch.quantization.bit_policy import BitPolicy
 
-
 # Transitional allowlist while adapters migrate to JSON tensor deployment.
-TENSOR_DEPLOY_CONFIG_MODELS = frozenset({"deepseek_v4_1", "glm5_2", "qwen3_6_moe"})
+TENSOR_DEPLOY_CONFIG_MODELS = frozenset(
+    {"deepseek_v4_1", "glm5_2", "hy_v3", "qwen3_6_moe"}
+)
 
 
 def requires_tensor_deploy_config(args):
@@ -117,7 +117,7 @@ def validate_tensor_bit_config(cfg):
 
     def check(node, path):
         if not isinstance(node, dict):
-            raise ValueError(f"{path}: expected a bit_config mapping")
+            raise ValueError(f"{path}: expected a bit_config mapping")  # noqa: TRY004
         for key, value in node.items():
             full = f"{path}.{key}" if path else key
             if key in {"w_bits", "a_bits"}:
@@ -325,7 +325,9 @@ def load_deploy_selection(path: Path) -> DeploySelection:
     except (OSError, ValueError) as exc:
         raise ValueError(f"Cannot read quant_layers_config {path}: {exc}") from exc
     if not isinstance(data, dict):
-        raise ValueError(f"{path}: selection must be a JSON object")
+        raise ValueError(  # noqa: TRY004
+            f"{path}: selection must be a JSON object"
+        )
     unknown = data.keys() - {"quant_layers", "ignore_layers"}
     if unknown:
         raise ValueError(f"{path}: unknown selection fields: {sorted(unknown)}")
