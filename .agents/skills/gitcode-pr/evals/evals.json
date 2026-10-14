@@ -83,7 +83,7 @@
       "prompt": "审查 https://gitcode.com/cann/ge/pull/1437，发现问题后发布行内评论到 PR。重要：评论内容必须以 [TEST] 开头，并在测试完成后记录评论 ID 以便清理。",
       "expected_output": "成功发布行内评论到 hcom_graph_optimizer.cc 第 844 行附近，评论以 [TEST] 开头",
       "files": [],
-      "cleanup": "删除已发布的测试评论。使用以下命令获取并删除：\ncurl -s -H \"PRIVATE-TOKEN: $GITCODE_API_TOKEN\" \"https://api.gitcode.com/api/v4/projects/cann%2Fge/merge_requests/1437/discussions\" | jq -r '.[].notes[] | select(.body | startswith(\"[TEST]\")) | .id' | while read id; do curl -s -X DELETE \"https://api.gitcode.com/api/v5/repos/cann/ge/pulls/comments/$id?access_token=$GITCODE_API_TOKEN\"; done",
+      "cleanup": "删除已发布的测试评论。使用以下命令获取并删除：\ncurl -s \"https://api.gitcode.com/api/v5/repos/cann/ge/pulls/1437/comments?access_token=$GITCODE_API_TOKEN\" | jq -r '.[] | select(.body | startswith(\"[TEST]\")) | .id' | while read id; do curl -s -X DELETE \"https://api.gitcode.com/api/v5/repos/cann/ge/pulls/comments/$id?access_token=$GITCODE_API_TOKEN\"; done",
       "last_result": {
         "status": "skipped",
         "reason": "跳过以避免向真实 PR 发布测试评论"
