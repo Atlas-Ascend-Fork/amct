@@ -274,7 +274,7 @@ class LlmDeployWorkflow:
         config_file = os.path.join(self.output_dir, 'config.json')
         with open(config_file, "r") as f:
             config = json.load(f)
-        if self.quant_dtype is not None:
+        if self.quant_dtype in ['int', 'mxfp', 'hifp', 'fp']:
             cache_scheme_fn = getattr(self.pipeline, "cache_scheme", None)
             cache_scheme = cache_scheme_fn() if callable(cache_scheme_fn) else None
             if tensor_plan is not None:
@@ -296,16 +296,6 @@ class LlmDeployWorkflow:
 
         new_config_file = os.path.join(self.output_dir, "config.json")
         with open(new_config_file, "w") as f:
-            json.dump(config, f, indent=2)
-
-    def _refresh_config_tensor(self):
-        config_file = os.path.join(self.output_dir, 'config.json')
-        with open(config_file, "r") as f:
-            config = json.load(f)
-        if self.quant_dtype == "bf16":
-            config["torch_dtype"] = "bfloat16"
-            config.pop('quantization_config', None)
-        with open(config_file, "w") as f:
             json.dump(config, f, indent=2)
 
     def _refresh_weight_index(
