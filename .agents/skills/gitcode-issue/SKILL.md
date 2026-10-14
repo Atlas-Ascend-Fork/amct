@@ -28,20 +28,39 @@ description: '读取 GitCode issue 详情和评论。当用户提到 GitCode iss
 
 **第三步**：读取特定 issue：
 ```bash
-curl -s -H "private-token: $GITCODE_API_TOKEN" "https://gitcode.com/api/v5/repos/{owner}/{repo}/issues/{issue_number}"
+curl -s "https://api.gitcode.com/api/v5/repos/{owner}/{repo}/issues/{issue_number}?access_token=$GITCODE_API_TOKEN"
 ```
 
 ## API 使用
 
 ### 认证
-GitCode API 需要私有令牌才能访问：
-- Header: `private-token: YOUR_TOKEN`
-- 将 `YOUR_TOKEN` 替换为你的实际访问令牌
+GitCode **v5** API 的官方认证方式（将 `YOUR_TOKEN` 替换为实际访问令牌）：
+- 推荐 query 参数：`?access_token=YOUR_TOKEN`
+- 或 Header：`Authorization: Bearer YOUR_TOKEN`
+- `private-token: YOUR_TOKEN` 头在 v5 网关上也能被识别，但非官方文档写法，优先用 `access_token`
+
+> ⚠️ **不要使用 `/api/v4` 接口**：GitCode 已禁用 v4 的写操作，调用返回
+> `403 {"message":"当前 /api/v4 接口已禁用，请使用官方文档中的 /api/v5 接口"}`；
+> 部分 v4 读接口虽仍可用，但为保持一致性，issue 相关读写统一走 v5。
+>
+> 公开仓库的 issue 读接口在**无 token** 时也可返回 200；若返回
+> `401 {"error_message":"401, token not found"}`，说明 token 缺失或失效。
 
 ### API 端点
 - **单个 Issue**：`GET /api/v5/repos/{owner}/{repo}/issues/{number}`
 - **Issue 列表**：`GET /api/v5/repos/{owner}/{repo}/issues`
 - **Issue 评论**：`GET /api/v5/repos/{owner}/{repo}/issues/{number}/comments`
+
+**示例**：
+```bash
+# 单个 issue
+curl -s "https://api.gitcode.com/api/v5/repos/{owner}/{repo}/issues/{number}?access_token=$GITCODE_API_TOKEN" | \
+  jq '{number, title, state, body, user: .user.login, labels}'
+
+# issue 评论
+curl -s "https://api.gitcode.com/api/v5/repos/{owner}/{repo}/issues/{number}/comments?access_token=$GITCODE_API_TOKEN" | \
+  jq '.[] | {id, user: .user.login, created_at, body}'
+```
 
 ### 响应格式
 Issues API 返回包含以下关键字段的 JSON：

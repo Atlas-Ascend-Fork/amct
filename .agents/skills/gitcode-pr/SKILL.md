@@ -131,10 +131,26 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
 
 ## GitCode API v5 说明
 
-**认证头**：
+**认证方式**：
 
 - 推荐使用 query 参数：`?access_token=$GITCODE_API_TOKEN`
-- 也可使用 Header：`PRIVATE-TOKEN: $GITCODE_API_TOKEN`
+- 也可使用 Header：`Authorization: Bearer $GITCODE_API_TOKEN`
+- `private-token: $GITCODE_API_TOKEN` 头在 v5 网关上也能被识别（实测传入无效 token
+ 返回 `401 {"error_code_name":"UNAUTHORIZED","error_message":"401, token not found"}`），
+ 但**非官方文档写法**，统一优先用 `?access_token=`，避免与 v4 用法混淆
+
+> ⚠️ **v4 的所有写操作已被禁用**：任何 v4 `POST`/`PUT`/`DELETE` 都返回
+> `403 {"message":"当前 /api/v4 接口已禁用，请使用官方文档中的 /api/v5 接口"}`。
+> 因此发评论、行内评论、回复讨论、创建 PR 等写操作**一律走 v5 + `access_token`**，
+> 不要再用 `POST /api/v4/.../merge_requests/<n>/notes` 或 `.../discussions`。
+>
+> v4 仅保留部分**只读**接口（`merge_requests/<n>`、`.../changes`、`.../discussions`）：
+> - `.../discussions` 返回的是 `{end_id, end_system_id, data:[...]}` 包装对象，
+>   `data[]` 中混有系统事件（`notes` 为 `null`），解析必须用
+>   `.data[] | select(.notes != null) | .notes[]`；写成 `.[].notes[]` 会报
+>   `Cannot index number with string "notes"`
+> - `GET .../merge_requests/<n>/notes` 与 `GET .../discussions/<id>/notes` **未发布，返回 404**
+> - 读评论统一用 v5 `GET /repos/{owner}/{repo}/pulls/<n>/comments`
 
 #### 解析评论数据
 
