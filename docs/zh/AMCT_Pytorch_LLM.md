@@ -275,7 +275,7 @@ python -m amct_pytorch.deploy \
 | `--device` | `npu:0` | 指定运行设备。建议选择NPU/GPU，以加速计算。 |
 | `--granularity` | `block` | 工作粒度，即量化或处理的单位，按子命令校验合法值：<br> `block`：按模块块处理（更细粒度，可能效果更好但耗时），所有子命令的默认值。<br> `model`：整个模型统一处理（整模型加载后前向，粗粒度，速度快），仅 `eval` 支持，`ptq` 中为预留接口。<br> `tensor`：按张（tensor）粒度转换权重（用于反量化或直转量化），仅 `deploy` 支持。 |
 | `--seed` | `42` | 随机种子，用于控制实验中随机行为的一致性（如数据采样、初始化等），设置为固定值可保证结果可复现。 |
-| `--quant_target` | `[]`（`ptq` / `extract_ptq_data` **必填**；`deploy` 的 blockwise 导出**必填**） | 量化目标，取值：mlp（多层感知机）/ moe（混合专家）/ attn-linear（注意力线性层）/ attn-cache（注意力缓存）。各命令用法不同：`eval` 与 `deploy` 可同时指定多个（如 `--quant_target mlp attn-linear`）；`ptq` / `extract_ptq_data` 一次仅允许一个，多目标请分目标依次执行。`deploy` blockwise 中该参数决定构建并导出哪些量化模块，缺失时会静默导出未量化权重；`granularity=tensor` 时纯反量化（如 FP8/FP4 → BF16 权重转换）不使用该参数，tensorwise 直转量化（部分模型族，如 hy_v3 / glm5_2）仍需指定。 |
+| `--quant_target` | `[]`（`ptq` / `extract_ptq_data` **必填**；`deploy` 的 blockwise 导出**必填**） | 量化目标，取值：mlp（多层感知机）/ moe（混合专家）/ attn-linear（注意力线性层）/ attn-cache（注意力缓存）。各命令用法不同：`eval` 与 `deploy` 可同时指定多个（如 `--quant_target mlp attn-linear`）；`ptq` / `extract_ptq_data` 一次仅允许一个，多目标请分目标依次执行。`deploy` blockwise 中该参数决定构建并导出哪些量化模块，缺失时会静默导出未量化权重；`granularity=tensor` 时纯反量化（如 FP8/FP4 → BF16 权重转换）不使用该参数，已接入 JSON 配置的 tensorwise 直转量化（如 hy_v3 / glm5_2）通过 `quant_layers_config` 控制量化层，不再使用该参数。 |
 | `--seq_len` | `4096` | 校准和评估时使用的输入序列长度。用于确定模型在处理多长文本时的表现（尤其在量化校准阶段很重要）。 可选值：`1024`、`2048`、`4096`|
 | `--data_dir` | 空字符串（`ptq` / `extract_ptq_data` **必填**） | PTQ 中间数据保存/读取目录：`extract_ptq_data` 的输出目录，`ptq` 从中读取。 |
 | `--output_dir` | `./outputs` | 输出目录，存放日志文件、PTQ 参数配置、最终部署模型等所有生成内容。 |
