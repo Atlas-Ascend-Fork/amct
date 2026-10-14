@@ -15,14 +15,16 @@
 
 ## 认证方式
 
-GitCode 使用两种 API 风格：
+官方文档（<https://docs.gitcode.com/docs/apis/>）明确「当前可用的版本为 `/api/v5`」，
+读写一律使用 v5：
 
-| API 风格 | 认证头 | 端点格式 |
-|---------|-------|---------|
-| **GitLab API v4**（推荐） | `PRIVATE-TOKEN: <token>` | `/api/v4/projects/<encoded_path>/...` |
-| GitHub 兼容 | `Authorization: Bearer <token>` | `/api/v5/repos/<path>/...` |
+| API 版本 | 认证方式 | 端点格式 |
+|---------|---------|---------|
+| **GitCode API v5** | `?access_token=<token>`（或 `Authorization: Bearer <token>`、`PRIVATE-TOKEN: <token>`） | `/api/v5/repos/<owner>/<repo>/...` |
 
-**项目路径编码**：`owner/repo` → `owner%2Frepo`（使用 `jq -sRr @uri` 或 `printf '%s' "owner/repo" | jq -sRr @uri`）
+> ⚠️ **不要使用 `/api/v4`**：v4 未收录于官方文档，写接口已被禁用，调用返回
+> `403 {"message":"当前 /api/v4 接口已禁用，请使用官方文档中的 /api/v5 接口"}`；
+> 部分 v4 读接口从未发布，返回 `404 {"error_code":"APIG.0101"}`。
 
 ---
 
@@ -139,60 +141,58 @@ fi
 ## 获取 PR 信息
 
 ```bash
-curl -s -H "PRIVATE-TOKEN: $GITCODE_API_TOKEN" \
-  "https://api.gitcode.com/api/v4/projects/${encoded_repo}/merge_requests/<PR_NUMBER>"
+curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>?access_token=$GITCODE_API_TOKEN"
 ```
 
 ---
 
 ## 获取 PR 讨论（包含行内评论）
 
+顶层直接返回数组，行内评论与普通评论混在同一列表，用 `comment_type` 区分：
+
 ```bash
-curl -s -H "PRIVATE-TOKEN: $GITCODE_API_TOKEN" \
-  "https://api.gitcode.com/api/v4/projects/${encoded_repo}/merge_requests/<PR_NUMBER>/discussions"
+curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100" | \
+  jq '.[] | {id, discussion_id, comment_type, author: .user.login, resolved, lines: .diff_position, body}'
 ```
+
+**查询参数**：
+
+| 参数 | 说明 |
+|------|------|
+| `page` / `per_page` | 分页；`per_page` 默认 **20**、最大 100，评论较多时必须显式传，否则会被截断 |
+| `direction` | `asc` / `desc` |
+| `comment_type` | 筛选评论类型：`diff_comment`（行内）/ `pr_comment`（普通） |
 
 **返回字段说明**：
 
 | 字段 | 说明 |
 |------|------|
-| `notes[].type` | `DiffNote` = 行内评论，`DiscussionNote` = 普通讨论 |
-| `notes[].body` | 评论内容 |
-| `notes[].diff_file` | 被评论的文件路径 |
-| `notes[].new_line` | 代码行号（结束行） |
-| `notes[].position.start_new_line` | 起始行号（多行选择） |
-| `notes[].resolved` | 是否已解决 |
+| `id` | 评论 ID（整数），删除评论用它 |
+| `discussion_id` | 讨论 ID（哈希串），回复该讨论用它 |
+| `comment_type` | `diff_comment` = 行内评论，`pr_comment` = 普通评论 |
+| `diff_position.start_new_line` / `end_new_line` | 行内评论的起止行号 |
+| `diff_position.position_type` | `text` = 代码行评论，`binary` = 文件级评论 |
+| `resolved` / `resolved_by` | 检视意见是否已解决、解决人 |
+| `reply[]` | 该讨论下的回复，嵌套在父评论里，不单独出现在顶层 |
+| `user.login` | 评论者 |
+
+> ⚠️ 列表接口**不返回被评论的文件路径**（`path` 恒为 `null`）。需要路径时改查单条
+> `GET /api/v5/repos/${owner}/${repo}/pulls/comments/<COMMENT_ID>`，其 `position` 字段含
+> `old_path` / `new_path` / `new_line` / `base_sha` / `head_sha`。
 
 ---
 
 ## 提交行内评论（支持多行选择）
 
-### 创建新的 Discussion（推荐）
-
 ```bash
 curl -s -X POST \
-  -H "PRIVATE-TOKEN: $GITCODE_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://api.gitcode.com/api/v4/projects/${encoded_repo}/merge_requests/<PR_NUMBER>/discussions" \
+  "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN" \
   -d '{
-    "repoId": "'"${encoded_repo}"'",
-    "iid": <PR_NUMBER>,
     "body": "评论内容",
-    "line_types": "new",
-    "position": {
-      "base_sha": "<base_commit_sha>",
-      "start_sha": "<start_commit_sha>",
-      "head_sha": "<head_commit_sha>",
-      "position_type": "text",
-      "old_path": "文件路径",
-      "new_path": "文件路径",
-      "old_line": null,
-      "new_line": <结束行号>,
-      "start_old_line": null,
-      "start_new_line": <起始行号>,
-      "ignore_whitespace_change": false
-    },
-    "severity": "suggestion"
+    "path": "文件相对路径",
+    "position": <结束行号>,
+    "start_position": <起始行号>
   }'
 ```
 
@@ -201,31 +201,50 @@ curl -s -X POST \
 | 参数 | 说明 | 必需 |
 |------|------|------|
 | `body` | 评论内容 | ✅ |
-| `line_types` | `"new"` 选择新代码（右侧），`"old"` 选择旧代码（左侧） | ✅ |
-| `position.base_sha` | base 提交 SHA | ✅ |
-| `position.start_sha` | start 提交 SHA | ✅ |
-| `position.head_sha` | head 提交 SHA | ✅ |
-| `position.new_path` | 文件相对路径 | ✅ |
-| `position.new_line` | 结束行号 | ✅ |
-| `position.start_new_line` | 起始行号（多行选择） | 多行时 |
-| `severity` | 严重程度：`suggestion`、`warning` | ❌ |
+| `path` | 文件相对路径 | ✅ |
+| `position` | 结束行号 | ✅ |
+| `start_position` | 起始行号（多行选择） | 多行时 |
+| `position_type` | `text`（默认，代码行评论）/ `binary`（文件级评论，此时 `position` 不生效） | 否 |
+| `access_token`（query） | 用户授权码 | ✅ |
+
+**成功响应（HTTP 201）**：
+
+```json
+{"id": "<discussion_id 哈希串>", "body": "...", "note_id": <评论 ID 整数>}
+```
+
+> ⚠️ 响应里的 `id` 是**讨论 ID**（哈希串），不是评论 ID。删除评论必须用 `note_id`
+> （即评论列表里的整数 `id`）；把哈希串传给 `DELETE` 会得到
+> `400 {"error_code_name":"UN_KNOW","error_message":"Orchestration error: Invalid path parameter: note_id, number required"}`。
 
 ### 多行选择说明
 
-- **单行评论**：`start_new_line` 和 `new_line` 设置为相同值
-- **多行评论**：`start_new_line` = 起始行，`new_line` = 结束行
+- **单行评论**：只传 `position`（或与 `start_position` 设为相同值）
+- **多行评论**：`start_position` = 起始行，`position` = 结束行
+
+> `start_position` 未出现在官方文档的请求体 schema 中（官方只列 `body`/`path`/`position`/`position_type`），
+> 但实测有效：传 `start_position=158` + `position=160` 后读回
+> `diff_position = {"start_new_line":158,"end_new_line":160,"position_type":"text"}`。
+
+> 行内评论无需手工传 `base_sha`/`head_sha`；如确需 SHA，可从
+> `GET /api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/files.json` 的 `diff_refs` 获取。
 
 ### 回复已有 Discussion
 
 ```bash
 curl -s -X POST \
-  -H "PRIVATE-TOKEN: $GITCODE_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://api.gitcode.com/api/v4/projects/${encoded_repo}/merge_requests/<PR_NUMBER>/discussions/<DISCUSSION_ID>/notes" \
+  "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/discussions/<DISCUSSION_ID>/comments?access_token=$GITCODE_API_TOKEN" \
   -d '{
     "body": "回复内容"
   }'
 ```
+
+> `<DISCUSSION_ID>` 取自评论列表的 `discussion_id` 字段（哈希串），
+> 或发表评论时响应里的 `id`。
+
+**成功响应（HTTP 201）**：`{"id":"<discussion_id>","body":"...","note_id":<评论 ID 整数>}`。
+回复不会作为独立条目出现在评论列表顶层，而是嵌进父评论的 `reply[]`。
 
 ---
 
@@ -233,13 +252,14 @@ curl -s -X POST \
 
 ```bash
 curl -s -X POST \
-  -H "PRIVATE-TOKEN: $GITCODE_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://api.gitcode.com/api/v4/projects/${encoded_repo}/merge_requests/<PR_NUMBER>/notes" \
+  "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN" \
   -d '{
     "body": "评论内容"
   }'
 ```
+
+> 不传 `path`/`position` 即为普通评论（`comment_type: "pr_comment"`）。
 
 ---
 
@@ -276,7 +296,8 @@ curl -s -X DELETE \
 
 | 状态码 | 说明 |
 |--------|------|
-| `200` | 成功删除，返回空对象 `{}` |
+| `200` | 成功删除，返回空 body |
+| `400` | `id` 传成了 `discussion_id` 哈希串（要求整数） |
 | `401` | 未授权 |
 | `403` | 无权限删除此评论 |
 | `404` | 评论不存在 |
@@ -284,16 +305,12 @@ curl -s -X DELETE \
 ### 获取评论 ID
 
 ```bash
-# 获取 PR 的所有讨论（包含行内评论）
-curl -s -H "PRIVATE-TOKEN: $GITCODE_API_TOKEN" \
-  "https://api.gitcode.com/api/v4/projects/${encoded_repo}/merge_requests/<PR_NUMBER>/discussions" | \
-  jq '.[].notes[] | {id: .id, type: .type, author: .author.username, body: .body}'
-
-# 获取 PR 的所有普通评论
-curl -s -H "PRIVATE-TOKEN: $GITCODE_API_TOKEN" \
-  "https://api.gitcode.com/api/v4/projects/${encoded_repo}/merge_requests/<PR_NUMBER>/notes" | \
-  jq '.[] | {id: .id, author: .author.username, body: .body}'
+# 顶层直接是数组；per_page 默认 20，评论多时必须显式传 100，否则 ID 会漏
+curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100" | \
+  jq '.[] | {id, discussion_id, comment_type, author: .user.login, body}'
 ```
+
+> 这里的整数 `id` 就是 `DELETE` 要用的评论 ID（发表评论时响应里的 `note_id`）。
 
 ### 权限说明
 
@@ -306,14 +323,23 @@ curl -s -H "PRIVATE-TOKEN: $GITCODE_API_TOKEN" \
 ## 获取 PR 文件变更
 
 ```bash
-# 基本查询
-curl -s -H "PRIVATE-TOKEN: $GITCODE_API_TOKEN" \
-  "https://api.gitcode.com/api/v4/projects/${encoded_repo}/merge_requests/<PR_NUMBER>/changes"
+# 文件级变更列表，每项含 patch.diff（unified diff，带 @@ hunk header）
+curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/files?access_token=$GITCODE_API_TOKEN"
 
-# 每页 100 条
-curl -s -H "PRIVATE-TOKEN: $GITCODE_API_TOKEN" \
-  "https://api.gitcode.com/api/v4/projects/${encoded_repo}/merge_requests/<PR_NUMBER>/changes?per_page=100"
+# 需要整体统计与 diff_refs（base_sha / start_sha / head_sha）时用 files.json
+curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/files.json?access_token=$GITCODE_API_TOKEN" | \
+  jq '{count, added_lines, remove_lines, diff_refs}'
 ```
+
+**`files` 返回字段说明**：
+
+| 字段 | 说明 |
+|------|------|
+| `filename` / `sha` | 文件路径与 blob sha |
+| `additions` / `deletions` | 增删行数 |
+| `patch.diff` | unified diff 文本，行内评论定位行号从这里取 |
+| `patch.old_path` / `new_path` | 重命名前后路径 |
+| `patch.new_file` / `renamed_file` / `deleted_file` / `too_large` | 变更类型标记 |
 
 ---
 
@@ -328,6 +354,11 @@ curl -s "https://raw.gitcode.com/${owner}/${repo}/raw/{commit_sha}/文件路径"
 ## 注意事项
 
 1. **Token 配置**：使用环境变量 `GITCODE_API_TOKEN`
-2. **项目路径**：动态从当前仓库获取 `owner` 和 `repo`，并 URL 编码为 `${encoded_repo}`
-3. **认证头**：GitLab API v4 使用 `PRIVATE-TOKEN:`，不是 `Authorization: Bearer`
-4. **多行选择**：必须同时设置 `start_new_line` 和 `new_line`
+2. **项目路径**：动态从当前仓库获取 `owner` 和 `repo`，直接拼进
+   `/api/v5/repos/${owner}/${repo}/...`，无需 URL 编码
+3. **认证方式**：`?access_token=<token>`（或 `Authorization: Bearer <token>`）
+4. **API 版本**：只用 v5；`/api/v4` 已停用（写接口 403、部分读接口 404），不要使用
+5. **多行选择**：写入用 `start_position`（起始行）+ `position`（结束行），
+   读取看 `diff_position.start_new_line` / `end_new_line`
+6. **分页**：`per_page` 默认 20，评论较多时必须显式传 `per_page=100`
+7. **两种 ID 不要混用**：`discussion_id`（哈希串，用于回复）vs 评论 `id`（整数，用于删除）
