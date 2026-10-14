@@ -82,7 +82,11 @@ class BlockwiseSolver(BaseSolver):
                 outputs = outputs[0]
             loss = self._reconstruction_loss(outputs, unit_gt)
             total_loss += loss.detach().cpu()
-            loss = loss / loss.clone().detach()
+            normalization = loss.detach()
+            normalization = torch.where(
+                normalization == 0, torch.ones_like(normalization), normalization
+            )
+            loss = loss / normalization
             loss.backward()
             self.step()
             num_batches += 1
