@@ -85,6 +85,12 @@ def test_replace_module_rejects_empty_module_name():
         ModuleHelper.replace_module_by_name(model, '', nn.Linear(3, 3))
 
 
+def test_replace_module_rejects_non_string_module_name():
+    model = NormModel()
+    with pytest.raises(ValueError, match='module name must be a non-empty string'):
+        ModuleHelper.replace_module_by_name(model, None, nn.Linear(3, 3))
+
+
 def test_convert_runs_fusion_before_replacement():
     import inspect
     import amct_pytorch.classic.quantize as quantize_module

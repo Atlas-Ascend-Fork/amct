@@ -19,6 +19,10 @@ import torch
 from torch import nn
 
 from amct_pytorch.classic.deploy_op.shared_quantize import FusedPreOp
+from amct_pytorch.classic.deploy_op.local_dynamic import (
+    _HOOK_DICT_NAMES,
+    make_local_adapter,
+)
 from amct_pytorch.classic.optimizer.apply_scaling_fusion_pass import (
     ApplyScalingFusionPass,
 )
@@ -122,6 +126,23 @@ def test_dynamic_fusion_replaces_attention_and_mlp_without_replacing_layer():
     assert model.layer.mlp.gate_proj.input_quant_disabled
 
 
+def test_local_adapter_isolates_hook_registration():
+    original = nn.Module()
+    original.register_forward_hook(lambda *args: None)
+
+    fused = make_local_adapter('qwen3_attention', original, 'int8')
+
+    for name in _HOOK_DICT_NAMES:
+        assert getattr(fused, name) is not getattr(original, name)
+    assert len(fused._forward_hooks) == len(original._forward_hooks)
+
+    fused.register_forward_hook(lambda *args: None)
+    original.register_forward_hook(lambda *args: None)
+
+    assert len(original._forward_hooks) == 2
+    assert len(fused._forward_hooks) == 2
+
+
 def test_static_fusion_keeps_fused_pre_op_and_disables_member_inputs():
     model = Model()
     model.layer.input_layernorm = LayerNormQuant(
@@ -177,6 +198,57 @@ def test_adapter_failure_keeps_norm_and_weights_unmodified(monkeypatch):
     assert not model.layer.self_attn.q_proj.input_quant_disabled
     assert not model.layer.self_attn.q_proj.smooth_scale_skipped
     assert isinstance(model.layer.input_layernorm, nn.LayerNorm)
+
+
+def test_replacement_failure_rolls_back_parameters_and_target(monkeypatch):
+    import amct_pytorch.classic.optimizer.apply_scaling_fusion_pass as fusion
+    from amct_pytorch.common.utils.model_util import (
+        ModuleHelper as RealModuleHelper,
+    )
+
+    model = Model()
+    model.layer.input_layernorm = _dynamic_norm_quant(
+        model,
+        'layer.input_layernorm',
+        (
+            'layer.self_attn.q_proj',
+            'layer.self_attn.k_proj',
+            'layer.self_attn.v_proj',
+        ),
+        'layer.self_attn',
+        'qwen3_attention',
+    )
+    wrapper = model.layer.input_layernorm
+    wrapper.status = 'calibrated'
+    wrapper.smooth_factor = torch.tensor([[1.0, 2.0, 4.0, 8.0]])
+    original_target = model.layer.self_attn
+    before = {
+        id(parameter): parameter.detach().clone() for parameter in model.parameters()
+    }
+    failed = {'once': False}
+
+    class FlakyModuleHelper:
+        @staticmethod
+        def replace_module_by_name(model, name, mod):
+            if (
+                name == 'layer.input_layernorm'
+                and mod is wrapper.pre_op
+                and not failed['once']
+            ):
+                failed['once'] = True
+                raise RuntimeError('wrapper replacement failed')
+            RealModuleHelper.replace_module_by_name(model, name, mod)
+
+    monkeypatch.setattr(fusion, 'ModuleHelper', FlakyModuleHelper)
+    ApplyScalingFusionPass().run(model)
+
+    assert model.layer.self_attn is original_target
+    assert model.layer.input_layernorm is wrapper.pre_op
+    assert not hasattr(original_target, 'shared_quantize')
+    assert not original_target.q_proj.input_quant_disabled
+    assert not original_target.q_proj.smooth_scale_skipped
+    for parameter in model.parameters():
+        torch.testing.assert_close(parameter, before[id(parameter)])
 
 
 def test_shared_parameter_mode_mismatch_skips_fusion_without_weight_changes():

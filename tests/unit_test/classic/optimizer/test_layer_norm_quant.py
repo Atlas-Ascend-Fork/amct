@@ -290,6 +290,20 @@ def test_static_token_does_not_build_shared_group():
     assert build_layer_norm_quant_specs(layer) == []
 
 
+def test_pre_op_whitelist_matches_exact_type_paths():
+    from amct_pytorch.classic.optimizer.model_structure import _is_norm
+
+    class FakeQwen3RMSNorm(nn.Module):
+        pass
+
+    FakeQwen3RMSNorm.__module__ = 'transformers.models.qwen3.modeling_qwen3'
+    FakeQwen3RMSNorm.__qualname__ = 'Qwen3RMSNorm'
+
+    assert _is_norm(nn.LayerNorm(4))
+    assert _is_norm(FakeQwen3RMSNorm())
+    assert not _is_norm(nn.Identity())
+
+
 def test_static_token_layer_norm_quant_is_rejected():
     import pytest
 

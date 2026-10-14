@@ -49,7 +49,7 @@ convert(model)
 | 无 | `model.layers.0.input_layernorm.shared.act_scale` |
 | 无 | `model.layers.0.input_layernorm.shared.act_offset` |
 
-ViT 的 `layernorm_before` 以及其他已融合前置算子采用相同映射。单成员静态组不插入共享量化包装。动态 per-token 通过替换所在层并显式传递量化输入和 token scale，不使用上述 `FusedPreOp` 包装。
+ViT 的 `layernorm_before` 以及其他已融合前置算子采用相同映射。单成员静态组不插入共享量化包装。动态 per-token 通过替换所在 attention/MLP 子模块并显式传递量化输入和 token scale，不使用上述 `FusedPreOp` 包装。
 
 保存、加载和下游导出应使用同一部署结构，并保留共享量化 buffer。`FusedPreOp.load_state_dict` 的递归加载兼容原前置算子路径，但仅用于已经融合好的部署参数的键名迁移；它不会自动将未融合浮点 checkpoint 转换为部署参数。共享量化 buffer 缺失时，严格加载仍会报错。按模块路径访问 Norm 参数的脚本应使用新的 `.pre_op` 路径。
 

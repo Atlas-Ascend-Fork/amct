@@ -55,11 +55,35 @@ class ApplyScalingFusionPass(BaseModuleFusionPass):
             LOGGER.logw(f'Skip scaling fusion {object_name}: {exc}', 'LayerNormQuant')
             return
 
-        for parameter, value in updates:
-            parameter.copy_(value)
-        if target is not None:
-            ModuleHelper.replace_module_by_name(model, object_module.target_ref, target)
-        ModuleHelper.replace_module_by_name(model, object_name, replacement)
+        saved_parameters = [
+            (parameter, parameter.detach().clone()) for parameter, _ in updates
+        ]
+        saved_target = (
+            model.get_submodule(object_module.target_ref)
+            if target is not None
+            else None
+        )
+        try:
+            for parameter, value in updates:
+                parameter.copy_(value)
+            if target is not None:
+                ModuleHelper.replace_module_by_name(
+                    model, object_module.target_ref, target
+                )
+            ModuleHelper.replace_module_by_name(model, object_name, replacement)
+        except (ValueError, RuntimeError, OSError, AttributeError) as exc:
+            for parameter, value in saved_parameters:
+                parameter.copy_(value)
+            if target is not None:
+                ModuleHelper.replace_module_by_name(
+                    model, object_module.target_ref, saved_target
+                )
+            ModuleHelper.replace_module_by_name(
+                model, object_name, object_module.pre_op
+            )
+            LOGGER.logw(f'Skip scaling fusion {object_name}: {exc}', 'LayerNormQuant')
+            return
+
         for member in members:
             member.smooth_scale_skipped = object_module.algorithm == 'smoothquant'
             member.input_quant_disabled = (

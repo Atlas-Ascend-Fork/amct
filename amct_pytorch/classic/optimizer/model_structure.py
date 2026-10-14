@@ -17,23 +17,18 @@
 '''Explicit whitelist for pre-op calibration and local deployment adapters.'''
 
 from dataclasses import dataclass
-from unittest.mock import patch
-
-import torch
 
 from amct_pytorch.classic.quantize_op import MinMaxQuant, SmoothQuant
 
 from amct_pytorch.common.utils.log import LOGGER
 
 
-def _qwen3_rms_norm_type():
-    with patch('transformers.utils.is_torchaudio_available', return_value=False):
-        from transformers.models.qwen3.modeling_qwen3 import Qwen3RMSNorm
-
-    return Qwen3RMSNorm
-
-
-_SUPPORTED_PRE_OP_TYPES = (torch.nn.LayerNorm, _qwen3_rms_norm_type())
+_SUPPORTED_PRE_OP_TYPES = frozenset(
+    (
+        'torch.nn.modules.normalization.LayerNorm',
+        'transformers.models.qwen3.modeling_qwen3.Qwen3RMSNorm',
+    )
+)
 
 
 @dataclass(frozen=True)
@@ -245,8 +240,12 @@ def _resolve_member(model, layer_name, member):
     raise AttributeError(f'none of the member paths exists: {candidates}')
 
 
+def _module_type(module):
+    return f'{type(module).__module__}.{type(module).__qualname__}'
+
+
 def _is_norm(module):
-    return isinstance(module, _SUPPORTED_PRE_OP_TYPES)
+    return _module_type(module) in _SUPPORTED_PRE_OP_TYPES
 
 
 def _join_ref(layer_name, relative_ref):

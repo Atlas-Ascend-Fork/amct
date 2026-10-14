@@ -41,6 +41,19 @@ _ADAPTER_FORWARDS = {
     'vit_mlp': ('vit/fused_modules.py', '_mlp_forward'),
 }
 _ADAPTER_REDUCE_VERSION = 1
+_HOOK_DICT_NAMES = (
+    '_backward_pre_hooks',
+    '_backward_hooks',
+    '_forward_hooks',
+    '_forward_hooks_with_kwargs',
+    '_forward_hooks_always_called',
+    '_forward_pre_hooks',
+    '_forward_pre_hooks_with_kwargs',
+    '_state_dict_hooks',
+    '_state_dict_pre_hooks',
+    '_load_state_dict_pre_hooks',
+    '_load_state_dict_post_hooks',
+)
 
 
 def build_local_adapter(adapter, original, act_type):
@@ -59,11 +72,14 @@ def make_local_adapter(adapter, original, act_type):
     relative, forward_name = _ADAPTER_FORWARDS[adapter]
     forward = getattr(_load_adapter_module(relative), forward_name)
     # Keep native attributes, training state and hooks. Copy registration maps so
-    # adding the shared quantizer does not modify the original module.
+    # adding the shared quantizer or a hook does not modify the original module.
     fused = copy.copy(original)
     fused.__class__ = _adapter_type(type(original), forward, adapter)
     for name in ('_modules', '_parameters', '_buffers'):
         setattr(fused, name, getattr(original, name).copy())
+    for name in _HOOK_DICT_NAMES:
+        if hasattr(original, name):
+            setattr(fused, name, getattr(original, name).copy())
     fused._amct_adapter_id = adapter
     fused.shared_quantize = SharedDynamicQuantize(act_type)
     fused.shared_quantize.train(original.training)
