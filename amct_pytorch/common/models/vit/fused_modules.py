@@ -20,10 +20,7 @@ from amct_pytorch.classic.deploy_op.local_dynamic import make_local_adapter
 
 
 def vit_attention(attention, act_type='int8'):
-    adapter = (
-        'vit_attention' if hasattr(attention, 'q_proj') else 'vit_attention_legacy'
-    )
-    return make_local_adapter(adapter, attention, act_type)
+    return make_local_adapter('vit_attention', attention, act_type)
 
 
 def _attention(self, query, key, value, mask, dropout, **kwargs):
@@ -61,42 +58,10 @@ def _attention_forward(self, hidden_states, attention_mask=None, **kwargs):
     return self.o_proj(output), weights
 
 
-def _legacy_attention_forward(self, hidden_states, **kwargs):
-    shape = (
-        hidden_states.shape[0],
-        -1,
-        self.num_attention_heads,
-        self.attention_head_size,
-    )
-    quantized, scale = self.shared_quantize(hidden_states)
-    key = self.key(quantized, scale).view(shape).transpose(1, 2)
-    value = self.value(quantized, scale).view(shape).transpose(1, 2)
-    query = self.query(quantized, scale).view(shape).transpose(1, 2)
-    output, weights = _attention(
-        self,
-        query,
-        key,
-        value,
-        None,
-        self.dropout_prob,
-        is_causal=self.is_causal,
-        **kwargs,
-    )
-    return output.reshape(
-        hidden_states.shape[0], -1, self.all_head_size
-    ).contiguous(), weights
-
-
 def vit_mlp(mlp, act_type='int8'):
-    adapter = 'vit_mlp' if hasattr(mlp, 'fc1') else 'vit_mlp_legacy'
-    return make_local_adapter(adapter, mlp, act_type)
+    return make_local_adapter('vit_mlp', mlp, act_type)
 
 
 def _mlp_forward(self, hidden_states):
     quantized, scale = self.shared_quantize(hidden_states)
     return self.fc2(self.activation_fn(self.fc1(quantized, scale)))
-
-
-def _legacy_mlp_forward(self, hidden_states):
-    quantized, scale = self.shared_quantize(hidden_states)
-    return self.intermediate_act_fn(self.dense(quantized, scale))

@@ -90,8 +90,6 @@ class SmoothQuant(BaseQuantizeModule):
         self.scale_w1 = None
         self.scale_w2 = None
         self.shared_param_mode = None
-        self.shared_smooth_ready = False
-        self.shared_activation_ready = False
 
     @torch.no_grad()
     def forward(self, inputs):
@@ -154,11 +152,9 @@ class SmoothQuant(BaseQuantizeModule):
         self.shared_param_mode = mode
         if smooth_factor is not None:
             self.scale = smooth_factor.to(self.weight.dtype)
-            self.shared_smooth_ready = True
             self.finalize_weight_params()
         self.scale_d = activation_scale
         self.offset_d = activation_offset
-        self.shared_activation_ready = mode == 'static'
         self.fake_quant_cache_ready = False
         self.data_max = None
         self.data_min = None

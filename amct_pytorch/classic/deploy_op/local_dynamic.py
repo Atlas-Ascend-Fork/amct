@@ -32,17 +32,13 @@ _ADAPTER_BUILDERS = {
     ),
     'qwen3_mlp': ('llm/qwen/qwen3/fused_modules.py', 'qwen3_mlp'),
     'vit_attention': ('vit/fused_modules.py', 'vit_attention'),
-    'vit_attention_legacy': ('vit/fused_modules.py', 'vit_attention'),
     'vit_mlp': ('vit/fused_modules.py', 'vit_mlp'),
-    'vit_mlp_legacy': ('vit/fused_modules.py', 'vit_mlp'),
 }
 _ADAPTER_FORWARDS = {
     'qwen3_attention': ('llm/qwen/qwen3/fused_modules.py', '_attention_forward'),
     'qwen3_mlp': ('llm/qwen/qwen3/fused_modules.py', '_mlp_forward'),
     'vit_attention': ('vit/fused_modules.py', '_attention_forward'),
-    'vit_attention_legacy': ('vit/fused_modules.py', '_legacy_attention_forward'),
     'vit_mlp': ('vit/fused_modules.py', '_mlp_forward'),
-    'vit_mlp_legacy': ('vit/fused_modules.py', '_legacy_mlp_forward'),
 }
 _ADAPTER_REDUCE_VERSION = 1
 

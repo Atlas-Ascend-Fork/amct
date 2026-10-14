@@ -17,10 +17,23 @@
 '''Explicit whitelist for pre-op calibration and local deployment adapters.'''
 
 from dataclasses import dataclass
+from unittest.mock import patch
+
+import torch
 
 from amct_pytorch.classic.quantize_op import MinMaxQuant, SmoothQuant
 
 from amct_pytorch.common.utils.log import LOGGER
+
+
+def _qwen3_rms_norm_type():
+    with patch('transformers.utils.is_torchaudio_available', return_value=False):
+        from transformers.models.qwen3.modeling_qwen3 import Qwen3RMSNorm
+
+    return Qwen3RMSNorm
+
+
+_SUPPORTED_PRE_OP_TYPES = (torch.nn.LayerNorm, _qwen3_rms_norm_type())
 
 
 @dataclass(frozen=True)
@@ -109,15 +122,15 @@ MODEL_STRUCTURES.register(
             PreOpRelation(
                 pre_op='layernorm_before',
                 scaling_layers=(
-                    ('attention.q_proj', 'attention.attention.query'),
-                    ('attention.k_proj', 'attention.attention.key'),
-                    ('attention.v_proj', 'attention.attention.value'),
+                    'attention.q_proj',
+                    'attention.k_proj',
+                    'attention.v_proj',
                 ),
                 adapter='vit_attention',
             ),
             PreOpRelation(
                 pre_op='layernorm_after',
-                scaling_layers=(('mlp.fc1', 'intermediate.dense'),),
+                scaling_layers=('mlp.fc1',),
                 adapter='vit_mlp',
             ),
         ),
@@ -207,10 +220,6 @@ def _build_layer_norm_quant_spec(
         for w in weights
     ):
         return None
-    if any(
-        w.device != weights[0].device or w.dtype != weights[0].dtype for w in weights
-    ):
-        return None
     target_ref = member_refs[0].rsplit('.', 1)[0]
     used_members.update(member_refs)
     return LayerNormQuantSpec(
@@ -237,7 +246,7 @@ def _resolve_member(model, layer_name, member):
 
 
 def _is_norm(module):
-    return 'norm' in type(module).__name__.lower()
+    return isinstance(module, _SUPPORTED_PRE_OP_TYPES)
 
 
 def _join_ref(layer_name, relative_ref):

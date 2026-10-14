@@ -68,7 +68,6 @@ class MinMaxQuant(BaseQuantizeModule):
 
         self.batch_num = quant_config.get('batch_num')
         self.shared_param_mode = None
-        self.shared_activation_ready = False
         enable_quant = quant_config.get('inputs_cfg').get('enable_quant')
         if enable_quant is None or enable_quant:
             self.weight_compress_only = False
@@ -169,7 +168,6 @@ class MinMaxQuant(BaseQuantizeModule):
         self.shared_param_mode = mode
         self.scale_d = activation_scale
         self.offset_d = activation_offset
-        self.shared_activation_ready = mode == 'static'
         self.fake_quant_cache_ready = False
         self.data_max = None
         self.data_min = None

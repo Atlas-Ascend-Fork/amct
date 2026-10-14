@@ -66,10 +66,12 @@ class ApplyScalingFusionPass(BaseModuleFusionPass):
                 object_module.dynamic_per_token or len(members) > 1
             )
         object_module.status = 'fused'
-        LOGGER.logd(
-            f'Fused pre_op {object_name}, '
+        LOGGER.logi(
+            f'Fused shared-input group {object_name}: '
+            f'algorithm={object_module.algorithm}, '
+            f'mode={"dynamic" if object_module.dynamic_per_token else "static"}, '
             f'members={list(object_module.member_refs)}, '
-            f'dynamic_per_token={object_module.dynamic_per_token}',
+            f'pre_op_wrapped={isinstance(replacement, FusedPreOp)}',
             'LayerNormQuant',
         )
 

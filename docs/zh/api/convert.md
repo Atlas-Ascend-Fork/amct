@@ -53,4 +53,4 @@ ViT 的 `layernorm_before` 以及其他已融合前置算子采用相同映射�
 
 保存、加载和下游导出应使用同一部署结构，并保留共享量化 buffer。`FusedPreOp.load_state_dict` 的递归加载兼容原前置算子路径，但仅用于已经融合好的部署参数的键名迁移；它不会自动将未融合浮点 checkpoint 转换为部署参数。共享量化 buffer 缺失时，严格加载仍会报错。按模块路径访问 Norm 参数的脚本应使用新的 `.pre_op` 路径。
 
-动态融合层沿用当前依赖版本 Transformers 的 attention 后端、掩码、KV cache 和 dropout 逻辑。自定义层及未登记类型不会仅凭属性同名而被替换；作为模型根节点的动态层无法原地替换，因此跳过结构组优化。
+动态融合层沿用当前依赖版本 Transformers 的 attention 后端、掩码、KV cache 和 dropout 逻辑。自定义层及未登记类型不会仅凭属性同名而被替换；模型根节点可直接作为已登记层参与结构识别和融合。

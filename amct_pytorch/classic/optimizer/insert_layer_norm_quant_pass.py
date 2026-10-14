@@ -55,7 +55,7 @@ class InsertLayerNormQuantPass(BaseModuleFusionPass):
             dynamic_per_token=spec.dynamic_per_token,
         )
         ModuleHelper.replace_module_by_name(model, object_name, module)
-        LOGGER.logd(
+        LOGGER.logi(
             f'Inserted LayerNormQuant {object_name}, '
             f'members={list(spec.member_refs)}, '
             f'dynamic_per_token={spec.dynamic_per_token}',

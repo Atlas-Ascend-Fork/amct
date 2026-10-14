@@ -28,6 +28,7 @@ from amct_pytorch.classic.optimizer.apply_scaling_fusion_pass import (
 from amct_pytorch.classic.optimizer.base_module_fusion_pass import (
     BaseModuleFusionPass,
 )
+from amct_pytorch.common.utils.model_util import ModuleHelper
 
 
 class Member(nn.Module):
@@ -76,6 +77,12 @@ def test_scaling_fusion_pass_uses_module_fusion_interface():
     assert isinstance(fusion_pass, BaseModuleFusionPass)
     assert fusion_pass.match_pattern(wrapper, 'pre')
     assert not fusion_pass.match_pattern(model.pre, 'pre')
+
+
+def test_replace_module_rejects_empty_module_name():
+    model = NormModel()
+    with pytest.raises(ValueError, match='module name must be a non-empty string'):
+        ModuleHelper.replace_module_by_name(model, '', nn.Linear(3, 3))
 
 
 def test_convert_runs_fusion_before_replacement():
