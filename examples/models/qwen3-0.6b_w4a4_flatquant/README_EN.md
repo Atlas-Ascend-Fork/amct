@@ -1,92 +1,95 @@
 # Qwen3-0.6B W4A4 Quantization Sample (FlatQuant, Community Task 6)
 
-This sample demonstrates **W4A4** post-training quantization of **Qwen3-0.6B** on Ascend NPU with AMCT. The PTQ algorithm is **flatquant**, and both **int** and **mxfp** quantization data types are evaluated (WikiText2 PPL, fake quant).
+This sample demonstrates **W4A4** post-training quantization of **Qwen3-0.6B** on Ascend NPU with AMCT. The PTQ algorithm is **flatquant**, evaluated for both **int4/int4** and **mxfp4/mxfp4** formats (WikiText2 PPL, fake quant).
 
 Community task: Task 6 (quantization format w4a4 + PTQ algorithm flatquant).
-
-## Quantization Configuration
 
 | Item | Value |
 | --- | --- |
 | Model | Qwen/Qwen3-0.6B (dense, 28 layers) |
 | AMCT model name | qwen3 |
-| Quantization format | w4a4 (4-bit weights + 4-bit activations) |
-| Quantization data type | int, mxfp |
+| Quant format / data type | w4a4: int4/int4 and mxfp4/mxfp4 |
 | Quantization target | attn-linear, mlp |
-| PTQ algorithm | flatquant (`--algos flatquant`) |
-| Bit config | `amct_pytorch/configs/w4a4.yaml` |
-| Evaluation | WikiText2 PPL, seq_len=4096 |
+| PTQ algorithm | flatquant |
+| Calibration / eval set | Pileval (mit-han-lab/pile-val-backup) / WikiText2 (wikitext-2-raw-v1 test), seq_len=4096 |
 
 ## How to Run
 
-All commands are executed in the **AMCT repository root**. Set the model path first; pass an NPU id based on `npu-smi info` (defaults to 0):
+All commands are executed in the **AMCT repository root**. `<MODEL_DIR>` is the local model weight directory (placeholder path); pick an idle card via `npu-smi info` for `NPU_ID` (default 0); `SEQ_LEN` defaults to 4096 and **must be identical across BF16 eval, PTQ data extraction, and quantized eval**. Every script prints its full run configuration at startup.
+
+**Step 1. BF16 baseline evaluation**
 
 ```bash
-export MODEL_DIR=/path/to/Qwen3-0.6B
+bash examples/models/qwen3-0.6b_w4a4_flatquant/scripts/eval_bf16.sh <MODEL_DIR> <NPU_ID>
 ```
 
-**Step 1. BF16 baseline**
+**Step 2. Extract PTQ calibration data** (Pileval; attn-linear and mlp sequentially; expect 28 pkl files each for Qwen3-0.6B)
 
 ```bash
-bash examples/models/qwen3-0.6b_w4a4_flatquant/eval_bf16.sh "$MODEL_DIR"
+bash examples/models/qwen3-0.6b_w4a4_flatquant/scripts/extract_ptq_data.sh <MODEL_DIR> <NPU_ID>
 ```
 
-**Step 2. Extract PTQ calibration data** (once for attn-linear, once for mlp; expect 28 pkl files each. Extracted data is independent of the algorithm/format and can be reused across samples.)
+**Step 3. PTQ training** (int and mxfp trained separately; `<dtype>` is `int` or `mxfp`, mapped to `configs/w4a4_<dtype>_flatquant.yaml`)
 
 ```bash
-bash examples/models/qwen3-0.6b_w4a4_flatquant/extract_ptq_data.sh "$MODEL_DIR"
-```
-
-**Step 3. PTQ training** (train int and mxfp separately; outputs are kept apart)
-
-```bash
-bash examples/models/qwen3-0.6b_w4a4_flatquant/ptq_attn.sh "$MODEL_DIR" int
-bash examples/models/qwen3-0.6b_w4a4_flatquant/ptq_mlp.sh  "$MODEL_DIR" int
-bash examples/models/qwen3-0.6b_w4a4_flatquant/ptq_attn.sh "$MODEL_DIR" mxfp
-bash examples/models/qwen3-0.6b_w4a4_flatquant/ptq_mlp.sh  "$MODEL_DIR" mxfp
+bash examples/models/qwen3-0.6b_w4a4_flatquant/scripts/ptq_attn.sh <MODEL_DIR> int  <NPU_ID>
+bash examples/models/qwen3-0.6b_w4a4_flatquant/scripts/ptq_mlp.sh  <MODEL_DIR> int  <NPU_ID>
+bash examples/models/qwen3-0.6b_w4a4_flatquant/scripts/ptq_attn.sh <MODEL_DIR> mxfp <NPU_ID>
+bash examples/models/qwen3-0.6b_w4a4_flatquant/scripts/ptq_mlp.sh  <MODEL_DIR> mxfp <NPU_ID>
 ```
 
 **Step 4. Quantized accuracy evaluation** (loads attn + mlp PTQ params together)
 
 ```bash
-bash examples/models/qwen3-0.6b_w4a4_flatquant/eval_quant.sh "$MODEL_DIR" int
-bash examples/models/qwen3-0.6b_w4a4_flatquant/eval_quant.sh "$MODEL_DIR" mxfp
+bash examples/models/qwen3-0.6b_w4a4_flatquant/scripts/eval_quant.sh <MODEL_DIR> int  <NPU_ID>
+bash examples/models/qwen3-0.6b_w4a4_flatquant/scripts/eval_quant.sh <MODEL_DIR> mxfp <NPU_ID>
 ```
 
-## Parameters
+### Quantization Configs
+
+| File | Content | Used with |
+| --- | --- | --- |
+| `configs/w4a4_int_flatquant.yaml` | `w_bits: 4` + `a_bits: 4` | `--quant_dtype int --algos flatquant` |
+| `configs/w4a4_mxfp_flatquant.yaml` | `w_bits: 4` + `a_bits: 4` | `--quant_dtype mxfp --algos flatquant` |
+
+The data format is selected via the CLI argument `--quant_dtype`; the config file fixes the weight/activation bit widths (W4/A4).
+
+### Parameters
 
 | Parameter | Meaning | Notes |
 | --- | --- | --- |
-| `MODEL_DIR` | Local model weight directory | 1st script argument |
-| `int`/`mxfp` | Quantization data type | 2nd script argument; must match between PTQ and eval |
-| NPU id | Runtime device | 3rd script argument, defaults to 0 |
-| `--seq_len` | Sequence length | Fixed at 4096 in scripts; must be identical for BF16 / extraction / eval |
-| `--data_dir` | PTQ offline data directory | Must be identical between extraction and PTQ training |
-| `--output_dir` | PTQ parameter output directory | int and mxfp stored separately under `ptq_result/{int,mxfp}` |
+| `<MODEL_DIR>` | Local model weight directory | 1st script argument (placeholder path) |
+| `<int\|mxfp>` | Quant data type (int4/int4, mxfp4/mxfp4) | 2nd script argument; must match between PTQ and eval |
+| `NPU_ID` | Runtime device card id | Default 0 |
+| `SEQ_LEN` | Sequence length | Default 4096; identical across all three stages |
+| `DATA_DIR` | PTQ offline data directory | Default `ptq_data/qwen3/{attn-linear,mlp}`; identical between extraction and training |
+| `OUTPUT_DIR` | PTQ parameter output directory | Default `ptq_result/<dtype>`; int and mxfp kept apart |
 
 ## Generated Artifacts
 
-The following directories are generated by the scripts and are **not committed** (large size; structure and measured size documented here only):
+The following directories are generated by the scripts and are **not committed**; model weights and datasets are prepared by the user:
 
-| Directory | Contents | Measured size (Qwen3-0.6B, seq_len=4096) |
-| --- | --- | --- |
-| `ptq_data/qwen3/attn-linear/` | Per-layer attention input pkl (28 `block_*_attn_in.pkl`) | ~29 GB |
-| `ptq_data/qwen3/mlp/` | Per-layer MLP input pkl (28 `block_*_mlp_in.pkl`) | ~29 GB |
-| `ptq_result/{int,mxfp}/ptq_params/qwen3/{attn-linear,mlp}/` | PTQ params (one `.pt` per layer, 56 per format) | ~1.7–1.8 GB per format |
+| Artifact | Directory | Contents | Measured size (Qwen3-0.6B, seq_len=4096) |
+| --- | --- | --- | --- |
+| PTQ data (Attention) | `ptq_data/qwen3/attn-linear/` | 28 `block_*_attn_in.pkl` | 29 GiB |
+| PTQ data (MLP) | `ptq_data/qwen3/mlp/` | 28 `block_*_mlp_in.pkl` | 29 GiB |
+| PTQ data total | — | — | **58 GiB** |
+| Quant params (int4/int4) | `ptq_result/int/ptq_params/qwen3/{attn-linear,mlp}/` | one `.pt` per layer, 56 in total | ~1.7 GB |
+| Quant params (mxfp4/mxfp4) | `ptq_result/mxfp/ptq_params/qwen3/{attn-linear,mlp}/` | one `.pt` per layer, 56 in total | ~1.8 GB |
 
 ## Results
 
-Atlas 910B (16 NPU, single dedicated card), CANN 8.5.0, torch_npu 2.7.1, WikiText2 PPL, seq_len=4096, flatquant default hyper-parameters:
+Environment: Atlas 910B (16 NPU, single dedicated card), CANN 8.5.0, torch_npu 2.7.1; flatquant default hyper-parameters. Quantization duration = wall time from PTQ start until all quant params of that format are generated (excludes model download and environment build; measured via param file timestamps).
 
-| Model | Quant format | Quant type | BF16 PPL | Quant PPL | PPL delta | Notes |
-| --- | --- | --- | --- | --- | --- | --- |
-| Qwen3-0.6B | w4a4 | 4/int8 | 19.166 | 48.659 | +29.493 | Large degradation for the int format with 4-bit activations |
-| Qwen3-0.6B | w4a4 | 4/mxfp8 | 19.166 | 28.150 | +8.984 | mxfp significantly better than int |
+| Model | Data type | Algorithm | Quant format | BF16 PPL | Quant PPL | PPL delta | Quant duration (min) | Offline data size (GiB) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Qwen3-0.6B | w4a4 | flatquant | int4/int4 | 19.166 | 48.659 | +29.493 | 34.1 | 58 |
+| Qwen3-0.6B | w4a4 | flatquant | mxfp4/mxfp4 | 19.166 | 28.150 | +8.984 | 93.2 | 58 |
 
-**Conclusion**: Under full W4A4 quantization, the mxfp (block floating point) format shows a clear advantage over int on this 0.6B model (PPL delta +8.98 vs +29.49), consistent with the trend observed in W4A8.
+**Conclusion**: Under full W4A4 quantization, mxfp4/mxfp4 is significantly better than int4/int4 (PPL delta +8.98 vs +29.49); mxfp takes longer to train (93.2 vs 34.1 min) but the accuracy gain is clear.
 
 ## Notes
 
-1. **Offline dataset preparation**: WikiText2 (evaluation) and pile-val-backup (calibration) are loaded online from HuggingFace by default. For air-gapped environments, set `HF_ENDPOINT=https://hf-mirror.com` together with `HF_HUB_DISABLE_XET=1`, or pre-download the datasets and switch the loaders to `load_dataset(data_files=...)`.
-2. **Calibration data reuse**: `extract_ptq_data` output is independent of the PTQ algorithm / quantization format; other W4A4/W4A8 samples with the same model and seq_len can reuse `--data_dir` directly.
-3. **Card selection on shared machines**: check `npu-smi info` for idle NPUs first and select via `ASCEND_RT_VISIBLE_DEVICES` to avoid co-located services.
+1. **Dataset preparation**: Pileval and WikiText2 are loaded online (HuggingFace) by default. For air-gapped environments, pre-download with `HF_ENDPOINT=https://hf-mirror.com` and `HF_HUB_DISABLE_XET=1`, or switch to `load_dataset(data_files=...)` local loading.
+2. **Consistent measurement**: BF16 and quantized evaluation must use the same model version, dataset, and `seq_len`; otherwise the PPL delta is meaningless.
+3. **Card selection on shared machines**: check `npu-smi info` for idle NPUs and pass via `NPU_ID` to avoid co-located services.
