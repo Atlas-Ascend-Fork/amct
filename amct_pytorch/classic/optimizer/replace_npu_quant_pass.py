@@ -96,7 +96,9 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
         else:
             npu_module = self._get_deploy_module(object_module, module_type)
 
-        replace_module_aliases(model, object_module, npu_module)
+        replace_module_aliases(
+            model, object_module, npu_module, self.module_alias_index
+        )
         LOGGER.logd(
             "Replace npu module to '{}' success!".format(object_name),
             'ReplaceNpuQuantPass',

@@ -78,7 +78,9 @@ class InsertQuantizeModulePass(BaseModuleFusionPass):
             object_module, object_name, layer_config
         )
 
-        replace_module_aliases(model, object_module, new_module)
+        replace_module_aliases(
+            model, object_module, new_module, self.module_alias_index
+        )
         LOGGER.logd(
             "Insert quantize op module to '{}' success!".format(object_name),
             'InsertQuantizeModulePass',
