@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import copy
+from collections.abc import Mapping
 from typing import Dict, List, Sequence, Tuple
 
 import torch
@@ -380,6 +381,12 @@ def move_batch_to_device(
     kwargs: Dict[str, object],
     device: torch.device,
 ) -> Tuple[Tuple[object, ...], Dict[str, object]]:
+    """Recursively move Tensor leaves to device without mutating the input.
+
+    Any Mapping is normalized to a plain dict. Tuple/list container kinds
+    are retained, but their subclasses are not preserved.
+    """
+
     def move(value: object) -> object:
         if torch.is_tensor(value):
             return value.to(device)
@@ -387,7 +394,7 @@ def move_batch_to_device(
             return tuple(move(x) for x in value)
         if isinstance(value, list):
             return [move(x) for x in value]
-        if isinstance(value, dict):
+        if isinstance(value, Mapping):
             return {k: move(v) for k, v in value.items()}
         return value
 

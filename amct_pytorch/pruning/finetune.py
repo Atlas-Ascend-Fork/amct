@@ -60,12 +60,8 @@ def _default_loss(
 
 
 def _move_to_device(batch, dev):
-    if isinstance(batch, Mapping):
-        return {k: (v.to(dev) if torch.is_tensor(v) else v) for k, v in batch.items()}
-    if isinstance(batch, (tuple, list)):
-        args, _ = move_batch_to_device(tuple(batch), {}, dev)
-        return type(batch)(args)
-    return batch.to(dev) if torch.is_tensor(batch) else batch
+    args, _ = move_batch_to_device((batch,), {}, dev)
+    return args[0]
 
 
 def _train_step(model, moved, loss_fn, batch_adapter, opt, params, grad_clip):
