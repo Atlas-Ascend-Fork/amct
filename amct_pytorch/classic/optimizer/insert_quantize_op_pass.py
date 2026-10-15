@@ -18,7 +18,7 @@
 from amct_pytorch.classic.optimizer.base_module_fusion_pass import BaseModuleFusionPass
 from amct_pytorch.common.utils.log import LOGGER
 from amct_pytorch.common.config.utils import get_alg_name_from_config
-from amct_pytorch.common.utils.model_util import ModuleHelper
+from amct_pytorch.classic.optimizer.module_alias_util import replace_module_aliases
 from amct_pytorch.algorithms import AlgorithmRegistry
 
 
@@ -78,8 +78,9 @@ class InsertQuantizeModulePass(BaseModuleFusionPass):
             object_module, object_name, layer_config
         )
 
-        helper = ModuleHelper(model)
-        helper.replace_module_by_name(model, object_name, new_module)
+        replace_module_aliases(
+            model, object_module, new_module, self.module_alias_index
+        )
         LOGGER.logd(
             "Insert quantize op module to '{}' success!".format(object_name),
             'InsertQuantizeModulePass',

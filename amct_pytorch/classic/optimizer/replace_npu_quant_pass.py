@@ -17,7 +17,7 @@
 
 from amct_pytorch.classic.optimizer.base_module_fusion_pass import BaseModuleFusionPass
 from amct_pytorch.common.utils.log import LOGGER
-from amct_pytorch.common.utils.model_util import ModuleHelper
+from amct_pytorch.classic.optimizer.module_alias_util import replace_module_aliases
 from amct_pytorch.classic.deploy_op import NpuQuantizationLinear
 from amct_pytorch.classic.deploy_op import NpuWeightQuantizedLinear
 from amct_pytorch.classic.deploy_op import NpuQuantizationConv2d
@@ -96,7 +96,9 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
         else:
             npu_module = self._get_deploy_module(object_module, module_type)
 
-        ModuleHelper.replace_module_by_name(model, object_name, npu_module)
+        replace_module_aliases(
+            model, object_module, npu_module, self.module_alias_index
+        )
         LOGGER.logd(
             "Replace npu module to '{}' success!".format(object_name),
             'ReplaceNpuQuantPass',
