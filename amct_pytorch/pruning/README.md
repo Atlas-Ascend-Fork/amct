@@ -314,6 +314,10 @@ amct.accuracy_based_auto_calibration(model, ev, quant_cfg, ...)
 的 2 层微模型上有覆盖测试，见 `tests/amct_pytorch/test_pruning_real_hf_models.py` 与
 `tests/amct_pytorch/test_pruning_auto_prune.py`。
 
+微调 batch 的递归搬运及非 `dict` 的 `Mapping` 输入由
+`tests/amct_pytorch/test_pruning_finetune_nested_batch.py` 覆盖。映射搬运后统一返回
+普通 `dict`，保持键和非张量元数据，且不修改输入。
+
 ### 剪枝后的 config 同步
 
 剪枝结束后会把新尺寸写回 `model.config`，使 `save_pretrained` 保存的配置与权重一致：

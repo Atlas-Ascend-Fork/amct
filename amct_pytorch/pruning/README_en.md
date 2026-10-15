@@ -349,6 +349,11 @@ Mechanical prunability is covered on 2-layer micro models across common architec
 `tests/amct_pytorch/test_pruning_real_hf_models.py` and
 `tests/amct_pytorch/test_pruning_auto_prune.py`.
 
+Recursive finetuning batch transfer, including non-`dict` `Mapping` inputs, is covered by
+`tests/amct_pytorch/test_pruning_finetune_nested_batch.py`. Transferred mappings
+are normalized to plain `dict` objects, preserving keys and non-tensor metadata
+without mutating the input.
+
 ### Config sync after pruning
 
 Post-prune sizes are written back to `model.config` so that a `save_pretrained` config
