@@ -1,0 +1,9 @@
+# Quantization config: W4A4, mxfp format, flatquant algorithm.
+# Used together with: --quant_dtype mxfp --algos flatquant
+#
+# The quantization data type itself is selected via the CLI argument
+# --quant_dtype (int / mxfp); this file fixes the bit widths for
+# weights (W4) and activations (A4) across all linear layers.
+
+w_bits: 4
+a_bits: 4
