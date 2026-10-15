@@ -80,13 +80,16 @@ def test_convert_runs_replace_pass_on_model():
     model = nn.Linear(4, 4)
     with (
         patch.object(QUANTIZE_MODULE, "ModelOptimizer") as mock_opt_cls,
+        patch.object(QUANTIZE_MODULE, "ApplyScalingFusionPass"),
         patch.object(QUANTIZE_MODULE, "ReplaceNpuQuantModulePass") as mock_pass_cls,
     ):
         opt = mock_opt_cls.return_value
         convert(model)
 
     mock_pass_cls.assert_called_once_with()
-    opt.add_pass.assert_called_once_with(mock_pass_cls.return_value)
+    assert mock_pass_cls.return_value in [
+        call.args[0] for call in opt.add_pass.call_args_list
+    ]
     opt.do_optimizer.assert_called_once_with(model)
 
 
@@ -108,6 +111,9 @@ def test_quantize_uses_default_config_when_none():
         ) as mock_parse,
         patch.object(QUANTIZE_MODULE, "ModelOptimizer") as mock_opt_cls,
         patch.object(QUANTIZE_MODULE, "InsertQuantizeModulePass") as mock_pass_cls,
+        patch.object(
+            QUANTIZE_MODULE, "InsertLayerNormQuantPass"
+        ) as mock_layer_norm_pass_cls,
     ):
         opt = mock_opt_cls.return_value
         quantize(model, None)
@@ -118,7 +124,11 @@ def test_quantize_uses_default_config_when_none():
     assert args[0] is model
     assert args[1] is sentinel_default
     mock_pass_cls.assert_called_once_with(sentinel_layer)
-    opt.add_pass.assert_called_once_with(mock_pass_cls.return_value)
+    mock_layer_norm_pass_cls.assert_called_once_with()
+    assert [call.args[0] for call in opt.add_pass.call_args_list] == [
+        mock_pass_cls.return_value,
+        mock_layer_norm_pass_cls.return_value,
+    ]
     opt.do_optimizer.assert_called_once_with(model)
 
 

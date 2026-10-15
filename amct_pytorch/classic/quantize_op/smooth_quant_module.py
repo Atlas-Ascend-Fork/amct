@@ -59,6 +59,7 @@ class SmoothQuant(BaseQuantizeModule):
         self.quant_config = quant_config
         self.batch_num = quant_config.get('batch_num')
         self.act_granularity = quant_config.get('inputs_cfg').get('strategy')
+        self.dynamic = quant_config.get('inputs_cfg').get('dynamic')
         self.wts_granularity = quant_config.get('weights_cfg').get('strategy')
         self.act_symmetric = quant_config.get('inputs_cfg').get('symmetric')
         self.wts_symmetric = quant_config.get('weights_cfg').get('symmetric')
@@ -88,6 +89,7 @@ class SmoothQuant(BaseQuantizeModule):
         self.batch_input = None
         self.scale_w1 = None
         self.scale_w2 = None
+        self.shared_param_mode = None
 
     @torch.no_grad()
     def forward(self, inputs):
@@ -101,6 +103,10 @@ class SmoothQuant(BaseQuantizeModule):
         output = F.linear(inputs, self.weight, self.bias)
 
         self.cur_batch += 1
+        if self.shared_param_mode is not None:
+            if self.cur_batch > self.batch_num:
+                return self.fake_quant_forward(inputs)
+            return output
         if self.cur_batch > self.batch_num:
             return self.fake_quant_forward(inputs)
         batch_max = inputs.reshape(-1, inputs.shape[-1]).amax(dim=0, keepdim=True)
@@ -119,37 +125,55 @@ class SmoothQuant(BaseQuantizeModule):
 
         if self.cur_batch == self.batch_num:
             act_max = torch.max(self.data_max.abs(), self.data_min.abs())
-            smooth_factor = self.calculate_smooth(act_max)
-            weight = self.weight * smooth_factor
-
-            # only FP8 * FP4 do progressive scale
-            if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
-                self.scale_w1, self.scale_w2 = (
-                    calculate_progressive_weights_scale_factor(
-                        weight.data, group_size=self.group_size
-                    )
-                )
-            else:
-                self.scale_w, self.offset_w = self.calculate_weights_scale_factor(
-                    weight, self.quant_config.get('weights_cfg').get('strategy')
-                )
-
+            self.scale = self.calculate_smooth(act_max)
+            self.finalize_weight_params()
             if self.act_granularity == 'tensor':
-                scale_d, offset_d = self._calculate_per_tensor_params(smooth_factor)
+                self.scale_d, self.offset_d = self._calculate_per_tensor_params(
+                    self.scale
+                )
             elif self.act_granularity == 'token':
-                scale_d, offset_d = self._calculate_per_token_params(smooth_factor)
-
-            self.scale_d = scale_d
-            self.offset_d = offset_d
-            self.scale = smooth_factor
-
+                self.scale_d, self.offset_d = self._calculate_per_token_params(
+                    self.scale
+                )
             LOGGER.logd(
-                "Calculate smooth quant params of layer '{}' success!".format(
-                    self.layer_name
-                ),
+                f"Calculate smooth quant params of layer '{self.layer_name}' success!",
                 'SmoothQuant',
             )
         return output
+
+    def accept_shared_params(
+        self,
+        mode,
+        smooth_factor=None,
+        activation_scale=None,
+        activation_offset=None,
+    ):
+        '''Receive parameters calculated from the shared-input pre_op.'''
+        self.shared_param_mode = mode
+        if smooth_factor is not None:
+            self.scale = smooth_factor.to(self.weight.dtype)
+            self.finalize_weight_params()
+        self.scale_d = activation_scale
+        self.offset_d = activation_offset
+        self.fake_quant_cache_ready = False
+        self.data_max = None
+        self.data_min = None
+        self.batch_input = None
+
+    @torch.no_grad()
+    def finalize_weight_params(self):
+        """Finish member-owned weight scales after common smooth writeback."""
+        if self.scale_w is not None or self.scale_w1 is not None:
+            return
+        weight = self.weight * self.scale
+        if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
+            self.scale_w1, self.scale_w2 = calculate_progressive_weights_scale_factor(
+                weight.data, group_size=self.group_size
+            )
+        else:
+            self.scale_w, self.offset_w = self.calculate_weights_scale_factor(
+                weight, self.wts_granularity
+            )
 
     def calculate_smooth(self, act_max):
         """

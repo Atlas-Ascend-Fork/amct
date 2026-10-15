@@ -31,6 +31,8 @@ class ModuleHelper:
     @staticmethod
     def replace_module_by_name(model, name, mod):
         """replace module in model by a new mod according to module name"""
+        if not isinstance(name, str) or not name:
+            raise ValueError('module name must be a non-empty string')
         tokens = name.split('.')
         sub_tokens = tokens[:-1]
         cur_mod = model
