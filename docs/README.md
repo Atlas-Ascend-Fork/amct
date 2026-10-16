@@ -352,7 +352,7 @@ amct.accuracy_based_auto_calibration(
 >1. 基于PyTorch环境进行训练，当前仅支持distributed模式（即DistributedDataParallel模式）的多卡训练，不支持DataParallel模式的多卡训练，使用DP模式训练会报错。
 >2. 调用AMCT的部分，函数入参可以根据实际情况进行调整。量化感知训练基于用户的训练过程，请确保已经有基于PyTorch环境进行训练的脚本，并且训练后的精度正常。
 >3. 使用AMCT的量化感知训练特性时，如果训练过程卡死，请检查当前服务器是否有其他ONNX Runtime程序在运行（可以用**top**命令查看服务器所有进程），如果有，请先暂停其他ONNX Runtime程序，重新执行量化感知训练。
->4. 参考本章节进行量化，模型中存在PyTorch自定义算子时，可能存在无法导出生成ONNX模型，从而导致量化失败的问题。具体报错信息如下：'Model cannot be quantized for it cannot be export to onnx!' 。此时，您可以参考[单算子模式的量化感知训练](#单算子模式的量化感知训练)章节，进行单算子模式的量化。
+>4. 参考本章节进行量化，模型中存在PyTorch自定义算子时，可能存在无法导出生成ONNX模型，从而导致量化失败的问题。具体报错信息如下：'Model cannot be quantized for it cannot be export to onnx!'。此时，您可以参考[单算子模式的量化感知训练](#单算子模式的量化感知训练)章节，进行单算子模式的量化。
 >5. 如下示例标有“由用户补充处理”的步骤，需要用户根据自己的模型和数据集进行补充处理，示例中仅为示例代码。
 
 1. 导入AMCT包，并通过[工具构建](./zh/build.md)中的环境变量设置日志级别。

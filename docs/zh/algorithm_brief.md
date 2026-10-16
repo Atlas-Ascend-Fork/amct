@@ -118,7 +118,7 @@ GPTQ（Generative Pre-trained Transformer Quantization）是一种针对大模�
 ### LWC
 
 LWC（Learnable Weight Clipping，可学习权重裁剪范围）是面向神经网络量化，尤其是LLM训练后量化的可微权重范围优化技术，在可学习裁剪外加入通道缩放类结构变换，增强低比特 W/A 量化精度。
-算法详细介绍请参见：[OmniQuant: Omnidirectionally Calibrated Quantization for Large Language Models](https://arxiv.org/abs/2308.13137) 。
+算法详细介绍请参见：[OmniQuant: Omnidirectionally Calibrated Quantization for Large Language Models](https://arxiv.org/abs/2308.13137)。
 
 ## 激活量化算法
 
@@ -232,7 +232,7 @@ OFMR（Output FeatureMap Reconstruct）算法在某个数据分布下，通过�
 
 OmniQuant是面向LLM的轻量级、可微分训练后量化算法，核心是风格结构变换，学习通道缩放：在可学习裁剪外加入通道缩放类结构变换，增强低比特W/A量化精度。
 
-算法详细介绍请参见： [OmniQuant: Omnidirectionally Calibrated Quantization for Large Language Models](https://arxiv.org/abs/2308.13137) 。
+算法详细介绍请参见： [OmniQuant: Omnidirectionally Calibrated Quantization for Large Language Models](https://arxiv.org/abs/2308.13137)。
 
 ### SmoothQuant
 

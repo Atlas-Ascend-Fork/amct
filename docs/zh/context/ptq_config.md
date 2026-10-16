@@ -212,7 +212,7 @@ calibration\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_02401
 <td class="cellrowborder" valign="top" headers="mcps1.2.6.1.3 "><p id="p136714114339"><a name="p136714114339"></a><a name="p136714114339"></a>ada_quantize</p>
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.2.6.1.4 "><p id="p53671011193318"><a name="p53671011193318"></a><a name="p53671011193318"></a>权重量化算法配置。</p>
-<p id="p3778153020331"><a name="p3778153020331"></a><a name="p3778153020331"></a>ada_quantize：Adaptive rounding (AdaRound) ，自适应舍入量化算法配置。</p>
+<p id="p3778153020331"><a name="p3778153020331"></a><a name="p3778153020331"></a>ada_quantize：Adaptive rounding (AdaRound)，自适应舍入量化算法配置。</p>
 </td>
 </tr>
 <tr id="zh-cn_topic_0240188735_row9881174683115"><td class="cellrowborder" valign="top" headers="mcps1.2.6.1.1 "><p id="p1548512525015"><a name="p1548512525015"></a><a name="p1548512525015"></a>-</p>
