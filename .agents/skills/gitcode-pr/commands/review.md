@@ -26,6 +26,12 @@ allowed-tools: Bash(curl:*), Bash(jq:*), Bash(grep:*), Bash(git diff:*), Bash(gi
 
 如果以上任一条件成立，停止执行，不继续后续步骤。
 
+> ⚠️ **评论列表取不全时必须停止审查，不得据此判断「未评论过」**：
+> 「基本格式」的翻页脚本非 0 退出、或往 stderr 打了 `ERROR`，都说明列表不完整。
+> 此时拿到的空列表既可能是「确实没人评论过」，也可能是「请求失败/漏页」，
+> 两者无法区分——按后者误判成前者就会重复发布审查意见。
+> 必须先修好请求（token、网络、端点、分页）把评论取全，再继续步骤 2。
+
 **注意**：仍然需要审查 Claude 生成的 PR。
 
 ### 步骤 2: 获取项目规范上下文
@@ -265,7 +271,7 @@ while :; do
   #      会被当成「本页 N 条」而提前静默终止，漏读后续评论却毫无提示。
   if [ "$(echo "$resp" | jq -r 'type' 2>/dev/null)" != "array" ]; then
     echo "ERROR: 第 ${page} 页评论请求失败或响应非数组，已取结果不完整：$resp" >&2
-    break
+    exit 1   # 取不全就是失败，必须非 0 退出（见下方「失败必须显式」）
   fi
   echo "$resp" | jq -c '.[] | {id, discussion_id, comment_type, author: .user.login, body}'
   count=$(echo "$resp" | jq 'length')
@@ -273,6 +279,15 @@ while :; do
   page=$((page + 1))
 done
 ```
+
+> **失败必须显式（不能 `break` 后以 0 退出）**：`break` 版本在两类失败下都只往 stderr
+> 打一行 `ERROR`，脚本仍 `exit 0`、stdout 是空列表——实测把 token 换成无效值返回
+> `{"message":"401 Unauthorized"}`、把域名换成不可解析主机返回空响应，两种情况
+> `echo $?` 都是 `0`。步骤 1 正是靠这份列表判断「Claude 是否已评论过」，
+> 空列表 + `exit 0` 会被读成「取全了且没人评论过」，于是重复发布审查意见，
+> 也就是上一轮「必须翻页取完」要防的后果。故失败分支用 `exit 1`；
+> 若这段循环嵌在更大的脚本里不能直接退出，则改成置标志（`incomplete=1`）后 `break`，
+> 并由调用方检查该标志，非 0/为真时停止审查。调用方无论如何都要检查退出码。
 
 > **是否取全可用响应头校验**：该接口在响应头返回 `total_count`（评论总数）与
 > `total_page`（总页数）——实测 `per_page=5&page=1` 返回 `total_count: 10`、`total_page: 2`，
