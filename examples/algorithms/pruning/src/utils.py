@@ -199,21 +199,31 @@ def load_model(
     torch_dtype=torch.bfloat16,
     trust_remote_code=False,
     device_map=None,
+    low_cpu_mem_usage=None,
 ):
-    """Load a causal LM (e.g. Qwen3-0.6B) with its tokenizer."""
+    """Load a causal LM (e.g. Qwen3-0.6B) with its tokenizer.
+
+    ``low_cpu_mem_usage`` stays ``None`` by default so the Transformers
+    built-in default applies; callers may opt in explicitly (e.g. ``True``
+    for multi-GB checkpoints). Passing ``False`` together with a
+    ``device_map`` raises on Transformers 4.x, which is why the value is
+    only forwarded when explicitly set.
+    """
     _disable_torchaudio_for_transformers()
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     tokenizer = AutoTokenizer.from_pretrained(
         model_path, trust_remote_code=trust_remote_code, local_files_only=True
     )
-    model = AutoModelForCausalLM.from_pretrained(
-        model_path,
+    load_kwargs = dict(
         torch_dtype=torch_dtype,
         trust_remote_code=trust_remote_code,
         device_map=device_map,
         local_files_only=True,
-    ).eval()
+    )
+    if low_cpu_mem_usage is not None:
+        load_kwargs["low_cpu_mem_usage"] = low_cpu_mem_usage
+    model = AutoModelForCausalLM.from_pretrained(model_path, **load_kwargs).eval()
     return model, tokenizer
 
 
