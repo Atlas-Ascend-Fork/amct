@@ -8,7 +8,7 @@ HiFloat4 (HiF4) is a 4-bit block-scaling float format: each element uses an S1P2
 
 This operator only implements fake-quant simulation: a single FP → HiF4 → FP quantization and dequantization pass. The output is a floating-point tensor with the same shape and dtype as the input.
 
-The corresponding underlying kernel is invoked based on the input dtype; both kernels compute internally in fp32:
+Only FP16/BF16 inputs are accepted (FP32 is out of scope and raises `RuntimeError`). The corresponding underlying kernel is invoked based on the input dtype; both kernels compute internally in fp32:
 
 | Input dtype | Underlying kernel | Internal computation |
 |-------------|-------------------|---------------------|

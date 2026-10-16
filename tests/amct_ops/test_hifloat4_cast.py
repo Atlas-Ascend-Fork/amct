@@ -58,6 +58,20 @@ class TestHiFloat4Kernel(unittest.TestCase):
         torch.manual_seed(4)
         self._assert_kernel_matches_reference(torch.randn(8, 256, dtype=torch.float16))
 
+    def test_kernel_fp32_raises(self):
+        """Contract regression (issue #218): FP32 is not a supported input dtype.
+
+        The op accepts FP16/BF16 only; FP32 must be rejected at the dispatcher entry
+        instead of being silently routed to the fp32 kernel.
+        """
+        from amct_ops.hifloat4_cast import hifloat4_fake_quant as npu_fake_quant
+
+        torch.manual_seed(7)
+        x = torch.randn(2, 128, dtype=torch.float32).npu()
+        with self.assertRaises(RuntimeError) as ctx:
+            npu_fake_quant(x)
+        self.assertIn("expected float16 or bfloat16", str(ctx.exception))
+
     def test_kernel_unaligned_raises(self):
         from amct_ops.hifloat4_cast import hifloat4_fake_quant as npu_fake_quant
 
