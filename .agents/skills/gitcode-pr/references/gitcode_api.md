@@ -164,7 +164,7 @@ while :; do
   # 静默提前终止。两者都必须显式报错。
   if [ "$(echo "$resp" | jq -r 'type' 2>/dev/null)" != "array" ]; then
     echo "ERROR: 第 ${page} 页评论请求失败或响应非数组，已取结果不完整：$resp" >&2
-    break
+    exit 1   # 取不全即失败：空列表 + exit 0 会被调用方误读成「取全了且没有评论」
   fi
   echo "$resp" | jq -c '.[] | {id, discussion_id, comment_type, author: .user.login, resolved, body}'
   count=$(echo "$resp" | jq 'length')
@@ -172,6 +172,12 @@ while :; do
   page=$((page + 1))
 done
 ```
+
+> **失败必须显式**：无效 token（`{"message":"401 Unauthorized"}`）、不可解析域名（空响应）
+> 都会走进上面的非数组分支。若那里用 `break`，脚本仍以 `exit 0` 结束、stdout 是空列表，
+> 调用方无法区分「取全了但没有评论」与「取失败了」，据空列表判断「尚未评论过」就会重复发评论。
+> 因此失败分支用 `exit 1`；嵌在更大脚本里不能直接退出时，改置 `incomplete=1` 标志再 `break`，
+> 由调用方检查该标志。调用方无论如何都要检查退出码。
 
 > **翻页终止的另一种判据**：响应头带 `total_count`（评论总数）与 `total_page`（总页数），
 > 实测 `per_page=5&page=1` → `total_count: 10`、`total_page: 2`；`per_page=100` → `total_page: 1`
@@ -202,6 +208,18 @@ done
 > ⚠️ 列表接口**不返回被评论的文件路径**（`path` 恒为 `null`）。需要路径时改查单条
 > `GET /api/v5/repos/${owner}/${repo}/pulls/comments/<COMMENT_ID>`，其 `position` 字段含
 > `old_path` / `new_path` / `new_line` / `base_sha` / `head_sha`。
+
+> ⚠️ **两个接口的 `comment_type` 取值不是同一套**，按上表的口径去解析单条响应会拿到预期外的值：
+>
+> | 评论种类 | 列表接口 `GET /pulls/<n>/comments` | 单条接口 `GET /pulls/comments/<id>` |
+> |----------|-----------------------------------|--------------------------------------|
+> | 行内评论 | `diff_comment` | `DiffNote` |
+> | 普通评论 | `pr_comment` | `null` |
+>
+> 实测（cann/amct PR!455）：同一条行内评论 `194208411` 在列表里是 `diff_comment`、
+> 在单条接口里是 `DiffNote`；普通评论 `194141205`/`194176110` 在列表里是 `pr_comment`、
+> 在单条接口里是 `null`（见不到 `DiscussionNote`）。
+> 因此**判断行内/普通只用列表接口的值**；单条接口的 `comment_type` 只能当「非 null 即行内」用。
 
 ---
 
@@ -336,7 +354,7 @@ while :; do
   # 是键数，会被当成「本页 N 条」静默提前终止、漏掉后续 ID。两者都必须显式报错。
   if [ "$(echo "$resp" | jq -r 'type' 2>/dev/null)" != "array" ]; then
     echo "ERROR: 第 ${page} 页评论请求失败或响应非数组，已取 ID 不完整：$resp" >&2
-    break
+    exit 1   # 取不全即失败：ID 列表不完整时继续删会漏删，且 exit 0 会被读成「已清理干净」
   fi
   echo "$resp" | jq -c '.[] | {id, discussion_id, comment_type, author: .user.login, body}'
   count=$(echo "$resp" | jq 'length')
@@ -346,6 +364,8 @@ done
 ```
 
 > 这里的整数 `id` 就是 `DELETE` 要用的评论 ID（发表评论时响应里的 `note_id`）。
+> 该循环失败分支同样必须 `exit 1`（理由见上「失败必须显式」）：ID 没取全就继续删会**漏删**，
+> 而 `break` + `exit 0` 会让调用方把「取失败了」读成「已清理干净」。
 
 ### 权限说明
 

@@ -126,8 +126,27 @@ GitCode 使用 v5 API 获取 PR 评论：
 
 ```bash
 # 获取 PR 的所有评论（包括行内评论）
-curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN"
+# ⚠️ 必须显式传 per_page=100 并从 page=1 起翻页取完：per_page 默认只有 20，
+#    实测 cann/amct PR!431 共 38 条、PR!417 共 45 条，不带 per_page 都只返回 20 条。
+page=1
+while :; do
+  resp=$(curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100&page=${page}")
+  # 响应必须是数组：无效 token 返回 {"message":"401 Unauthorized"}、网络失败返回空响应，
+  # 两者都要显式失败退出，不能 break 后以 0 退出——空列表 + exit 0 会被读成「取全了且没有评论」。
+  if [ "$(echo "$resp" | jq -r 'type' 2>/dev/null)" != "array" ]; then
+    echo "ERROR: 第 ${page} 页评论请求失败或响应非数组，结果不完整：$resp" >&2
+    exit 1
+  fi
+  echo "$resp" | jq -c '.[] | {id, discussion_id, comment_type, author: .user.login, body}'
+  count=$(echo "$resp" | jq 'length')
+  [ "$count" -lt 100 ] && break   # 本页不足 100 条即为最后一页
+  page=$((page + 1))
+done
 ```
+
+> 评论列表**取不全时必须停止**依赖它的判断（如「是否已评论过」「该删哪条」），
+> 不得据空列表推断「没有评论」。完整翻页写法与响应头校验见
+> `references/gitcode_api.md` → 「获取 PR 讨论（包含行内评论）」。
 
 ## GitCode API v5 说明
 
@@ -178,11 +197,12 @@ v5 API 返回**直接数组**，不是包装对象。评论数据包含以下关
   "body": "这段代码需要优化",
   "path": null,
   "position": null,
-  "comment_type": "DiffNote"
+  "comment_type": "diff_comment"
 }
 ```
 
 **重要说明**：列表接口返回的 `path` 和 `position` 字段为 `null`。要获取完整位置信息，需要使用单条评论接口。
+列表接口的 `comment_type` 只有 `diff_comment`（行内）/ `pr_comment`（普通）两种取值。
 
 #### 获取单条评论详情（包含完整位置信息）
 
@@ -221,9 +241,18 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<C
 }
 ```
 
-> ⚠️ 单条评论接口（`/pulls/comments/:id`）返回的 `comment_type` 实测为 `null`，
-> 不能依赖它判断行内/普通评论。评论类型只能从列表接口
-> （`/pulls/<PR_NUMBER>/comments`，其 `comment_type` 字段有正确值）关联获取。
+> ⚠️ **两个接口的 `comment_type` 不是同一套取值**（实测 cann/amct PR!455）：
+>
+> | 评论种类 | 列表接口 `/pulls/<n>/comments` | 单条接口 `/pulls/comments/<id>` |
+> |----------|-------------------------------|----------------------------------|
+> | 行内评论 | `diff_comment` | `DiffNote` |
+> | 普通评论 | `pr_comment` | `null` |
+>
+> 同一条行内评论 `194208411`：列表里是 `diff_comment`，单条里是 `DiffNote`；
+> 普通评论 `194141205`/`194176110`：列表里是 `pr_comment`，单条里是 `null`
+> （v5 见不到 `DiscussionNote` 这个取值）。
+> 所以**判断行内/普通一律用列表接口的值**；单条接口只能当「`comment_type` 非 `null` 即行内」用，
+> 不要拿列表接口的取值去匹配单条响应（反之亦然），否则永远匹配不上。
 
 **关键位置字段**：
 
@@ -239,10 +268,11 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<C
 
 | 接口 | 位置信息 | comment_type | 用途 |
 | ------ | --------- | ------------- | ------ |
-| `/pulls/:number/comments` | `path`/`position` 为 `null` | 有正确类型 | 获取评论列表 |
-| `/pulls/comments/:id` | 完整 `position` 对象 | 为 `null` | 获取单条评论详情 |
+| `/pulls/:number/comments` | `path`/`position` 为 `null` | `diff_comment`（行内）/ `pr_comment`（普通） | 获取评论列表 |
+| `/pulls/comments/:id` | 完整 `position` 对象 | `DiffNote`（行内）/ `null`（普通） | 获取单条评论详情 |
 
-**注意**：单条评论接口返回的 `comment_type` 字段为 `null`，要获取评论类型，需要使用列表接口。
+**注意**：要按「行内 / 普通」区分评论，请使用列表接口的 `comment_type`；
+单条评论接口对普通评论返回 `null`、对行内评论返回 `DiffNote`，取值形态与列表接口不同。
 
 ### 获取 PR 文件变更
 
@@ -347,7 +377,8 @@ curl -X POST \
 ```bash
 # 推荐：用 POST 返回的 discussion_id 精确定位（最可靠）
 DISCUSSION_ID="b227720346ef5a37e410d17e76a1c1e1f60d5d80"   # POST 返回的哈希串
-curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN" | \
+# 同样必须 per_page=100 + 翻页：目标评论在第 20 条之后时，不带 per_page 会查不到而误判「创建失败」
+curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100" | \
   jq --arg did "$DISCUSSION_ID" --arg me "$MY_LOGIN" \
     '.[] | select(.discussion_id == $did or (.user.login == $me and .body == "唯一标记内容")) | {id, discussion_id, comment_type}'
 
@@ -355,7 +386,7 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
 # {
 #   "id": 171431239,  // 数字 ID
 #   "discussion_id": "b227720346ef5a37e410d17e76a1c1e1f60d5d80",
-#   "comment_type": "DiffNote"
+#   "comment_type": "diff_comment"
 # }
 ```
 
@@ -384,7 +415,8 @@ POST /repos/:owner/:repo/pulls/:number/discussions/:discussion_id/comments
 1. **获取 discussion_id**：
 
     ```bash
-   curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN" | \
+   # per_page 默认 20，必须显式传 100；评论数 > 100 时按 page 递增翻页取完（见「获取 PR 讨论列表」）
+   curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100" | \
     jq '.[] | {id: .id, discussion_id: .discussion_id}'
     ```
 
@@ -402,8 +434,9 @@ POST /repos/:owner/:repo/pulls/:number/discussions/:discussion_id/comments
 3. **验证回复成功**：
 
     ```bash
-    # 使用单条评论接口验证 discussion_id 是否匹配
-    curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<REPLY_ID>?access_token=$GITCODE_API_TOKEN" | \
+    # 回复接口（HTTP 201）只返回 {"id":"<discussion_id>","body":"...","note_id":<评论 ID 整数>}，
+    # 不含 comment_type；用 note_id 查单条接口，比对 discussion_id 是否等于父讨论的 discussion_id
+    curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<NOTE_ID>?access_token=$GITCODE_API_TOKEN" | \
     jq '{discussion_id: .discussion_id, comment_type: .comment_type}'
     ```
 
@@ -414,9 +447,12 @@ POST /repos/:owner/:repo/pulls/:number/discussions/:discussion_id/comments
 
 **注意**：
 
-- 回复评论不在 `/pulls/:number/comments` 列表显示，需要用单条接口验证
-- 回复行内评论返回 `comment_type: "DiffNote"`
-- 回复普通评论返回 `comment_type: "DiscussionNote"`
+- 回复不作为独立条目出现在 `/pulls/:number/comments` 列表**顶层**，而是嵌进父评论的 `reply[]`；
+  要验证就用回复响应里的 `note_id` 查单条接口
+- 单条接口查回复时，`comment_type` 跟随**父讨论**的种类：父讨论是行内评论 → `DiffNote`
+  （实测 PR!455 的回复 `194209148`、`194148955`），父讨论是普通评论 → `null`
+  （实测 PR!431 的回复 `193411043`/`193411048`/`193706419`）。v5 **没有** `DiscussionNote` 这个取值
+- 因此校验「回复是否落在目标讨论」请用 `discussion_id` 是否相等，**不要**用 `comment_type` 匹配
 
 ### 删除 PR 评论
 
@@ -426,7 +462,9 @@ POST /repos/:owner/:repo/pulls/:number/discussions/:discussion_id/comments
 
 ```bash
 # 1. 获取评论的数字 id（使用 v5 API）
-curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN" | \
+#    per_page 默认 20，必须显式传 100；评论数 > 100 时按 page 递增翻页取完（见「获取 PR 讨论列表」），
+#    否则目标评论不在前 20 条时会漏查，清理不干净
+curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100" | \
   jq '.[] | {id: .id, body: .body}'
 
 # 2. 删除评论（<COMMENT_ID> 使用上一步列表返回的数字 id）
