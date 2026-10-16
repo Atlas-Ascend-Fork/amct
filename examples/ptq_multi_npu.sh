@@ -1,3 +1,4 @@
+#!/bin/bash
 # -*- coding: UTF-8 -*-
 # ----------------------------------------------------------------------------
 # Copyright (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
@@ -16,7 +17,6 @@
 # ----------------------------------------------------------------------------
 
 
-#!/bin/bash
 model_path="" # 模型路径
 model_name="" # 模型名
 data_path="" # dump 的数据路径
