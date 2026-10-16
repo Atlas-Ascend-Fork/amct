@@ -54,6 +54,8 @@ class MinMaxQuant(BaseQuantizeModule):
         quant_config: calibration algorithm parameters.
         """
         super().__init__(ori_module, layer_name, quant_config)
+        self.algorithm = 'minmax'
+        self.quant_config = quant_config
         self.ori_module_type = type(ori_module).__name__
         self.weight = ori_module.weight
         self.bias = ori_module.bias
@@ -65,12 +67,14 @@ class MinMaxQuant(BaseQuantizeModule):
         self.scale_w2 = None
 
         self.batch_num = quant_config.get('batch_num')
+        self.shared_param_mode = None
         enable_quant = quant_config.get('inputs_cfg').get('enable_quant')
         if enable_quant is None or enable_quant:
             self.weight_compress_only = False
             self.act_type = quant_config.get('inputs_cfg').get('quant_type')
             self.act_symmetric = quant_config.get('inputs_cfg').get('symmetric')
             self.act_granularity = quant_config.get('inputs_cfg').get('strategy')
+            self.dynamic = quant_config.get('inputs_cfg').get('dynamic')
             self.data_max = None
             self.data_min = None
 
@@ -118,6 +122,10 @@ class MinMaxQuant(BaseQuantizeModule):
             return self.fake_quant_forward(inputs)
 
         self.cur_batch += 1
+        if self.shared_param_mode is not None:
+            if self.cur_batch > self.batch_num:
+                return self.fake_quant_forward(inputs)
+            return fp_out
         if self.cur_batch > self.batch_num:
             return self.fake_quant_forward(inputs)
         if self.act_granularity == 'tensor':
@@ -148,6 +156,21 @@ class MinMaxQuant(BaseQuantizeModule):
                 'MinMaxQuant',
             )
         return fp_out
+
+    def accept_shared_params(
+        self,
+        mode,
+        smooth_factor=None,
+        activation_scale=None,
+        activation_offset=None,
+    ):
+        '''Receive parameters calculated from the shared-input pre_op.'''
+        self.shared_param_mode = mode
+        self.scale_d = activation_scale
+        self.offset_d = activation_offset
+        self.fake_quant_cache_ready = False
+        self.data_max = None
+        self.data_min = None
 
     @torch.no_grad()
     def fake_quant_forward(self, inputs):
