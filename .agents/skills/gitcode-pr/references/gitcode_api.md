@@ -151,15 +151,26 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
 顶层直接返回数组，行内评论与普通评论混在同一列表，用 `comment_type` 区分：
 
 ```bash
+# 单页（评论数 ≤ 100 时够用）
 curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100" | \
   jq '.[] | {id, discussion_id, comment_type, author: .user.login, resolved, lines: .diff_position, body}'
+
+# 翻页取完所有评论（评论数可能 > 100，必须循环，否则会漏读）
+page=1
+while :; do
+  resp=$(curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100&page=${page}")
+  echo "$resp" | jq -c '.[] | {id, discussion_id, comment_type, author: .user.login, resolved, body}'
+  count=$(echo "$resp" | jq 'length')
+  [ "$count" -lt 100 ] && break   # 本页不足 100 条即为最后一页
+  page=$((page + 1))
+done
 ```
 
 **查询参数**：
 
 | 参数 | 说明 |
 |------|------|
-| `page` / `per_page` | 分页；`per_page` 默认 **20**、最大 100，评论较多时必须显式传，否则会被截断 |
+| `page` / `per_page` | 分页；`per_page` 默认 **20**、最大 **100**，评论较多时必须显式传；评论数 > 100 时还必须按 `page` 递增翻页直到本页返回条数 < 100，否则第 2 页之后的评论会被漏读 |
 | `direction` | `asc` / `desc` |
 | `comment_type` | 筛选评论类型：`diff_comment`（行内）/ `pr_comment`（普通） |
 
@@ -305,9 +316,15 @@ curl -s -X DELETE \
 ### 获取评论 ID
 
 ```bash
-# 顶层直接是数组；per_page 默认 20，评论多时必须显式传 100，否则 ID 会漏
-curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100" | \
-  jq '.[] | {id, discussion_id, comment_type, author: .user.login, body}'
+# 顶层直接是数组；per_page 默认 20、最大 100，评论多时必须显式传 100 并翻页，否则 ID 会漏
+page=1
+while :; do
+  resp=$(curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100&page=${page}")
+  echo "$resp" | jq -c '.[] | {id, discussion_id, comment_type, author: .user.login, body}'
+  count=$(echo "$resp" | jq 'length')
+  [ "$count" -lt 100 ] && break
+  page=$((page + 1))
+done
 ```
 
 > 这里的整数 `id` 就是 `DELETE` 要用的评论 ID（发表评论时响应里的 `note_id`）。
@@ -360,5 +377,7 @@ curl -s "https://raw.gitcode.com/${owner}/${repo}/raw/{commit_sha}/文件路径"
 4. **API 版本**：只用 v5；`/api/v4` 已停用（写接口 403、部分读接口 404），不要使用
 5. **多行选择**：写入用 `start_position`（起始行）+ `position`（结束行），
    读取看 `diff_position.start_new_line` / `end_new_line`
-6. **分页**：`per_page` 默认 20，评论较多时必须显式传 `per_page=100`
+6. **分页**：`per_page` 默认 20、最大 100，评论较多时必须显式传 `per_page=100`；
+   评论数 > 100 时还必须从 `page=1` 起递增翻页，直到本页返回条数 < 100 为止，
+   否则会漏读第 2 页之后的评论
 7. **两种 ID 不要混用**：`discussion_id`（哈希串，用于回复）vs 评论 `id`（整数，用于删除）

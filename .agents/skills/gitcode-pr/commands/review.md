@@ -1,6 +1,6 @@
 ---
 description: 审查 GitCode Pull Request 的代码变更
-allowed-tools: Bash(curl), Bash(git diff), Bash(git log), Bash(git show)
+allowed-tools: Bash(curl), Bash(jq), Bash(grep), Bash(git diff), Bash(git log), Bash(git show)
 ---
 
 # GitCode PR 代码审查
@@ -21,7 +21,8 @@ allowed-tools: Bash(curl), Bash(git diff), Bash(git log), Bash(git show)
 - PR 已关闭
 - PR 是草稿状态
 - PR 不需要代码审查（如：自动化 PR、明显正确的微小变更）
-- Claude 已经在此 PR 上评论过（通过 GitCode API 检查 PR 评论）
+- Claude 已经在此 PR 上评论过（通过 GitCode API 检查 PR 评论，**必须翻完所有分页**，
+  见「GitCode API 参考 → 基本格式」，否则会漏读第 100 条之后的评论而误判为未评论过）
 
 如果以上任一条件成立，停止执行，不继续后续步骤。
 
@@ -242,7 +243,7 @@ curl -s -X POST \
 |------|---------|
 | 获取 PR 信息 | `GET /api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>` |
 | 获取 PR 变更 | `GET /api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/files` |
-| 获取 PR 评论 | `GET /api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?per_page=100`（默认只返回 20 条） |
+| 获取 PR 评论 | `GET /api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?per_page=100&page=<N>`（`per_page` 默认 20、最大 100，**必须翻页取完**，见「基本格式」） |
 | 发布普通评论 | `POST /api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments`（只传 `body`） |
 | 发布行内评论 | `POST /api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments`（传 `body`+`path`+`position`） |
 | 回复评论 | `POST /api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/discussions/<DISCUSSION_ID>/comments` |
@@ -252,8 +253,20 @@ curl -s -X POST \
 
 ```bash
 # 读取 PR 评论（顶层直接是数组；comment_type 区分 diff_comment / pr_comment）
-curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100" | \
-  jq '.[] | {id, discussion_id, comment_type, author: .user.login, body}'
+# ⚠️ per_page 默认 20、最大 100：评论数超过 100 的 PR 必须按 page 递增翻页取完，
+#    否则步骤 1「Claude 是否已评论过」会漏读后面的评论而误判，导致重复发布审查意见。
+page=1
+while :; do
+  resp=$(curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100&page=${page}")
+  echo "$resp" | jq -c '.[] | {id, discussion_id, comment_type, author: .user.login, body}'
+  count=$(echo "$resp" | jq 'length')
+  [ "$count" -lt 100 ] && break   # 本页不足 100 条即为最后一页
+  page=$((page + 1))
+done
 ```
+
+> 也可用响应的 `Link` header（`rel="next"`）判断是否还有下一页，效果等价。
+> 自检分页是否生效：把 `per_page` 临时调小（如 `per_page=5`）后分别请求
+> `page=1` 与 `page=2`，确认第 2 页返回的是剩余的评论而非重复内容。
 
 **完整 API 格式（包括多行行内评论）详见**：`../references/gitcode_api.md`
