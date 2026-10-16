@@ -159,12 +159,24 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
 page=1
 while :; do
   resp=$(curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100&page=${page}")
+  # 响应必须是数组：空响应会让 `[ "" -lt 100 ]` 报错不 break（死循环），
+  # 错误对象（{"error_code":...}）的 `jq 'length'` 是键数，会被当成「本页 N 条」
+  # 静默提前终止。两者都必须显式报错。
+  if [ "$(echo "$resp" | jq -r 'type' 2>/dev/null)" != "array" ]; then
+    echo "ERROR: 第 ${page} 页评论请求失败或响应非数组，已取结果不完整：$resp" >&2
+    break
+  fi
   echo "$resp" | jq -c '.[] | {id, discussion_id, comment_type, author: .user.login, resolved, body}'
   count=$(echo "$resp" | jq 'length')
   [ "$count" -lt 100 ] && break   # 本页不足 100 条即为最后一页
   page=$((page + 1))
 done
 ```
+
+> **翻页终止的另一种判据**：响应头带 `total_count`（评论总数）与 `total_page`（总页数），
+> 实测 `per_page=5&page=1` → `total_count: 10`、`total_page: 2`；`per_page=100` → `total_page: 1`
+> （数值随评论增长变化，此处为测量当时的值）。
+> 该接口**不返回** `Link` header，不要按 GitHub 的 `rel="next"` 判断。
 
 **查询参数**：
 
@@ -320,6 +332,12 @@ curl -s -X DELETE \
 page=1
 while :; do
   resp=$(curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100&page=${page}")
+  # 空响应会让 `[ "" -lt 100 ]` 报错不 break（死循环）；错误对象的 `jq 'length'`
+  # 是键数，会被当成「本页 N 条」静默提前终止、漏掉后续 ID。两者都必须显式报错。
+  if [ "$(echo "$resp" | jq -r 'type' 2>/dev/null)" != "array" ]; then
+    echo "ERROR: 第 ${page} 页评论请求失败或响应非数组，已取 ID 不完整：$resp" >&2
+    break
+  fi
   echo "$resp" | jq -c '.[] | {id, discussion_id, comment_type, author: .user.login, body}'
   count=$(echo "$resp" | jq 'length')
   [ "$count" -lt 100 ] && break

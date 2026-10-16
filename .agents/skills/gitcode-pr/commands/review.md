@@ -1,6 +1,6 @@
 ---
 description: 审查 GitCode Pull Request 的代码变更
-allowed-tools: Bash(curl), Bash(jq), Bash(grep), Bash(git diff), Bash(git log), Bash(git show)
+allowed-tools: Bash(curl:*), Bash(jq:*), Bash(grep:*), Bash(git diff:*), Bash(git log:*), Bash(git show:*)
 ---
 
 # GitCode PR 代码审查
@@ -258,6 +258,15 @@ curl -s -X POST \
 page=1
 while :; do
   resp=$(curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100&page=${page}")
+  # 响应必须是数组才继续。两类失败都要显式报错、不能静默 break：
+  #   ① 请求失败/空响应 —— `jq 'length'` 得空值，`[ "" -lt 100 ]` 报错返回非 0，
+  #      不触发 break，循环永不终止；
+  #   ② 返回错误对象（如 {"error_code":"APIG.0101"}）—— `jq 'length'` 得键数，
+  #      会被当成「本页 N 条」而提前静默终止，漏读后续评论却毫无提示。
+  if [ "$(echo "$resp" | jq -r 'type' 2>/dev/null)" != "array" ]; then
+    echo "ERROR: 第 ${page} 页评论请求失败或响应非数组，已取结果不完整：$resp" >&2
+    break
+  fi
   echo "$resp" | jq -c '.[] | {id, discussion_id, comment_type, author: .user.login, body}'
   count=$(echo "$resp" | jq 'length')
   [ "$count" -lt 100 ] && break   # 本页不足 100 条即为最后一页
@@ -265,7 +274,16 @@ while :; do
 done
 ```
 
-> 也可用响应的 `Link` header（`rel="next"`）判断是否还有下一页，效果等价。
+> **是否取全可用响应头校验**：该接口在响应头返回 `total_count`（评论总数）与
+> `total_page`（总页数）——实测 `per_page=5&page=1` 返回 `total_count: 10`、`total_page: 2`，
+> `per_page=100` 返回 `total_page: 1`（数值随评论增长变化，此处为测量当时的值）。
+> 用 `curl -sD -` 取头即可核对是否已取全。
+> ⚠️ 该接口**不返回** GitHub 风格的 `Link` header，不要按 `rel="next"` 判断翻页。
+>
+> 终止条件用「本页条数 < per_page」而非「本页为空」：评论总数恰为 `per_page` 整数倍时
+> 会多发一次请求拿到空数组才停（实测 10 条 / `per_page=5` → 3 次请求），行为正确、无副作用；
+> 想省掉这次请求可改读 `total_page` 头。
+>
 > 自检分页是否生效：把 `per_page` 临时调小（如 `per_page=5`）后分别请求
 > `page=1` 与 `page=2`，确认第 2 页返回的是剩余的评论而非重复内容。
 
