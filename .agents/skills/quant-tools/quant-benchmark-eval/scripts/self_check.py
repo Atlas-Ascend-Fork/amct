@@ -202,7 +202,9 @@ def _check_split_layout_semantics():
 
 # Upstream file lists as of 2026-10, used by the offline regression below so
 # `--remote`'s matching logic stays testable without network. Kept minimal: only
-# what each task's `allow_patterns` would keep anyway.
+# what each task's `allow_patterns` would keep anyway. A repo with no entry here
+# gets a listing derived from its own datasets.json declaration
+# (`_derived_listing`), so adding a benchmark never means editing this dict.
 _FAKE_UPSTREAM = {
     "TIGER-Lab/MMLU-Pro": [
         "README.md",
@@ -249,23 +251,130 @@ _FAKE_UPSTREAM = {
 }
 
 
-def _run_remote_check(file_lists):
+class _StubGap(AssertionError):
+    """No offline file list exists for a repo_id the registry asks about.
+
+    Kept distinct from a network failure: `_check_remote_registry` funnels both
+    into its `problems` list, and reporting a *fixture* gap as
+    "datasets.json does not match upstream repos" sends the reader off to fix
+    registry globs that were already correct.
+    """
+
+
+_STUB_GAP_MARK = "[stub-gap]"
+
+
+def _materialize_glob(rel):
+    """Turn one declared path/glob into a concrete filename it still matches.
+
+    `data/test-*.parquet` -> `data/test-00000-of-00001.parquet`;
+    `**/test-*.parquet` -> `main/test-00000-of-00001.parquet`. Only used to
+    synthesize an upstream listing for a repo that has no hand-written stub.
+    """
+    parts = []
+    for part in rel.split("/"):
+        if part == "**":
+            parts.append("main")
+        elif not any(ch in part for ch in "*?["):
+            parts.append(part)
+        else:
+            base, dot, ext = part.rpartition(".")
+            if not dot:
+                base, ext = part, ""
+            base = re.sub(r"[*?]+", "00000-of-00001", base)
+            base = re.sub(r"\[[^\]]*\]", "x", base)
+            parts.append(f"{base}.{ext}" if ext else base)
+    return "/".join(parts)
+
+
+def _derived_listing(spec):
+    """Synthesize an upstream file list from a registry entry's own declaration.
+
+    This is what keeps the documented extension path true -- "add a benchmark =
+    add a datasets.json entry, no code change here" (bench_offline.py). Without
+    it a new task made the *default* `self_check.py` fail with
+    `--remote false-positive on a correct registry: <task>: cannot list
+    <repo_id>`, i.e. a fixture gap dressed up as a registry bug.
+
+    A derived listing is self-consistent with the declaration by construction,
+    so for such a repo the offline step covers the any_of/all_of matching logic
+    plus whether `allow_patterns` would really download every declared glob
+    (prefetch downloads by `allow_patterns`; a declared glob it filters out can
+    never resolve locally). Whether the globs fit the *real* upstream layout
+    stays `--remote`'s job -- hand-written stubs exist for the known repos
+    precisely because they pin layouts worth pinning (MATH-500 shipping parquet
+    only, LiveCodeBench's six cumulative shards).
+    """
+    files = ["README.md"]
+    for rels in spec["splits"].values():
+        _mode, rel_list = split_declaration(rels)
+        files.extend(_materialize_glob(rel) for rel in rel_list)
+    return sorted(set(files))
+
+
+def _upstream_stubs(reg):
+    """`(file_lists, derived_repo_ids)` covering every repo_id in `reg`.
+
+    Hand-written stubs win; anything else is derived. A stub no registry entry
+    references anymore is an error: it would silently stop testing anything.
+    """
+    wanted = {spec["repo_id"] for spec in reg.values()}
+    dead = sorted(set(_FAKE_UPSTREAM) - wanted)
+    if dead:
+        raise AssertionError(
+            f"_FAKE_UPSTREAM holds repo(s) no datasets.json entry uses: {dead}. "
+            "Drop them, or fix the repo_id they were written for."
+        )
+    file_lists, derived = {}, []
+    for repo_id in sorted(wanted):
+        if repo_id in _FAKE_UPSTREAM:
+            file_lists[repo_id] = list(_FAKE_UPSTREAM[repo_id])
+            continue
+        spec = next(s for s in reg.values() if s["repo_id"] == repo_id)
+        file_lists[repo_id] = _derived_listing(spec)
+        derived.append(repo_id)
+    return file_lists, derived
+
+
+def _probe_entry(allow_patterns):
+    """A registry entry for a repo that has no hand-written stub."""
+    return {
+        "repo_id": "openai/gsm8k",
+        "subdir": "gsm8k",
+        "dataset_name": "main",
+        "splits": {"test": "main/test-*.parquet"},
+        "allow_patterns": allow_patterns,
+    }
+
+
+def _run_remote_check(file_lists, reg=None):
     """Run `_check_remote_registry` against injected file lists; return problems.
 
     `huggingface_hub` is swapped for a stub so the *matching logic* is covered
     offline (this box may have no network, and `--remote` must not be the only
-    thing that can catch a registry regression). Returns the AssertionError text
-    when the check fails, else "".
+    thing that can catch a registry regression). `reg` optionally injects the
+    registry as well, so an entry that is not in datasets.json yet can still be
+    exercised. Returns the AssertionError text when the check fails, else "".
     """
 
     class _FakeApi:
         def list_repo_files(self, repo_id, repo_type="dataset"):
-            return list(file_lists[repo_id])
+            try:
+                return list(file_lists[repo_id])
+            except KeyError:
+                raise _StubGap(
+                    f"{_STUB_GAP_MARK} no offline file list for {repo_id}; build "
+                    "the mapping with _upstream_stubs(reg) so every registry "
+                    "repo_id is covered (hand-written stub or derived)"
+                ) from None
 
     stub = types.ModuleType("huggingface_hub")
     stub.HfApi = lambda *a, **k: _FakeApi()
-    saved = sys.modules.get("huggingface_hub")
+    saved_hub = sys.modules.get("huggingface_hub")
+    saved_loader = globals()["load_dataset_registry"]
     sys.modules["huggingface_hub"] = stub
+    if reg is not None:
+        globals()["load_dataset_registry"] = lambda: reg
     buf = io.StringIO()
     try:
         with contextlib.redirect_stdout(buf):
@@ -273,11 +382,27 @@ def _run_remote_check(file_lists):
     except AssertionError as exc:
         return str(exc)
     finally:
-        if saved is None:
+        if saved_hub is None:
             sys.modules.pop("huggingface_hub", None)
         else:
-            sys.modules["huggingface_hub"] = saved
+            sys.modules["huggingface_hub"] = saved_hub
+        globals()["load_dataset_registry"] = saved_loader
     return ""
+
+
+def _repo_of(reg, task):
+    """repo_id a negative control breaks, resolved through the registry.
+
+    Hardcoding the string lets a datasets.json rename quietly turn the control
+    into a no-op -- it would mutate a repo no task reads and still pass.
+    """
+    try:
+        return reg[task]["repo_id"]
+    except KeyError:
+        raise AssertionError(
+            f"self_check's --remote negative controls need task '{task}' in "
+            "datasets.json; update them alongside the registry"
+        ) from None
 
 
 def _check_remote_glob_semantics():
@@ -288,7 +413,9 @@ def _check_remote_glob_semantics():
     dict and `for rel in rels` yielded the key names `any_of` / `all_of`, which
     never fnmatch -- `self_check.py --remote` then failed math500, livecodebench
     and livecodebench_release_v6 against a perfectly correct datasets.json. Also
-    covers the lax `any(...)` that let a missing all_of shard through.
+    covers the lax `any(...)` that let a missing all_of shard through, and the
+    follow-up regression where the offline stub dict became a second file to
+    edit whenever a benchmark was added to datasets.json.
     """
     # 1. Normalization: no declaration may leak its mode key as a path.
     reg = load_dataset_registry()
@@ -334,36 +461,99 @@ def _check_remote_glob_semantics():
     if got != ["test2.jsonl"]:
         raise AssertionError(f"all_of must name the missing shard, got {got}")
 
-    # 3. End to end against realistic upstream listings: zero problems.
-    problems = _run_remote_check(_FAKE_UPSTREAM)
+    # 3. End to end against realistic upstream listings: zero problems. Every
+    #    registry repo_id is covered, by a hand-written stub or a derived one.
+    file_lists, derived = _upstream_stubs(reg)
+    problems = _run_remote_check(file_lists, reg=reg)
+    if _STUB_GAP_MARK in problems:
+        raise AssertionError(
+            f"offline upstream listings do not cover the registry:\n{problems}"
+        )
     if problems:
         raise AssertionError(
             f"--remote false-positive on a correct registry:\n{problems}"
         )
-
-    # 4. Negative controls -- it must still catch real drift.
-    broken = {k: list(v) for k, v in _FAKE_UPSTREAM.items()}
-    broken["livecodebench/code_generation_lite"].remove("test3.jsonl")
-    problems = _run_remote_check(broken)
-    if "test3.jsonl" not in problems:
-        raise AssertionError(
-            f"--remote must report a missing all_of shard, got:\n{problems or '<no problems>'}"
+    if derived:
+        print(
+            "[self_check] note: no hand-written upstream stub for "
+            f"{', '.join(derived)} -- listing derived from the datasets.json "
+            "declaration, so run --remote to verify them against the real repos"
         )
-    broken = {k: list(v) for k, v in _FAKE_UPSTREAM.items()}
-    broken["HuggingFaceH4/MATH-500"] = ["README.md", "test.jsonl"]
-    problems = _run_remote_check(broken)
+
+    # 4. Negative controls -- it must still catch real drift. repo_ids and
+    #    shard names come from the registry, not from literals.
+    lcb_repo = _repo_of(reg, "livecodebench_release_v6")
+    mode, shards = split_declaration(reg["livecodebench_release_v6"]["splits"]["test"])
+    if mode != "all_of" or len(shards) < 2:
+        raise AssertionError(
+            "self_check's --remote controls expect livecodebench_release_v6/test "
+            f"to stay a multi-shard all_of declaration, got ({mode}, {shards})"
+        )
+    dropped = shards[len(shards) // 2]
+    broken = {k: list(v) for k, v in file_lists.items()}
+    broken[lcb_repo] = [f for f in broken[lcb_repo] if not fnmatch.fnmatch(f, dropped)]
+    problems = _run_remote_check(broken, reg=reg)
+    if dropped not in problems:
+        raise AssertionError(
+            f"--remote must report a missing all_of shard ({dropped}), "
+            f"got:\n{problems or '<no problems>'}"
+        )
+
+    math_repo = _repo_of(reg, "math500")
+    mode, cands = split_declaration(reg["math500"]["splits"]["test"])
+    if mode != "any_of" or "test.jsonl" not in cands:
+        raise AssertionError(
+            "self_check's --remote controls expect math500/test to stay an any_of "
+            f"declaration listing test.jsonl, got ({mode}, {cands})"
+        )
+    broken = {k: list(v) for k, v in file_lists.items()}
+    broken[math_repo] = ["README.md", "test.jsonl"]
+    problems = _run_remote_check(broken, reg=reg)
     if problems:
         raise AssertionError(
             f"MATH-500 shipping only test.jsonl is a valid any_of layout:\n{problems}"
         )
-    broken = {k: list(v) for k, v in _FAKE_UPSTREAM.items()}
-    broken["allenai/sciq"] = ["README.md"]
-    problems = _run_remote_check(broken)
+
+    sciq_repo = _repo_of(reg, "sciq")
+    broken = {k: list(v) for k, v in file_lists.items()}
+    broken[sciq_repo] = ["README.md"]
+    problems = _run_remote_check(broken, reg=reg)
     if "sciq" not in problems:
         raise AssertionError(
             f"--remote must report a task whose files all vanished, got:\n{problems or '<no problems>'}"
         )
-    print("[self_check] remote glob semantics ok (any_of one-hit / all_of every shard)")
+
+    # 5. Extension safety: a task added to datasets.json *alone* (no stub edit)
+    #    must keep the default self-check green -- and must still be checked.
+    probe = dict(reg)
+    probe["gsm8k_probe"] = _probe_entry(["*.parquet", "README.md"])
+    probe_lists, probe_derived = _upstream_stubs(probe)
+    if "openai/gsm8k" not in probe_derived:
+        raise AssertionError(
+            "a repo without a hand-written stub must fall back to a derived "
+            f"listing, got derived={probe_derived}"
+        )
+    problems = _run_remote_check(probe_lists, reg=probe)
+    if problems:
+        raise AssertionError(
+            "adding a datasets.json entry must not break the default self-check "
+            f"(no _FAKE_UPSTREAM stub edit required):\n{problems}"
+        )
+    # Not vacuous: a declared glob that allow_patterns would never download is
+    # reported even when the listing is derived.
+    probe = dict(reg)
+    probe["gsm8k_probe"] = _probe_entry(["README.md"])
+    probe_lists, _ = _upstream_stubs(probe)
+    problems = _run_remote_check(probe_lists, reg=probe)
+    if "gsm8k_probe" not in problems:
+        raise AssertionError(
+            "a declared glob excluded by allow_patterns must be reported even "
+            f"when the listing is derived, got:\n{problems or '<no problems>'}"
+        )
+    print(
+        "[self_check] remote glob semantics ok (any_of one-hit / all_of every "
+        "shard / new task needs no stub)"
+    )
 
 
 def _check_prefetched_resolution():

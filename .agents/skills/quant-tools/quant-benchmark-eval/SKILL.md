@@ -102,6 +102,8 @@ python scripts/prefetch_data.py --task <task>                 # 预下载到 $BE
 
 这两种语义在 `prefetch_data.py`（本地文件）、`config.resolve_split_files()`（离线读取）与 `self_check.py --remote`（上游文件列表）三处**判定口径一致**：`any_of` 有一条候选命中即通过，`all_of` 要求每条分片都命中。所以 `--remote` 报 `datasets.json does not match upstream repos` 时，是注册表 glob 与上游布局真的对不上（上游改名 / 少发分片），不是声明形态没被识别。
 
+**加一个 benchmark 只需要改 `datasets.json`**（`bench_offline.py` 的扩展约定），不用动 `self_check.py`：默认自检的离线回归对**没有手写桩**的 repo 会按其声明自动派生一份上游文件列表（`_derived_listing()`），因此新任务不会因为「桩文件列表缺这个 repo_id」而让默认自检变红。手写桩（`_FAKE_UPSTREAM`）只保留给当前 10 个任务对应的 7 个仓，作用是钉住真实布局（MATH-500 只发 parquet、LiveCodeBench 6 个累积分片）。派生桩与声明天然自洽，只能覆盖 `any_of`/`all_of` 匹配逻辑与「声明的 glob 是否被 `allow_patterns` 覆盖」（`prefetch` 按 `allow_patterns` 下载，被过滤掉的 glob 永远落不到本地）；**新任务的 glob 是否真的贴合上游布局，仍须跑一次 `--remote` 兜底**。自检会打印一行 `note: no hand-written upstream stub for <repo_id>` 提示这一点；桩里出现注册表已不再引用的 repo_id 会直接报错（防止对照项静默失效）。
+
 ### 2. 装配 + 评测
 
 ```bash
@@ -161,7 +163,7 @@ python scripts/assemble_and_eval.py --model <model_path> --model_name qwen3_5_mo
 | `scripts/config.py` | env 解析（`AMCT_HOME` / `BENCH_ASSETS` / `HF_ENDPOINT`）+ 加载 `datasets.json`；提供 `local_dataset_map()`（旧名 `local_parquet_map()` 为兼容别名）与 `split_declaration()` / `resolve_split_files()`（`any_of` 取首个命中布局、`all_of` 合并全部分片） |
 | `scripts/utils.py` | 数据读取（parquet / jsonl）、依赖检查、LiveCodeBench 字段校验、attention 量化保护、结果日志解析 |
 | `scripts/datasets.json` | benchmark 注册表（repo_id、subdir、split → parquet/jsonl/glob，或 `{"any_of": [...]}` / `{"all_of": [...]}`），prefetch 与离线 shim 的单一数据源 |
-| `scripts/self_check.py` | 不加载模型、不跑 NPU 的轻量自检：脚本接线、注册表声明、`any_of`/`all_of` 布局语义（临时目录实测，防样本翻倍）、`--remote` 的 glob 匹配语义（注入假文件列表离线回归，防把正确注册表报成不匹配）、已预下载任务的 split 是否真能解析、SKILL.md 指标列 vs lm-eval task index；`--remote` 再加验注册表 vs 数据集仓真实文件列表 |
+| `scripts/self_check.py` | 不加载模型、不跑 NPU 的轻量自检：脚本接线、注册表声明、`any_of`/`all_of` 布局语义（临时目录实测，防样本翻倍）、`--remote` 的 glob 匹配语义（注入假文件列表离线回归，防把正确注册表报成不匹配；未建桩的 repo 按声明自动派生列表，**加任务只改 `datasets.json` 不会让默认自检变红**）、已预下载任务的 split 是否真能解析、SKILL.md 指标列 vs lm-eval task index；`--remote` 再加验注册表 vs 数据集仓真实文件列表 |
 | `scripts/check_env.py` | 检查运行依赖与 lm-eval 版本；`--livecodebench_score` 加查官方评分 runner |
 | `scripts/prefetch_data.py` | `snapshot_download` 把数据集下到 `$BENCH_ASSETS`，并校验每个 split 是否真命中文件（`any_of` 未命中、`all_of` 缺分片即非 0 退出） |
 | `scripts/bench_offline.py` | monkeypatch `load_dataset` → fastparquet 读本地 parquet、pandas 读本地 jsonl |
