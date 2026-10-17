@@ -400,28 +400,28 @@ done
 > 而 `break` + `exit 0` 会让调用方把「取失败了」读成「已清理干净」。
 > 同理，**不展开 `reply[]` 也会漏删**：以回复形式留下的评论不在顶层，
 > 只投影顶层字段时它的 `id` 永远收不到——这类漏删还是静默的（脚本 `exit 0`）。
->
-> ⚠️ **展开后还必须调整删除顺序**：上面的投影是「父在前、回复在后」，照这个顺序直接删，
-> 父评论会因「还有回复」返回 `405 Can not delete a discussion that has replies.` 而留下，
-> 回复反倒被删掉——清理只完成一半，且 `curl -s` 的退出码仍是 `0`，看起来像成功。
-> 实测（cann/amct PR!455 自测探针）：父 `194259915` 带回复 `194259921` 时删父 → `405`；
-> 先删回复（`200`）再删父 → `200`。
-> 因此按 `reply_to` 排序（**非 null 的回复先删**），并逐个校验 HTTP 状态码：
->
-> ```bash
-> fail=0
-> # reply_to 非 null（回复）排在前，父评论在后
-> for id in $(printf '%s\n' "$resp" | jq -r '
->     .[] | . as $c
->     | ({id, body, reply_to: null}, ((.reply // [])[] | {id, body, reply_to: $c.id}))
->     | select(.body | startswith("<唯一标记>"))
->     | "\(if .reply_to then 1 else 0 end)\t\(.id)"' | sort -r | cut -f2); do
->   code=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
->     "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/${id}?access_token=$GITCODE_API_TOKEN")
->   [ "$code" = "200" ] || { echo "ERROR: 删除评论 ${id} 失败（http=${code}），清理不完整" >&2; fail=1; }
-> done
-> [ "$fail" -eq 0 ] || exit 1
-> ```
+
+⚠️ **展开后还必须调整删除顺序**：上面的投影是「父在前、回复在后」，照这个顺序直接删，
+父评论会因「还有回复」返回 `405 Can not delete a discussion that has replies.` 而留下，
+回复反倒被删掉——清理只完成一半，且 `curl -s` 的退出码仍是 `0`，看起来像成功。
+实测（cann/amct PR!455 自测探针）：父 `194259915` 带回复 `194259921` 时删父 → `405`；
+先删回复（`200`）再删父 → `200`。
+因此按 `reply_to` 排序（**非 null 的回复先删**），并逐个校验 HTTP 状态码：
+
+```bash
+fail=0
+# reply_to 非 null（回复）排在前，父评论在后
+for id in $(printf '%s\n' "$resp" | jq -r '
+    .[] | . as $c
+    | ({id, body, reply_to: null}, ((.reply // [])[] | {id, body, reply_to: $c.id}))
+    | select(.body | startswith("<唯一标记>"))
+    | "\(if .reply_to then 1 else 0 end)\t\(.id)"' | sort -r | cut -f2); do
+  code=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
+    "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/${id}?access_token=$GITCODE_API_TOKEN")
+  [ "$code" = "200" ] || { echo "ERROR: 删除评论 ${id} 失败（http=${code}），清理不完整" >&2; fail=1; }
+done
+[ "$fail" -eq 0 ] || exit 1
+```
 
 ### 权限说明
 
