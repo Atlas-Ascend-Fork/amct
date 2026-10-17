@@ -160,7 +160,7 @@ python scripts/assemble_and_eval.py --model <model_path> --model_name qwen3_5_mo
 | `references/constraints.md` | 13 条关键约束（attention / KV cache、离线数据、PYTHONPATH、OOM、多卡 hook、`--algos` 与 ptq 参数匹配、`--trust_remote_code`、transformers dtype 参数名等） |
 | `references/env-and-portability.md` | 依赖边界、可配置 env、环境模板、新机器部署步骤 |
 | `references/livecodebench.md` | LiveCodeBench 生成 + 官方评分 + 榜单对齐清单 |
-| `scripts/config.py` | env 解析（`AMCT_HOME` / `BENCH_ASSETS` / `HF_ENDPOINT`）+ 加载 `datasets.json`；提供 `local_dataset_map()`（旧名 `local_parquet_map()` 为兼容别名）与 `split_declaration()` / `resolve_split_files()`（`any_of` 取首个命中布局、`all_of` 合并全部分片） |
+| `scripts/config.py` | env 解析（`AMCT_HOME` / `BENCH_ASSETS` / `HF_ENDPOINT`）+ 加载 `datasets.json`；提供 `local_dataset_map()` 与 `split_declaration()` / `resolve_split_files()`（`any_of` 取首个命中布局、`all_of` 合并全部分片） |
 | `scripts/utils.py` | 数据读取（parquet / jsonl）、依赖检查、LiveCodeBench 字段校验、attention 量化保护、结果日志解析 |
 | `scripts/datasets.json` | benchmark 注册表（repo_id、subdir、split → parquet/jsonl/glob，或 `{"any_of": [...]}` / `{"all_of": [...]}`），prefetch 与离线 shim 的单一数据源 |
 | `scripts/self_check.py` | 不加载模型、不跑 NPU 的轻量自检：脚本接线、注册表声明、`any_of`/`all_of` 布局语义（临时目录实测，防样本翻倍）、`--remote` 的 glob 匹配语义（注入假文件列表离线回归，防把正确注册表报成不匹配；未建桩的 repo 按声明自动派生列表，**加任务只改 `datasets.json` 不会让默认自检变红**）、离线 shim 是否真拦住 lm-eval 的 `load_dataset` 调用形态（注入临时 jsonl 实跑一次，防评测静默回落到网络 / HF cache）、已预下载任务的 split 是否真能解析、SKILL.md 指标列 vs lm-eval task index；`--remote` 再加验注册表 vs 数据集仓真实文件列表 |

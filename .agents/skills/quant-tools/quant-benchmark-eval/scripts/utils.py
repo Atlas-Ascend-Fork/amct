@@ -21,7 +21,6 @@ import importlib.util
 import ast
 import os
 import re
-from glob import glob
 
 import pandas as pd
 
@@ -259,14 +258,6 @@ def parse_result_log(path):
                 metrics = {"raw": payload}
             results.setdefault(tag, {})[task] = metrics
     return results
-
-
-def expand_existing(paths):
-    out = []
-    for path in paths:
-        matches = sorted(glob(path))
-        out.extend(matches or [path])
-    return out
 
 
 def resolve_task_metric_keys(task_name, task_manager=None):

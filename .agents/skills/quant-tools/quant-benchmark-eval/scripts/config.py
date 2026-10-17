@@ -169,10 +169,6 @@ def resolve_split_files(base, rels):
     return existing or deduped
 
 
-# Backward-compatible private name.
-_resolve_split_files = resolve_split_files
-
-
 def local_dataset_map():
     """Return {(repo_id, dataset_name): {split: [absolute paths]}} for offline shim."""
     reg = load_dataset_registry()
@@ -185,8 +181,3 @@ def local_dataset_map():
             for split, rel in spec["splits"].items()
         }
     return out
-
-
-def local_parquet_map():
-    """Backward-compatible alias for local_dataset_map()."""
-    return local_dataset_map()

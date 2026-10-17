@@ -28,6 +28,7 @@ entry, no code change here.
 
 import os
 import sys
+import inspect
 import pandas as pd
 import datasets
 
@@ -40,9 +41,24 @@ _LOCAL = local_dataset_map()
 
 _ORIG = datasets.load_dataset
 
+# Signature of the real `datasets.load_dataset`, used to normalize whatever
+# positional/keyword mix a caller passes into named arguments. `split` sits at
+# index 4 (path, name, data_dir, data_files, split), so reading it out of
+# `*args` by position would be wrong the moment a caller skips `data_dir`.
+_ORIG_PARAMS = tuple(inspect.signature(_ORIG).parameters)
+
+
+def _bind(path, args, kwargs):
+    """`(name, split)` a caller asked for, positionals and keywords both handled."""
+    bound = {}
+    for key, value in zip(_ORIG_PARAMS[1:], args):
+        bound[key] = value
+    bound.update(kwargs)
+    return bound.get("name"), bound.get("split")
+
 
 def _patched(path, *args, **kwargs):
-    name = args[0] if args and isinstance(args[0], str) else kwargs.get("name")
+    name, wanted_split = _bind(path, args, kwargs)
     key = (path, name)
     if key not in _LOCAL:
         key = (path, None)
@@ -65,6 +81,19 @@ def _patched(path, *args, **kwargs):
             frames = [read_dataset_file(fp) for fp in fps]
             df = pd.concat(frames, ignore_index=True) if len(frames) > 1 else frames[0]
             splits[split] = datasets.Dataset.from_pandas(df, preserve_index=False)
+        # `datasets.load_dataset(..., split="test")` returns one Dataset, not a
+        # DatasetDict; lm-eval forwards a task's `dataset_kwargs` verbatim, so a
+        # task that declares `split` would otherwise get the wrong container
+        # type and fail somewhere inside the harness instead of here.
+        if wanted_split is not None:
+            if wanted_split not in splits:
+                raise KeyError(
+                    f"{path} has no split '{wanted_split}' in the prefetched cache; "
+                    f"datasets.json declares {sorted(splits)}. Add the split to "
+                    f"the registry entry (and prefetch it) or drop `split` from "
+                    f"the task's dataset_kwargs."
+                )
+            return splits[wanted_split]
         return datasets.DatasetDict(splits)
     return _ORIG(path, *args, **kwargs)
 

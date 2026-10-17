@@ -61,6 +61,12 @@ _KVSAFE_TARGET = {
 # (see references/constraints.md #10).
 DEFAULT_ALGOS = ["lwc", "lac"]
 
+# amct's own CLI defaults `--end_block_idx` to 61 (`cli/llm/args.py:219`), which
+# is DeepSeek-V3's layer count. This skill assembles *every* layer, so the value
+# is only a placeholder until the model is loaded; `assemble_quant_model`
+# overwrites it with the real `pipe.num_layers` (see the note there).
+_AMCT_CLI_DEFAULT_END_BLOCK_IDX = 61
+
 
 def _resolve_quant_target(model_name, quant_target):
     """Explicit --quant_target wins; otherwise use the KV-safe default.
@@ -188,8 +194,11 @@ def _require_ptq_params_landed(param_dir, stats, algos):
         print(f"[ptq] params loaded from {param_dir} ({detail})")
 
 
-def _load_float(model_path, device_map, trust_remote_code=False):
+def load_float(model_path, device_map, trust_remote_code=False):
     """Load the bf16 float model.
+
+    Public: `livecodebench_eval.py` loads its `--bf16` baseline through it, so
+    both sides of a comparison go through the same dtype/device path.
 
     `trust_remote_code` is an explicit opt-in, matching amct's own CLI default
     (`amct_pytorch/cli/llm/args.py`): it executes custom modeling code from the
@@ -261,7 +270,7 @@ def build_pipeline_args(
         is_per_tensor=False,
         k_size=128,
         start_block_idx=0,
-        end_block_idx=61,
+        end_block_idx=_AMCT_CLI_DEFAULT_END_BLOCK_IDX,
         bit_config=bit_cfg,
         attn_linear_param_dir=param_dir if "attn-linear" in quant_targets else "",
         attn_cache_param_dir=param_dir if "attn-cache" in quant_targets else "",
@@ -317,9 +326,40 @@ def assemble_quant_model(
     print(
         f"[assemble] loading float_model (bf16, device_map={device_map}, target={qt})..."
     )
-    m = _load_float(model, device_map, trust_remote_code)
+    m = load_float(model, device_map, trust_remote_code)
     layers = _get_layers(m)
     n = pipe.num_layers
+    # amct's own CLI defaults `--end_block_idx` to 61 (DeepSeek-V3's layer
+    # count), and `build_pipeline_args` inherits that literal. Nothing on this
+    # assemble path reads it -- the loop below is driven by `pipe.num_layers` --
+    # but `pipe` keeps the same Namespace object (`base.py`: `self.args = args`),
+    # so any amct helper that does read it (ptq_provider metadata, llm_ptq's
+    # range) would silently describe the wrong layer span on a model that is not
+    # 61 layers deep. Sync it to the real count instead of leaving a
+    # model-specific magic number in a generic skill.
+    args.end_block_idx = n
+    if n > len(layers):
+        raise RuntimeError(
+            f"amct pipeline reports num_layers={n} but the model's decoder stack "
+            f"only has {len(layers)} layers (model_name={model_name!r}). The "
+            f"assembly loop below would IndexError on layers[{n - 1}] and leave "
+            f"a half-swapped model. Check --model_name against the checkpoint."
+        )
+    if n < len(layers):
+        # Legitimate for MTP checkpoints: amct adapters set num_layers to
+        # config.num_hidden_layers while the HF stack also carries the trailing
+        # MTP block(s) (glm5_2 / hy_v3 quantize num_hidden_layers of
+        # num_hidden_layers + num_nextn). Those tail layers stay bf16 on purpose,
+        # but a wrong --model_name looks identical from here, so say it out loud
+        # rather than failing a path amct itself runs.
+        print(
+            f"[warn] amct pipeline quantizes num_layers={n} but the checkpoint "
+            f"has {len(layers)} decoder layers: the trailing {len(layers) - n} "
+            f"stay bf16. Expected for MTP models (glm5_2 / hy_v3). If this "
+            f"checkpoint has no MTP layer, --model_name={model_name!r} likely "
+            f"does not match it and the score below describes a half-quantized "
+            f"model."
+        )
     print(f"[assemble] algos={algo_list} param_dir={param_dir or '<none>'}")
     # Multi-card: device_map=auto attaches accelerate AlignDevicesHooks that move
     # activations to each layer's card as data flows layer→layer. Replacing a layer
@@ -328,13 +368,29 @@ def assemble_quant_model(
     # layer's hook (carries execution_device) onto the swapped-in quant block.
     try:
         from accelerate.hooks import add_hook_to_module
-    except Exception:
+    except Exception as exc:  # keep the reason for the fail-fast below
         add_hook_to_module = None
+        hook_import_error = exc
+    else:
+        hook_import_error = None
     load_stats = {}
     for i in range(n):
         # place quant block on the SAME card as the original layer (multi-card safe)
         dev = next(layers[i].parameters()).device
         old_hook = getattr(layers[i], "_hf_hook", None)
+        if old_hook is not None and add_hook_to_module is None:
+            # Silently skipping the re-attach produces a multi-card model whose
+            # cross-card activations are never realigned; the failure surfaces
+            # much later as "Expected all tensors to be on the same device"
+            # inside generate, pointing at nothing in this skill.
+            raise RuntimeError(
+                f"layer {i} carries an accelerate hook (device_map={device_map!r} "
+                f"spread the model over several cards) but accelerate.hooks."
+                f"add_hook_to_module is unavailable ({hook_import_error}). The "
+                f"quant block would lose its cross-card hook and generate() "
+                f"would crash on mismatched devices. Install/upgrade accelerate, "
+                f"or run single-card with an empty --device_map."
+            )
         qblock = pipe.build_quant_block(i)
         _tally(load_stats, pipe.load_selected_layer_ptq_params(i, qblock, strict=False))
         set_model_to_observe(qblock, False)
@@ -452,7 +508,7 @@ def main():
     quant_target = a.quant_target or ""
     if a.bf16:
         print(f"[bf16] loading original model (no quant, device_map={dmap})...")
-        model = _load_float(a.model, dmap, a.trust_remote_code)
+        model = load_float(a.model, dmap, a.trust_remote_code)
     else:
         if not a.param_dir:
             sys.exit("--param_dir required unless --bf16")

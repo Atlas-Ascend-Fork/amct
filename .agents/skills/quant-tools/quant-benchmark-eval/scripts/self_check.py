@@ -119,7 +119,7 @@ def _check_registry():
 def _check_split_layout_semantics():
     """any_of must not double-read two cached layouts; all_of must merge shards.
 
-    `_resolve_split_files` used to keep *every* existing candidate, so a
+    `resolve_split_files` used to keep *every* existing candidate, so a
     BENCH_ASSETS holding both `test.jsonl` and `data/test-*.parquet` (upstream
     layout migration, or leftover cache) made bench_offline concat the same
     samples twice and every metric silently changed denominator. This runs on a
@@ -802,6 +802,45 @@ def _check_offline_shim_install():
             ids = list(got["test"]["question_id"])
             if ids != ["q1", "q2"]:
                 raise AssertionError(f"shim did not serve the local jsonl rows: {ids}")
+
+            # A task whose `dataset_kwargs` declares `split` must get that one
+            # Dataset back, not a DatasetDict: `datasets.load_dataset` returns
+            # the narrower type, and lm-eval forwards dataset_kwargs verbatim
+            # (`api/task.py:869`), so the harness would index a DatasetDict with
+            # a split name it already resolved away.
+            one = datasets.load_dataset(path="selfcheck/probe", name=None, split="test")
+            if isinstance(one, datasets.DatasetDict):
+                raise AssertionError(
+                    "shim returned a DatasetDict for load_dataset(split='test'); "
+                    "datasets.load_dataset returns a single Dataset in that form"
+                )
+            if list(one["question_id"]) != ["q1", "q2"]:
+                raise AssertionError(
+                    f"shim(split='test') served rows {list(one['question_id'])}"
+                )
+            # Same split asked for positionally (index 4 in datasets' signature).
+            positional = datasets.load_dataset(
+                "selfcheck/probe", None, None, None, "test"
+            )
+            if isinstance(positional, datasets.DatasetDict):
+                raise AssertionError(
+                    "shim ignored a positional `split` argument (index 4 in "
+                    "datasets.load_dataset's signature) and returned a "
+                    "DatasetDict; _bind() must normalize positionals before "
+                    "matching against the registry"
+                )
+            if list(positional["question_id"]) != ["q1", "q2"]:
+                raise AssertionError("shim ignored a positional `split` argument")
+            # Unknown split must name what the registry does declare.
+            try:
+                datasets.load_dataset(path="selfcheck/probe", name=None, split="train")
+            except KeyError as exc:
+                if "no split 'train'" not in str(exc) or "'test'" not in str(exc):
+                    raise AssertionError(f"unclear unknown-split error: {exc}")
+            else:
+                raise AssertionError(
+                    "shim accepted split='train' that the registry does not declare"
+                )
         finally:
             datasets.load_dataset = saved_datasets
             if saved_task is not None:

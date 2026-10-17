@@ -43,7 +43,7 @@ sys.path.insert(0, SKILL_DIR)
 
 from assemble_and_eval import (  # noqa: E402
     DEFAULT_ALGOS,
-    _load_float,
+    load_float,
     assemble_quant_model,
     input_device,
 )
@@ -208,7 +208,7 @@ def main():
     if a.bf16:
         tag = "bf16"
         print(f"[bf16] loading original model (no quant, device_map={dmap})...")
-        model = _load_float(a.model, dmap, a.trust_remote_code)
+        model = load_float(a.model, dmap, a.trust_remote_code)
     else:
         tag = "quant"
         if not a.param_dir:
