@@ -251,7 +251,7 @@ curl -s -X POST \
 |------|---------|
 | 获取 PR 信息 | `GET /api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>` |
 | 获取 PR 变更 | `GET /api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/files` |
-| 获取 PR 评论 | `GET /api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?per_page=100&page=<N>`（`per_page` 默认 20、最大 100，**必须翻页取完**，见「基本格式」） |
+| 获取 PR 评论 | `GET /api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?per_page=100&page=<N>`（`per_page` 默认 20（实测）、最大 100（文档值，未实测），**必须翻页取完**，见「基本格式」） |
 | 发布普通评论 | `POST /api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments`（只传 `body`） |
 | 发布行内评论 | `POST /api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments`（传 `body`+`path`+`position`） |
 | 回复评论 | `POST /api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/discussions/<DISCUSSION_ID>/comments` |
@@ -261,10 +261,13 @@ curl -s -X POST \
 
 ```bash
 # 读取 PR 评论（顶层直接是数组；comment_type 区分 diff_comment / pr_comment）
-# ⚠️ per_page 默认 20、最大 100：评论数超过 100 的 PR 必须按 page 递增翻页取完，
+# ⚠️ per_page 默认 20（实测）；「最大 100」取自官方文档、未实测（抽样中没有父评论 > 100 的
+#    PR，在 38 条的 PR 上传 per_page=150/200 都返回全部 38 条，既不能证明也不能推翻上限）。
+#    按 100 翻页在上限更大时也只是多翻几页、结果仍正确，故评论数可能超过 100 的 PR
+#    必须按 page 递增翻页取完，
 #    否则步骤 1「Claude 是否已评论过」会漏读后面的评论而误判，导致重复发布审查意见。
-# ⚠️ 顶层数组**不含回复**：回复嵌在父评论的 reply[] 里（实测 PR!455 测量当时：顶层 27 条、
-#    reply[] 内另有 11 条，回复 ID 在顶层一个都查不到；数值随评论增长变化），必须一并展开，
+# ⚠️ 顶层数组**不含回复**：回复嵌在父评论的 reply[] 里（实测 cann/amct PR!455：
+#    回复 ID 在顶层一个都查不到），必须一并展开，
 #    否则「只在既有讨论里回复过」的活动看不到，步骤 1 同样会误判为未评论过。
 page=1
 while :; do
@@ -301,8 +304,9 @@ done
 > `total_page`（总页数）——实测 `per_page=5&page=1` 返回 `total_count: 10`、`total_page: 2`，
 > `per_page=100` 返回 `total_page: 1`（数值随评论增长变化，此处为测量当时的值）。
 > 用 `curl -sD -` 取头即可核对是否已取全。
-> ⚠️ `total_count` 只数**父评论**，回复不计入（实测 PR!455：`total_count: 29` = 顶层 29 条，
-> `reply[]` 内 13 条不在其中）。核对时要拿**父评论**条数比，别拿展开 `reply[]` 后的输出条数比。
+> ⚠️ `total_count` 只数**父评论**，回复不计入（实测 cann/amct PR!455：响应头 `total_count`
+> 的值等于顶层数组长度，`reply[]` 内的回复不计入）。核对时要拿**父评论**条数比，
+> 别拿展开 `reply[]` 后的输出条数比。
 > ⚠️ 该接口**不返回** GitHub 风格的 `Link` header，不要按 `rel="next"` 判断翻页。
 >
 > 终止条件用「本页条数 < per_page」而非「本页为空」：评论总数恰为 `per_page` 整数倍时

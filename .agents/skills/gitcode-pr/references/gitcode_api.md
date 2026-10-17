@@ -150,9 +150,8 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
 
 顶层直接返回数组，行内评论与普通评论混在同一列表，用 `comment_type` 区分。
 
-> ⚠️ **顶层数组不含回复**：回复嵌在父评论的 `reply[]` 里（实测 cann/amct PR!455
-> 测量当时：顶层 27 条、4 条父评论的 `reply[]` 内另有 11 条，这 11 个 ID 在顶层一个都查不到；
-> 数值随评论增长变化）。
+> ⚠️ **顶层数组不含回复**：回复嵌在父评论的 `reply[]` 里（实测 cann/amct PR!455：
+> 回复的 ID 在顶层数组一个都查不到）。
 > `reply[]` 里的对象**只有** `id`/`body`/`user`/`created_at`/`updated_at`，
 > **没有** `discussion_id`/`comment_type`/`resolved`/`path`/`diff_position`，需要时从父评论带下来。
 >
@@ -168,8 +167,8 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
 > 需要区分时用 `reply_to`（`null` = 父评论，非 null = 回复，值为父评论 ID）。
 >
 > **分页 `length` 与响应头 `total_count` 数的都是父评论条数**，回复不计入
-> `per_page`/`total_count`（实测 PR!455：`total_count: 29` = 顶层 29 条，
-> `reply[]` 内 13 条不在其中）。因此校验「是否取全」要拿**父评论**条数去比，
+> `per_page`/`total_count`（实测 cann/amct PR!455：响应头 `total_count` 的值等于
+> 顶层数组长度，`reply[]` 内的回复不计入）。因此校验「是否取全」要拿**父评论**条数去比，
 > **不要拿展开后的输出条数去比**（展开后必然偏大，会被误判成「多取了/取重了」）。
 
 ```bash
@@ -186,7 +185,7 @@ while :; do
   # 错误对象（{"error_code":...}）的 `jq 'length'` 是键数，会被当成「本页 N 条」
   # 静默提前终止。两者都必须显式报错。
   if [ "$(echo "$resp" | jq -r 'type' 2>/dev/null)" != "array" ]; then
-  echo "ERROR: 第 ${page} 页评论请求失败或响应非数组，已取结果不完整：$resp" >&2
+    echo "ERROR: 第 ${page} 页评论请求失败或响应非数组，已取结果不完整：$resp" >&2
     exit 1   # 取不全即失败：空列表 + exit 0 会被调用方误读成「取全了且没有评论」
   fi
   # 父评论原样输出，再把 reply[] 展开成同形对象（回复没有 discussion_id/comment_type，从父评论带下来）
@@ -212,7 +211,7 @@ done
 
 | 参数 | 说明 |
 |------|------|
-| `page` / `per_page` | 分页；`per_page` 默认 **20**、最大 **100**，评论较多时必须显式传；评论数 > 100 时还必须按 `page` 递增翻页直到本页返回条数 < 100，否则第 2 页之后的评论会被漏读 |
+| `page` / `per_page` | 分页；`per_page` 默认 **20**（实测），最大 **100**（官方文档值，未实测——抽样中没有父评论 > 100 的 PR，在 38 条的 PR 上传 `per_page=150/200` 都返回全部 38 条，既不能证明也不能推翻该上限；按 100 翻页在上限更大时只是多翻几页、结果仍正确）。评论较多时必须显式传；评论数 > 100 时还必须按 `page` 递增翻页直到本页返回条数 < 100，否则第 2 页之后的评论会被漏读 |
 | `direction` | `asc` / `desc` |
 | `comment_type` | 筛选评论类型：`diff_comment`（行内）/ `pr_comment`（普通） |
 
@@ -375,9 +374,10 @@ curl -s -X DELETE \
 ### 获取评论 ID
 
 ```bash
-# 顶层直接是数组；per_page 默认 20、最大 100，评论多时必须显式传 100 并翻页，否则 ID 会漏。
+# 顶层直接是数组；per_page 默认 20（实测）、「最大 100」为官方文档值未实测（按 100 翻页在
+# 上限更大时也只是多翻几页、结果仍正确），评论多时必须显式传 100 并翻页，否则 ID 会漏。
 # ⚠️ 顶层**不含回复**：自己以「回复」形式发的评论嵌在父评论 reply[] 里，不展开就永远收不到
-#    它的 id，DELETE 时会漏删（实测 PR!455 测量当时：顶层 27 条、reply[] 内另有 11 条）。
+#    它的 id，DELETE 时会漏删（实测 cann/amct PR!455：回复的 ID 在顶层一个都查不到）。
 page=1
 while :; do
   resp=$(curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100&page=${page}")
@@ -504,7 +504,9 @@ curl -s "https://raw.gitcode.com/${owner}/${repo}/raw/{commit_sha}/文件路径"
 4. **API 版本**：只用 v5；`/api/v4` 已停用（写接口 403、部分读接口 404），不要使用
 5. **多行选择**：写入用 `start_position`（起始行）+ `position`（结束行），
    读取看 `diff_position.start_new_line` / `end_new_line`
-6. **分页**：`per_page` 默认 20、最大 100，评论较多时必须显式传 `per_page=100`；
+6. **分页**：`per_page` 默认 20（实测）；「最大 100」取自官方文档、未实测（抽样中没有
+   父评论 > 100 的 PR，在 38 条的 PR 上传 `per_page=150/200` 都返回全部 38 条）。
+   按 100 翻页在上限更大时也只是多翻几页、结果仍正确，故评论较多时必须显式传 `per_page=100`；
    评论数 > 100 时还必须从 `page=1` 起递增翻页，直到本页返回条数 < 100 为止，
    否则会漏读第 2 页之后的评论
 7. **两种 ID 不要混用**：`discussion_id`（哈希串，用于回复）vs 评论 `id`（整数，用于删除）
