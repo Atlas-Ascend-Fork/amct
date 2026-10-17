@@ -86,15 +86,24 @@ echo "Repo: $repo"
 curl -s -H "Authorization: Bearer $GITCODE_API_TOKEN" \
   "https://api.gitcode.com/api/v5/repos/${owner}/${repo}" | \
   jq -r '
-    if .fork then
-      "原仓库: " + .parent.full_name + "\n" +
-      "原仓库URL: " + .parent.html_url + "\n" +
-      "目标分支: " + .parent.default_branch
+    if (type != "object") or (has("fork") | not) then
+      "ERROR: 仓库信息响应异常（token 失效 / 仓库不存在？）：" + tostring
+    elif .fork then
+      "原仓库: " + (.parent.full_name // "<缺失>") + "\n" +
+      "原仓库URL: " + (.parent.web_url // "<缺失>") + "\n" +
+      "目标分支: " + (.parent.default_branch // "<缺失>")
     else
       "这不是一个 fork 仓库，直接使用当前仓库"
     end
   '
 ```
+
+> ⚠️ 必须显式区分「响应异常」和「不是 fork」：`if .fork then … else …` 里 `null` 也是假值，
+> token 失效时返回的 `{"message":"401 Unauthorized"}` 会走进 else，被读成「这不是 fork 仓库」，
+> 于是 PR 直接建到自己的 fork 上而不是上游仓库。
+> ⚠️ 原仓库网页地址的键名是 **`web_url`**，不是 `html_url`——v5 的 `repos` 响应里**没有**
+> `html_url` 键（实测 `yaoguangxiu/amct`：`parent` 只有 `url`/`ssh_url_to_repo`/
+> `http_url_to_repo`/`web_url`/`readme_url`），取错键不报错，只会静默输出空串。
 
 **响应关键字段**：
 
@@ -102,18 +111,19 @@ curl -s -H "Authorization: Bearer $GITCODE_API_TOKEN" \
 | ------ | ------ |
 | `fork` | 是否为 fork 仓库（`true`/`false`） |
 | `parent.full_name` | 原仓库完整名称（格式：`owner/repo`） |
-| `parent.html_url` | 原仓库网页地址 |
+| `parent.web_url` | 原仓库网页地址（实测键名；**不是** `html_url`，该键不存在） |
 | `parent.default_branch` | 原仓库默认分支 |
 
-**示例输出**：
+**示例响应（实测 `GET /repos/yaoguangxiu/amct`，仅保留相关键）**：
 
 ```json
 {
   "fork": true,
   "parent": {
-    "full_name": "cann-agent/skills",
-    "html_url": "https://gitcode.com/cann-agent/skills",
-    "default_branch": "main"
+    "full_name": "cann/amct",
+    "web_url": "https://gitcode.com/cann/amct",
+    "http_url_to_repo": "https://gitcode.com/cann/amct.git",
+    "default_branch": "master"
   }
 }
 ```
@@ -709,7 +719,7 @@ done
 ```bash
 # 注意：endpoint 的 ${owner}/${repo} 必须是 PR 要合入的【目标仓库】；
 # 跨 fork 时目标仓库是上游仓库，而非你的 fork
-curl -s -X POST "https://gitcode.com/api/v5/repos/${target_owner}/${target_repo}/pulls" \
+curl -s -X POST "https://api.gitcode.com/api/v5/repos/${target_owner}/${target_repo}/pulls" \
   -H "Authorization: Bearer $GITCODE_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{

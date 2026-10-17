@@ -22,6 +22,14 @@
 |---------|---------|---------|
 | **GitCode API v5** | `?access_token=<token>`（或 `Authorization: Bearer <token>`、`PRIVATE-TOKEN: <token>`） | `/api/v5/repos/<owner>/<repo>/...` |
 
+**基址（host）**：文档统一写 `https://api.gitcode.com`。实测 `https://gitcode.com/api/v5/...`
+指向同一套 v5 接口（同一 token 下 GET 返回同一份 JSON；对不存在仓库 POST 也返回同样的
+`400 head或base不能为空`），两者都可用，但**不要在同一份脚本里混用**，便于排查与替换。
+
+**认证方式（实测均可用，返回 200）**：`?access_token=` query 参数、`Authorization: Bearer <token>`
+请求头、`PRIVATE-TOKEN: <token>` 请求头。token 错误或缺失时返回 `401 {"message":"401 Unauthorized"}`
+（不是 403），**且 `curl -s` 的退出码仍是 0**——判成功要看 HTTP 状态码或校验响应里有没有期望的键。
+
 > ⚠️ **不要使用 `/api/v4`**：v4 未收录于官方文档，写接口已被禁用，调用返回
 > `403 {"message":"当前 /api/v4 接口已禁用，请使用官方文档中的 /api/v5 接口"}`；
 > 部分 v4 读接口从未发布，返回 `404 {"error_code":"APIG.0101"}`。
@@ -74,7 +82,7 @@ curl -s -H "Authorization: Bearer $GITCODE_API_TOKEN" \
 | `full_name` | string | 原仓库完整名称 |
 | `ssh_url_to_repo` | string | 原仓库 SSH 地址 |
 | `http_url_to_repo` | string | 原仓库 HTTP 地址 |
-| `html_url` | string | 原仓库网页 URL |
+| `web_url` | string | 原仓库网页 URL（实测键名；**没有** `html_url` 这个键，取它会静默得到空串） |
 | `default_branch` | string | 原仓库默认分支 |
 
 ### 示例响应
@@ -91,7 +99,7 @@ curl -s -H "Authorization: Bearer $GITCODE_API_TOKEN" \
     "full_name": "cann-agent/skills",
     "ssh_url_to_repo": "git@gitcode.com:cann-agent/skills.git",
     "http_url_to_repo": "https://gitcode.com/cann-agent/skills.git",
-    "html_url": "https://gitcode.com/cann-agent/skills",
+    "web_url": "https://gitcode.com/cann-agent/skills",
     "default_branch": "main"
   }
 }
@@ -110,29 +118,43 @@ if [ -z "$repo_url" ]; then
 fi
 
 # 提取 owner 和 repo
-owner=$(echo "$repo_url" | sed 's|.*:\([^/]*\)/\([^/]*\)\.git$|\\1|')
-repo=$(echo "$repo_url" | sed 's|.*:\([^/]*\)/\([^/]*\)\.git$|\\2|')
+# ⚠️ SSH 与 HTTPS 两种 remote 格式都要处理：只用 `.*:` 这套 SSH 模式时，
+#    HTTPS 地址（https://gitcode.com/owner/repo.git）匹配不上，sed 会**原样输出整串 URL**，
+#    owner 和 repo 都变成那条 URL，后续 API 请求直接 404（实测）
+if [[ $repo_url == git@* ]]; then
+  owner=$(echo "$repo_url" | sed 's|.*:\([^/]*\)/\([^/]*\)\.git$|\1|')
+  repo=$(echo "$repo_url" | sed 's|.*:\([^/]*\)/\([^/]*\)\.git$|\2|')
+else
+  owner=$(echo "$repo_url" | sed 's|.*gitcode\.com/\([^/]*\)/\([^/]*\)\.git$|\1|')
+  repo=$(echo "$repo_url" | sed 's|.*gitcode\.com/\([^/]*\)/\([^/]*\)\.git$|\2|')
+fi
+# ⚠️ sed 替换里必须写 `\1`/`\2`，写成 `\\1` 得到的是**字面量** `\1`（实测）
+if [ -z "$owner" ] || [ "$owner" = "$repo_url" ]; then
+  echo "错误：无法从 $repo_url 解析 owner/repo"
+  exit 1
+fi
 
 # 查询仓库信息
 response=$(curl -s -H "Authorization: Bearer $GITCODE_API_TOKEN" \
   "https://api.gitcode.com/api/v5/repos/${owner}/${repo}")
 
 # 使用 jq 解析结果
-if echo "$response" | jq -e '.fork' > /dev/null; then
-  is_fork=$(echo "$response" | jq -r '.fork')
-  if [ "$is_fork" = "true" ]; then
-    parent_name=$(echo "$response" | jq -r '.parent.full_name')
-    parent_branch=$(echo "$response" | jq -r '.parent.default_branch')
-    echo "这是一个 fork 仓库"
-    echo "原仓库: $parent_name"
-    echo "原仓库默认分支: $parent_branch"
-    echo "原仓库 URL: $(echo "$response" | jq -r '.parent.html_url')"
-  else
-    echo "这不是一个 fork 仓库"
-    echo "仓库: $(echo "$response" | jq -r '.full_name')"
-  fi
+# ⚠️ 不能用 `jq -e '.fork'` 判断「API 是否调用成功」：`jq -e` 对 `false`/`null` 同样返回
+#    退出码 1，于是**正常的非 fork 仓库**会被误报成「API 调用失败」（实测）。
+#    要判响应有效性，得看它是不是带 fork 键的对象。
+if [ "$(echo "$response" | jq -r 'if (type == "object") and (has("fork")) then "ok" else "bad" end' 2>/dev/null)" != "ok" ]; then
+  echo "API 调用失败或响应异常：$response"
+  exit 1
+fi
+if [ "$(echo "$response" | jq -r '.fork')" = "true" ]; then
+  echo "这是一个 fork 仓库"
+  echo "原仓库: $(echo "$response" | jq -r '.parent.full_name')"
+  echo "原仓库默认分支: $(echo "$response" | jq -r '.parent.default_branch')"
+  # ⚠️ 网页地址的键是 web_url，不是 html_url（后者不存在，取它只会输出 "null"）
+  echo "原仓库 URL: $(echo "$response" | jq -r '.parent.web_url')"
 else
-  echo "API 调用失败"
+  echo "这不是一个 fork 仓库"
+  echo "仓库: $(echo "$response" | jq -r '.full_name')"
 fi
 ```
 
@@ -516,10 +538,13 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
 
 | 字段 | 说明 |
 |------|------|
-| `filename` / `sha` | 文件路径与 blob sha |
+| `filename` | 文件路径 |
+| `sha` | **提交 sha**（实测等于 `diff_refs.head_sha`），**不是 blob sha**；blob sha 在 `blob_id` |
+| `blob_id` / `blob_url` / `raw_url` | blob sha 与其取内容的地址（`blob_id` 实测等于 `git rev-parse <commit>:<path>`） |
 | `additions` / `deletions` | 增删行数 |
 | `patch.diff` | unified diff 文本，行内评论定位行号从这里取 |
 | `patch.old_path` / `new_path` | 重命名前后路径 |
+| `patch.added_lines` / `removed_lines` | 该文件的增删行数（与顶层 `additions`/`deletions` 实测一致） |
 | `patch.new_file` / `renamed_file` / `deleted_file` / `too_large` | 变更类型标记 |
 
 ---

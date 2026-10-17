@@ -48,15 +48,15 @@ allowed-tools: Bash(curl:*), Bash(jq:*), Bash(grep:*), Bash(git diff:*), Bash(gi
 
 ```bash
 # 获取 PR 信息
-curl -s "https://gitcode.com/api/v5/repos/{owner}/{repo}/pulls/{pr_number}" \
+curl -s "https://api.gitcode.com/api/v5/repos/{owner}/{repo}/pulls/{pr_number}" \
   -H "Authorization: Bearer $GITCODE_API_TOKEN"
 
 # 获取 PR 变更文件列表（每项含 patch.diff）
-curl -s "https://gitcode.com/api/v5/repos/{owner}/{repo}/pulls/{pr_number}/files" \
+curl -s "https://api.gitcode.com/api/v5/repos/{owner}/{repo}/pulls/{pr_number}/files" \
   -H "Authorization: Bearer $GITCODE_API_TOKEN"
 
 # 获取 PR diff：v5 没有 diff=true 参数，diff 在 files 的 patch.diff 字段里
-curl -s "https://gitcode.com/api/v5/repos/{owner}/{repo}/pulls/{pr_number}/files" \
+curl -s "https://api.gitcode.com/api/v5/repos/{owner}/{repo}/pulls/{pr_number}/files" \
   -H "Authorization: Bearer $GITCODE_API_TOKEN" | jq -r '.[] | .patch.diff'
 ```
 
@@ -68,7 +68,7 @@ curl -s "https://gitcode.com/api/v5/repos/{owner}/{repo}/pulls/{pr_number}/files
 
 ```bash
 # 获取 PR 变更文件列表（包含 diff 信息）
-curl -s "https://gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/files" \
+curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/files" \
   -H "Authorization: Bearer $GITCODE_API_TOKEN"
 ```
 
