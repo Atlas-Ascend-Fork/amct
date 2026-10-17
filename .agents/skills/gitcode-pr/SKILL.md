@@ -269,10 +269,13 @@ v5 API 返回**直接数组**，不是包装对象。评论数据包含以下关
 - **行号列表接口就能拿到**：在 `diff_position.start_new_line` / `end_new_line` 里
   （实测 PR!455 全部 5 条 `diff_comment` 都带此键，单行评论两个值相同）。
   不需要为了行号再逐条调单条接口。
-  ⚠️ 但**行号数值本身是易变的**：它按 PR head **当前**指向的 commit 重算，PR 每推一个新
-  commit 就可能整体位移（实测同一条 `194143085`：head 为 `ae35b167…` 时是 `60`，本 PR 把
-  head 推到 `a4f4aec…` 后同一条变成 `81`）。所以这里只固化「哪些键存在」这类结构事实，
-  **不要把具体行号当稳定结论引用或写进 PR 描述**；要行号就现场查。
+  ⚠️ 但**行号数值本身是易变的**：接口按 PR head **当前**指向的 commit 重算行号，锚定的
+  还是同一行源码，行号却会随该文件上方的增删而位移。实测同一条 `194143085`（锚在
+  `commands/review.md` 的 `… | jq -r '.[] | .patch.diff'` 那一行）：head 为 `ae35b167…` 时
+  `new_line=60`，head 推进到 `4e51dc0…` 后同一行变成 `81`（期间 `review.md` 净增 62 行、
+  该行内容一字未变，`git show <head>:<path>` 两个行号取到的是同一句）。
+  所以这里只固化「哪些键存在」这类结构事实，**不要把具体行号当稳定结论引用或写进 PR 描述**；
+  要行号就现场查。
 - **只有「被评论的文件路径」列表接口拿不到**，需要查单条评论接口的 `position.new_path`。
 - `comment_type` 只有 `diff_comment`（行内）/ `pr_comment`（普通）两种取值。
 
@@ -342,9 +345,10 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<C
 >   行内评论三个键都在。
 > - 单条接口**没有**列表接口才有的 `resolved` / `resolved_by` / `diff_position` / `reply` 键；
 >   要看检视意见是否已解决、要拿讨论下的回复，必须走列表接口。
-> - `position.head_sha` / `new_line` 是**按 PR head 当前指向的 commit 重算的快照值**，PR 每推
->   一个新 commit 就可能漂移（实测同一条 `194143085`：head 为 `ae35b167…` 时 `new_line=60`，
->   本 PR 把 head 推到 `a4f4aec…` 后变 `81`）。`base_sha` / `start_sha` 才是稳定的。
+> - `position.head_sha` / `new_line` 是**按 PR head 当前指向的 commit 重算的快照值**：锚定的
+>   还是同一行源码，但 head 推进、该文件上方有增删时行号就会漂移（实测同一条 `194143085`：
+>   head `ae35b167…` 时 `new_line=60`，head 推进到 `4e51dc0…` 后同一行变 `81`，该行内容
+>   一字未变）。`base_sha` / `start_sha` 才是稳定的。
 >   所以上面 JSON 里的行号、head sha 只作形状示范，**不要当稳定事实引用**；要行号就现场查。
 
 > ⚠️ **两个接口的 `comment_type` 不是同一套取值**（实测 cann/amct PR!455）：
