@@ -90,6 +90,28 @@ def require_amct_home():
     return AMCT_HOME
 
 
+def require_bit_config(bit_config=None):
+    """Return a bit-config path that exists, before any model is loaded.
+
+    `DEFAULT_BIT_CONFIG` is derived from AMCT_HOME, so a stale AMCT_HOME or a
+    checkout without `amct_pytorch/configs/w8a8.yaml` used to fail deep inside
+    the amct pipeline with a message that never named this skill's default --
+    after the tokenizer and the float model were already loaded. Check the file
+    here instead; `--bf16` runs pass no bit config and are unaffected.
+    """
+    path = bit_config or DEFAULT_BIT_CONFIG
+    if os.path.isfile(path):
+        return path
+    if path == DEFAULT_BIT_CONFIG:
+        raise RuntimeError(
+            f"bit config not found: {path}. This is the skill default derived "
+            f"from AMCT_HOME={AMCT_HOME or '<unresolved>'}; point AMCT_HOME at a "
+            "full amct checkout (one holding amct_pytorch/configs/w8a8.yaml) or "
+            "pass --bit_config explicitly."
+        )
+    raise RuntimeError(f"bit config not found: {path}. Pass an existing --bit_config.")
+
+
 _DATASETS_JSON = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "datasets.json"
 )
@@ -136,7 +158,34 @@ def _expand(base, rel):
     return [os.path.join(base, rel)]
 
 
-def resolve_split_files(base, rels):
+class UnresolvedSplit:
+    """Deferred resolution failure for one declared split.
+
+    `local_dataset_map()` builds an entry for *every* task in datasets.json, so
+    raising while building it would fail an eval of task A just because task B's
+    cache is incomplete. Store the error instead and let whoever actually asks
+    for that split re-raise it (`bench_offline._patched` /
+    `utils.local_dataset_files`): still fail-loud, but scoped to the data in
+    use. Compares by message so two identical declarations of one shim key stay
+    a harmless duplicate (see `local_dataset_map`).
+    """
+
+    def __init__(self, error):
+        self.error = error
+
+    def raise_it(self):
+        raise self.error
+
+    def __eq__(self, other):
+        return isinstance(other, UnresolvedSplit) and str(other.error) == str(
+            self.error
+        )
+
+    def __repr__(self):
+        return f"<unresolved split: {self.error}>"
+
+
+def resolve_split_files(base, rels, owner=""):
     """Resolve one split's declared paths/globs under `base`.
 
     Two declaration modes, because a split's paths can mean opposite things:
@@ -145,11 +194,18 @@ def resolve_split_files(base, rels):
       ``data/test-*.parquet``); the first candidate that exists wins, so a cache
       holding both layouts is not read twice (samples would silently double).
     - ``all_of`` — shards that must all be merged (LiveCodeBench's cumulative
-      `test.jsonl` … `test6.jsonl`).
+      `test.jsonl` … `test6.jsonl`). Every declared shard is required, so a
+      cache holding only some of them raises: merging the subset would score a
+      smaller benchmark and report a pass@1 / accuracy with the wrong
+      denominator, which reads as a real result (constraints.md #2). This is
+      the same verdict `prefetch_data.py` and `self_check.py --remote` reach for
+      a partial shard set -- all three must agree, or one of them silently
+      decides how many samples get scored.
 
     A bare string / list keeps the historical ``all_of`` meaning. Globs are
-    expanded; when nothing exists the declared paths come back verbatim so the
-    caller's error can name them.
+    expanded; when *nothing* exists the declared paths come back verbatim so the
+    caller's error can name them. `owner` labels the raising message with the
+    task/split the declaration belongs to.
     """
     mode, rel_list = split_declaration(rels)
     if mode == "any_of":
@@ -161,12 +217,27 @@ def resolve_split_files(base, rels):
             if existing:
                 return existing
         return list(dict.fromkeys(declared))
-    deduped = []
+    declared = []
+    per_rel = []
     for rel in rel_list:
-        deduped.extend(_expand(base, rel))
-    deduped = list(dict.fromkeys(deduped))
-    existing = [path for path in deduped if os.path.exists(path)]
-    return existing or deduped
+        matches = _expand(base, rel)
+        declared.extend(matches)
+        per_rel.append((rel, [path for path in matches if os.path.exists(path)]))
+    declared = list(dict.fromkeys(declared))
+    existing = [path for path in declared if os.path.exists(path)]
+    if not existing:
+        return declared
+    missing = [rel for rel, hits in per_rel if not hits]
+    if missing:
+        raise FileNotFoundError(
+            f"{owner or 'split'} declares {len(rel_list)} shard(s) to merge "
+            f"(all_of) under {base}, but {missing} matched nothing on disk while "
+            f"{len(existing)} file(s) did. Refusing to score the subset: the "
+            f"metric denominator would silently shrink. Re-download the missing "
+            f"shards (prefetch_data.py), or drop them from the datasets.json "
+            f"declaration if the upstream repo no longer ships them."
+        )
+    return existing
 
 
 def local_dataset_map():
@@ -189,10 +260,18 @@ def local_dataset_map():
     for task, spec in reg.items():
         base = os.path.join(BENCH_ASSETS, spec["subdir"])
         key = (spec["repo_id"], spec.get("dataset_name"))
-        entry = {
-            split: resolve_split_files(base, rel)
-            for split, rel in spec["splits"].items()
-        }
+        entry = {}
+        for split, rel in spec["splits"].items():
+            # `label`, not `owner`: `owner` below tracks which task claimed a
+            # shim key, and shadowing it with a string turned the collision
+            # check into a TypeError.
+            label = f"task '{task}' split '{split}'"
+            try:
+                entry[split] = resolve_split_files(base, rel, owner=label)
+            except FileNotFoundError as exc:
+                # Deferred, not swallowed: see UnresolvedSplit. The error
+                # surfaces from whoever reads this split.
+                entry[split] = UnresolvedSplit(exc)
         if key in out:
             prev_task = owner[key]
             prev_base = os.path.join(BENCH_ASSETS, reg[prev_task]["subdir"])

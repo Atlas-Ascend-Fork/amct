@@ -40,10 +40,13 @@ sys.path.insert(0, SKILL_DIR)
 
 import config as config_module  # noqa: E402
 from config import (  # noqa: E402
+    AMCT_HOME,
     BENCH_ASSETS,
     DEFAULT_BIT_CONFIG,
+    UnresolvedSplit,
     local_dataset_map,
     load_dataset_registry,
+    require_bit_config,
     resolve_split_files,
     split_declaration,
 )
@@ -85,6 +88,317 @@ CLI_SCRIPTS = [
 ALGOS_SCRIPTS = ["assemble_and_eval.py", "livecodebench_eval.py"]
 _DATA_SUFFIXES = (".parquet", ".json", ".jsonl")
 
+# CLI flags the docs mention that belong to *other* tools, not to this skill's
+# argparse: pip's installer flag and the official LiveCodeBench evaluator's own
+# arguments (references/livecodebench.md tells the user to run lcb_runner).
+# Every entry must actually appear in the docs, so a dead allowance fails.
+_EXTERNAL_FLAGS = {
+    "--user": "pip install --user",
+    "--scenario": "lcb_runner.runner.custom_evaluator",
+    "--custom_output_file": "lcb_runner.runner.custom_evaluator",
+}
+
+# Identifiers the docs name that belong to neither this skill's scripts nor the
+# amct checkout: kwargs / config keys of third-party libraries. Deliberately a
+# text block parsed at import, not a dict literal -- `_check_doc_code_drift`
+# searches the scripts' own text, so a literal here would put every allowed name
+# into the blob it searches, the lookup would "find" it, and the check would
+# quietly stop verifying anything (the same trap the injected controls dodge by
+# building stale names at runtime). Names that live in amct need no allowance:
+# they are verified against $AMCT_HOME below, so an amct rename is caught.
+_EXTERNAL_IDENTIFIERS_TEXT = """\
+attention_mask|transformers forward/generate kwarg (constraints.md #7)
+cache_position|transformers attention forward kwarg (constraints.md #7)
+past_key_values|transformers KV-cache container (constraints.md #7)
+max_memory|transformers device_map kwarg (constraints.md #11)
+max_split_size_mb|allocator config key, not a Python symbol (constraints.md #11)
+"""
+_EXTERNAL_IDENTIFIERS = dict(
+    line.split("|", 1) for line in _EXTERNAL_IDENTIFIERS_TEXT.strip().splitlines()
+)
+
+
+def _doc_identifiers(text):
+    """``[(name, is_call)]`` for every identifier-shaped token the docs backtick.
+
+    Covers all four spellings the docs actually use -- `name()`, `name`,
+    `mod.name`, `mod.name()`. Anything else inside backticks (paths, shell
+    lines, JSON, `--flags`) is skipped; those have their own checks below.
+    """
+    out = set()
+    for token in re.findall(r"`([^`\n]+)`", text):
+        token = token.strip()
+        for pattern, is_call in (
+            (r"([A-Za-z_][\w.]*)\(\)", True),
+            (r"([A-Za-z_][\w.]*)", False),
+        ):
+            match = re.fullmatch(pattern, token)
+            if match:
+                out.add((match.group(1), is_call))
+                break
+    return sorted(out)
+
+
+def _amct_identifiers():
+    """Identifier set of $AMCT_HOME/amct_pytorch, or None when unresolvable.
+
+    One pass over the checkout (~0.1s). The docs name amct-side hooks
+    (`input_transform`, `extract_ptq_data`) that no script here defines, and
+    those are exactly the names an amct refactor renames -- so resolve them
+    against the source instead of allowing them by hand.
+    """
+    root = os.path.join(AMCT_HOME, "amct_pytorch")
+    if not AMCT_HOME or not os.path.isdir(root):
+        return None
+    names = set()
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if not d.startswith((".", "__pycache__"))]
+        for fname in filenames:
+            if not fname.endswith(".py"):
+                continue
+            try:
+                with open(
+                    os.path.join(dirpath, fname), encoding="utf-8", errors="ignore"
+                ) as f:
+                    names.update(re.findall(r"[A-Za-z_]\w*", f.read()))
+            except OSError:
+                continue
+    return names
+
+
+def _doc_sources():
+    """`{filename: text}` for every script, and `[(name, text)]` for every doc."""
+    sources = {}
+    for fname in sorted(os.listdir(SKILL_DIR)):
+        if fname.endswith(".py"):
+            with open(os.path.join(SKILL_DIR, fname), encoding="utf-8") as f:
+                sources[fname] = f.read()
+    ref_dir = os.path.join(os.path.dirname(SKILL_DIR), "references")
+    docs = [("SKILL.md", SKILL_MD)]
+    docs += [
+        (f"references/{n}", os.path.join(ref_dir, n))
+        for n in sorted(os.listdir(ref_dir))
+        if n.endswith(".md")
+    ]
+    loaded = []
+    for name, path in docs:
+        with open(path, encoding="utf-8") as f:
+            loaded.append((name, f.read()))
+    return sources, loaded
+
+
+def _check_doc_code_drift(docs=None, sources=None):
+    """Docs must not name code that no longer exists.
+
+    Regression for a reviewer-reported drift: the model loader was renamed to
+    drop its leading underscore when a second script started reusing it, code
+    references were updated, but SKILL.md's assembly flow and constraints.md
+    #13 kept spelling the old private name -- a reader grepping the docs found
+    nothing and would assume the function was deleted. Renames are exactly when
+    this happens, and nothing else in the self-check looks at the docs except
+    the metric table.
+
+    Do not write a stale identifier in this file as a backticked call: the
+    drift check scans every script here, so a literal in a docstring or a
+    control satisfies it and the control passes for the wrong reason (build
+    such names at runtime instead -- see `_check_doc_drift_controls`).
+
+    Three mechanical cross-checks, no network / NPU:
+
+    1. every code identifier the docs mention -- `name()`, `name`, `mod.name`
+       alike -- is defined or called in scripts/, exists in $AMCT_HOME, or is an
+       explicitly allowed third-party name (`_EXTERNAL_IDENTIFIERS`);
+    2. every `scripts/<file>.py` the docs mention exists, and every script that
+       exists is mentioned (an undocumented script is a doc gap too);
+    3. every `--flag` the docs mention is declared by some argparse here, or is
+       an explicitly allowed flag of another tool (`_EXTERNAL_FLAGS`).
+
+    `docs` / `sources` can be injected so the reverse controls below need no
+    edit to the real files.
+    """
+    if sources is None or docs is None:
+        real_sources, real_docs = _doc_sources()
+        sources = real_sources if sources is None else sources
+        docs = real_docs if docs is None else docs
+    # The allowance block is text inside one of the scanned sources; drop it so
+    # an allowed name cannot satisfy the "found in scripts/" lookup by being
+    # spelled in this very file (see _EXTERNAL_IDENTIFIERS_TEXT).
+    blob = "\n".join(sources.values()).replace(_EXTERNAL_IDENTIFIERS_TEXT, "")
+    text = "\n".join(body for _, body in docs)
+
+    # 1. code identifiers. Matching only the `name()` call form was the shape
+    #    of the one reported drift, not the class of it: most code mentions in
+    #    these docs are bare (`input_transform`, `resolve_split_files`), and a
+    #    rename hides in those just as well.
+    identifiers = _doc_identifiers(text)
+    amct_names = _amct_identifiers()
+    if amct_names is None:
+        print(
+            "[self_check] note: $AMCT_HOME unresolved, so amct-side identifiers "
+            "the docs name are not verified against the source"
+        )
+    unresolved = []
+    for name, is_call in identifiers:
+        leaf = name.split(".")[-1]
+        needle = r"\b" + re.escape(leaf) + (r"\s*\(" if is_call else r"\b")
+        if re.search(needle, blob):
+            continue
+        if leaf in _EXTERNAL_IDENTIFIERS:
+            continue
+        if amct_names is not None and leaf in amct_names:
+            continue
+        unresolved.append(f"`{name}{'()' if is_call else ''}`")
+    if unresolved:
+        raise AssertionError(
+            f"docs name {unresolved}, but no script here defines or calls it"
+            + (
+                ", $AMCT_HOME/amct_pytorch has no such name,"
+                if amct_names is not None
+                else " (amct names unverifiable: $AMCT_HOME unresolved),"
+            )
+            + " and _EXTERNAL_IDENTIFIERS does not allow it: a rename or "
+            "removal was not propagated to the docs"
+        )
+    for name, why in sorted(_EXTERNAL_IDENTIFIERS.items()):
+        if not any(tok.split(".")[-1] == name for tok, _ in identifiers):
+            raise AssertionError(
+                f"_EXTERNAL_IDENTIFIERS allows '{name}' ({why}), but the docs no "
+                "longer mention it; drop the allowance so it cannot silently "
+                "start hiding a real drift"
+            )
+
+    # 2. script filenames, both directions
+    mentioned = set(re.findall(r"scripts/([A-Za-z_][\w]*\.py)", text))
+    for fname in sorted(mentioned - set(sources)):
+        raise AssertionError(f"docs reference scripts/{fname}, which does not exist")
+    for fname in sorted(set(sources) - mentioned):
+        raise AssertionError(
+            f"scripts/{fname} exists but the docs never mention it; the file "
+            "table in SKILL.md must cover every script"
+        )
+
+    # 3. CLI flags
+    declared = set(re.findall(r"""add_argument\(\s*['"](--[a-z0-9_\-]+)['"]""", blob))
+    for flag in sorted(set(re.findall(r"(--[a-z][a-z0-9_\-]{2,})", text))):
+        if flag in declared:
+            continue
+        if flag in _EXTERNAL_FLAGS and _EXTERNAL_FLAGS[flag] in text:
+            continue
+        raise AssertionError(
+            f"docs mention {flag}, but no script declares it and it is not an "
+            f"allowed flag of another tool ({sorted(_EXTERNAL_FLAGS)})"
+        )
+    for flag, owner in sorted(_EXTERNAL_FLAGS.items()):
+        if flag not in text or owner not in text:
+            raise AssertionError(
+                f"_EXTERNAL_FLAGS allows {flag} for '{owner}', but the docs no "
+                "longer mention that pair; drop the allowance so it cannot "
+                "silently start hiding a real drift"
+            )
+
+
+def _check_doc_drift_controls():
+    """The doc-drift check must fail on drift -- a cross-check that cannot fail
+    reads as coverage while checking nothing. Inject docs; never edit the real
+    ones. Each control keeps the full real doc set and perturbs one entry, so
+    the failure it provokes is the intended one and not an artifact of passing a
+    truncated doc.
+    """
+    sources, docs = _doc_sources()
+
+    def _with(extra=None, drop=None):
+        # `drop` applies to *every* doc: most scripts are mentioned in more than
+        # one file (compare_results.py in SKILL.md and references/livecodebench.md),
+        # so dropping it from one leaves the mention the check would find and the
+        # control passes without proving anything.
+        out = []
+        for name, text in docs:
+            body = text if drop is None else text.replace(drop[0], drop[1])
+            if extra and name == "SKILL.md":
+                body += extra
+            out.append((name, body))
+        return out
+
+    def _must_fail(injected, needle, what, **kw):
+        try:
+            _check_doc_code_drift(docs=injected, sources=kw.pop("sources", sources))
+        except AssertionError as exc:
+            if needle not in str(exc):
+                raise AssertionError(
+                    f"{what}: drift error does not name '{needle}': {exc}"
+                ) from exc
+        else:
+            raise AssertionError(f"{what}: drift passed the check")
+
+    # 1. A callable the scripts no longer define -- the reported drift shape.
+    #    Built at runtime: this file is one of the scanned sources, so writing
+    #    the identifier as a literal here would make the drift check find it in
+    #    its own control code and the control would pass for the wrong reason.
+    stale = "_load_" + "float"
+    _must_fail(
+        _with(extra=f"\n装配用 `{stale}()` 加载模型。\n"),
+        stale,
+        "stale callable",
+    )
+    # 1b. The same drift spelled *without* the call parens, which is how most
+    #     code mentions in these docs are written. A check that only matched
+    #     `name()` passed this shape -- the reported bug's form was codified
+    #     instead of the class of bug.
+    _must_fail(
+        _with(extra=f"\n装配阶段由 `{stale}` 负责加载权重。\n"),
+        stale,
+        "stale bare identifier",
+    )
+    # 1c. A dotted mention must be caught by its leaf too.
+    _must_fail(
+        _with(extra=f"\n见 `config.{stale}`。\n"),
+        stale,
+        "stale dotted identifier",
+    )
+    # 1d. An identifier the docs name that amct no longer defines must fail as
+    #     well; it is resolved against $AMCT_HOME, not against an allow-list.
+    if _amct_identifiers() is not None:
+        gone = "input_trans" + "form_renamed"
+        _must_fail(
+            _with(extra=f"\n量化钩子 `{gone}` 由 amct 提供。\n"),
+            gone,
+            "stale amct identifier",
+        )
+    # 2a. A script path that does not exist.
+    _must_fail(_with(extra="\n见 `scripts/nope.py`。\n"), "nope.py", "ghost script")
+    # 2b. A script that exists but the docs stopped mentioning.
+    _must_fail(
+        _with(drop=("scripts/compare_results.py", "compare_results.py")),
+        "compare_results.py",
+        "undocumented script",
+    )
+    # 3. A CLI flag no argparse declares and no other tool owns.
+    _must_fail(
+        _with(extra="\n加上 `--bogus_flag_xyz` 即可。\n"),
+        "--bogus_flag_xyz",
+        "ghost flag",
+    )
+    # 4. An allowance for a flag the docs no longer mention must not linger.
+    saved_flags = dict(_EXTERNAL_FLAGS)
+    globals()["_EXTERNAL_FLAGS"] = dict(
+        saved_flags, **{"--never_allowed": "a tool nobody documents"}
+    )
+    try:
+        _must_fail(_with(), "--never_allowed", "dead allowance")
+    finally:
+        globals()["_EXTERNAL_FLAGS"] = saved_flags
+    # 5. Same for an identifier allowance: a name nobody documents any more
+    #    would sit there forever and silently excuse a future drift.
+    saved_idents = dict(_EXTERNAL_IDENTIFIERS)
+    globals()["_EXTERNAL_IDENTIFIERS"] = dict(
+        saved_idents, **{"never_allowed_ident": "a kwarg no doc mentions"}
+    )
+    try:
+        _must_fail(_with(), "never_allowed_ident", "dead identifier allowance")
+    finally:
+        globals()["_EXTERNAL_IDENTIFIERS"] = saved_idents
+    print("[self_check] doc/code drift controls ok (7 reverse checks)")
+
 
 def _check_registry():
     """Validate datasets.json *declarations* (no filesystem, no network).
@@ -115,6 +429,26 @@ def _check_registry():
         os.path.join("amct_pytorch", "configs", "w8a8.yaml")
     ):
         raise AssertionError(f"unexpected DEFAULT_BIT_CONFIG: {DEFAULT_BIT_CONFIG}")
+    # The suffix alone says nothing about the file being there: a stale
+    # AMCT_HOME used to fail inside the amct pipeline, after the float model was
+    # already on the card.
+    if AMCT_HOME and not os.path.isfile(DEFAULT_BIT_CONFIG):
+        raise AssertionError(
+            f"AMCT_HOME={AMCT_HOME} resolved but the default bit config is "
+            f"missing: {DEFAULT_BIT_CONFIG}"
+        )
+    bogus = os.path.join(tempfile.gettempdir(), "selfcheck-no-such-bit-config.yaml")
+    try:
+        require_bit_config(bogus)
+    except RuntimeError as exc:
+        if "selfcheck-no-such-bit-config.yaml" not in str(exc):
+            raise AssertionError(
+                f"missing bit config error does not name the path: {exc}"
+            ) from exc
+    else:
+        raise AssertionError("require_bit_config accepted a path that does not exist")
+    if AMCT_HOME and require_bit_config() != DEFAULT_BIT_CONFIG:
+        raise AssertionError("require_bit_config() must default to DEFAULT_BIT_CONFIG")
 
 
 def _check_shim_key_collisions():
@@ -234,6 +568,32 @@ def _check_split_layout_semantics():
         )
         if len(got) != 3:
             raise AssertionError(f"all_of must merge every shard, got {got}")
+        # A *partial* shard set must be refused, not merged. LiveCodeBench's
+        # shards are cumulative, so scoring 3 of 4 reports a pass@1 whose
+        # denominator silently shrank -- and it reads as a real result.
+        try:
+            resolve_split_files(
+                tmp,
+                {"all_of": ["test.jsonl", "test2.jsonl", "test3.jsonl", "gone.jsonl"]},
+                owner="task 'selfcheck' split 'test'",
+            )
+        except FileNotFoundError as exc:
+            for needle in ("gone.jsonl", "selfcheck", "all_of"):
+                if needle not in str(exc):
+                    raise AssertionError(
+                        f"partial all_of error must name {needle!r}: {exc}"
+                    ) from exc
+        else:
+            raise AssertionError(
+                "a partial all_of shard set was merged instead of refused"
+            )
+        # Nothing on disk at all is *not* that error: the declared paths come
+        # back verbatim so the caller's own message can name them.
+        got = resolve_split_files(tmp, {"all_of": ["nope1.jsonl", "nope2.jsonl"]})
+        if len(got) != 2 or any(os.path.exists(path) for path in got):
+            raise AssertionError(
+                f"an empty all_of must return the declared paths, got {got}"
+            )
 
     reg = load_dataset_registry()
     for task, expected in (
@@ -292,8 +652,75 @@ def _check_split_layout_semantics():
                 f"got {len(lcb_files)}: {lcb_files}"
             )
     print(
-        "[self_check] split layout semantics ok (any_of single-layout / all_of merged)"
+        "[self_check] split layout semantics ok (any_of single-layout / all_of "
+        "merged / partial all_of refused)"
     )
+
+
+def _check_partial_split_deferred():
+    """A broken cache must fail its own task, not every task in the registry.
+
+    `local_dataset_map()` resolves *all* of datasets.json, so raising while
+    building it would block an eval of a healthy benchmark just because another
+    one's shards are incomplete. The partial-shard error is stored
+    (`UnresolvedSplit`) and raised by whoever reads that split -- still loud,
+    but scoped to the data actually in use.
+    """
+    saved_reg = config_module.load_dataset_registry
+    saved_assets = config_module.BENCH_ASSETS
+    with tempfile.TemporaryDirectory() as tmp:
+        for sub in ("good", "partial"):
+            os.makedirs(os.path.join(tmp, sub))
+        open(os.path.join(tmp, "good", "test.jsonl"), "w", encoding="utf-8").close()
+        for name in ("test.jsonl", "test2.jsonl"):
+            open(os.path.join(tmp, "partial", name), "w", encoding="utf-8").close()
+        reg = {
+            "good_task": {
+                "repo_id": "selfcheck/good",
+                "subdir": "good",
+                "splits": {"test": "test.jsonl"},
+            },
+            "partial_task": {
+                "repo_id": "selfcheck/partial",
+                "subdir": "partial",
+                "splits": {
+                    "test": {"all_of": ["test.jsonl", "test2.jsonl", "test3.jsonl"]}
+                },
+            },
+        }
+        config_module.load_dataset_registry = lambda: reg
+        config_module.BENCH_ASSETS = tmp
+        try:
+            mapping = config_module.local_dataset_map()
+            held = mapping[("selfcheck/partial", None)]["test"]
+            if not isinstance(held, UnresolvedSplit):
+                raise AssertionError(
+                    f"a partial all_of split must be deferred as UnresolvedSplit, "
+                    f"got {held!r}"
+                )
+            files = local_dataset_files("good_task", reg, mapping)
+            if len(files) != 1:
+                raise AssertionError(
+                    f"an unrelated healthy task broke because another task's "
+                    f"cache is partial: {files}"
+                )
+            try:
+                local_dataset_files("partial_task", reg, mapping)
+            except FileNotFoundError as exc:
+                for needle in ("partial_task", "test3.jsonl"):
+                    if needle not in str(exc):
+                        raise AssertionError(
+                            f"deferred split error must name {needle!r}: {exc}"
+                        ) from exc
+            else:
+                raise AssertionError(
+                    "the task with a partial cache was served a truncated shard "
+                    "set instead of failing"
+                )
+        finally:
+            config_module.load_dataset_registry = saved_reg
+            config_module.BENCH_ASSETS = saved_assets
+    print("[self_check] partial all_of defers to the task that reads it")
 
 
 # Upstream file lists as of 2026-10, used by the offline regression below so
@@ -893,6 +1320,49 @@ def _check_quant_target_guard():
     ensure_supported_quant_target("attn-linear", allow_attn_quant=True)
 
 
+def _check_input_device_fallback():
+    """`input_device()` must not guess `npu:0` when it cannot tell.
+
+    With `--device_map auto` the embedding can sit on any card; feeding
+    input_ids to a hardcoded npu:0 dies with a cross-device error deep inside
+    forward -- or runs on a card that holds no weights. Requires torch.
+    """
+    try:
+        import torch
+    except ImportError as exc:
+        print(f"[self_check] skip input_device check: {exc}")
+        return
+    from assemble_and_eval import input_device
+
+    class _HasDevice:
+        device = torch.device("cpu")
+
+        def get_input_embeddings(self):
+            raise AttributeError("stub has no embeddings")
+
+    if input_device(_HasDevice()) != torch.device("cpu"):
+        raise AssertionError("input_device ignored model.device")
+
+    class _Opaque:
+        def get_input_embeddings(self):
+            raise AttributeError("stub has no embeddings")
+
+    try:
+        input_device(_Opaque())
+    except RuntimeError as exc:
+        if not isinstance(exc.__cause__, AttributeError):
+            raise AssertionError(
+                f"input_device dropped the reason it could not tell: {exc!r}"
+            ) from exc
+        if "npu:0" in str(exc):
+            raise AssertionError("input_device still falls back to a hardcoded npu:0")
+    else:
+        raise AssertionError(
+            "input_device invented a device for a model that exposes none"
+        )
+    print("[self_check] input_device refuses to guess a device")
+
+
 def _check_offline_shim_install():
     """`bench_offline.install()` must intercept the call lm-eval really makes.
 
@@ -981,6 +1451,38 @@ def _check_offline_shim_install():
                 )
             if list(positional["question_id"]) != ["q1", "q2"]:
                 raise AssertionError("shim ignored a positional `split` argument")
+            # A second declared split that was never prefetched must not break
+            # a run that only asked for `test`: mmlu_pro / boolq / copa declare
+            # `validation`, and loading every declared split turned that into a
+            # failure of an unrelated request (plus I/O nobody scores).
+            bench_offline._LOCAL[("selfcheck/probe", None)]["validation"] = [
+                os.path.join(tmp, "never-downloaded.parquet")
+            ]
+            try:
+                one = datasets.load_dataset(
+                    path="selfcheck/probe", name=None, split="test"
+                )
+            except FileNotFoundError as exc:
+                raise AssertionError(
+                    f"shim validated a split the caller did not ask for: {exc}"
+                ) from exc
+            if list(one["question_id"]) != ["q1", "q2"]:
+                raise AssertionError(
+                    f"shim(split='test') served {list(one['question_id'])}"
+                )
+            # Asking for the unprefetched split must still fail, naming it.
+            try:
+                datasets.load_dataset(
+                    path="selfcheck/probe", name=None, split="validation"
+                )
+            except FileNotFoundError as exc:
+                if "validation" not in str(exc):
+                    raise AssertionError(
+                        f"unprefetched split error does not name the split: {exc}"
+                    ) from exc
+            else:
+                raise AssertionError("shim served a split whose file does not exist")
+            del bench_offline._LOCAL[("selfcheck/probe", None)]["validation"]
             # Unknown split must name what the registry does declare.
             try:
                 datasets.load_dataset(path="selfcheck/probe", name=None, split="train")
@@ -1150,6 +1652,37 @@ def _check_task_offline_registration():
         raise AssertionError(
             "task 'gsm8k' has no datasets.json entry but passed the pre-flight check"
         )
+
+    # A task lm-eval *knows* but that declares no dataset of its own is a
+    # different mistake: no datasets.json entry could fix it, so telling the
+    # user to "check the spelling" sends them the wrong way.
+    class _StubIndex:
+        def __init__(self, index):
+            self.task_index = index
+
+    stub = _StubIndex({"no_dataset": types.SimpleNamespace(cfg={"task": "no_dataset"})})
+    try:
+        check_task_offline_ready("no_dataset", reg, stub)
+    except RuntimeError as exc:
+        msg = str(exc)
+        if (
+            "declares no dataset_path" not in msg
+            or "cannot be served offline" not in msg
+        ):
+            raise AssertionError(
+                f"a dataset-less task is not reported as such: {exc}"
+            ) from exc
+    else:
+        raise AssertionError("a task with no dataset_path passed the pre-flight")
+    try:
+        check_task_offline_ready("no_such_task", reg, _StubIndex({}))
+    except RuntimeError as exc:
+        if "cannot be served offline" in str(exc):
+            raise AssertionError(
+                f"an index miss borrowed the dataset-less wording: {exc}"
+            )
+    else:
+        raise AssertionError("an unknown task passed the pre-flight")
     # A registry that does not actually declare the task's repo must fail too:
     # the check has to read the registry, not just the task index.
     try:
@@ -1193,12 +1726,16 @@ def main():
     _check_prefetched_resolution()
     _check_shim_key_collisions()
     _check_split_layout_semantics()
+    _check_partial_split_deferred()
     _check_remote_glob_semantics()
     _check_split_list_arg()
     _check_jsonl_reader()
     _check_lcb_validation()
     _check_quant_target_guard()
+    _check_input_device_fallback()
     _check_offline_shim_install()
+    _check_doc_code_drift()
+    _check_doc_drift_controls()
     _check_skill_metric_keys()
     _check_task_offline_registration()
     _check_cli_help()

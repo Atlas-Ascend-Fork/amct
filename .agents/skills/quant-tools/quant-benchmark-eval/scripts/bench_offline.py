@@ -33,7 +33,7 @@ import pandas as pd
 import datasets
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from config import local_dataset_map  # noqa: E402
+from config import UnresolvedSplit, local_dataset_map  # noqa: E402
 from utils import read_dataset_file  # noqa: E402
 
 # (repo_id, dataset_name) -> {split: [local paths]}, built from datasets.json + $BENCH_ASSETS
@@ -63,8 +63,33 @@ def _patched(path, *args, **kwargs):
     if key not in _LOCAL:
         key = (path, None)
     if key in _LOCAL:
+        declared = _LOCAL[key]
+        # `datasets.load_dataset(..., split="test")` returns one Dataset, not a
+        # DatasetDict; lm-eval forwards a task's `dataset_kwargs` verbatim, so a
+        # task that declares `split` would otherwise get the wrong container
+        # type and fail somewhere inside the harness instead of here.
+        #
+        # Validate and read *only* what was asked for: loading every declared
+        # split makes an unprefetched `validation` fail a run that asked for
+        # `test` (MMLU-Pro / boolq / copa all declare a split the caller never
+        # scores) and parses data nobody reads.
+        if wanted_split is not None:
+            if wanted_split not in declared:
+                raise KeyError(
+                    f"{path} has no split '{wanted_split}' in the prefetched cache; "
+                    f"datasets.json declares {sorted(declared)}. Add the split to "
+                    f"the registry entry (and prefetch it) or drop `split` from "
+                    f"the task's dataset_kwargs."
+                )
+            wanted = [wanted_split]
+        else:
+            wanted = sorted(declared)
         splits = {}
-        for split, fps in _LOCAL[key].items():
+        for split in wanted:
+            fps = declared[split]
+            if isinstance(fps, UnresolvedSplit):
+                # Deferred from local_dataset_map(): a partial all_of shard set.
+                fps.raise_it()
             if not fps:
                 raise FileNotFoundError(
                     f"{path} split '{split}' resolved to no local file under "
@@ -81,18 +106,7 @@ def _patched(path, *args, **kwargs):
             frames = [read_dataset_file(fp) for fp in fps]
             df = pd.concat(frames, ignore_index=True) if len(frames) > 1 else frames[0]
             splits[split] = datasets.Dataset.from_pandas(df, preserve_index=False)
-        # `datasets.load_dataset(..., split="test")` returns one Dataset, not a
-        # DatasetDict; lm-eval forwards a task's `dataset_kwargs` verbatim, so a
-        # task that declares `split` would otherwise get the wrong container
-        # type and fail somewhere inside the harness instead of here.
         if wanted_split is not None:
-            if wanted_split not in splits:
-                raise KeyError(
-                    f"{path} has no split '{wanted_split}' in the prefetched cache; "
-                    f"datasets.json declares {sorted(splits)}. Add the split to "
-                    f"the registry entry (and prefetch it) or drop `split` from "
-                    f"the task's dataset_kwargs."
-                )
             return splits[wanted_split]
         return datasets.DatasetDict(splits)
     try:

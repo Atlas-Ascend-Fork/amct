@@ -31,6 +31,24 @@ REQUIRED_LCB_FIELDS = ("question_id", "question_content")
 # experimental DeepSeekV3.2), which reject the new name outright.
 _DTYPE_KWARG_MIN_VERSION = (4, 56)
 
+
+class TaskIndexMiss(KeyError):
+    """`--task` names something the installed lm-eval does not know at all.
+
+    A typo, or an alias this skill maps but lm-eval does not ship. Fixable by
+    the user alone -- the registry is not involved.
+    """
+
+
+class TaskHasNoDataset(KeyError):
+    """The lm-eval task exists but declares no `dataset_path`.
+
+    Nothing to prefetch and nothing to match against datasets.json, so the
+    offline shim could never serve it. Distinct from TaskIndexMiss: adding a
+    datasets.json entry would not help, the task name itself is unusable here.
+    """
+
+
 # Task names this skill accepts that are not lm-eval task names.
 TASK_ALIASES = {"math500": "hendrycks_math500"}
 # Scored by the official lcb_runner instead of lm-eval, so they have no
@@ -101,9 +119,16 @@ def _restore_dotted_columns(df):
 
 def local_dataset_files(task, registry, mapping, split="test", existing_only=True):
     """Resolve local dataset files for a task using its exact registry key."""
+    from config import UnresolvedSplit
+
     spec = registry[task]
     key = (spec["repo_id"], spec.get("dataset_name"))
     fps = mapping.get(key, {}).get(split, [])
+    if isinstance(fps, UnresolvedSplit):
+        # Deferred from local_dataset_map(): a partial all_of shard set. This
+        # task is the one being scored, so the error is raised here rather than
+        # silently merging the shards that happen to be on disk.
+        fps.raise_it()
     if existing_only:
         fps = [fp for fp in fps if os.path.exists(fp)]
     if fps:
@@ -323,7 +348,7 @@ def resolve_task_dataset_keys(task_name, task_manager=None):
         seen.add(name)
         entry = tm.task_index.get(name)
         if entry is None:
-            raise KeyError(f"task '{name}' is not in the lm-eval task index")
+            raise TaskIndexMiss(f"task '{name}' is not in the lm-eval task index")
         cfg = getattr(entry, "cfg", None) or {}
         subtasks = cfg.get("task")
         if isinstance(subtasks, list):
@@ -331,7 +356,7 @@ def resolve_task_dataset_keys(task_name, task_manager=None):
             continue
         path = cfg.get("dataset_path")
         if not path:
-            raise KeyError(f"task '{name}' declares no dataset_path")
+            raise TaskHasNoDataset(f"task '{name}' declares no dataset_path")
         wanted.add((path, cfg.get("dataset_name")))
     return wanted
 
@@ -362,17 +387,30 @@ def check_task_offline_ready(task_name, registry=None, task_manager=None):
 
     Returns the resolved pairs so callers can log what will be read.
     """
+    known = registered_dataset_keys(registry)
     try:
         wanted = resolve_task_dataset_keys(task_name, task_manager)
-    except KeyError as exc:
-        known = sorted({repo for repo, _ in registered_dataset_keys(registry)})
+    except TaskIndexMiss as exc:
+        # lm-eval never heard of it: a spelling / alias problem, and no
+        # datasets.json entry could fix it.
         raise RuntimeError(
             f"--task {task_name!r} cannot be checked against datasets.json: {exc}. "
-            f"Registered tasks' repos: {known}. Check the spelling (lm-eval names "
-            f"are what --task takes, plus this skill's aliases "
-            f"{sorted(TASK_ALIASES)}), or add a datasets.json entry + prefetch it."
+            f"--task takes lm-eval task names plus this skill's aliases "
+            f"{sorted(TASK_ALIASES)}. Registered tasks' repos: "
+            f"{sorted({repo for repo, _ in known})}."
         ) from exc
-    known = registered_dataset_keys(registry)
+    except TaskHasNoDataset as exc:
+        # The task exists but has no dataset of its own, so there is nothing to
+        # prefetch and nothing for the offline shim to serve.
+        raise RuntimeError(
+            f"--task {task_name!r} cannot be served offline: {exc}, so there is "
+            f"no (dataset_path, dataset_name) to match against datasets.json and "
+            f"the offline shim would pass the request to the network "
+            f"(constraints.md #2). Pass a leaf task that declares a dataset "
+            f"(a group without one expands to its subtasks), or register the "
+            f"dataset it reads. Registered (repo_id, dataset_name): "
+            f"{sorted(known)}."
+        ) from exc
     missing = sorted(
         pair for pair in wanted if pair not in known and (pair[0], None) not in known
     )

@@ -100,7 +100,9 @@ python scripts/prefetch_data.py --task <task>                 # 预下载到 $BE
 - `{"any_of": [...]}` —— 同一份数据的不同**候选布局**（MATH-500 既可能发 `test.jsonl` 也可能发 `data/test-*.parquet`）：按声明顺序取**第一个命中**的候选，其余忽略。缓存里同时存在两种布局（上游迁移 / 旧缓存残留）时也只读一份，样本不会翻倍。
 - `{"all_of": [...]}`（或裸字符串 / 裸列表）—— 必须**全部合并**的分片（LiveCodeBench 累积集 `test.jsonl` … `test6.jsonl`）：缺任一分片即以 PARTIAL 非 0 退出，避免静默少跑样本、指标分母错。
 
-这两种语义在 `prefetch_data.py`（本地文件）、`config.resolve_split_files()`（离线读取）与 `self_check.py --remote`（上游文件列表）三处**判定口径一致**：`any_of` 有一条候选命中即通过，`all_of` 要求每条分片都命中。所以 `--remote` 报 `datasets.json does not match upstream repos` 时，是注册表 glob 与上游布局真的对不上（上游改名 / 少发分片），不是声明形态没被识别。
+这两种语义在 `prefetch_data.py`（本地文件）、`config.resolve_split_files()`（离线读取）与 `self_check.py --remote`（上游文件列表）三处**判定口径一致**：`any_of` 有一条候选命中即通过，`all_of` 要求每条分片都命中——**部分命中同样算不通过**。所以 `all_of` 缺分片在三处都硬失败：prefetch 以 PARTIAL 非 0 退出，离线读取抛 `FileNotFoundError` 点名缺哪几片（绝不拿子集凑数：LiveCodeBench 的分片是累积集，少一片就等于把 pass@1 的分母悄悄改小，产出的却是一张看起来正常的结果表），`--remote` 报 `datasets.json does not match upstream repos`（此时是注册表 glob 与上游布局真的对不上——上游改名 / 少发分片，不是声明形态没被识别）。
+
+离线读取的这次失败是**延迟到真正读该 split 时**才抛的（`config.UnresolvedSplit`）：`local_dataset_map()` 会解析注册表里全部任务，若在建表时就抛，某个 benchmark 的缓存不完整会连带阻塞另一个健康 benchmark 的评测。存下错误、由读它的人抛，既保持 fail-loud，又只影响真正在用的数据。
 
 **加一个 benchmark 只需要改 `datasets.json`**（`bench_offline.py` 的扩展约定），不用动 `self_check.py`：默认自检的离线回归对**没有手写桩**的 repo 会按其声明自动派生一份上游文件列表（`_derived_listing()`），因此新任务不会因为「桩文件列表缺这个 repo_id」而让默认自检变红。手写桩（`_FAKE_UPSTREAM`）只保留给当前 10 个任务对应的 7 个仓，作用是钉住真实布局（MATH-500 只发 parquet、LiveCodeBench 6 个累积分片）。派生桩与声明天然自洽，只能覆盖 `any_of`/`all_of` 匹配逻辑与「声明的 glob 是否被 `allow_patterns` 覆盖」（`prefetch` 按 `allow_patterns` 下载，被过滤掉的 glob 永远落不到本地）；**新任务的 glob 是否真的贴合上游布局，仍须跑一次 `--remote` 兜底**。自检会打印一行 `note: no hand-written upstream stub for <repo_id>` 提示这一点；桩里出现注册表已不再引用的 repo_id 会直接报错（防止对照项静默失效）。派生是**按 repo_id 聚合该仓下全部任务的声明**再取并集，不是只取字典序第一个任务：同一 repo_id 挂多个任务（`datasets.json` 里 livecodebench / livecodebench_release_v6 已经是这个形态，只是两者都有手写桩才绕过派生分支）时，只派生第一个会让第二个任务的分片不在列表里，默认自检就会把**桩缺口**报成「注册表误报」。自检第 5 步专门有一条「两个任务共用一个未建桩 repo_id」的对照，含摘掉其中一个分片必须点名到该任务的反向验证。
 
@@ -126,7 +128,8 @@ python scripts/assemble_and_eval.py --model <model_path> --model_name qwen3_5_mo
 - **`--algos` 必须与 ptq 参数训练时的算法一致**（默认 `lwc,lac`；amct 已注册 `autoround / flatquant / gptq / lac / let / lwc`）。算法决定了量化块里构造出哪些子模块，不一致时加载参数会 `KeyError`；脚本在装配前先按 `ALGO_REGISTRY` 校验键名。详见约束 10。
 - **ptq 参数必须真的加载上**：脚本逐层统计 `loaded/missing`，一个都没加载上直接报错（否则会静默回落直转，评的就不是用户的 PTQ 结果）；部分层缺参数打 `[warn]`，结论里要写明是混合对象。详见约束 11。
 - **`--bf16` 跑基线**：跳过量化，用**同一套 harness** 跑原始模型。两者都要跑，最后报告差值。
-- **`--device_map auto`** 走多卡，省略则单卡 npu:0；输入经 `input_device()` 路由到 embedding 所在卡。
+- **`--device_map auto`** 走多卡，省略则单卡 npu:0；输入经 `input_device()` 路由到 embedding 所在卡——取不到 embedding 设备时退回 `model.device`，两者都拿不到就报错并保留原因，**不会兜底硬写 `npu:0`**（多卡下把 input_ids 送到没有权重的卡，只会在 forward 深处炸成跨设备错误）。
+- **bit config 先验存在再装模型**：`--bit_config` 默认取 `$AMCT_HOME/amct_pytorch/configs/w8a8.yaml`，`require_bit_config()` 在加载任何权重之前确认该文件真在盘上。否则 AMCT_HOME 指错 / 指向不含该配置的 checkout 时，失败会发生在 amct 流水线内部、float 模型已经上卡之后，报错里也看不出是这个默认路径的问题。`--bf16` 不读 bit config，不受影响。
 - **attention 量化默认被拦截**：脚本禁 `--quant_target attn-linear` / `attn-cache`，确需评完整 attention 量化对象要显式加 `--allow_attn_quant`，且先按约束 1 与用户确认取舍。
 - **`--trust_remote_code` 默认关闭**（与 amct CLI 一致）：加载非原生支持架构的模型目录需要它时才显式加，加了就会执行该目录下的自定义建模代码——只对可信目录开，且必须先与用户说明。未开启时脚本会打 `[warn]` 提示可能加载失败，详见约束 12。
 
@@ -161,13 +164,13 @@ python scripts/assemble_and_eval.py --model <model_path> --model_name qwen3_5_mo
 | `references/constraints.md` | 13 条关键约束（attention / KV cache、离线数据、PYTHONPATH、OOM、多卡 hook、`--algos` 与 ptq 参数匹配、`--trust_remote_code`、transformers dtype 参数名等） |
 | `references/env-and-portability.md` | 依赖边界、可配置 env、环境模板、新机器部署步骤 |
 | `references/livecodebench.md` | LiveCodeBench 生成 + 官方评分 + 榜单对齐清单 |
-| `scripts/config.py` | env 解析（`AMCT_HOME` / `BENCH_ASSETS` / `HF_ENDPOINT`）+ 加载 `datasets.json`；提供 `local_dataset_map()`（键为 `(repo_id, dataset_name)`，即 lm-eval 传给 `load_dataset` 的那对值，**不是任务名**；两个任务共用同一对键却声明不同本地数据时直接抛错，不静默覆盖）与 `split_declaration()` / `resolve_split_files()`（`any_of` 取首个命中布局、`all_of` 合并全部分片） |
-| `scripts/utils.py` | 数据读取（parquet / jsonl）、依赖检查、LiveCodeBench 字段校验、attention 量化保护、结果日志解析；`check_task_offline_ready()` 用 lm-eval task index 把 `--task` 解析成 `(dataset_path, dataset_name)` 并对照 `datasets.json`，做加载模型前的离线预检 |
+| `scripts/config.py` | env 解析（`AMCT_HOME` / `BENCH_ASSETS` / `HF_ENDPOINT`）+ 加载 `datasets.json`；提供 `local_dataset_map()`（键为 `(repo_id, dataset_name)`，即 lm-eval 传给 `load_dataset` 的那对值，**不是任务名**；两个任务共用同一对键却声明不同本地数据时直接抛错，不静默覆盖）与 `split_declaration()` / `resolve_split_files()`（`any_of` 取首个命中布局、`all_of` 合并全部分片，**缺片即抛 `FileNotFoundError` 点名缺哪几片**，不静默按子集算分）、`require_amct_home()` / `require_bit_config()`（默认位宽配置存在性预检） |
+| `scripts/utils.py` | 数据读取（parquet / jsonl）、依赖检查、LiveCodeBench 字段校验、attention 量化保护、结果日志解析；`check_task_offline_ready()` 用 lm-eval task index 把 `--task` 解析成 `(dataset_path, dataset_name)` 并对照 `datasets.json`，做加载模型前的离线预检；「任务名 lm-eval 不认」（`TaskIndexMiss`，拼写 / 别名问题）与「任务存在但不声明 dataset」（`TaskHasNoDataset`，加注册表条目也没用）分开报错，不洗成同一句「检查拼写」 |
 | `scripts/datasets.json` | benchmark 注册表（repo_id、subdir、split → parquet/jsonl/glob，或 `{"any_of": [...]}` / `{"all_of": [...]}`），prefetch 与离线 shim 的单一数据源 |
-| `scripts/self_check.py` | 不加载模型、不跑 NPU 的轻量自检：脚本接线、注册表声明、`any_of`/`all_of` 布局语义（临时目录实测，防样本翻倍）、`--remote` 的 glob 匹配语义（注入假文件列表离线回归，防把正确注册表报成不匹配；未建桩的 repo 按声明自动派生列表，**加任务只改 `datasets.json` 不会让默认自检变红**）、离线 shim 是否真拦住 lm-eval 的 `load_dataset` 调用形态（注入临时 jsonl 实跑一次，防评测静默回落到网络 / HF cache）、已预下载任务的 split 是否真能解析、SKILL.md 指标列 vs lm-eval task index、shim 键冲突（同 repo 不同 `dataset_name` 必须两键并存、同键不同数据必须报错、同键同声明可折叠）、注册表任务 vs lm-eval task index 的离线预检（含未知任务名 / 未注册数据集两条反向对照，防预检被改成永真）、离线 shim 透传失败是否可诊断；`--remote` 再加验注册表 vs 数据集仓真实文件列表 |
+| `scripts/self_check.py` | 不加载模型、不跑 NPU 的轻量自检：脚本接线、注册表声明、`any_of`/`all_of` 布局语义（临时目录实测，防样本翻倍）、`--remote` 的 glob 匹配语义（注入假文件列表离线回归，防把正确注册表报成不匹配；未建桩的 repo 按声明自动派生列表，**加任务只改 `datasets.json` 不会让默认自检变红**）、离线 shim 是否真拦住 lm-eval 的 `load_dataset` 调用形态（注入临时 jsonl 实跑一次，防评测静默回落到网络 / HF cache）、已预下载任务的 split 是否真能解析、SKILL.md 指标列 vs lm-eval task index、文档点名的代码标识符是否还存在（`name()` / 裸名 / `mod.name` 三种写法都查；amct 侧名字对 `$AMCT_HOME` 源码核，第三方名走显式允许表且**表里失效的条目要报错**）、shim 键冲突（同 repo 不同 `dataset_name` 必须两键并存、同键不同数据必须报错、同键同声明可折叠）、注册表任务 vs lm-eval task index 的离线预检（含未知任务名 / 未注册数据集 / 任务不声明 dataset 三条反向对照，防预检被改成永真）、`all_of` 缺片必须拒绝且只影响该任务（`_check_partial_split_deferred`）、shim 只读被请求的 split、`input_device()` 不许猜设备、bit config 存在性、离线 shim 透传失败是否可诊断；`--remote` 再加验注册表 vs 数据集仓真实文件列表 |
 | `scripts/check_env.py` | 检查运行依赖与 lm-eval 版本；`--livecodebench_score` 加查官方评分 runner |
 | `scripts/prefetch_data.py` | `snapshot_download` 把数据集下到 `$BENCH_ASSETS`，并校验每个 split 是否真命中文件（`any_of` 未命中、`all_of` 缺分片即非 0 退出） |
-| `scripts/bench_offline.py` | monkeypatch `load_dataset` → fastparquet 读本地 parquet、pandas 读本地 jsonl；不在注册表里的请求透传给真实 loader，透传失败时把「没注册哪条 + 已注册哪些」链进报错（原始 loader 异常保留在 `__cause__`） |
+| `scripts/bench_offline.py` | monkeypatch `load_dataset` → fastparquet 读本地 parquet、pandas 读本地 jsonl；**只校验并读取调用方要的那个 split**（请求 `test` 不会因为没预取的 `validation` 报错，也不多读没人评分的数据）；不在注册表里的请求透传给真实 loader，透传失败时把「没注册哪条 + 已注册哪些」链进报错（原始 loader 异常保留在 `__cause__`） |
 | `scripts/assemble_and_eval.py` | 装配 fake-quant 模型（KV-safe 目标、`--algos` 校验、ptq 参数落地校验、多卡保留 hook）+ HFLM 评测 + `--bf16` 基线；评测前先跑 `--task` 离线预检（`--smoke` 只验装配链路、不读数据，故跳过） |
 | `scripts/livecodebench_eval.py` | 装配后生成代码，输出 LiveCodeBench 官方 `custom_evaluator` JSON（同样支持 `--algos` / `--trust_remote_code`）；只打 `[lcb-gen]`，分数由官方 evaluator 产出 |
 | `scripts/compare_results.py` | 从 bf16 / quant 日志或 JSON（含官方 lcb_runner `*_eval.json`）抽指标并输出差值；排除 `_stderr` 与 `sample_len` 等非指标键；日志没有 `[RESULT]` 行时给出可诊断报错 |

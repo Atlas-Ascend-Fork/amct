@@ -35,7 +35,7 @@ import torch
 
 SKILL_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SKILL_DIR)  # for bench_offline / config
-from config import DEFAULT_BIT_CONFIG  # noqa: E402
+from config import DEFAULT_BIT_CONFIG, require_bit_config  # noqa: E402
 from utils import (  # noqa: E402
     TASK_ALIASES,
     check_environment,
@@ -88,11 +88,26 @@ def _resolve_quant_target(model_name, quant_target):
 
 
 def input_device(model):
-    """Device the model's input_ids should go to (embedding's card, multi-card safe)."""
+    """Device the model's input_ids should go to (embedding's card, multi-card safe).
+
+    Never falls back to a hardcoded `npu:0`: with `--device_map auto` the
+    embedding can sit on any card, and feeding input_ids to the wrong one makes
+    every forward die with a cross-device error (or, worse, silently run on a
+    card that holds no weights). If neither the embedding nor `model.device`
+    tells us where the model lives, say so and keep the reason.
+    """
     try:
         return model.get_input_embeddings().weight.device
-    except Exception:
-        return getattr(model, "device", torch.device("npu:0"))
+    except Exception as exc:
+        device = getattr(model, "device", None)
+        if device is None:
+            raise RuntimeError(
+                f"cannot tell which device holds the model's inputs: "
+                f"get_input_embeddings() failed with {type(exc).__name__}: {exc}, "
+                f"and {type(model).__name__} exposes no `.device`. Pass a model "
+                f"loaded through this skill's load_float/assemble_quant_model."
+            ) from exc
+        return device
 
 
 def _check_no_offload(model):
@@ -304,6 +319,9 @@ def assemble_quant_model(
     from amct_pytorch.quantization.modules.quant_linear import QuantLinear
     from amct_pytorch.common.models.llm.common.quant_apply import set_model_to_observe
 
+    # Before anything is loaded: a missing bit config used to surface inside
+    # the amct pipeline, after the float model was on the card.
+    require_bit_config(bit_cfg)
     register_llm_models()
     register_dtype()
     register_algorithms()
