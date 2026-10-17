@@ -3,7 +3,10 @@ description: 审查 GitCode Pull Request 的代码变更
 # ⚠️ allowed-tools 必须覆盖正文里所有会被复制执行的命令：步骤 3.1「方法 2」用 contents API 取
 #    文件内容时要管道给 base64 -d（解码）或 xargs -r curl（跟 download_url），漏授权会让
 #    推荐路径被工具白名单拦住、agent 只能退回去用不可靠的 raw/<commit>/<path> 形式
-allowed-tools: Bash(curl:*), Bash(jq:*), Bash(grep:*), Bash(base64:*), Bash(xargs:*), Bash(git diff:*), Bash(git log:*), Bash(git show:*)
+#    步骤 3 起的 URL 用 ${owner}/${repo} 这两个 shell 变量，取值脚本在 SKILL.md
+#    「提取仓库 owner/repo 信息」，用到 git remote get-url 与 sed；步骤 1 的自检块用到 echo。
+#    这三条不授权，变量就填不上（后果见步骤 3 的 ⚠️）
+allowed-tools: Bash(curl:*), Bash(jq:*), Bash(grep:*), Bash(base64:*), Bash(xargs:*), Bash(sed:*), Bash(echo:*), Bash(git remote get-url:*), Bash(git diff:*), Bash(git log:*), Bash(git show:*)
 ---
 
 # GitCode PR 代码审查
@@ -65,7 +68,8 @@ echo "MY_LOGIN=$MY_LOGIN"
 
 ### 步骤 3: 获取 PR 变更摘要
 
-查看 PR 并返回变更摘要：
+查看 PR 并返回变更摘要。**先按 SKILL.md「提取仓库 owner/repo 信息」把 `${owner}`/`${repo}`
+设好**（本文件不重复那段脚本），再执行下面的命令：
 
 ```bash
 # 获取 PR 信息
@@ -90,6 +94,12 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
 > `404 {"error_code_name":"UN_KNOW","error_message":"Project not found:owner/repo"}`
 > （同一时刻正确形式 `…/repos/cann/amct/pulls/455` 返回 `200`）。
 > 两种失败 `curl -s` 的退出码都仍是 `0`，不校验状态码就会拿着错误响应当 PR 信息往下走。
+>
+> 同理，**`${owner}`/`${repo}` 未赋值时拼出的是 `…/repos///pulls/<PR_NUMBER>`**，实测返回
+> `401 {"message":"401 Unauthorized"}`，与「token 失效」的响应体**一字不差**
+> （同一时刻正确路径 `…/repos/cann/amct/pulls/455` 无 token 返回 `200`，带坏 token 返回同样的
+> `401 {"message":"401 Unauthorized"}`）。看到这个 401 先 `echo "$owner/$repo"` 确认变量非空，
+> 别一上来就怀疑 token。
 
 ### 步骤 3.1: 确定问题代码的准确行号
 

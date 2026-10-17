@@ -578,17 +578,17 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
 ## 获取文件原始内容
 
 ```bash
-curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/contents/{文件路径}?ref={commit_sha}&access_token=$GITCODE_API_TOKEN" | \
+curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/contents/<文件路径>?ref=<commit_sha>&access_token=$GITCODE_API_TOKEN" | \
   jq -r '.content' | base64 -d
 ```
 
 **返回字段**（实测）：`type` / `encoding` / `size` / `name` / `path` / `content`（base64）/
 `sha`（**blob sha**）/ `url` / `html_url` / `download_url` / `_links`。
 
-`download_url` 是 `https://raw.gitcode.com/${owner}/${repo}/blobs/{blob_sha}/{文件路径}` 形式，
+`download_url` 是 `https://raw.gitcode.com/${owner}/${repo}/blobs/<blob_sha>/<文件路径>` 形式，
 直接返回明文，实测稳定 `200`，适合管道给 `grep -n` 定位行号。
 
-> ⚠️ **`…/raw/{commit_sha}/{文件路径}` 这个形式实测不稳定，不要当唯一手段**：同一 URL、同一 sha，
+> ⚠️ **`…/raw/<commit_sha>/<文件路径>` 这个形式实测不稳定，不要当唯一手段**：同一 URL、同一 sha，
 > 在某一段时间内对 `.agents/skills/gitcode-pr/` 下的 `commands/review.md`、
 > `references/gitcode_api.md`、`evals/evals.json` 连续 3 次返回 `403`（body「暂不支持预览」），
 > 同一时刻同 sha 的 `SKILL.md`/`README.md`/`build.sh` 却返回 `200`；几分钟后同一批 URL
