@@ -58,15 +58,26 @@ git remote -v
 # 从远程 URL 提取 owner 和 repo
 repo_url=$(git remote get-url origin)
 
-# 处理不同 URL 格式
-# SSH 格式: git@gitcode.com:owner/repo.git
-# HTTPS 格式: https://gitcode.com/owner/repo.git
+# 处理不同 URL 格式（尾部 `.git` 可有可无，先归一化掉）
+# SSH 格式:   git@gitcode.com:owner/repo[.git]
+# HTTPS 格式: https://gitcode.com/owner/repo[.git]
+# ⚠️ SSH 与 HTTPS 两种格式都要处理：只用 `.*:` 这套 SSH 模式时，HTTPS 地址匹配不上，
+#    sed 会**原样输出整串 URL**，owner 和 repo 都变成那条 URL，后续 API 请求直接 404（实测）。
+# ⚠️ 尾部 `.git` 是**可选**的：sed 用 `\.git$` 锚定时，`https://gitcode.com/owner/repo`
+#    这种 remote 同样匹配不上、同样退化成整串 URL 而 404（实测本仓 origin 就是无 `.git` 形式），
+#    故先 `${repo_url%.git}` 去掉可选后缀，再按「无后缀」模式提取。
+repo_url=${repo_url%.git}
 if [[ $repo_url == git@* ]]; then
-  owner=$(echo $repo_url | sed 's|.*:\([^/]*\)/\([^/]*\)\.git$|\1|')
-  repo=$(echo $repo_url | sed 's|.*:\([^/]*\)/\([^/]*\)\.git$|\2|')
+  owner=$(echo "$repo_url" | sed 's|.*:\([^/]*\)/\([^/]*\)$|\1|')
+  repo=$(echo "$repo_url" | sed 's|.*:\([^/]*\)/\([^/]*\)$|\2|')
 else
-  owner=$(echo $repo_url | sed 's|.*gitcode\.com/\([^/]*\)/\([^/]*\)\.git$|\1|')
-  repo=$(echo $repo_url | sed 's|.*gitcode\.com/\([^/]*\)/\([^/]*\)\.git$|\2|')
+  owner=$(echo "$repo_url" | sed 's|.*gitcode\.com/\([^/]*\)/\([^/]*\)$|\1|')
+  repo=$(echo "$repo_url" | sed 's|.*gitcode\.com/\([^/]*\)/\([^/]*\)$|\2|')
+fi
+# ⚠️ sed 替换里必须写 `\1`/`\2`，写成 `\\1` 得到的是**字面量** `\1`（实测）
+if [ -z "$owner" ] || [ "$owner" = "$repo_url" ]; then
+  echo "错误：无法从 $repo_url 解析 owner/repo" >&2
+  exit 1
 fi
 
 echo "Owner: $owner"
