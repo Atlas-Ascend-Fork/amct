@@ -50,6 +50,7 @@ from config import (  # noqa: E402
 from utils import (  # noqa: E402
     NON_LM_EVAL_TASKS,
     TASK_ALIASES,
+    check_task_offline_ready,
     ensure_supported_quant_target,
     local_dataset_files,
     read_dataset_file,
@@ -303,13 +304,20 @@ def _materialize_glob(rel):
 
 
 def _derived_listing(spec):
-    """Synthesize an upstream file list from a registry entry's own declaration.
+    """Synthesize an upstream file list from registry declarations for one repo.
 
     This is what keeps the documented extension path true -- "add a benchmark =
     add a datasets.json entry, no code change here" (bench_offline.py). Without
     it a new task made the *default* `self_check.py` fail with
     `--remote false-positive on a correct registry: <task>: cannot list
     <repo_id>`, i.e. a fixture gap dressed up as a registry bug.
+
+    `spec` is one entry or a list of entries that share a repo_id: several tasks
+    may read the same repo from different subdirs (datasets.json already does
+    that for livecodebench / livecodebench_release_v6, and both only escape this
+    branch because they have hand-written stubs). Deriving from the first entry
+    alone leaves the second task's shards out of the listing, so the offline
+    regression reports a *stub* gap as a registry false positive. Union them.
 
     A derived listing is self-consistent with the declaration by construction,
     so for such a repo the offline step covers the any_of/all_of matching logic
@@ -320,10 +328,12 @@ def _derived_listing(spec):
     precisely because they pin layouts worth pinning (MATH-500 shipping parquet
     only, LiveCodeBench's six cumulative shards).
     """
+    specs = spec if isinstance(spec, (list, tuple)) else [spec]
     files = ["README.md"]
-    for rels in spec["splits"].values():
-        _mode, rel_list = split_declaration(rels)
-        files.extend(_materialize_glob(rel) for rel in rel_list)
+    for one in specs:
+        for rels in one["splits"].values():
+            _mode, rel_list = split_declaration(rels)
+            files.extend(_materialize_glob(rel) for rel in rel_list)
     return sorted(set(files))
 
 
@@ -341,12 +351,16 @@ def _upstream_stubs(reg):
             "Drop them, or fix the repo_id they were written for."
         )
     file_lists, derived = {}, []
+    # Group by repo_id: one repo can back several tasks, and a derived listing
+    # must cover every task that reads it (see _derived_listing).
+    by_repo = {}
+    for task in sorted(reg):
+        by_repo.setdefault(reg[task]["repo_id"], []).append(reg[task])
     for repo_id in sorted(wanted):
         if repo_id in _FAKE_UPSTREAM:
             file_lists[repo_id] = list(_FAKE_UPSTREAM[repo_id])
             continue
-        spec = next(s for s in reg.values() if s["repo_id"] == repo_id)
-        file_lists[repo_id] = _derived_listing(spec)
+        file_lists[repo_id] = _derived_listing(by_repo[repo_id])
         derived.append(repo_id)
     return file_lists, derived
 
@@ -358,6 +372,27 @@ def _probe_entry(allow_patterns):
         "subdir": "gsm8k",
         "dataset_name": "main",
         "splits": {"test": "main/test-*.parquet"},
+        "allow_patterns": allow_patterns,
+    }
+
+
+def _probe_entry_ssec(allow_patterns):
+    """A *second* task on the same unstubbed repo, different subdir + layout.
+
+    Regression for the derived-listing gap: `_upstream_stubs` used to take
+    `next(s for s in reg.values() if s["repo_id"] == repo_id)`, so with two
+    tasks on one repo only the first one's shards made it into the synthesized
+    upstream listing, and the default `self_check.py` then failed with
+    `--remote false-positive on a correct registry: gsm8k_ssec split 'test'
+    (all_of): declared [...] unmatched [...]` -- a fixture gap reported as a
+    registry bug. datasets.json already has this shape (livecodebench /
+    livecodebench_release_v6), it just hides behind hand-written stubs.
+    """
+    return {
+        "repo_id": "openai/gsm8k",
+        "subdir": "gsm8k_ssec",
+        "dataset_name": "ssec",
+        "splits": {"test": {"all_of": ["ssec/test-*.parquet", "ssec/test2-*.parquet"]}},
         "allow_patterns": allow_patterns,
     }
 
@@ -565,9 +600,44 @@ def _check_remote_glob_semantics():
             "a declared glob excluded by allow_patterns must be reported even "
             f"when the listing is derived, got:\n{problems or '<no problems>'}"
         )
+    # Two tasks sharing one unstubbed repo_id: the derived listing must cover
+    # both, otherwise the second task's shards look like a registry error.
+    probe = dict(reg)
+    probe["gsm8k_probe"] = _probe_entry(["*.parquet", "README.md"])
+    probe["gsm8k_ssec"] = _probe_entry_ssec(["*.parquet", "README.md"])
+    probe_lists, probe_derived = _upstream_stubs(probe)
+    if "openai/gsm8k" not in probe_derived:
+        raise AssertionError(
+            "a repo without a hand-written stub must fall back to a derived "
+            f"listing, got derived={probe_derived}"
+        )
+    shared = probe_lists["openai/gsm8k"]
+    if not any(f.startswith("main/") for f in shared) or not any(
+        f.startswith("ssec/") for f in shared
+    ):
+        raise AssertionError(
+            "derived listing for a repo with two tasks must union both tasks' "
+            f"declared paths, got {shared}"
+        )
+    problems = _run_remote_check(probe_lists, reg=probe)
+    if problems:
+        raise AssertionError(
+            "two tasks on one unstubbed repo_id must not break the default "
+            f"self-check (derived listing has to aggregate them):\n{problems}"
+        )
+    # Not vacuous: drop the second task's shard from the shared listing and the
+    # check must name that task, proving both are really being matched.
+    broken = {k: list(v) for k, v in probe_lists.items()}
+    broken["openai/gsm8k"] = [f for f in shared if not f.startswith("ssec/test2-")]
+    problems = _run_remote_check(broken, reg=probe)
+    if "gsm8k_ssec" not in problems:
+        raise AssertionError(
+            "--remote must report the second task when one of its all_of shards "
+            f"is missing from the shared repo listing, got:\n{problems or '<no problems>'}"
+        )
     print(
         "[self_check] remote glob semantics ok (any_of one-hit / all_of every "
-        "shard / new task needs no stub)"
+        "shard / new task needs no stub / two tasks may share one repo)"
     )
 
 
@@ -841,6 +911,39 @@ def _check_offline_shim_install():
                 raise AssertionError(
                     "shim accepted split='train' that the registry does not declare"
                 )
+            # Passthrough of an unregistered (path, name) must stay diagnosable:
+            # the real loader's own message (FSTimeoutError on these boxes) says
+            # nothing about datasets.json, which is the thing the user has to fix.
+            # Stub _ORIG so this needs no network.
+            saved_orig = bench_offline._ORIG
+
+            def _boom(*_a, **_kw):
+                raise OSError("simulated FSTimeoutError")
+
+            bench_offline._ORIG = _boom
+            try:
+                datasets.load_dataset(path="not/registered", name=None)
+            except RuntimeError as exc:
+                msg = str(exc)
+                if "datasets.json" not in msg or "not/registered" not in msg:
+                    raise AssertionError(
+                        "passthrough failure does not name the unregistered path "
+                        f"or datasets.json: {exc}"
+                    )
+                if "selfcheck/probe" not in msg:
+                    raise AssertionError(
+                        f"passthrough failure does not list registered keys: {exc}"
+                    )
+                if exc.__cause__ is None:
+                    raise AssertionError(
+                        "passthrough failure dropped the loader's original error"
+                    )
+            else:
+                raise AssertionError(
+                    "shim swallowed an unregistered path instead of failing"
+                )
+            finally:
+                bench_offline._ORIG = saved_orig
         finally:
             datasets.load_dataset = saved_datasets
             if saved_task is not None:
@@ -905,6 +1008,83 @@ def _check_skill_metric_keys():
     print(f"[self_check] metric keys ok ({len(rows)} rows)")
 
 
+def _check_task_offline_registration():
+    """Every lm-eval task this skill advertises must resolve to registered data.
+
+    `check_task_offline_ready()` is the pre-flight that stops a typo'd or
+    unregistered `--task` before the model is loaded; if it were to pass for a
+    dataset that is not in datasets.json, the run would instead die as
+    `FSTimeoutError` minutes into evaluation (constraints.md #2). Verify both
+    directions here, against lm-eval's installed task index -- no download, no
+    NPU. Skipped when lm-eval is absent.
+    """
+    try:
+        from lm_eval.tasks import TaskManager
+    except ImportError as exc:
+        print(f"[self_check] skip task-registration check: {exc}")
+        return
+    task_manager = TaskManager()
+    reg = load_dataset_registry()
+    checked = 0
+    for task in sorted(EXPECTED_TASKS & set(reg)):
+        if task in NON_LM_EVAL_TASKS:
+            continue
+        lm_task = TASK_ALIASES.get(task, task)
+        # math500 -> hendrycks_math500 declares dataset_name 'default' while
+        # datasets.json keys the repo with no name: the shim's (path, None)
+        # fallback must make that pass rather than demand a second entry.
+        wanted = check_task_offline_ready(lm_task, reg, task_manager)
+        if not wanted:
+            raise AssertionError(f"task '{lm_task}' resolved to no dataset key")
+        checked += 1
+    if checked < 5:
+        raise AssertionError(
+            f"only {checked} registry tasks cross-checked against lm-eval; "
+            "the advertised task list must stay covered"
+        )
+    # Negative controls: a misspelling and a task whose dataset was never
+    # registered are the two mistakes this pre-flight exists to catch, and they
+    # must be told apart (index miss vs. registry miss) in the message.
+    try:
+        check_task_offline_ready("arc-challenge", reg, task_manager)
+    except RuntimeError as exc:
+        msg = str(exc)
+        if "not in the lm-eval task index" not in msg:
+            raise AssertionError(
+                f"unknown task is not reported as an index miss: {exc}"
+            )
+        if "TIGER-Lab/MMLU-Pro" not in msg:
+            raise AssertionError(
+                f"unknown task error does not list registered repos: {exc}"
+            )
+    else:
+        raise AssertionError("unknown task 'arc-challenge' passed the pre-flight check")
+    try:
+        check_task_offline_ready("gsm8k", reg, task_manager)
+    except RuntimeError as exc:
+        if "openai/gsm8k" not in str(exc) or "datasets.json" not in str(exc):
+            raise AssertionError(
+                f"unregistered dataset error does not name the missing pair: {exc}"
+            )
+    else:
+        raise AssertionError(
+            "task 'gsm8k' has no datasets.json entry but passed the pre-flight check"
+        )
+    # A registry that does not actually declare the task's repo must fail too:
+    # the check has to read the registry, not just the task index.
+    try:
+        check_task_offline_ready(
+            "arc_easy", {"selfcheck": {"repo_id": "other/repo"}}, task_manager
+        )
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError(
+            "arc_easy passed against a registry that declares no allenai/ai2_arc"
+        )
+    print(f"[self_check] task offline registration ok ({checked} tasks)")
+
+
 def _check_cli_help():
     for script in CLI_SCRIPTS:
         path = os.path.join(SKILL_DIR, script)
@@ -939,6 +1119,7 @@ def main():
     _check_quant_target_guard()
     _check_offline_shim_install()
     _check_skill_metric_keys()
+    _check_task_offline_registration()
     _check_cli_help()
     _check_cli_flags()
     if args.remote:

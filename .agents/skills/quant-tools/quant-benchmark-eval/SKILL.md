@@ -102,7 +102,7 @@ python scripts/prefetch_data.py --task <task>                 # 预下载到 $BE
 
 这两种语义在 `prefetch_data.py`（本地文件）、`config.resolve_split_files()`（离线读取）与 `self_check.py --remote`（上游文件列表）三处**判定口径一致**：`any_of` 有一条候选命中即通过，`all_of` 要求每条分片都命中。所以 `--remote` 报 `datasets.json does not match upstream repos` 时，是注册表 glob 与上游布局真的对不上（上游改名 / 少发分片），不是声明形态没被识别。
 
-**加一个 benchmark 只需要改 `datasets.json`**（`bench_offline.py` 的扩展约定），不用动 `self_check.py`：默认自检的离线回归对**没有手写桩**的 repo 会按其声明自动派生一份上游文件列表（`_derived_listing()`），因此新任务不会因为「桩文件列表缺这个 repo_id」而让默认自检变红。手写桩（`_FAKE_UPSTREAM`）只保留给当前 10 个任务对应的 7 个仓，作用是钉住真实布局（MATH-500 只发 parquet、LiveCodeBench 6 个累积分片）。派生桩与声明天然自洽，只能覆盖 `any_of`/`all_of` 匹配逻辑与「声明的 glob 是否被 `allow_patterns` 覆盖」（`prefetch` 按 `allow_patterns` 下载，被过滤掉的 glob 永远落不到本地）；**新任务的 glob 是否真的贴合上游布局，仍须跑一次 `--remote` 兜底**。自检会打印一行 `note: no hand-written upstream stub for <repo_id>` 提示这一点；桩里出现注册表已不再引用的 repo_id 会直接报错（防止对照项静默失效）。
+**加一个 benchmark 只需要改 `datasets.json`**（`bench_offline.py` 的扩展约定），不用动 `self_check.py`：默认自检的离线回归对**没有手写桩**的 repo 会按其声明自动派生一份上游文件列表（`_derived_listing()`），因此新任务不会因为「桩文件列表缺这个 repo_id」而让默认自检变红。手写桩（`_FAKE_UPSTREAM`）只保留给当前 10 个任务对应的 7 个仓，作用是钉住真实布局（MATH-500 只发 parquet、LiveCodeBench 6 个累积分片）。派生桩与声明天然自洽，只能覆盖 `any_of`/`all_of` 匹配逻辑与「声明的 glob 是否被 `allow_patterns` 覆盖」（`prefetch` 按 `allow_patterns` 下载，被过滤掉的 glob 永远落不到本地）；**新任务的 glob 是否真的贴合上游布局，仍须跑一次 `--remote` 兜底**。自检会打印一行 `note: no hand-written upstream stub for <repo_id>` 提示这一点；桩里出现注册表已不再引用的 repo_id 会直接报错（防止对照项静默失效）。派生是**按 repo_id 聚合该仓下全部任务的声明**再取并集，不是只取字典序第一个任务：同一 repo_id 挂多个任务（`datasets.json` 里 livecodebench / livecodebench_release_v6 已经是这个形态，只是两者都有手写桩才绕过派生分支）时，只派生第一个会让第二个任务的分片不在列表里，默认自检就会把**桩缺口**报成「注册表误报」。自检第 5 步专门有一条「两个任务共用一个未建桩 repo_id」的对照，含摘掉其中一个分片必须点名到该任务的反向验证。
 
 ### 2. 装配 + 评测
 
@@ -121,7 +121,8 @@ python scripts/assemble_and_eval.py --model <model_path> --model_name qwen3_5_mo
 #         也可直接传 hendrycks_math500 / minerva_math500 换 prompt 口径
 ```
 
-- **装配流程**：`_load_float()`（支持 `device_map`）加载模型 → 逐层 `build_quant_block`（KV-safe 目标：dense 用 `mlp`，MoE 用 `moe`）+ `load_selected_layer_ptq_params` → 开启量化、置 `eval_mode=True` → 量化块塞回层列表**并放回该层原本所在的卡** → 先做一次 `generate` 冒烟。出现 cpu / disk offload 直接报错（offload 会破坏量化正确性）。
+- **`--task` 先做离线预检**：加载模型**之前**用 lm-eval task index 把任务（含别名 / group 展开）解析成 `(dataset_path, dataset_name)`，逐个对照 `datasets.json`。拼错或未注册的任务立刻报错并列出已有 repo，不会等到模型装好、每层量化块都塞回去之后才以 `FSTimeoutError` 炸掉（那时报错里根本不提 `--task`）。通过后打一行 `[task] <name> reads [...] from $BENCH_ASSETS`，便于事后核对评的是哪份数据。详见约束 2。
+- **装配流程**：`load_float()`（支持 `device_map`）加载模型 → 逐层 `build_quant_block`（KV-safe 目标：dense 用 `mlp`，MoE 用 `moe`）+ `load_selected_layer_ptq_params` → 开启量化、置 `eval_mode=True` → 量化块塞回层列表**并放回该层原本所在的卡** → 先做一次 `generate` 冒烟。出现 cpu / disk offload 直接报错（offload 会破坏量化正确性）。
 - **`--algos` 必须与 ptq 参数训练时的算法一致**（默认 `lwc,lac`；amct 已注册 `autoround / flatquant / gptq / lac / let / lwc`）。算法决定了量化块里构造出哪些子模块，不一致时加载参数会 `KeyError`；脚本在装配前先按 `ALGO_REGISTRY` 校验键名。详见约束 10。
 - **ptq 参数必须真的加载上**：脚本逐层统计 `loaded/missing`，一个都没加载上直接报错（否则会静默回落直转，评的就不是用户的 PTQ 结果）；部分层缺参数打 `[warn]`，结论里要写明是混合对象。详见约束 11。
 - **`--bf16` 跑基线**：跳过量化，用**同一套 harness** 跑原始模型。两者都要跑，最后报告差值。
@@ -161,12 +162,12 @@ python scripts/assemble_and_eval.py --model <model_path> --model_name qwen3_5_mo
 | `references/env-and-portability.md` | 依赖边界、可配置 env、环境模板、新机器部署步骤 |
 | `references/livecodebench.md` | LiveCodeBench 生成 + 官方评分 + 榜单对齐清单 |
 | `scripts/config.py` | env 解析（`AMCT_HOME` / `BENCH_ASSETS` / `HF_ENDPOINT`）+ 加载 `datasets.json`；提供 `local_dataset_map()` 与 `split_declaration()` / `resolve_split_files()`（`any_of` 取首个命中布局、`all_of` 合并全部分片） |
-| `scripts/utils.py` | 数据读取（parquet / jsonl）、依赖检查、LiveCodeBench 字段校验、attention 量化保护、结果日志解析 |
+| `scripts/utils.py` | 数据读取（parquet / jsonl）、依赖检查、LiveCodeBench 字段校验、attention 量化保护、结果日志解析；`check_task_offline_ready()` 用 lm-eval task index 把 `--task` 解析成 `(dataset_path, dataset_name)` 并对照 `datasets.json`，做加载模型前的离线预检 |
 | `scripts/datasets.json` | benchmark 注册表（repo_id、subdir、split → parquet/jsonl/glob，或 `{"any_of": [...]}` / `{"all_of": [...]}`），prefetch 与离线 shim 的单一数据源 |
-| `scripts/self_check.py` | 不加载模型、不跑 NPU 的轻量自检：脚本接线、注册表声明、`any_of`/`all_of` 布局语义（临时目录实测，防样本翻倍）、`--remote` 的 glob 匹配语义（注入假文件列表离线回归，防把正确注册表报成不匹配；未建桩的 repo 按声明自动派生列表，**加任务只改 `datasets.json` 不会让默认自检变红**）、离线 shim 是否真拦住 lm-eval 的 `load_dataset` 调用形态（注入临时 jsonl 实跑一次，防评测静默回落到网络 / HF cache）、已预下载任务的 split 是否真能解析、SKILL.md 指标列 vs lm-eval task index；`--remote` 再加验注册表 vs 数据集仓真实文件列表 |
+| `scripts/self_check.py` | 不加载模型、不跑 NPU 的轻量自检：脚本接线、注册表声明、`any_of`/`all_of` 布局语义（临时目录实测，防样本翻倍）、`--remote` 的 glob 匹配语义（注入假文件列表离线回归，防把正确注册表报成不匹配；未建桩的 repo 按声明自动派生列表，**加任务只改 `datasets.json` 不会让默认自检变红**）、离线 shim 是否真拦住 lm-eval 的 `load_dataset` 调用形态（注入临时 jsonl 实跑一次，防评测静默回落到网络 / HF cache）、已预下载任务的 split 是否真能解析、SKILL.md 指标列 vs lm-eval task index、注册表任务 vs lm-eval task index 的离线预检（含未知任务名 / 未注册数据集两条反向对照，防预检被改成永真）、离线 shim 透传失败是否可诊断；`--remote` 再加验注册表 vs 数据集仓真实文件列表 |
 | `scripts/check_env.py` | 检查运行依赖与 lm-eval 版本；`--livecodebench_score` 加查官方评分 runner |
 | `scripts/prefetch_data.py` | `snapshot_download` 把数据集下到 `$BENCH_ASSETS`，并校验每个 split 是否真命中文件（`any_of` 未命中、`all_of` 缺分片即非 0 退出） |
-| `scripts/bench_offline.py` | monkeypatch `load_dataset` → fastparquet 读本地 parquet、pandas 读本地 jsonl |
-| `scripts/assemble_and_eval.py` | 装配 fake-quant 模型（KV-safe 目标、`--algos` 校验、ptq 参数落地校验、多卡保留 hook）+ HFLM 评测 + `--bf16` 基线 |
+| `scripts/bench_offline.py` | monkeypatch `load_dataset` → fastparquet 读本地 parquet、pandas 读本地 jsonl；不在注册表里的请求透传给真实 loader，透传失败时把「没注册哪条 + 已注册哪些」链进报错（原始 loader 异常保留在 `__cause__`） |
+| `scripts/assemble_and_eval.py` | 装配 fake-quant 模型（KV-safe 目标、`--algos` 校验、ptq 参数落地校验、多卡保留 hook）+ HFLM 评测 + `--bf16` 基线；评测前先跑 `--task` 离线预检（`--smoke` 只验装配链路、不读数据，故跳过） |
 | `scripts/livecodebench_eval.py` | 装配后生成代码，输出 LiveCodeBench 官方 `custom_evaluator` JSON（同样支持 `--algos` / `--trust_remote_code`）；只打 `[lcb-gen]`，分数由官方 evaluator 产出 |
 | `scripts/compare_results.py` | 从 bf16 / quant 日志或 JSON（含官方 lcb_runner `*_eval.json`）抽指标并输出差值；排除 `_stderr` 与 `sample_len` 等非指标键；日志没有 `[RESULT]` 行时给出可诊断报错 |

@@ -299,3 +299,90 @@ def resolve_task_metric_keys(task_name, task_manager=None):
     if not keys:
         raise KeyError(f"task '{task_name}' declares no metrics")
     return sorted(keys)
+
+
+def resolve_task_dataset_keys(task_name, task_manager=None):
+    """`{(dataset_path, dataset_name)}` lm-eval will request for a task or group.
+
+    Groups (`mmlu_pro`) declare no dataset of their own, so walk their subtask
+    list. A *leaf* task's cfg also carries a `task` key -- its own name as a
+    string -- so only a list means "group"; recursing on the string form loops
+    forever. Only the installed task index / YAML configs are read, no dataset
+    download, so this stays safe offline. Requires lm-eval to be importable.
+    """
+    from lm_eval.tasks import TaskManager
+
+    tm = task_manager or TaskManager()
+    wanted = set()
+    pending = [task_name]
+    seen = set()
+    while pending:
+        name = pending.pop()
+        if name in seen:
+            continue
+        seen.add(name)
+        entry = tm.task_index.get(name)
+        if entry is None:
+            raise KeyError(f"task '{name}' is not in the lm-eval task index")
+        cfg = getattr(entry, "cfg", None) or {}
+        subtasks = cfg.get("task")
+        if isinstance(subtasks, list):
+            pending.extend(subtasks)
+            continue
+        path = cfg.get("dataset_path")
+        if not path:
+            raise KeyError(f"task '{name}' declares no dataset_path")
+        wanted.add((path, cfg.get("dataset_name")))
+    return wanted
+
+
+def registered_dataset_keys(registry=None):
+    """`(repo_id, dataset_name)` pairs datasets.json can serve offline."""
+    from config import load_dataset_registry
+
+    reg = load_dataset_registry() if registry is None else registry
+    return {(spec["repo_id"], spec.get("dataset_name")) for spec in reg.values()}
+
+
+def check_task_offline_ready(task_name, registry=None, task_manager=None):
+    """Fail before a model is loaded if `--task` cannot be served offline.
+
+    Two different mistakes look identical once lm-eval is running: a typo
+    (`arc-challenge`) and a task whose dataset was never registered
+    (`gsm8k`). Both make `bench_offline._patched` fall through to the real
+    `datasets.load_dataset` -- a network read that on these boxes dies as
+    `FSTimeoutError` minutes in, *after* the model was loaded and every layer
+    assembled, and with nothing in the traceback pointing at `--task`.
+    Resolving the task through lm-eval's index here turns that into an
+    immediate, actionable error (constraints.md #2).
+
+    A requested `(path, name)` counts as registered when `(path, None)` is too:
+    that is the shim's own fallback, and MATH-500 needs it (the task declares
+    `dataset_name: default`, datasets.json keys the repo with no name).
+
+    Returns the resolved pairs so callers can log what will be read.
+    """
+    try:
+        wanted = resolve_task_dataset_keys(task_name, task_manager)
+    except KeyError as exc:
+        known = sorted({repo for repo, _ in registered_dataset_keys(registry)})
+        raise RuntimeError(
+            f"--task {task_name!r} cannot be checked against datasets.json: {exc}. "
+            f"Registered tasks' repos: {known}. Check the spelling (lm-eval names "
+            f"are what --task takes, plus this skill's aliases "
+            f"{sorted(TASK_ALIASES)}), or add a datasets.json entry + prefetch it."
+        ) from exc
+    known = registered_dataset_keys(registry)
+    missing = sorted(
+        pair for pair in wanted if pair not in known and (pair[0], None) not in known
+    )
+    if missing:
+        raise RuntimeError(
+            f"--task {task_name!r} reads {missing} from the network: datasets.json "
+            f"has no entry for it, so the offline shim would pass the request "
+            f"through to `datasets.load_dataset` (constraints.md #2) and the run "
+            f"would die as FSTimeoutError only after the model was assembled. "
+            f"Registered (repo_id, dataset_name): {sorted(known)}. Add an entry "
+            f"with matching globs, run prefetch_data.py for it, then re-run."
+        )
+    return wanted

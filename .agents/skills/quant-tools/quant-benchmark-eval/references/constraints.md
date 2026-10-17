@@ -29,6 +29,14 @@
 
 解决办法：先用 `snapshot_download` 把数据集仓下载到本地，再 monkeypatch `datasets.load_dataset`，改用 **fastparquet** 读本地 parquet、pandas 读本地 jsonl（见 `scripts/bench_offline.py`）。运行前用 `scripts/prefetch_data.py` 预下载一次即可，运行期保持 `HF_DATASETS_OFFLINE=1 HF_HUB_OFFLINE=1`。
 
+只注册表里有的任务才真离线：`(repo_id, dataset_name)` 不在 `datasets.json` 的请求会被 shim 原样透传给真实 loader，也就是回到上面那个 `FSTimeoutError`，而且是在**模型加载完、每层量化块都装好之后**才炸，报错里一个字都不提 `--task`。所以 `assemble_and_eval.py` 在加载模型**之前**先跑一次预检 `utils.check_task_offline_ready()`：用 lm-eval 已安装的 task index 把 `--task`（含别名，group 会展开子任务）解析成 `(dataset_path, dataset_name)` 集合，逐个对照注册表。
+
+- 任务名拼错 / 未注册（`arc-challenge`、`gsm8k`）→ 立刻报错，并列出注册表里已有的 repo，告诉你要么改拼写要么补 `datasets.json` + `prefetch_data.py`；
+- 对不上注册表但确实要评的任务 → 按报错提示补一条注册表项（glob 要覆盖上游真实布局，补完跑一次 `self_check.py --remote` 兜底）再预下载；
+- 解析时 `dataset_name` 允许回落到 `(path, None)`，这是 shim 自己的兜底语义，MATH-500 就靠它（task 声明 `dataset_name: default`，注册表按仓维度不写 name），不需要为它多注册一条。
+
+`self_check.py` 会把这两条反向对照跑一遍（未知任务名、未注册数据集都必须报错，且报错要能区分「索引里没有」和「注册表里没有」），避免预检被改成永真。
+
 ## 3. HFLM 直接接受内存中的模型对象
 
 脚本已处理，无需自定义 LM 子类。运行时 `pretrained not of type str` 的 warning 属正常，可忽略。
@@ -98,4 +106,4 @@ agent 代为执行时的规矩：默认不加；确实需要（非原生支持�
 
 `from_pretrained` 的权重 dtype 参数在 **transformers 4.56 才从 `torch_dtype` 改名为 `dtype`**。本仓不同模型目录钉的版本并不一致（`examples/algorithms/flatquant/requirements.txt` 4.51.0、`amct_pytorch/experimental/quantization/DeepSeekV3.2/requirements.txt` 4.52.4、`MiniMax-M2.7` 4.57.6），所以写死新名字在 4.52 环境上**不是**报“unexpected keyword”，而是该值落进 `**kwargs` → 被写进 config → 延后炸成 `TypeError: Object of type dtype is not JSON serializable`，很难归因。
 
-因此 `_load_float()` 统一走 `utils.dtype_kwargs(torch.bfloat16)`：按已安装版本选 `dtype`（≥4.56）或 `torch_dtype`（更旧，4.57+ 只是弃用告警、未删除）。`check_env.py` 会打印当前 transformers 版本与解析出的参数名，环境不符时先看这一行，不要为了消错去升级/降级用户的 transformers。
+因此 `load_float()` 统一走 `utils.dtype_kwargs(torch.bfloat16)`：按已安装版本选 `dtype`（≥4.56）或 `torch_dtype`（更旧，4.57+ 只是弃用告警、未删除）。`check_env.py` 会打印当前 transformers 版本与解析出的参数名，环境不符时先看这一行，不要为了消错去升级/降级用户的 transformers。

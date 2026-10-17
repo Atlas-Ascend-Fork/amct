@@ -95,7 +95,20 @@ def _patched(path, *args, **kwargs):
                 )
             return splits[wanted_split]
         return datasets.DatasetDict(splits)
-    return _ORIG(path, *args, **kwargs)
+    try:
+        return _ORIG(path, *args, **kwargs)
+    except Exception as exc:
+        # Not a registry key: the request goes to the real loader, i.e. the
+        # network / HF cache. When that fails the original message (typically
+        # FSTimeoutError on these boxes) says nothing about *why* the shim did
+        # not serve it, so chain the context that makes it actionable.
+        raise RuntimeError(
+            f"datasets.load_dataset(path={path!r}, name={name!r}) has no entry in "
+            f"datasets.json, so the offline shim passed it through to the real "
+            f"loader, which failed with {type(exc).__name__}: {exc}. Registered "
+            f"(repo_id, dataset_name): {sorted(_LOCAL)}. Prefetch the dataset and "
+            f"add a registry entry (prefetch_data.py), or use a registered task."
+        ) from exc
 
 
 def install():

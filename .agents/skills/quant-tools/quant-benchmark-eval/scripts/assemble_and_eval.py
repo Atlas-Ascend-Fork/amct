@@ -39,6 +39,7 @@ from config import DEFAULT_BIT_CONFIG  # noqa: E402
 from utils import (  # noqa: E402
     TASK_ALIASES,
     check_environment,
+    check_task_offline_ready,
     dtype_kwargs,
     ensure_supported_quant_target,
     has_attention_quant,
@@ -502,6 +503,13 @@ def main():
     from transformers import AutoTokenizer
 
     warn_trust_remote_code(a.model, a.trust_remote_code)
+    lm_task = TASK_ALIASES.get(a.task, a.task)
+    if not a.smoke:
+        # Before the model is loaded: an unregistered / misspelled --task only
+        # fails deep inside lm-eval, after assembly, as a network timeout that
+        # does not name --task (see utils.check_task_offline_ready).
+        wanted = check_task_offline_ready(lm_task)
+        print(f"[task] {lm_task} reads {sorted(wanted)} from $BENCH_ASSETS")
     tok = AutoTokenizer.from_pretrained(
         a.model, use_fast=False, trust_remote_code=a.trust_remote_code
     )
@@ -551,11 +559,10 @@ def main():
         pretrained=model, tokenizer=tok, batch_size=1, max_gen_toks=a.max_gen_toks
     )
     tag = "bf16" if a.bf16 else "quant"
-    task = TASK_ALIASES.get(a.task, a.task)
-    print(f"[eval] {tag} task={task} limit={a.limit} max_gen_toks={a.max_gen_toks}")
+    print(f"[eval] {tag} task={lm_task} limit={a.limit} max_gen_toks={a.max_gen_toks}")
     res = simple_evaluate(
         model=lm,
-        tasks=[task],
+        tasks=[lm_task],
         limit=a.limit,
         bootstrap_iters=0,
         log_samples=a.log_samples,
