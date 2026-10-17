@@ -267,8 +267,12 @@ v5 API 返回**直接数组**，不是包装对象。评论数据包含以下关
 - 列表接口**没有** `path` / `position` 这两个键（`has("path")` 与 `has("position")` 均为 `false`，
   不是「值为 `null`」）。用 `jq '.path'` 取值会得到 `null`，但**不要按这两个字段过滤**，永远命中不了。
 - **行号列表接口就能拿到**：在 `diff_position.start_new_line` / `end_new_line` 里
-  （当时全部 `diff_comment` 都带此键，如 `194143085` → `60/60`）。
+  （实测 PR!455 全部 5 条 `diff_comment` 都带此键，单行评论两个值相同）。
   不需要为了行号再逐条调单条接口。
+  ⚠️ 但**行号数值本身是易变的**：它按 PR head **当前**指向的 commit 重算，PR 每推一个新
+  commit 就可能整体位移（实测同一条 `194143085`：head 为 `ae35b167…` 时是 `60`，本 PR 把
+  head 推到 `a4f4aec…` 后同一条变成 `81`）。所以这里只固化「哪些键存在」这类结构事实，
+  **不要把具体行号当稳定结论引用或写进 PR 描述**；要行号就现场查。
 - **只有「被评论的文件路径」列表接口拿不到**，需要查单条评论接口的 `position.new_path`。
 - `comment_type` 只有 `diff_comment`（行内）/ `pr_comment`（普通）两种取值。
 
@@ -287,6 +291,9 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<C
 ```
 
 **返回字段（实测 cann/amct PR!455，非构造示例）**：
+
+> 下面 JSON 是**某一时刻的快照**：`position.head_sha` / `new_line` 会随 PR head 推进而漂移
+> （见下方 ⚠️），别把里面的具体行号、head sha 当稳定事实引用；**键名与键的存在性**才是要看的。
 
 行内评论（`194143085`，`comment_type` = `DiffNote`）：
 
@@ -335,6 +342,10 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<C
 >   行内评论三个键都在。
 > - 单条接口**没有**列表接口才有的 `resolved` / `resolved_by` / `diff_position` / `reply` 键；
 >   要看检视意见是否已解决、要拿讨论下的回复，必须走列表接口。
+> - `position.head_sha` / `new_line` 是**按 PR head 当前指向的 commit 重算的快照值**，PR 每推
+>   一个新 commit 就可能漂移（实测同一条 `194143085`：head 为 `ae35b167…` 时 `new_line=60`，
+>   本 PR 把 head 推到 `a4f4aec…` 后变 `81`）。`base_sha` / `start_sha` 才是稳定的。
+>   所以上面 JSON 里的行号、head sha 只作形状示范，**不要当稳定事实引用**；要行号就现场查。
 
 > ⚠️ **两个接口的 `comment_type` 不是同一套取值**（实测 cann/amct PR!455）：
 >
@@ -426,7 +437,8 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
   别拿它当取内容的地址，改用 contents API 或 `…/blobs/<new_blob_id>/<path>`
 - `diffs[].content` - ⚠️ **不是 diff 文本，而是对象** `{"text":[…]}`；`text[]` 每项形如
   `{"line_content":"<diff 行原文>","old_line":"…","new_line":"…","type":"match"}`
-  （实测 PR!455 的 `SKILL.md` 有 602 项）。要拿可直接 `grep` 的 unified diff 文本，
+  （实测 PR!455 的 `SKILL.md` 即为此形状；**项数随该文件 diff 大小变化，不在此固化**）。
+  要拿可直接 `grep` 的 unified diff 文本，
   用 `/pulls/<n>/files` 的 `patch.diff`；非要从本接口拼，得
   `jq -r '.diffs[0].content.text[].line_content'`
 

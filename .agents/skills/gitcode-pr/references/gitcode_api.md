@@ -262,8 +262,11 @@ done
 > `old_path` / `new_path` / `new_line` / `base_sha` / `head_sha`。
 >
 > ⚠️ **行号不需要查单条接口**：列表接口的 `diff_position.start_new_line` / `end_new_line`
-> 就是起止行（实测当时全部 `diff_comment` 都带此键，如 `194143085` → `60/60`）。
-> 但**两个接口的位置键名不是同一套**，别串用（实测 cann/amct PR!447 多行行内评论 `193754581`：
+> 就是起止行（实测 PR!455 全部 5 条 `diff_comment` 都带此键，单行评论起止同值）。
+> 但**行号数值易变**：按 PR head **当前**指向的 commit 重算，PR 每推新 commit 就可能整体位移
+> （实测同一条 `194143085`：head 为 `ae35b167…` 时是 `60`，head 推到 `a4f4aec…` 后变成 `81`），
+> 故此处只固化「哪些键存在」这类结构事实，不要把具体行号当稳定结论引用。
+> 另，**两个接口的位置键名不是同一套**，别串用（实测 cann/amct PR!447 多行行内评论 `193754581`：
 > 列表 `diff_position = {start_new_line:29, end_new_line:31}`，
 > 单条 `position = {new_line:31, start_new_line:29, new_path:"…"}`）：
 >
