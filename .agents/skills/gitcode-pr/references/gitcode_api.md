@@ -228,9 +228,25 @@ done
 | `reply[]` | 该讨论下的回复，嵌套在父评论里，不单独出现在顶层 |
 | `user.login` | 评论者 |
 
-> ⚠️ 列表接口**不返回被评论的文件路径**（`path` 恒为 `null`）。需要路径时改查单条
+> ⚠️ 列表接口**不返回被评论的文件路径**——注意是**没有 `path` / `position` 这两个键**
+> （实测 cann/amct PR!455 全部父评论：`has("path")` 与 `has("position")` 均为 `false`，
+> 不是「键存在但值为 `null`」）。用 `jq '.path'` 取值会得到 `null`，但**不要按这两个字段过滤**，
+> 永远命中不了。需要路径时改查单条
 > `GET /api/v5/repos/${owner}/${repo}/pulls/comments/<COMMENT_ID>`，其 `position` 字段含
 > `old_path` / `new_path` / `new_line` / `base_sha` / `head_sha`。
+>
+> ⚠️ **行号不需要查单条接口**：列表接口的 `diff_position.start_new_line` / `end_new_line`
+> 就是起止行（实测当时全部 `diff_comment` 都带此键，如 `194143085` → `60/60`）。
+> 但**两个接口的位置键名不是同一套**，别串用（实测 cann/amct PR!447 多行行内评论 `193754581`：
+> 列表 `diff_position = {start_new_line:29, end_new_line:31}`，
+> 单条 `position = {new_line:31, start_new_line:29, new_path:"…"}`）：
+>
+> | 含义 | 列表接口 `diff_position` | 单条接口 `position` |
+> |------|--------------------------|---------------------|
+> | 起始行 | `start_new_line` | `start_new_line`（**单行评论时该键不存在**） |
+> | 结束行 | `end_new_line` | `new_line`（**不叫 `end_new_line`**） |
+> | 文件路径 | **无** | `new_path` / `old_path` |
+> | base/head SHA | **无** | `base_sha` / `start_sha` / `head_sha` |
 
 > ⚠️ **两个接口的 `comment_type` 取值不是同一套**，按上表的口径去解析单条响应会拿到预期外的值：
 >
