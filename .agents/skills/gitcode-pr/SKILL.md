@@ -195,7 +195,7 @@ v5 API 返回**直接数组**，不是包装对象。评论数据包含以下关
 | `updated_at` | 评论更新时间 |
 | `comment_type` | 评论类型，只有两种取值：`diff_comment` = 行内评论，`pr_comment` = 普通评论 |
 | `diff_position.start_new_line` / `end_new_line` | 行内评论的起止行号（仅行内评论有此键） |
-| `diff_position.position_type` | `text` = 代码行评论，`binary` = 文件级评论 |
+| `diff_position.position_type` | `text` = 代码行评论（实测）；`binary` = 文件级评论（官方文档值，**未实测**） |
 | `resolved` / `resolved_by` | 检视意见是否已解决、解决人 |
 | `reply[]` | 该讨论下的回复，**嵌在父评论里**，不单独出现在顶层数组 |
 
@@ -561,8 +561,8 @@ curl -s -o /dev/null -w '%{http_code}\n' -X DELETE \
 ```
 
 **批量清理**（按唯一标记删掉自己发过的测试评论）：必须**先翻完所有页把 ID 取全、再统一删**。
-下面这段可直接复制执行，五条不变式（翻页取全 / 非数组守卫 / 展开 `reply[]` / 回复在前 / 校验状态码）
-已全部落在代码里，不靠注释提醒：
+下面这段可直接复制执行，六条不变式（翻页取全 / 非数组守卫 / 展开 `reply[]` / **405 预检** /
+回复在前 / 校验状态码）已全部落在代码里，不靠注释提醒：
 
 ```bash
 # ---- 第 1 步：翻页把所有待删 ID 取全（只读不删），追加进临时文件 ----
@@ -571,7 +571,8 @@ curl -s -o /dev/null -w '%{http_code}\n' -X DELETE \
 # ⚠️ 不能在循环里覆盖同一个变量、循环外再删：resp 每页都被覆盖，结束后只剩**最后一页**，
 #    评论超过 100 条时前面几页的 ID 全丢，而脚本仍 exit 0
 ids=$(mktemp)
-trap 'rm -f "$ids"' EXIT
+blocked=$(mktemp)
+trap 'rm -f "$ids" "$blocked"' EXIT
 page=1
 while :; do
   resp=$(curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100&page=${page}")
@@ -593,12 +594,30 @@ while :; do
       | select((.body // "") | startswith("<唯一标记>"))
       | "\(if .reply_to then 1 else 0 end)\t\(.id)"' >> "$ids" \
     || { echo "ERROR: 第 ${page} 页 jq 解析失败，ID 未取全" >&2; exit 1; }
+  # ⚠️ 405 预检：**被选中的父评论**若还有**未被选中的存活回复**，删它必然 405。
+  #    这类失败在翻页阶段就能算出来，没必要先发 N 次注定失败的 DELETE、再靠 405 反推
+  #    （实测：标记只覆盖父评论时，100 个父评论 DELETE **全部** 405、脚本 exit 1，
+  #     清理一条都没完成，且 100 行 ERROR 里看不出根因是「筛选条件没覆盖回复」）。
+  echo "$resp" | jq -r '
+      .[] | select((.body // "") | startswith("<唯一标记>")) as $p
+      | ($p.reply // [])[]
+      | select(((.body // "") | startswith("<唯一标记>")) | not)
+      | "父 \($p.id) 的回复 \(.id) 未被筛选条件命中"' >> "$blocked" \
+    || { echo "ERROR: 第 ${page} 页 405 预检 jq 解析失败" >&2; exit 1; }
   count=$(echo "$resp" | jq 'length')
   [ "$count" -lt 100 ] && break   # count 数的是**父评论**条数（回复不计入分页）
   page=$((page + 1))
 done
 
-# ---- 第 2 步：全部取完后再统一删（sort -r 使「回复在前、父评论在后」）----
+# ---- 第 2 步：删除前的 405 预检，有阻塞项就直接失败、一次 DELETE 都不发 ----
+if [ -s "$blocked" ]; then
+  echo "ERROR: 以下父评论带「未被筛选条件命中的存活回复」，直接删必然 405：" >&2
+  sort -u "$blocked" >&2
+  echo "       处置：改筛选条件让它同时命中父评论与其回复，或先单独删掉上面列出的回复 ID。" >&2
+  exit 1
+fi
+
+# ---- 第 3 步：全部取完后再统一删（sort -r 使「回复在前、父评论在后」）----
 # ⚠️ 必须先删回复再删父评论：父评论带回复时 DELETE 返回
 #    405 {"error_message":"Can not delete a discussion that has replies."}（实测），
 #    照投影原顺序（父在前）删会只删掉回复、留下父评论，清理只完成一半且退出码仍是 0
@@ -611,7 +630,7 @@ done
 [ "$fail" -eq 0 ] || exit 1
 ```
 
-> 想先看清单再删（不自动执行）：把上面第 2 步换成 `sort -r "$ids"` 打印即可。
+> 想先看清单再删（不自动执行）：把上面第 3 步换成 `sort -r "$ids"` 打印即可。
 > 完整的坑位说明与响应码表见 `references/gitcode_api.md` →「删除 PR 评论」。
 
 **注意**：DELETE 接口的 `<COMMENT_ID>` 必须是评论列表（`/pulls/<PR_NUMBER>/comments`）

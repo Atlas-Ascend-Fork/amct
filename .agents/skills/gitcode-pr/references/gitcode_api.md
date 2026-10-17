@@ -223,7 +223,7 @@ done
 | `discussion_id` | 讨论 ID（哈希串），回复该讨论用它 |
 | `comment_type` | `diff_comment` = 行内评论，`pr_comment` = 普通评论 |
 | `diff_position.start_new_line` / `end_new_line` | 行内评论的起止行号 |
-| `diff_position.position_type` | `text` = 代码行评论，`binary` = 文件级评论 |
+| `diff_position.position_type` | `text` = 代码行评论（实测）；`binary` = 文件级评论（官方文档值，**未实测**） |
 | `resolved` / `resolved_by` | 检视意见是否已解决、解决人 |
 | `reply[]` | 该讨论下的回复，嵌套在父评论里，不单独出现在顶层 |
 | `user.login` | 评论者 |
@@ -284,7 +284,7 @@ curl -s -X POST \
 | `path` | 文件相对路径 | ✅ |
 | `position` | 结束行号 | ✅ |
 | `start_position` | 起始行号（多行选择） | 多行时 |
-| `position_type` | `text`（默认，代码行评论）/ `binary`（文件级评论，此时 `position` 不生效） | 否 |
+| `position_type` | `text`（默认，代码行评论）/ `binary`（文件级评论，此时 `position` 不生效）——**`binary` 取自官方文档、未实测** | 否 |
 | `access_token`（query） | 用户授权码 | ✅ |
 
 **成功响应（HTTP 201）**：
@@ -368,7 +368,9 @@ DELETE https://api.gitcode.com/api/v5/repos/:owner/:repo/pulls/comments/:id
 ### 请求示例
 
 ```bash
-curl -s -X DELETE \
+# ⚠️ curl -s 不加 --fail 时，400/401/403/404/405 的退出码仍是 0，只看 $? 会把删失败当成删成功，
+#    必须用 -w '%{http_code}' 校验（成功为 200）
+curl -s -o /dev/null -w '%{http_code}\n' -X DELETE \
   "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<COMMENT_ID>?access_token=$GITCODE_API_TOKEN"
 ```
 
@@ -384,6 +386,9 @@ curl -s -X DELETE \
 | `405` | **该评论下还有回复**：`{"error_code":405,"error_message":"Can not delete a discussion that has replies."}`，必须先把 `reply[]` 里的回复全部删掉，再删父评论 |
 
 > ⚠️ **删除有顺序要求**：父评论带着回复时删不掉（`405`）。批量清理时必须**先删回复、再删父评论**。
+> 且当筛选条件只命中父评论、漏掉它的某条回复时，这个 `405` 是**必然**发生而非偶发——
+> 应在删除前就用 `reply[]` 预检出来并直接失败（见下文批量清理脚本第 2 步），
+> 否则会把 N 次注定失败的 `DELETE` 全发一遍，只留下 N 行看不出根因的 ERROR。
 > 另：`curl -s` 不加 `-f`/`--fail` 时，`405` 这类 HTTP 错误的**退出码仍是 0**，
 > 只看 `$?` 会把「删失败」当成「删成功」——必须用 `-w '%{http_code}'` 显式校验状态码。
 
@@ -442,7 +447,8 @@ done
 ```bash
 # ---- 第 1 步：翻页把所有待删 ID 取全（只读不删），追加进临时文件 ----
 ids=$(mktemp)
-trap 'rm -f "$ids"' EXIT
+blocked=$(mktemp)
+trap 'rm -f "$ids" "$blocked"' EXIT
 page=1
 while :; do
   resp=$(curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100&page=${page}")
@@ -457,12 +463,27 @@ while :; do
       | select((.body // "") | startswith("<唯一标记>"))
       | "\(if .reply_to then 1 else 0 end)\t\(.id)"' >> "$ids" \
     || { echo "ERROR: 第 ${page} 页 jq 解析失败，ID 未取全" >&2; exit 1; }
+  # 405 预检：被选中的父评论若还有**未被选中的存活回复**，删它必然 405，翻页阶段就能算出来
+  echo "$resp" | jq -r '
+      .[] | select((.body // "") | startswith("<唯一标记>")) as $p
+      | ($p.reply // [])[]
+      | select(((.body // "") | startswith("<唯一标记>")) | not)
+      | "父 \($p.id) 的回复 \(.id) 未被筛选条件命中"' >> "$blocked" \
+    || { echo "ERROR: 第 ${page} 页 405 预检 jq 解析失败" >&2; exit 1; }
   count=$(echo "$resp" | jq 'length')
   [ "$count" -lt 100 ] && break
   page=$((page + 1))
 done
 
-# ---- 第 2 步：全部取完后再统一删除（sort -r 使「回复在前、父评论在后」）----
+# ---- 第 2 步：删除前的 405 预检，有阻塞项就直接失败、一次 DELETE 都不发 ----
+if [ -s "$blocked" ]; then
+  echo "ERROR: 以下父评论带「未被筛选条件命中的存活回复」，直接删必然 405：" >&2
+  sort -u "$blocked" >&2
+  echo "       处置：改筛选条件让它同时命中父评论与其回复，或先单独删掉上面列出的回复 ID。" >&2
+  exit 1
+fi
+
+# ---- 第 3 步：全部取完后再统一删除（sort -r 使「回复在前、父评论在后」）----
 fail=0
 for id in $(sort -r "$ids" | cut -f2); do
   code=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
