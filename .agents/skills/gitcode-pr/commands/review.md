@@ -69,17 +69,27 @@ echo "MY_LOGIN=$MY_LOGIN"
 
 ```bash
 # 获取 PR 信息
-curl -s "https://api.gitcode.com/api/v5/repos/{owner}/{repo}/pulls/{pr_number}" \
+curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>" \
   -H "Authorization: Bearer $GITCODE_API_TOKEN"
 
 # 获取 PR 变更文件列表（每项含 patch.diff）
-curl -s "https://api.gitcode.com/api/v5/repos/{owner}/{repo}/pulls/{pr_number}/files" \
+curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/files" \
   -H "Authorization: Bearer $GITCODE_API_TOKEN"
 
 # 获取 PR diff：v5 没有 diff=true 参数，diff 在 files 的 patch.diff 字段里
-curl -s "https://api.gitcode.com/api/v5/repos/{owner}/{repo}/pulls/{pr_number}/files" \
+curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/files" \
   -H "Authorization: Bearer $GITCODE_API_TOKEN" | jq -r '.[] | .patch.diff'
 ```
+
+> ⚠️ 占位符统一写 `${owner}` / `${repo}` / `<PR_NUMBER>`（与本文件步骤 3.1、下方「快速参考」表一致）：
+> `owner`/`repo` 按 SKILL.md「提取仓库 owner/repo 信息」从 `git remote get-url` 解析得到，
+> **不能**照抄字面量 `{owner}`——bash 的花括号展开需要逗号或 `..`，`{owner}` 不构成展开，
+> 会原样拼进 URL。实测照抄后：`…/repos/{owner}/{repo}/pulls/{pr_number}` 返回
+> `400 {"error_code":1000,"error_code_name":"PARAMETER_ERROR","error_message":"参数 pr_number 类型错误"}`；
+> 只把 owner/repo 写成字面量、PR 号给数字时返回
+> `404 {"error_code_name":"UN_KNOW","error_message":"Project not found:owner/repo"}`
+> （同一时刻正确形式 `…/repos/cann/amct/pulls/455` 返回 `200`）。
+> 两种失败 `curl -s` 的退出码都仍是 `0`，不校验状态码就会拿着错误响应当 PR 信息往下走。
 
 ### 步骤 3.1: 确定问题代码的准确行号
 
