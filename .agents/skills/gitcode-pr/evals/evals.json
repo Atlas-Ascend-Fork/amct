@@ -48,7 +48,7 @@
       "id": 2,
       "eval_name": "line-number-accuracy",
       "prompt": "审查 PR #1437 的代码变更，找出 if (it == (itMap->second).end()) 这行代码的准确行号，并说明如何获取的。注意：此用例只定位行号，不要发布评论。",
-      "expected_output": "准确定位到第 844 行，并说明通过 raw 文件验证或 grep -n 获取",
+      "expected_output": "准确定位到第 844 行，并说明通过取文件原始内容（contents API 或本地 git show）+ grep -n 获取",
       "files": [],
       "cleanup": "无需清理（此用例不发布评论）",
       "last_result": {
@@ -73,7 +73,7 @@
         {
           "name": "explains-method",
           "description": "解释行号获取方法",
-          "check": "输出中应说明通过 raw 文件验证或 grep -n 命令获取行号"
+          "check": "输出中应说明通过取文件原始内容（v5 contents API，或本地 git show）再 grep -n 获取行号；不应把 raw.gitcode.com/…/raw/<commit>/<path> 当唯一手段（该形式实测会间歇 403「暂不支持预览」）"
         }
       ]
     },

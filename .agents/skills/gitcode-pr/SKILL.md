@@ -190,6 +190,12 @@ done
 
 - 推荐使用 query 参数：`?access_token=$GITCODE_API_TOKEN`
 - 也可使用 Header：`PRIVATE-TOKEN: $GITCODE_API_TOKEN`
+- 也可使用 Header：`Authorization: Bearer $GITCODE_API_TOKEN`
+
+> 三种方式实测均可用（同一 token 下 GET 返回 200 与同一份 JSON）；token 错误或缺失时返回
+> `401 {"message":"401 Unauthorized"}`（**不是 403**），且 `curl -s` 的退出码仍是 0——
+> 判成功要看 HTTP 状态码或校验响应里有没有期望的键。详见
+> [references/gitcode_api.md](references/gitcode_api.md) 的「认证方式」。
 
 #### 解析评论数据
 
@@ -269,28 +275,55 @@ GET /repos/:owner/:repo/pulls/comments/:id
 curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<COMMENT_ID>?access_token=$GITCODE_API_TOKEN"
 ```
 
-**返回完整字段**：
+**返回字段（实测 cann/amct PR!455，非构造示例）**：
+
+行内评论（`194143085`，`comment_type` = `DiffNote`）：
 
 ```json
 {
-  "id": 171419900,
-  "body": "行内评论内容",
-  "path": null,
+  "id": 194143085,
+  "discussion_id": "b4ecb001ec8af59d02c3ffeffeb83fb7a8226c84",
+  "body": "评论内容",
+  "comment_type": "DiffNote",
+  "user": { "id": 1, "object_id": "…", "login": "username", "name": "显示名称", "type": "…" },
+  "created_at": "2026-05-14T16:06:24+08:00",
+  "updated_at": "2026-05-14T16:06:24+08:00",
+  "is_outdated": false,
   "position": {
-    "base_sha": "d8eb570...",
-    "start_sha": "d8eb570...",
-    "head_sha": "e54ef3...",
-    "old_path": "runtime/v1/executor.cc",
-    "new_path": "runtime/v1/executor.cc",
+    "base_sha": "475eeb88…",
+    "start_sha": "e1c9cb37…",
+    "head_sha": "ae35b167…",
+    "old_path": ".agents/skills/gitcode-pr/commands/review.md",
+    "new_path": ".agents/skills/gitcode-pr/commands/review.md",
     "position_type": "text",
-    "old_line": 212,
-    "new_line": 212
-  },
-  "comment_type": null,
-  "user": "username",
-  "created_at": "2026-05-14T16:06:24+08:00"
+    "new_line": 60
+  }
 }
 ```
+
+普通评论（`194141205`）：
+
+```json
+{
+  "id": 194141205,
+  "discussion_id": "…",
+  "body": "评论内容",
+  "user": { "id": 1, "object_id": "…", "login": "username", "name": "显示名称", "type": "…" },
+  "created_at": "2026-05-14T15:25:32+08:00",
+  "updated_at": "2026-05-14T15:25:32+08:00"
+}
+```
+
+> ⚠️ **单条接口的响应形状（实测，容易踩坑）**：
+>
+> - `user` 是**对象**（含 `login`/`name`/`id`/`object_id`/`type`），**不是用户名字符串**；
+>   取用户名用 `.user.login`。
+> - 单条接口**没有** `path` 键（`has("path")` 为 `false`），文件路径只在 `position.new_path` 里。
+> - 普通评论的响应里**根本没有** `comment_type` / `position` / `is_outdated` 这三个键
+>   （`jq '.comment_type'` 得到 `null` 是因为键不存在，不是值为 `null`）；
+>   行内评论三个键都在。
+> - 单条接口**没有**列表接口才有的 `resolved` / `resolved_by` / `diff_position` / `reply` 键；
+>   要看检视意见是否已解决、要拿讨论下的回复，必须走列表接口。
 
 > ⚠️ **两个接口的 `comment_type` 不是同一套取值**（实测 cann/amct PR!455）：
 >
@@ -310,10 +343,17 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<C
 | 字段 | 说明 |
 | ------ | ------ |
 | `position.new_path` | 文件路径 |
-| `position.new_line` | 行号（新代码） |
-| `position.old_line` | 行号（旧代码） |
+| `position.new_line` | **结束行**行号（新代码） |
+| `position.start_new_line` | **起始行**行号（新代码）；**单行评论没有此键** |
+| `position.position_type` | `text` = 代码行评论（实测）；`binary` = 文件级评论（官方文档值，**未实测**） |
+| `position.old_path` | 文件路径（重命名前） |
 | `position.base_sha` | Base 提交 SHA |
 | `position.head_sha` | Head 提交 SHA |
+
+> ⚠️ 实测 5 条行内评论（PR!455 的 `194143085`/`194143153`/`194208411`/`194208419`/`194235149`）
+> 的 `position` 键**都只有** `base_sha`/`start_sha`/`head_sha`/`old_path`/`new_path`/`position_type`/`new_line`，
+> **没有 `old_line`**（多行评论额外多一个 `start_new_line`）。所以旧代码行号取不到，
+> 不要用 `position.old_line` 做判断或过滤。
 
 > ⚠️ 上表的 `position.*` 是**单条接口**的字段名，与列表接口的 `diff_position.*` **不是同一套键名**，
 > 且**结束行的字段名在两个接口里不同**（实测 cann/amct PR!447 多行行内评论 `193754581`，
@@ -355,13 +395,23 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
   jq -r '.diffs[0].statistic.new_path'
 ```
 
-**响应字段说明**：
+**响应字段说明（实测 cann/amct PR!455）**：
 
-- `diffs[].statistic.new_path` - 新文件路径
-- `diffs[].statistic.old_path` - 旧文件路径
-- `diff_refs.base_sha` - Base SHA
-- `diff_refs.head_sha` - Head SHA
-- `diff_refs.start_sha` - Start SHA
+顶层是**对象**（不是数组），键为 `code` / `added_lines` / `remove_lines` / `count` / `diff_refs` / `diffs`：
+
+- `code` - 状态码，成功为 `0`
+- `count` - 变更文件数
+- `added_lines` / `remove_lines` - 整个 PR 的新增 / 删除行数合计
+- `diff_refs.base_sha` / `start_sha` / `head_sha` - 三个基准 SHA（发行内评论要用）
+- `diffs[]` - 每个变更文件一项，键为 `new_blob_id` / `statistic` / `head` / `added_lines` / `remove_lines` / `content`
+- `diffs[].statistic.new_path` / `old_path` - 新 / 旧文件路径（**同一路径时两者相同**）
+- `diffs[].statistic.path` - 文件路径（与 `new_path` 实测同值，取哪个都行）
+- `diffs[].statistic.type` - 变更类型，如 `text_type`
+- `diffs[].content` - 该文件的 diff 文本
+
+> 另有 `/pulls/<n>/files`（**返回数组**，每项含 `filename`/`additions`/`deletions`/`blob_id`/`patch.diff` 等）；
+> 要**整体统计与 `diff_refs`** 用 `files.json`，要**逐文件 patch / blob sha** 用 `files`。
+> 两者字段名不同（如 `diffs[].content` vs `patch.diff`），别把一套 jq 表达式套到另一个接口上。
 
 ### 提交行内评论（支持多行选择）
 
@@ -418,35 +468,39 @@ curl -X POST \
   }'
 ```
 
-**注意**：`start_position` 参数是未文档化的参数，但测试证明可能有效。
+**注意**：`start_position` **未出现在官方文档的请求体 schema 里**（官方只列
+`body`/`path`/`position`/`position_type`），但**实测有效**：传 `start_position=158` + `position=160`
+后读回 `diff_position = {"start_new_line":158,"end_new_line":160,"position_type":"text"}`。
 
-#### 创建评论的返回值问题
+#### 创建评论的返回值
 
-**重要**：POST 创建评论 API 立即返回的是**哈希字符串格式 ID**，不是数字 ID。
-
-**返回示例**：
+**重要**：POST 创建评论返回 **HTTP 201**，响应体是（实测，与「回复 discussion」接口同形）：
 
 ```json
-{
-  "id": "b227720346ef5a37e410d17e76a1c1e1f60d5d80",  // 哈希字符串
-  "discussion_id": null,
-  "body": "评论内容",
-  "created_at": null
-}
+{"id": "<discussion_id 哈希串>", "body": "评论内容", "note_id": 194071029}
 ```
 
-**获取真正的数字 ID**：
-创建评论后，需要查询评论列表获取数字 ID（用于后续删除等操作）。
-⚠️ 不要用 `contains(.body)` 做宽匹配定位——若 PR 中已有包含相同文本的评论，
-会匹配到错误的评论 ID，导致误删/误操作他人评论。应满足以下任一精确条件：
+- `id` 是**讨论 ID**（哈希串），用于回复该讨论，**不能**用于删除；
+- `note_id` 就是**数字评论 ID**，`DELETE /pulls/comments/<note_id>` 直接用它，
+  **不必先翻评论列表反查**；
+- 拿哈希串去 DELETE 会得到
+  `400 {"error_code_name":"UN_KNOW","error_message":"Orchestration error: Invalid path parameter: note_id, number required"}`；
+- 响应里**没有** `comment_type` / `created_at` / `discussion_id` 这些键，别按它们校验。
 
-- 在评论正文里嵌入一个**唯一标记**（如随机串/时间戳），用 `==` 或 `contains(唯一标记)` 精确匹配；
+**仍建议回读校验**（POST 的 201 不代表评论内容/落点符合预期，例如行号错位、path 写错会静默落到别处）。
+回读时用列表接口按 `note_id` 精确比对 `.id`，不要用 `contains(.body)` 做宽匹配——若 PR 中已有包含相同
+文本的评论，会匹配到错误的评论 ID，导致误删/误操作他人评论。应满足以下任一精确条件：
+
+- **首选**：直接用 POST 返回的 `note_id` 比 `.id`（唯一、无需标记）；
+- 或在评论正文里嵌入一个**唯一标记**（如随机串/时间戳），用 `==` 或 `contains(唯一标记)` 精确匹配；
 - 或结合**当前用户**（`.user.login`）、**创建时间**（`.created_at`）、POST 返回的
-  **`discussion_id`** 共同过滤，缩小到唯一一条。
+  **`id`（讨论 ID）** 共同过滤，缩小到唯一一条。
 
 ```bash
-# 推荐：用 POST 返回的 discussion_id 定位，再用 reply_to 收敛到唯一一条
-DISCUSSION_ID="b227720346ef5a37e410d17e76a1c1e1f60d5d80"   # POST 返回的哈希串
+# 回读校验：首选直接用 POST 返回的 note_id 比 .id；下面额外保留按讨论 ID 定位的写法，
+# 用于「响应没留档、只记得讨论」或需要确认落点（行号/文件）的场景
+NOTE_ID=194071029                                        # POST 响应里的 note_id（数字评论 ID）
+DISCUSSION_ID="b227720346ef5a37e410d17e76a1c1e1f60d5d80" # POST 响应里的 id（哈希串）
 # ⚠️ 同样必须 per_page=100 **并翻页**：目标评论在第 20 条之后时不带 per_page 会查不到、
 #    在第 100 条之后时不翻页会查不到，两种都会把「创建成功」误判成「创建失败」。
 #    下面按页查找，命中即停。
@@ -464,10 +518,10 @@ while :; do
     echo "ERROR: 第 ${page} 页评论请求失败或响应非数组，无法确认评论是否创建成功：$resp" >&2
     exit 1
   fi
-  found=$(echo "$resp" | jq -c --arg did "$DISCUSSION_ID" --arg me "$MY_LOGIN" '
+  found=$(echo "$resp" | jq -c --argjson nid "$NOTE_ID" --arg did "$DISCUSSION_ID" --arg me "$MY_LOGIN" '
       .[] | {id, discussion_id, comment_type, author: .user.login, body} as $c
       | $c, (.reply[]? | {id, discussion_id: $c.discussion_id, comment_type: $c.comment_type, author: .user.login, body, reply_to: $c.id})
-      | select(.discussion_id == $did or (.author == $me and .body == "唯一标记内容"))
+      | select(.id == $nid or .discussion_id == $did or (.author == $me and .body == "唯一标记内容"))
       | select(.reply_to == null)          # 目标是新建的顶层评论；找回复则改用 .id == <note_id>
       | {id, discussion_id, comment_type, reply_to}')
   [ -n "$found" ] && break
@@ -606,8 +660,10 @@ while :; do
     || { echo "ERROR: 第 ${page} 页 jq 解析失败，ID 未取全" >&2; exit 1; }
   # ⚠️ 405 预检：**被选中的父评论**若还有**未被选中的存活回复**，删它必然 405。
   #    这类失败在翻页阶段就能算出来，没必要先发 N 次注定失败的 DELETE、再靠 405 反推
-  #    （实测：标记只覆盖父评论时，100 个父评论 DELETE **全部** 405、脚本 exit 1，
-  #     清理一条都没完成，且 100 行 ERROR 里看不出根因是「筛选条件没覆盖回复」）。
+  #    （**本地假 API 模拟**：100 父 + 100 回复、标记只覆盖父评论时，100 个父评论 DELETE **全部** 405、
+  #     脚本 exit 1、清理一条都没完成，且 100 行 ERROR 里看不出根因是「筛选条件没覆盖回复」。
+  #     **真实 API 只实测过单点**：父评论带存活回复时删父 → 405，先删回复再删父 → 200，
+  #     见 references/gitcode_api.md「删除 PR 评论」的证据边界）。
   echo "$resp" | jq -r '
       .[] | select((.body // "") | startswith("<唯一标记>")) as $p
       | ($p.reply // [])[]

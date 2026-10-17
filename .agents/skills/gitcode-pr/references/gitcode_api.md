@@ -413,6 +413,14 @@ curl -s -o /dev/null -w '%{http_code}\n' -X DELETE \
 > 否则会把 N 次注定失败的 `DELETE` 全发一遍，只留下 N 行看不出根因的 ERROR。
 > 另：`curl -s` 不加 `-f`/`--fail` 时，`405` 这类 HTTP 错误的**退出码仍是 0**，
 > 只看 `$?` 会把「删失败」当成「删成功」——必须用 `-w '%{http_code}'` 显式校验状态码。
+>
+> **证据边界（别把两类验证混为一谈）**：
+> - **真实 API 实测**（cann/amct PR!455 自测探针）：父 `194259915` 带存活回复 `194259921` 时
+>   删父 → `405 Can not delete a discussion that has replies.`；先删回复（`200`）再删父 → `200`。
+> - **「N 个父评论全部 405、脚本 exit 1、清理一条没完成」的批量场景是本地假 API 模拟得到的**
+>   （100 父 + 100 回复、标记只覆盖父评论），不是对真实 API 的批量实测——
+>   真实 API 上不会为验证这一点去批量制造/删除上百条评论。
+>   由单点实测（父带存活回复删不掉）+ 筛选条件没覆盖回复，可**推得**批量场景必然逐条 `405`。
 
 ### 获取评论 ID
 
@@ -540,7 +548,9 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
 |------|------|
 | `filename` | 文件路径 |
 | `sha` | **提交 sha**（实测等于 `diff_refs.head_sha`），**不是 blob sha**；blob sha 在 `blob_id` |
-| `blob_id` / `blob_url` / `raw_url` | blob sha 与其取内容的地址（`blob_id` 实测等于 `git rev-parse <commit>:<path>`） |
+| `blob_id` | blob sha（实测等于 `git rev-parse <commit>:<path>`），可拼成稳定的 `…/blobs/<blob_id>/<path>` 取内容地址 |
+| `blob_url` | 网页版文件页（`gitcode.com/<owner>/<repo>/blob/<commit_sha>/<path>`），不是取原始内容的地址 |
+| `raw_url` | 原始内容地址，但形式是 `…/raw/<commit_sha>/<path>`，**实测不稳定**（见下文「获取文件原始内容」），别当唯一手段 |
 | `additions` / `deletions` | 增删行数 |
 | `patch.diff` | unified diff 文本，行内评论定位行号从这里取 |
 | `patch.old_path` / `new_path` | 重命名前后路径 |
@@ -552,8 +562,25 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
 ## 获取文件原始内容
 
 ```bash
-curl -s "https://raw.gitcode.com/${owner}/${repo}/raw/{commit_sha}/文件路径"
+curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/contents/{文件路径}?ref={commit_sha}&access_token=$GITCODE_API_TOKEN" | \
+  jq -r '.content' | base64 -d
 ```
+
+**返回字段**（实测）：`type` / `encoding` / `size` / `name` / `path` / `content`（base64）/
+`sha`（**blob sha**）/ `url` / `html_url` / `download_url` / `_links`。
+
+`download_url` 是 `https://raw.gitcode.com/${owner}/${repo}/blobs/{blob_sha}/{文件路径}` 形式，
+直接返回明文，实测稳定 `200`，适合管道给 `grep -n` 定位行号。
+
+> ⚠️ **`…/raw/{commit_sha}/{文件路径}` 这个形式实测不稳定，不要当唯一手段**：同一 URL、同一 sha，
+> 在某一段时间内对 `.agents/skills/gitcode-pr/` 下的 `commands/review.md`、
+> `references/gitcode_api.md`、`evals/evals.json` 连续 3 次返回 `403`（body「暂不支持预览」），
+> 同一时刻同 sha 的 `SKILL.md`/`README.md`/`build.sh` 却返回 `200`；几分钟后同一批 URL
+> 又连续 5 次全部 `200`。`/pulls/<n>/files` 响应里的 `raw_url` 就是该形式，同样不可靠。
+>
+> 另：`ref` **必须是 commit sha**，传分支名返回 `404 {"message":"404 Commit Not Found"}`（实测）。
+> `curl -s` 对 `403`/`404` 的退出码仍是 `0`，取完必须校验状态码 / 内容非空，
+> 否则会把错误页当成文件内容、`grep -n` 静默输出空结果。
 
 ---
 

@@ -82,28 +82,41 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
 
 **注意**：hunk header 只提供了起始行号，需要根据 diff 内容逐行计算实际行号。
 
-#### 方法 2: 从 Raw 文件验证（推荐）
+#### 方法 2: 取文件原始内容验证（推荐）
 
-直接查询 PR 分支的 raw 文件获取准确行号：
+直接读取 PR head commit 上的完整文件，用 `grep -n` 拿准确行号。**首选 v5 contents API**
+（`content` 是 base64，需解码）：
 
 ```bash
-# 获取 PR head commit 的 raw 文件
-curl -s "https://raw.gitcode.com/${owner}/${repo}/raw/<HEAD_SHA>/path/to/file.cc" | grep -n "问题代码模式"
+curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/contents/path/to/file.cc?ref=<HEAD_SHA>&access_token=$GITCODE_API_TOKEN" \
+  | jq -r '.content' | base64 -d | grep -n "问题代码模式"
 ```
 
-**示例**：
+或用同一响应的 `download_url`（`…/blobs/<blob_sha>/<path>` 形式，返回明文，无需解码）：
+
 ```bash
-# 查找 if (it == 的行号
-curl -s "https://raw.gitcode.com/${owner}/${repo}/raw/358192edfc1809f6fe17b0da0b1b8efd9880a52f/hcom_graph_optimizer.cc" \
-  | grep -n "if (it =="
+curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/contents/path/to/file.cc?ref=<HEAD_SHA>&access_token=$GITCODE_API_TOKEN" \
+  | jq -r '.download_url' | xargs -r curl -s | grep -n "问题代码模式"
 ```
 
-输出：`844:      if (it == (itMap->second).end()) {`
+> ⚠️ **`https://raw.gitcode.com/${owner}/${repo}/raw/<commit_sha>/<path>` 这个形式实测不稳定，
+> 不要当唯一手段**：同一 URL、同一 sha，在某一段时间内对 `.agents/skills/gitcode-pr/` 下的
+> `commands/review.md`、`references/gitcode_api.md`、`evals/evals.json` 连续 3 次都返回
+> `403`（body 为「暂不支持预览」），而同一时刻同 sha 的 `SKILL.md`/`README.md`/`build.sh`
+> 返回 `200`；几分钟后同一批 URL 又连续 5 次全部 `200`。
+> `/pulls/<n>/files` 响应里的 `raw_url` 字段就是这个形式，同样不可靠。
+>
+> 因此：
+> - **取内容用 contents API 或它的 `download_url`（blobs 形式）**，两者实测稳定 `200`；
+> - `ref` **必须是 commit sha**，传分支名会 `404 {"message":"404 Commit Not Found"}`（实测）；
+> - 无论用哪种，都要**校验 HTTP 状态码 / 内容非空**再 `grep`——`curl -s` 对 403/404 的退出码
+>   仍是 `0`，不校验就会把错误页当成文件内容，`grep -n` 静默输出空结果，行号定位随之失败。
 
 #### 最佳实践
 
 1. **先用 diff 定位大致范围**：通过 PR diff 找到变更的代码块
-2. **再用 raw 文件确认精确行号**：避免手动计算出错
+2. **再取文件原始内容确认精确行号**：避免手动计算出错（用方法 2 的 contents API，
+   不要依赖 `…/raw/<commit>/<path>`——该形式实测会间歇 `403`）
 3. **发布评论前验证**：确保行号对应的是真正的问题代码
 
 ### 步骤 4: 代码审查
