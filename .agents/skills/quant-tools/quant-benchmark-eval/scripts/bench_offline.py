@@ -70,11 +70,25 @@ def _patched(path, *args, **kwargs):
 
 
 def install():
+    """Redirect dataset loads to $BENCH_ASSETS instead of the network / HF cache.
+
+    lm-eval 0.4.12 resolves the loader through the module attribute at call time
+    (`api/task.py`: `datasets.load_dataset(path=..., name=...)`), so the patch on
+    `datasets.load_dataset` is the one that actually intercepts it, and it is
+    applied unconditionally. A layout that instead binds `load_dataset` into
+    `lm_eval.api.task` at import time keeps its own reference and would go
+    straight to the network; patch that name too when it exists -- assigning it
+    blindly only creates an attribute nothing reads, and swallowing the import
+    error hides which of the two happened (constraints.md #2).
+    """
     datasets.load_dataset = _patched
+    patched = ["datasets.load_dataset"]
     try:
         import lm_eval.api.task as _t
-
-        _t.load_dataset = _patched
-    except Exception:
-        pass
-    print(f"[bench_offline] patched load_dataset for {list(_LOCAL)}")
+    except ImportError as exc:
+        print(f"[bench_offline] lm_eval.api.task not importable ({exc})")
+    else:
+        if hasattr(_t, "load_dataset"):
+            _t.load_dataset = _patched
+            patched.append("lm_eval.api.task.load_dataset")
+    print(f"[bench_offline] patched {' + '.join(patched)} for {list(_LOCAL)}")

@@ -743,6 +743,73 @@ def _check_quant_target_guard():
     ensure_supported_quant_target("attn-linear", allow_attn_quant=True)
 
 
+def _check_offline_shim_install():
+    """`bench_offline.install()` must intercept the call lm-eval really makes.
+
+    lm-eval 0.4.12 resolves the loader through the module attribute at call time
+    (`api/task.py`: `datasets.load_dataset(path=..., name=...)`), so the patch
+    that matters is the one on `datasets.load_dataset`. A layout that instead
+    binds `load_dataset` into `lm_eval.api.task` at import time keeps its own
+    reference and would go straight to the network / HF cache, scoring data that
+    is not the pinned `$BENCH_ASSETS` copy (constraints.md #2); `install()`
+    patches that name too when it exists. Assert both, then drive one call the
+    way lm-eval does and check it lands on a local file -- no network, no NPU.
+    """
+    try:
+        import datasets
+    except ImportError as exc:
+        print(f"[self_check] skip shim-install check: {exc}")
+        return
+
+    import bench_offline
+
+    task_mod = None
+    try:
+        import lm_eval.api.task  # noqa: F401
+
+        task_mod = sys.modules["lm_eval.api.task"]
+    except ImportError as exc:
+        print(f"[self_check] shim-install check runs without lm-eval: {exc}")
+
+    saved_datasets = datasets.load_dataset
+    saved_task = getattr(task_mod, "load_dataset", None)
+    saved_local = bench_offline._LOCAL
+    with tempfile.TemporaryDirectory() as tmp:
+        probe = os.path.join(tmp, "sample.jsonl")
+        with open(probe, "w", encoding="utf-8") as f:
+            f.write('{"question_id":"q1","answer":"42"}\n')
+            f.write('{"question_id":"q2","answer":"7"}\n')
+        bench_offline._LOCAL = {("selfcheck/probe", None): {"test": [probe]}}
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                bench_offline.install()
+            if datasets.load_dataset is not bench_offline._patched:
+                raise AssertionError("install() did not patch datasets.load_dataset")
+            if task_mod is not None and hasattr(task_mod, "load_dataset"):
+                if task_mod.load_dataset is not bench_offline._patched:
+                    raise AssertionError(
+                        "this lm-eval binds load_dataset into lm_eval.api.task at "
+                        "import time and install() left it unpatched, so tasks "
+                        "would read from the network / HF cache instead of "
+                        "$BENCH_ASSETS"
+                    )
+            # The keyword call shape lm-eval uses must reach the local file.
+            got = datasets.load_dataset(
+                path="selfcheck/probe", name=None, data_dir=None
+            )
+            if list(got) != ["test"]:
+                raise AssertionError(f"shim returned splits {list(got)}, want ['test']")
+            ids = list(got["test"]["question_id"])
+            if ids != ["q1", "q2"]:
+                raise AssertionError(f"shim did not serve the local jsonl rows: {ids}")
+        finally:
+            datasets.load_dataset = saved_datasets
+            if saved_task is not None:
+                task_mod.load_dataset = saved_task
+            bench_offline._LOCAL = saved_local
+    print("[self_check] offline shim intercepts lm-eval's load_dataset call shape")
+
+
 def _parse_metric_table(path):
     """Read (task, metric) pairs out of SKILL.md's cost/metric table.
 
@@ -831,6 +898,7 @@ def main():
     _check_jsonl_reader()
     _check_lcb_validation()
     _check_quant_target_guard()
+    _check_offline_shim_install()
     _check_skill_metric_keys()
     _check_cli_help()
     _check_cli_flags()
