@@ -503,9 +503,14 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
 #    ⚠️ 展开后还要**先删回复、再删父评论**：父评论带回复时 DELETE 返回
 #       405 {"error_message":"Can not delete a discussion that has replies."}（实测），
 #       下面用 reply_to 排序把回复排到前面
+#    ⚠️ 排序键**只放 reply_to 标志 + id，不要把 .body 放进去**：body 常带换行，
+#       sort 是按行排序的，掺进 body 会把一条评论拆成多行重排——记录数被撑大、
+#       带 id 的行被正文碎片淹没，「回复在前」的顺序根本读不出来（实测同一批
+#       43 条评论：掺 body 输出 475 行，只留标志+id 输出 43 行）
+#       要看正文另起一条命令用 jq -c 输出（一行一个 JSON 对象，换行已转义）
 curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100" | \
-  jq -r '.[] | . as $c | ({id: .id, body: .body, reply_to: null}, ((.reply // [])[] | {id: .id, body: .body, reply_to: $c.id}))
-         | "\(if .reply_to then 1 else 0 end)\t\(.id)\t\(.body)"' | sort -r
+  jq -r '.[] | . as $c | ({id: .id, reply_to: null}, ((.reply // [])[] | {id: .id, reply_to: $c.id}))
+         | "\(if .reply_to then 1 else 0 end)\t\(.id)"' | sort -r
 
 # 2. 删除评论（<COMMENT_ID> 使用上一步列表返回的数字 id，按上一步的顺序：回复在前）
 #    ⚠️ curl -s 不加 --fail 时，405/403/404 的退出码仍是 0，只看 $? 会把删失败当成删成功，

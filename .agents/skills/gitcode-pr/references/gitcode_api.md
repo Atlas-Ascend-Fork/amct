@@ -408,14 +408,47 @@ done
 先删回复（`200`）再删父 → `200`。
 因此按 `reply_to` 排序（**非 null 的回复先删**），并逐个校验 HTTP 状态码：
 
+⚠️ **另外两个同样会「少删却 exit 0」的坑**：
+
+1. **不能边翻页边删**。删除会让列表变短、后续条目前移，此时再取「下一页」拿到的已不是
+   原来那批数据，中间被跳过的条目**永远删不到**。必须**先把所有页的 ID 取全（只读不删），
+   再统一删**；若坚持边翻边删，则必须用 `total_page` **倒序**翻页（从最后一页往前删，
+   前面的偏移才不受影响）。
+2. **不能在循环里覆盖同一个变量、循环外再用它删**。`resp=$(...)` 每翻一页都会覆盖上一页，
+   循环结束后只剩**最后一页**——评论超过 100 条时前面几页的 ID 全丢，且脚本仍 `exit 0`。
+   必须在循环内把 ID **追加**到累积容器（临时文件/变量），循环结束后统一删。
+
+此外 `select(.body | startswith(...))` 里的 `.body` **可能为 `null`**（行内 diff 评论、
+系统生成的评论等），对 `null` 调 `startswith` 会让 jq **中途报错退出**：崩之前已输出的 ID
+算数、其后的 ID 全部丢失，而外层 `for` 不检查 jq 退出码，于是拿着残缺名单照常跑完并 `exit 0`。
+必须写成 `(.body // "")`，并对 jq 的退出码显式判断。
+
 ```bash
+# ---- 第 1 步：翻页把所有待删 ID 取全（只读不删），追加进临时文件 ----
+ids=$(mktemp)
+trap 'rm -f "$ids"' EXIT
+page=1
+while :; do
+  resp=$(curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100&page=${page}")
+  if [ "$(echo "$resp" | jq -r 'type' 2>/dev/null)" != "array" ]; then
+    echo "ERROR: 第 ${page} 页评论请求失败或响应非数组，ID 未取全：$resp" >&2
+    exit 1
+  fi
+  # reply_to 非 null（回复）标记为 1，父评论为 0；(.body // "") 兜住 null，否则 jq 会中途死掉丢 ID
+  echo "$resp" | jq -r '
+      .[] | . as $c
+      | ({id, body, reply_to: null}, ((.reply // [])[] | {id, body, reply_to: $c.id}))
+      | select((.body // "") | startswith("<唯一标记>"))
+      | "\(if .reply_to then 1 else 0 end)\t\(.id)"' >> "$ids" \
+    || { echo "ERROR: 第 ${page} 页 jq 解析失败，ID 未取全" >&2; exit 1; }
+  count=$(echo "$resp" | jq 'length')
+  [ "$count" -lt 100 ] && break
+  page=$((page + 1))
+done
+
+# ---- 第 2 步：全部取完后再统一删除（sort -r 使「回复在前、父评论在后」）----
 fail=0
-# reply_to 非 null（回复）排在前，父评论在后
-for id in $(printf '%s\n' "$resp" | jq -r '
-    .[] | . as $c
-    | ({id, body, reply_to: null}, ((.reply // [])[] | {id, body, reply_to: $c.id}))
-    | select(.body | startswith("<唯一标记>"))
-    | "\(if .reply_to then 1 else 0 end)\t\(.id)"' | sort -r | cut -f2); do
+for id in $(sort -r "$ids" | cut -f2); do
   code=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
     "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/${id}?access_token=$GITCODE_API_TOKEN")
   [ "$code" = "200" ] || { echo "ERROR: 删除评论 ${id} 失败（http=${code}），清理不完整" >&2; fail=1; }
