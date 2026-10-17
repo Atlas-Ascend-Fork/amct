@@ -148,12 +148,21 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
 
 ## 获取 PR 讨论（包含行内评论）
 
-顶层直接返回数组，行内评论与普通评论混在同一列表，用 `comment_type` 区分：
+顶层直接返回数组，行内评论与普通评论混在同一列表，用 `comment_type` 区分。
+
+> ⚠️ **顶层数组不含回复**：回复嵌在父评论的 `reply[]` 里（实测 cann/amct PR!455：顶层 27 条，
+> 4 条父评论的 `reply[]` 内另有 11 条，这 11 个 ID 在顶层一个都查不到）。
+> `reply[]` 里的对象**只有** `id`/`body`/`user`/`created_at`/`updated_at`，
+> **没有** `discussion_id`/`comment_type`/`resolved`/`path`，需要时从父评论带下来
+> （`comment_type` 跟随父讨论种类，与单条接口的行为一致；`resolved` 是讨论级属性、以父评论为准）。
+> 回复的完整字段仍需用 `note_id` 查单条接口 `GET /pulls/comments/<id>`。
+> **分页 `length` 数的是父评论条数**，回复不计入 `per_page`/`total_count`。
 
 ```bash
 # 单页（评论数 ≤ 100 时够用）
 curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100" | \
-  jq '.[] | {id, discussion_id, comment_type, author: .user.login, resolved, lines: .diff_position, body}'
+  jq '.[] | {id, discussion_id, comment_type, author: .user.login, resolved, lines: .diff_position, body} as $c
+      | $c, (.reply[]? | {id, discussion_id: $c.discussion_id, comment_type: $c.comment_type, author: .user.login, body, reply_to: $c.id})'
 
 # 翻页取完所有评论（评论数可能 > 100，必须循环，否则会漏读）
 page=1
@@ -163,12 +172,13 @@ while :; do
   # 错误对象（{"error_code":...}）的 `jq 'length'` 是键数，会被当成「本页 N 条」
   # 静默提前终止。两者都必须显式报错。
   if [ "$(echo "$resp" | jq -r 'type' 2>/dev/null)" != "array" ]; then
-    echo "ERROR: 第 ${page} 页评论请求失败或响应非数组，已取结果不完整：$resp" >&2
+  echo "ERROR: 第 ${page} 页评论请求失败或响应非数组，已取结果不完整：$resp" >&2
     exit 1   # 取不全即失败：空列表 + exit 0 会被调用方误读成「取全了且没有评论」
   fi
-  echo "$resp" | jq -c '.[] | {id, discussion_id, comment_type, author: .user.login, resolved, body}'
+  # 父评论原样输出，再把 reply[] 展开成同形对象（回复没有 discussion_id/comment_type，从父评论带下来）
+  echo "$resp" | jq -c '.[] | {id, discussion_id, comment_type, author: .user.login, resolved, body} as $c | $c, (.reply[]? | {id, discussion_id: $c.discussion_id, comment_type: $c.comment_type, author: .user.login, body, reply_to: $c.id})'
   count=$(echo "$resp" | jq 'length')
-  [ "$count" -lt 100 ] && break   # 本页不足 100 条即为最后一页
+  [ "$count" -lt 100 ] && break   # count 数的是**父评论**条数（回复不计入分页），不足 100 即最后一页
   page=$((page + 1))
 done
 ```
@@ -346,7 +356,9 @@ curl -s -X DELETE \
 ### 获取评论 ID
 
 ```bash
-# 顶层直接是数组；per_page 默认 20、最大 100，评论多时必须显式传 100 并翻页，否则 ID 会漏
+# 顶层直接是数组；per_page 默认 20、最大 100，评论多时必须显式传 100 并翻页，否则 ID 会漏。
+# ⚠️ 顶层**不含回复**：自己以「回复」形式发的评论嵌在父评论 reply[] 里，不展开就永远收不到
+#    它的 id，DELETE 时会漏删（实测 PR!455 顶层 27 条、reply[] 内另有 11 条）。
 page=1
 while :; do
   resp=$(curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100&page=${page}")
@@ -356,9 +368,10 @@ while :; do
     echo "ERROR: 第 ${page} 页评论请求失败或响应非数组，已取 ID 不完整：$resp" >&2
     exit 1   # 取不全即失败：ID 列表不完整时继续删会漏删，且 exit 0 会被读成「已清理干净」
   fi
-  echo "$resp" | jq -c '.[] | {id, discussion_id, comment_type, author: .user.login, body}'
+  # 父评论 + 其 reply[] 一并输出（回复没有 discussion_id/comment_type，从父评论带下来）
+  echo "$resp" | jq -c '.[] | {id, discussion_id, comment_type, author: .user.login, body} as $c | $c, (.reply[]? | {id, discussion_id: $c.discussion_id, comment_type: $c.comment_type, author: .user.login, body, reply_to: $c.id})'
   count=$(echo "$resp" | jq 'length')
-  [ "$count" -lt 100 ] && break
+  [ "$count" -lt 100 ] && break   # count 数的是**父评论**条数（回复不计入分页）
   page=$((page + 1))
 done
 ```
@@ -366,6 +379,8 @@ done
 > 这里的整数 `id` 就是 `DELETE` 要用的评论 ID（发表评论时响应里的 `note_id`）。
 > 该循环失败分支同样必须 `exit 1`（理由见上「失败必须显式」）：ID 没取全就继续删会**漏删**，
 > 而 `break` + `exit 0` 会让调用方把「取失败了」读成「已清理干净」。
+> 同理，**不展开 `reply[]` 也会漏删**：以回复形式留下的评论不在顶层，
+> 只投影顶层字段时它的 `id` 永远收不到——这类漏删还是静默的（脚本 `exit 0`）。
 
 ### 权限说明
 

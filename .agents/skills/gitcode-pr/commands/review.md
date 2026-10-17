@@ -22,7 +22,9 @@ allowed-tools: Bash(curl:*), Bash(jq:*), Bash(grep:*), Bash(git diff:*), Bash(gi
 - PR 是草稿状态
 - PR 不需要代码审查（如：自动化 PR、明显正确的微小变更）
 - Claude 已经在此 PR 上评论过（通过 GitCode API 检查 PR 评论，**必须翻完所有分页**，
-  见「GitCode API 参考 → 基本格式」，否则会漏读第 100 条之后的评论而误判为未评论过）
+  见「GitCode API 参考 → 基本格式」，否则会漏读第 100 条之后的评论而误判为未评论过；
+  且**必须展开父评论的 `reply[]`**——回复不出现在列表顶层，只在既有讨论里回复过的活动
+  不展开就完全看不到，同样会被误判为「未评论过」而重复发布审查意见）
 
 如果以上任一条件成立，停止执行，不继续后续步骤。
 
@@ -261,6 +263,9 @@ curl -s -X POST \
 # 读取 PR 评论（顶层直接是数组；comment_type 区分 diff_comment / pr_comment）
 # ⚠️ per_page 默认 20、最大 100：评论数超过 100 的 PR 必须按 page 递增翻页取完，
 #    否则步骤 1「Claude 是否已评论过」会漏读后面的评论而误判，导致重复发布审查意见。
+# ⚠️ 顶层数组**不含回复**：回复嵌在父评论的 reply[] 里（实测 PR!455 顶层 27 条、
+#    reply[] 内另有 11 条，回复 ID 在顶层一个都查不到），必须一并展开，
+#    否则「只在既有讨论里回复过」的活动看不到，步骤 1 同样会误判为未评论过。
 page=1
 while :; do
   resp=$(curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100&page=${page}")
@@ -273,9 +278,11 @@ while :; do
     echo "ERROR: 第 ${page} 页评论请求失败或响应非数组，已取结果不完整：$resp" >&2
     exit 1   # 取不全就是失败，必须非 0 退出（见下方「失败必须显式」）
   fi
-  echo "$resp" | jq -c '.[] | {id, discussion_id, comment_type, author: .user.login, body}'
+  # 父评论原样输出，再把 reply[] 展开成同形对象；reply 对象只有 id/body/user/时间戳，
+  # discussion_id 与 comment_type 从父评论带下来（comment_type 跟随父讨论种类）
+  echo "$resp" | jq -c '.[] | {id, discussion_id, comment_type, author: .user.login, body} as $c | $c, (.reply[]? | {id, discussion_id: $c.discussion_id, comment_type: $c.comment_type, author: .user.login, body, reply_to: $c.id})'
   count=$(echo "$resp" | jq 'length')
-  [ "$count" -lt 100 ] && break   # 本页不足 100 条即为最后一页
+  [ "$count" -lt 100 ] && break   # count 数的是**父评论**条数（回复不计入分页），不足 100 即最后一页
   page=$((page + 1))
 done
 ```

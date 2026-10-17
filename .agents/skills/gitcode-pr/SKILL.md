@@ -128,6 +128,9 @@ GitCode 使用 v5 API 获取 PR 评论：
 # 获取 PR 的所有评论（包括行内评论）
 # ⚠️ 必须显式传 per_page=100 并从 page=1 起翻页取完：per_page 默认只有 20，
 #    实测 cann/amct PR!431 共 38 条、PR!417 共 45 条，不带 per_page 都只返回 20 条。
+# ⚠️ 顶层数组**不含回复**：回复嵌在父评论的 reply[] 里（实测 PR!455 顶层 27 条、
+#    reply[] 内另有 11 条，回复 ID 在顶层一个都查不到），必须一并展开；
+#    reply 对象只有 id/body/user/时间戳，discussion_id 与 comment_type 要从父评论带下来。
 page=1
 while :; do
   resp=$(curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100&page=${page}")
@@ -137,9 +140,10 @@ while :; do
     echo "ERROR: 第 ${page} 页评论请求失败或响应非数组，结果不完整：$resp" >&2
     exit 1
   fi
-  echo "$resp" | jq -c '.[] | {id, discussion_id, comment_type, author: .user.login, body}'
+  # 每条父评论先原样输出，再把它 reply[] 里的回复展开成同形对象（带 reply_to 标记来源）
+  echo "$resp" | jq -c '.[] | {id, discussion_id, comment_type, author: .user.login, body} as $c | $c, (.reply[]? | {id, discussion_id: $c.discussion_id, comment_type: $c.comment_type, author: .user.login, body, reply_to: $c.id})'
   count=$(echo "$resp" | jq 'length')
-  [ "$count" -lt 100 ] && break   # 本页不足 100 条即为最后一页
+  [ "$count" -lt 100 ] && break   # count 数的是**父评论**条数（回复不计入分页），不足 100 即最后一页
   page=$((page + 1))
 done
 ```
@@ -147,6 +151,12 @@ done
 > 评论列表**取不全时必须停止**依赖它的判断（如「是否已评论过」「该删哪条」），
 > 不得据空列表推断「没有评论」。完整翻页写法与响应头校验见
 > `references/gitcode_api.md` → 「获取 PR 讨论（包含行内评论）」。
+>
+> **回复必须展开**：只投影顶层字段时，「只在既有讨论里回复过」的活动完全不可见——
+> 判断「是否已评论过」会漏判并重复发意见，给 `DELETE` 收集 ID 会漏删自己发过的回复。
+> 回复对象**没有** `discussion_id`/`comment_type`/`resolved`，前三者要从父评论带下来
+> （`comment_type` 跟随父讨论种类，与单条接口的行为一致），`resolved` 是讨论级属性、
+> 以父评论为准。回复的完整字段（含 `path`/`position`）仍需用 `note_id` 查单条接口。
 
 ## GitCode API v5 说明
 
@@ -378,15 +388,20 @@ curl -X POST \
 # 推荐：用 POST 返回的 discussion_id 精确定位（最可靠）
 DISCUSSION_ID="b227720346ef5a37e410d17e76a1c1e1f60d5d80"   # POST 返回的哈希串
 # 同样必须 per_page=100 + 翻页：目标评论在第 20 条之后时，不带 per_page 会查不到而误判「创建失败」
+# 顶层不含回复：若目标是「回复」而非新建评论，必须把 reply[] 一并展开才 select 得到
 curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100" | \
   jq --arg did "$DISCUSSION_ID" --arg me "$MY_LOGIN" \
-    '.[] | select(.discussion_id == $did or (.user.login == $me and .body == "唯一标记内容")) | {id, discussion_id, comment_type}'
+    '.[] | {id, discussion_id, comment_type, author: .user.login, body} as $c
+     | $c, (.reply[]? | {id, discussion_id: $c.discussion_id, comment_type: $c.comment_type, author: .user.login, body, reply_to: $c.id})
+     | select(.discussion_id == $did or (.author == $me and .body == "唯一标记内容"))
+     | {id, discussion_id, comment_type, reply_to}'
 
 # 返回：
 # {
 #   "id": 171431239,  // 数字 ID
 #   "discussion_id": "b227720346ef5a37e410d17e76a1c1e1f60d5d80",
-#   "comment_type": "diff_comment"
+#   "comment_type": "diff_comment",
+#   "reply_to": null        // 非 null 表示这条是回复，值为父评论 ID
 # }
 ```
 
@@ -414,11 +429,12 @@ POST /repos/:owner/:repo/pulls/:number/discussions/:discussion_id/comments
 
 1. **获取 discussion_id**：
 
-    ```bash
-   # per_page 默认 20，必须显式传 100；评论数 > 100 时按 page 递增翻页取完（见「获取 PR 讨论列表」）
-   curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100" | \
-    jq '.[] | {id: .id, discussion_id: .discussion_id}'
-    ```
+```bash
+# per_page 默认 20，必须显式传 100；评论数 > 100 时按 page 递增翻页取完（见「获取 PR 讨论列表」）
+# 此处只需父评论：回复不能单独被回复，reply[] 里的条目共享父评论的 discussion_id
+curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100" | \
+  jq '.[] | {id: .id, discussion_id: .discussion_id}'
+```
 
 2. **回复评论**：
 
@@ -464,8 +480,10 @@ POST /repos/:owner/:repo/pulls/:number/discussions/:discussion_id/comments
 # 1. 获取评论的数字 id（使用 v5 API）
 #    per_page 默认 20，必须显式传 100；评论数 > 100 时按 page 递增翻页取完（见「获取 PR 讨论列表」），
 #    否则目标评论不在前 20 条时会漏查，清理不干净
+#    ⚠️ 必须把 reply[] 一并展开：自己以「回复」形式发的评论不在顶层，
+#       只投影顶层字段会永远收不到它的 id，DELETE 时就漏删
 curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100" | \
-  jq '.[] | {id: .id, body: .body}'
+  jq '.[] | . as $c | ({id: .id, body: .body}, ((.reply // [])[] | {id: .id, body: .body, reply_to: $c.id}))'
 
 # 2. 删除评论（<COMMENT_ID> 使用上一步列表返回的数字 id）
 curl -X DELETE \
