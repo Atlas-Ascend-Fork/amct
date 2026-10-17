@@ -1,0 +1,186 @@
+{
+  "_comment": "Benchmark dataset registry, shared by prefetch_data.py (download) and bench_offline.py (offline read). Paths are relative to BENCH_ASSETS. splits map split name -> one path/glob, a list of paths/globs, or {\"any_of\": [...]} / {\"all_of\": [...]} under <BENCH_ASSETS>/<subdir>/. any_of = alternative layouts of the SAME data, first hit wins (a cache holding two layouts is read once, not twice); all_of = shards that must ALL be merged (bare string/list also means all_of).",
+  "mmlu_pro": {
+    "repo_id": "TIGER-Lab/MMLU-Pro",
+    "subdir": "mmlu_pro",
+    "splits": {
+      "test": "data/test-00000-of-00001.parquet",
+      "validation": "data/validation-00000-of-00001.parquet"
+    }
+  },
+  "math500": {
+    "repo_id": "HuggingFaceH4/MATH-500",
+    "subdir": "math500",
+    "splits": {
+      "test": {
+        "any_of": [
+          "test.jsonl",
+          "data/test.jsonl",
+          "test-*.parquet",
+          "data/test-*.parquet",
+          "**/test-*.parquet"
+        ]
+      }
+    },
+    "allow_patterns": [
+      "*.parquet",
+      "**/*.parquet",
+      "*.jsonl",
+      "**/*.jsonl",
+      "README.md"
+    ]
+  },
+  "livecodebench": {
+    "repo_id": "livecodebench/code_generation_lite",
+    "subdir": "livecodebench_code_generation_lite",
+    "dataset_name": "v6",
+    "splits": {
+      "test": {
+        "all_of": [
+          "test6.jsonl"
+        ]
+      }
+    },
+    "allow_patterns": [
+      "README.md",
+      "code_generation_lite.py",
+      "test6.jsonl"
+    ]
+  },
+  "livecodebench_release_v6": {
+    "repo_id": "livecodebench/code_generation_lite",
+    "subdir": "livecodebench_code_generation_lite_release_v6",
+    "dataset_name": "release_v6",
+    "splits": {
+      "test": {
+        "all_of": [
+          "test.jsonl",
+          "test2.jsonl",
+          "test3.jsonl",
+          "test4.jsonl",
+          "test5.jsonl",
+          "test6.jsonl"
+        ]
+      }
+    },
+    "allow_patterns": [
+      "README.md",
+      "code_generation_lite.py",
+      "test.jsonl",
+      "test2.jsonl",
+      "test3.jsonl",
+      "test4.jsonl",
+      "test5.jsonl",
+      "test6.jsonl"
+    ]
+  },
+  "arc_challenge": {
+    "repo_id": "allenai/ai2_arc",
+    "subdir": "ai2_arc",
+    "dataset_name": "ARC-Challenge",
+    "allow_patterns": [
+      "*.parquet",
+      "**/*.parquet",
+      "*.json",
+      "**/*.json",
+      "*.jsonl",
+      "**/*.jsonl",
+      "README.md"
+    ],
+    "splits": {
+      "train": "ARC-Challenge/train-*.parquet",
+      "validation": "ARC-Challenge/validation-*.parquet",
+      "test": "ARC-Challenge/test-*.parquet"
+    }
+  },
+  "arc_easy": {
+    "repo_id": "allenai/ai2_arc",
+    "subdir": "ai2_arc",
+    "dataset_name": "ARC-Easy",
+    "allow_patterns": [
+      "*.parquet",
+      "**/*.parquet",
+      "*.json",
+      "**/*.json",
+      "*.jsonl",
+      "**/*.jsonl",
+      "README.md"
+    ],
+    "splits": {
+      "train": "ARC-Easy/train-*.parquet",
+      "validation": "ARC-Easy/validation-*.parquet",
+      "test": "ARC-Easy/test-*.parquet"
+    }
+  },
+  "boolq": {
+    "repo_id": "aps/super_glue",
+    "subdir": "super_glue",
+    "dataset_name": "boolq",
+    "allow_patterns": [
+      "*.parquet",
+      "**/*.parquet",
+      "*.json",
+      "**/*.json",
+      "*.jsonl",
+      "**/*.jsonl",
+      "README.md"
+    ],
+    "splits": {
+      "train": "boolq/train-*.parquet",
+      "validation": "boolq/validation-*.parquet"
+    }
+  },
+  "copa": {
+    "repo_id": "aps/super_glue",
+    "subdir": "super_glue",
+    "dataset_name": "copa",
+    "allow_patterns": [
+      "*.parquet",
+      "**/*.parquet",
+      "*.json",
+      "**/*.json",
+      "*.jsonl",
+      "**/*.jsonl",
+      "README.md"
+    ],
+    "splits": {
+      "train": "copa/train-*.parquet",
+      "validation": "copa/validation-*.parquet"
+    }
+  },
+  "piqa": {
+    "repo_id": "baber/piqa",
+    "subdir": "piqa",
+    "allow_patterns": [
+      "*.parquet",
+      "**/*.parquet",
+      "*.json",
+      "**/*.json",
+      "*.jsonl",
+      "**/*.jsonl",
+      "README.md"
+    ],
+    "splits": {
+      "train": "piqa_train.parquet",
+      "validation": "piqa_validation.parquet"
+    }
+  },
+  "sciq": {
+    "repo_id": "allenai/sciq",
+    "subdir": "sciq",
+    "allow_patterns": [
+      "*.parquet",
+      "**/*.parquet",
+      "*.json",
+      "**/*.json",
+      "*.jsonl",
+      "**/*.jsonl",
+      "README.md"
+    ],
+    "splits": {
+      "train": "data/train-*.parquet",
+      "validation": "data/validation-*.parquet",
+      "test": "data/test-*.parquet"
+    }
+  }
+}

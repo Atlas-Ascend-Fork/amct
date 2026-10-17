@@ -22,7 +22,7 @@ description: amct 大模型量化的唯一编排入口（多 agent 集成只需�
 
 **编排为 supervisor**：分析类委派 `quant-analyzer`（只读、不改代码/方案）、实施类委派 `quant-implementer`（改 adapter / 跑 `$quant-run` 执行全部命令 / 导出）、审查类委派 `quant-reviewer`（只读 quant-run 结果判读，不跑评测/ptq、不改方案）；按各自 `description` 匹配。编排自身只做判阶段 / 路由 / 汇总 / 交互确认，不直接改 adapter 代码或量化方案。
 
-叶子 / 子任务：`$model-adapter`、`quant-tools/`（**执行** `$quant-run`；**推荐** `$scheme-recommendation` / `$algorithm-recommendation`；**判读** `$direct-quant-eval` / `$algorithm-validation`；**导出** `$deploy-export`）。
+叶子 / 子任务：`$model-adapter`、`quant-tools/`（**执行** `$quant-run`；**推荐** `$scheme-recommendation` / `$algorithm-recommendation`；**判读** `$direct-quant-eval` / `$algorithm-validation`；**导出** `$deploy-export`；**下游 benchmark** `$quant-benchmark-eval`）。
 
 ---
 
@@ -89,6 +89,7 @@ description: amct 大模型量化的唯一编排入口（多 agent 集成只需�
 - 只导出 → `$deploy-export`（不在此重做评测 / PTQ / 精度判定）
 - 只推荐算法 → `$algorithm-recommendation`
 - 只验证算法 → implementer 跑 `$quant-run`（含 ptq）+ reviewer `$algorithm-validation` 判读
+- 只要下游 benchmark（PPL 之外的生成式任务精度）→ `$quant-benchmark-eval`（**按需，不在默认达标路径上**：主判据仍是 WikiText2 PPL `delta`；用户明确要 mmlu_pro / math500 / livecodebench 等下游口径，或 PPL 达标但交付方要求补下游证据时才进；它只评测、不量化，需先有 ptq 参数 / 直转结果）
 
 ---
 

@@ -4,6 +4,7 @@ amct 仓的 Agent Skills 基础设施（`.agents/`），以 skill 为单元封�
 
 当前内置：
 - **quant-workflow**：LLM 量化全流程编排主入口（方案推荐 → PTQ → 部署导出，见下文）
+- **quant-benchmark-eval**：量化模型生成式下游 benchmark 评测（lm-eval-harness / LiveCodeBench，与 bf16 基线对比），按需触发、不在默认达标路径上
 - **amct-ops-dev**：NPU 算子开发（编排外独立工具）
 - **gitcode-pr / gitcode-issue**：GitCode 仓库协作操作
 
@@ -35,6 +36,8 @@ clone 本仓即可直接使用，Agent Skills 自动加载（机制见 [docs/arc
 | 「PTQ 跑完了，比直转有没有真改善」 | `algorithm-validation` 收益验证 |
 | 「达标了，导出权重 + 写交付文档」 | `deploy-export` 导出 + `deploy_quantization.md` |
 | 「deploy 目录有了，就差交付文档」 | `deploy-export`（阶段 5 补文档）|
+| 「W8A8 量化后跑下 mmlu_pro / MATH500，跟 bf16 比一下」/「PPL 之外再看下游准确率」 | `quant-benchmark-eval` 下游 benchmark 评测 |
+| 「量化模型在 LiveCodeBench 上 pass@1 掉了多少」 | `quant-benchmark-eval`（代码生成 + 官方 lcb_runner 评分）|
 | 「量化后 PPL 比 BF16 还低，正常吗」 | `quant-workflow` 先查链路再判定 |
 | 「在 amct_ops 里加一个 mxfp4 cast 算子」/「照 hifloat8_cast 模板写个新 NPU 算子」 | `amct-ops-dev` 算子开发 |
 | 「ops_build.sh 怎么按 A2/A3/A5 切 NPU_ARCH」/「torch.compile 报 no Meta kernel 怎么补」 | `amct-ops-dev` 构建/调试 |
