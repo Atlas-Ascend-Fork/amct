@@ -1,6 +1,9 @@
 ---
 description: 审查 GitCode Pull Request 的代码变更
-allowed-tools: Bash(curl:*), Bash(jq:*), Bash(grep:*), Bash(git diff:*), Bash(git log:*), Bash(git show:*)
+# ⚠️ allowed-tools 必须覆盖正文里所有会被复制执行的命令：步骤 3.1「方法 2」用 contents API 取
+#    文件内容时要管道给 base64 -d（解码）或 xargs -r curl（跟 download_url），漏授权会让
+#    推荐路径被工具白名单拦住、agent 只能退回去用不可靠的 raw/<commit>/<path> 形式
+allowed-tools: Bash(curl:*), Bash(jq:*), Bash(grep:*), Bash(base64:*), Bash(xargs:*), Bash(git diff:*), Bash(git log:*), Bash(git show:*)
 ---
 
 # GitCode PR 代码审查
@@ -21,10 +24,28 @@ allowed-tools: Bash(curl:*), Bash(jq:*), Bash(grep:*), Bash(git diff:*), Bash(gi
 - PR 已关闭
 - PR 是草稿状态
 - PR 不需要代码审查（如：自动化 PR、明显正确的微小变更）
-- Claude 已经在此 PR 上评论过（通过 GitCode API 检查 PR 评论，**必须翻完所有分页**，
+- **本 agent 自己**已经在此 PR 上评论过（通过 GitCode API 检查 PR 评论，**必须翻完所有分页**，
   见「GitCode API 参考 → 基本格式」，否则会漏读第 100 条之后的评论而误判为未评论过；
   且**必须展开父评论的 `reply[]`**——回复不出现在列表顶层，只在既有讨论里回复过的活动
   不展开就完全看不到，同样会被误判为「未评论过」而重复发布审查意见）
+
+> ⚠️ **「是否已评论过」按 `user.login` 比对，不要按 agent 品牌名比对**：执行本 skill 的可能是
+> Codex、amct-coder、Claude 等任意 agent，正文里不写死品牌名。判断方法是拿当前 token 对应的
+> 账号 login（`GET /api/v5/user` 的 `.login`）去比评论的 `author`，命中即视为「已评论过」。
+> 按品牌名比对会两种错法都犯：别的 agent 发过的审查意见被漏判（重复发布），
+> 同账号换 agent 跑时被误判（该发的没发）。
+
+下面这段可直接复制执行（放在引用块外，避免每行带 `> ` 前缀而不能直接跑）：
+
+```bash
+# 取当前 token 对应的账号 login（实测 200；无 token 返回 401 {"message":"401 Unauthorized"}）
+MY_LOGIN=$(curl -s "https://api.gitcode.com/api/v5/user?access_token=$GITCODE_API_TOKEN" | jq -r '.login // empty')
+[ -n "$MY_LOGIN" ] || { echo "ERROR: 取不到当前账号 login，无法判断是否已评论过" >&2; exit 1; }
+echo "MY_LOGIN=$MY_LOGIN"
+# 再用「基本格式」的翻页输出比 author（回复也要一起比，故先展开 reply[]）：
+#   … | jq -c --arg me "$MY_LOGIN" '.[] | select(.author == $me) | {id, reply_to, body}'
+# 有输出 = 已评论过（含回复），按步骤 1 停止；无输出 = 未评论过
+```
 
 如果以上任一条件成立，停止执行，不继续后续步骤。
 
@@ -34,7 +55,7 @@ allowed-tools: Bash(curl:*), Bash(jq:*), Bash(grep:*), Bash(git diff:*), Bash(gi
 > 两者无法区分——按后者误判成前者就会重复发布审查意见。
 > 必须先修好请求（token、网络、端点、分页）把评论取全，再继续步骤 2。
 
-**注意**：仍然需要审查 Claude 生成的 PR。
+**注意**：仍然需要审查由 AI agent 生成的 PR（包括本 agent 自己生成的）。
 
 ### 步骤 2: 获取项目规范上下文
 
@@ -103,12 +124,25 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/contents/path/to/
 > 不要当唯一手段**：同一 URL、同一 sha，在某一段时间内对 `.agents/skills/gitcode-pr/` 下的
 > `commands/review.md`、`references/gitcode_api.md`、`evals/evals.json` 连续 3 次都返回
 > `403`（body 为「暂不支持预览」），而同一时刻同 sha 的 `SKILL.md`/`README.md`/`build.sh`
-> 返回 `200`；几分钟后同一批 URL 又连续 5 次全部 `200`。
-> `/pulls/<n>/files` 响应里的 `raw_url` 字段就是这个形式，同样不可靠。
+> 返回 `200`；几分钟后同一批 URL 又连续 5 次全部 `200`（复查时再次复现：同一 sha 下
+> `SKILL.md` 返回 `403`、`review.md`/`README.md`/`build.sh` 返回 `200`——**命中哪些文件也在变**）。
+> `/pulls/<n>/files` 响应里的 `raw_url`、`files.json` 里 `diffs[].head.url` 都是这个形式，同样不可靠。
 >
 > 因此：
-> - **取内容用 contents API 或它的 `download_url`（blobs 形式）**，两者实测稳定 `200`；
-> - `ref` **必须是 commit sha**，传分支名会 `404 {"message":"404 Commit Not Found"}`（实测）；
+> - **取内容用 contents API 或它的 `download_url`（blobs 形式）**，两者实测稳定 `200`
+>   （blobs 形式连测 3 次全 200，且下载内容与本地文件 md5 一致）；
+> - `ref` **用 commit sha 或分支名都可以**（实测 cann/amct：`ref=master`、`ref=9.2.0`、
+>   `ref=feature/community-tasks`（带斜杠，原样或 `%2F` 编码均可）、`ref=65dbe33`（短 sha）、
+>   `ref=<40 位全 sha>` 全部 `200`，分支名取到的内容与本地 `git show cann/<branch>:<path>` md5 一致；
+>   跨 fork PR 的 head commit 在**目标仓库**路径下也取得到，实测 PR!447 head `59bd5789…`
+>   用 `cann/amct` 与源仓库 `m0_45199755/amct` 两条路径都 `200`、blob sha 相同）。
+>   **审查 PR 时仍应传 head commit sha**：分支名指向的是分支**当前**位置，PR 提交后分支若又推了新
+>   commit，用分支名取到的就不是被审查的那一版，行号会与 diff 对不上；
+> - `404` **不能用来区分「ref 不存在」和「文件在该 ref 上不存在」**：两种情况响应体完全相同，
+>   都是 `{"error_code":404,"error_code_name":"NOT_FOUND","error_message":"项目或文件不存在","trace_id":"…"}`
+>   （实测；`ref=nonexist-branch-xyz` + 存在的 `README.md`、`ref=feature/community-tasks` + 该分支上
+>   没有的 `.agents/…/SKILL.md`、`ref=master` + 不存在的文件，三者返回一模一样）。
+>   遇到 404 要两种可能都排查，别一口咬定是 ref 写错；
 > - 无论用哪种，都要**校验 HTTP 状态码 / 内容非空**再 `grep`——`curl -s` 对 403/404 的退出码
 >   仍是 `0`，不校验就会把错误页当成文件内容，`grep -n` 静默输出空结果，行号定位随之失败。
 
@@ -278,7 +312,7 @@ curl -s -X POST \
 #    PR，在 38 条的 PR 上传 per_page=150/200 都返回全部 38 条，既不能证明也不能推翻上限）。
 #    按 100 翻页在上限更大时也只是多翻几页、结果仍正确，故评论数可能超过 100 的 PR
 #    必须按 page 递增翻页取完，
-#    否则步骤 1「Claude 是否已评论过」会漏读后面的评论而误判，导致重复发布审查意见。
+#    否则步骤 1「本 agent 是否已评论过」会漏读后面的评论而误判，导致重复发布审查意见。
 # ⚠️ 顶层数组**不含回复**：回复嵌在父评论的 reply[] 里（实测 cann/amct PR!455：
 #    回复 ID 在顶层一个都查不到），必须一并展开，
 #    否则「只在既有讨论里回复过」的活动看不到，步骤 1 同样会误判为未评论过。
@@ -307,7 +341,7 @@ done
 > **失败必须显式（不能 `break` 后以 0 退出）**：`break` 版本在两类失败下都只往 stderr
 > 打一行 `ERROR`，脚本仍 `exit 0`、stdout 是空列表——实测把 token 换成无效值返回
 > `{"message":"401 Unauthorized"}`、把域名换成不可解析主机返回空响应，两种情况
-> `echo $?` 都是 `0`。步骤 1 正是靠这份列表判断「Claude 是否已评论过」，
+> `echo $?` 都是 `0`。步骤 1 正是靠这份列表判断「本 agent 是否已评论过」（按 user.login 比对，见步骤 1），
 > 空列表 + `exit 0` 会被读成「取全了且没人评论过」，于是重复发布审查意见，
 > 也就是上一轮「必须翻页取完」要防的后果。故失败分支用 `exit 1`；
 > 若这段循环嵌在更大的脚本里不能直接退出，则改成置标志（`incomplete=1`）后 `break`，

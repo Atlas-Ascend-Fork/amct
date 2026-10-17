@@ -407,11 +407,25 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
 - `diffs[].statistic.new_path` / `old_path` - 新 / 旧文件路径（**同一路径时两者相同**）
 - `diffs[].statistic.path` - 文件路径（与 `new_path` 实测同值，取哪个都行）
 - `diffs[].statistic.type` - 变更类型，如 `text_type`
-- `diffs[].content` - 该文件的 diff 文本
+- `diffs[].statistic.view` - 布尔值（实测文本文件为 `false`），用途未文档化，不要依赖
+- `diffs[].new_blob_id` - 变更后文件的 blob sha（实测等于 contents API 的 `sha`，
+  可拼成稳定的 `…/blobs/<new_blob_id>/<path>` 取内容地址）
+- `diffs[].head` - **对象**，键为 `commit_id`（= `diff_refs.head_sha`）与 `url`；
+  ⚠️ `url` 是 `…/raw/<commit_sha>/<path>` 形式，**实测不稳定**（间歇 `403`「暂不支持预览」），
+  别拿它当取内容的地址，改用 contents API 或 `…/blobs/<new_blob_id>/<path>`
+- `diffs[].content` - ⚠️ **不是 diff 文本，而是对象** `{"text":[…]}`；`text[]` 每项形如
+  `{"line_content":"<diff 行原文>","old_line":"…","new_line":"…","type":"match"}`
+  （实测 PR!455 的 `SKILL.md` 有 602 项）。要拿可直接 `grep` 的 unified diff 文本，
+  用 `/pulls/<n>/files` 的 `patch.diff`；非要从本接口拼，得
+  `jq -r '.diffs[0].content.text[].line_content'`
 
 > 另有 `/pulls/<n>/files`（**返回数组**，每项含 `filename`/`additions`/`deletions`/`blob_id`/`patch.diff` 等）；
 > 要**整体统计与 `diff_refs`** 用 `files.json`，要**逐文件 patch / blob sha** 用 `files`。
 > 两者字段名不同（如 `diffs[].content` vs `patch.diff`），别把一套 jq 表达式套到另一个接口上。
+>
+> ⚠️ 两个接口的增删行数与本地 `git diff --numstat` **可能差 1**（实测本 PR 的
+> `references/gitcode_api.md`：本地 `358/90`，两接口都给 `357/89`，其余文件一致；两接口之间从未分歧）。
+> 不影响判断，但别拿它做精确对账，也别把这类数字写进 PR 描述（易变）。
 
 ### 提交行内评论（支持多行选择）
 
@@ -699,10 +713,16 @@ done
 > 想先看清单再删（不自动执行）：把上面第 3 步换成 `sort -r "$ids"` 打印即可。
 > 完整的坑位说明与响应码表见 `references/gitcode_api.md` →「删除 PR 评论」。
 
-**注意**：DELETE 接口的 `<COMMENT_ID>` 必须是评论列表（`/pulls/<PR_NUMBER>/comments`）
-返回的**数字 `id`**（如 `171431239`），`references/gitcode_api.md` 中该 `id` 字段类型为 integer。
-而 POST 创建评论时立即返回的**哈希字符串**（如 `b227720346...`）是 `discussion_id`/临时返回标识，
-**不能**直接作为删除接口的 `COMMENT_ID`——需先按上文「获取真正的数字 ID」查列表拿到数字 `id`。
+**注意**：DELETE 接口的 `<COMMENT_ID>` 必须是**数字评论 ID**（如 `194071029`），
+`references/gitcode_api.md` 中该 `id` 字段类型为 integer。它的两个来源等价、任选其一：
+
+- POST 创建评论 / 回复评论响应里的 **`note_id`**（见上文[创建评论的返回值](#创建评论的返回值)，
+  拿到即可直接删，**不必再翻评论列表反查**）；
+- 评论列表 `/pulls/<PR_NUMBER>/comments` 里的 **`id`**（批量清理时按此收集）。
+
+而 POST 响应里的**哈希字符串 `id`** 是 `discussion_id`（用于回复该讨论），
+**不能**作为删除接口的 `<COMMENT_ID>`——传进去会得到
+`400 {"error_code_name":"UN_KNOW","error_message":"Orchestration error: Invalid path parameter: note_id, number required"}`。
 
 **删除顺序（实测）**：父评论下还有回复时删父评论会 `405 Can not delete a discussion that has replies.`；
 先删回复（`200`）再删父评论（`200`）才干净。批量清理必须按 `reply_to` 排序（回复在前），
@@ -743,8 +763,20 @@ git push hgjupstream fix/gcc13-link-error -u
 
 **目标分支策略**：
 
-- **默认合入 `develop` 分支**（日常开发、新功能、bugfix）
-- 仅当用户明确要求时，才合入其他分支（如 `master`、`release/x.y`）
+- **默认合入目标仓库的 `default_branch`**，不要硬编码某个分支名。该值从仓库信息接口读：
+
+  ```bash
+  # 跨 fork 时 target_owner/target_repo 是上游仓库（由 parent.full_name 得到）
+  curl -s "https://api.gitcode.com/api/v5/repos/${target_owner}/${target_repo}?access_token=$GITCODE_API_TOKEN" | \
+    jq -r '.default_branch'
+  ```
+
+  > ⚠️ **各仓库的默认分支并不统一**，写死分支名会让建 PR 直接失败。实测本仓 `cann/amct`
+  > 的 `default_branch` 是 `master`，且**没有 `develop` 分支**（分支列表只有 `master`、
+  > `9.2.0`/`9.1.0`/`9.0.0`/`8.5.0` 及其 `-beta.N`、`feature/community-tasks`）；
+  > 而 skill 上游所在的 `cann-agent/skills` 默认分支是 `main`。
+  > `base` 传了不存在的分支会得到 `404 Can not find the branch`。
+- 仅当用户明确要求时，才合入其他分支（如 `release/x.y`、某特性分支）
 
 #### 读取 PR 模板
 
@@ -781,7 +813,7 @@ curl -s -X POST "https://api.gitcode.com/api/v5/repos/${target_owner}/${target_r
   -d '{
     "title": "docs: 优化文档描述(#32)",
     "head": "source_owner/source_repo:fix/issue-32-description",
-    "base": "develop",
+    "base": "<目标仓库的 default_branch，按上文读取>",
     "body": "按模板填充的PR描述"
   }'
 ```
@@ -796,7 +828,8 @@ curl -s -X POST "https://api.gitcode.com/api/v5/repos/${target_owner}/${target_r
     ⚠️ 仅用 `username:branch` 经实测会返回 `400 BAD_REQUEST`；只用纯分支名时
     API 会去目标仓库找该分支并报 `404 Can not find the branch`。
   - endpoint 路径里的 owner/repo 始终用**目标仓库**（跨 fork 时为上游仓库）。
-- `base`: 目标分支，**默认为 `develop`**，除非用户明确要求合入其他分支
+- `base`: 目标分支，**默认取目标仓库的 `default_branch`**（见[目标分支策略](#创建-pr)，用接口读、
+  不要硬编码），除非用户明确要求合入其他分支
 - `body`: PR 描述（Markdown 格式，按[读取 PR 模板](#读取-pr-模板)查找到的仓库 PR 模板填充）
 
 ### PR URL 格式

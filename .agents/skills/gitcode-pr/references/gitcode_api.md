@@ -556,6 +556,14 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
 | `patch.old_path` / `new_path` | 重命名前后路径 |
 | `patch.added_lines` / `removed_lines` | 该文件的增删行数（与顶层 `additions`/`deletions` 实测一致） |
 | `patch.new_file` / `renamed_file` / `deleted_file` / `too_large` | 变更类型标记 |
+| `source_branch` / `target_branch` | PR 的源 / 目标分支名 |
+| `source_project` / `target_project` | 源 / 目标仓库对象（含 `id`/`full_name`/`human_name`/`path`）。**跨 fork PR 取 head 仓库用 `source_project.full_name`**，别去猜 |
+| `patch.a_mode` / `b_mode` | 变更前后的文件权限位（如 `100644`） |
+
+> ⚠️ **接口给的增删行数与本地 `git diff --numstat` 可能差 1**（实测 cann/amct PR!455：
+> `references/gitcode_api.md` 本地 numstat `358/90`，`files` 与 `files.json` 两个接口都给 `357/89`，
+> 其余 3 个文件完全一致；两接口之间从未出现分歧）。差值不影响判断，但**不要拿它做「diff 是否一致」的
+> 精确对账**，也不要把这类数字写进 PR 描述（易变）。
 
 ---
 
@@ -576,10 +584,26 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/contents/{文件�
 > 在某一段时间内对 `.agents/skills/gitcode-pr/` 下的 `commands/review.md`、
 > `references/gitcode_api.md`、`evals/evals.json` 连续 3 次返回 `403`（body「暂不支持预览」），
 > 同一时刻同 sha 的 `SKILL.md`/`README.md`/`build.sh` 却返回 `200`；几分钟后同一批 URL
-> 又连续 5 次全部 `200`。`/pulls/<n>/files` 响应里的 `raw_url` 就是该形式，同样不可靠。
+> 又连续 5 次全部 `200`；后续复查再次复现，且**命中哪些文件也在变**（同一 sha 下 `SKILL.md` 返回
+> `403`、`review.md`/`README.md`/`build.sh` 返回 `200`）。`/pulls/<n>/files` 响应里的 `raw_url`、
+> `files.json` 里 `diffs[].head.url` 都是该形式，同样不可靠。
+
+**`ref` 参数取值（实测 cann/amct）**：commit sha（40 位全 sha 或短 sha 如 `65dbe33`）与**分支名都可用**——
+`ref=master`、`ref=9.2.0`、`ref=feature/community-tasks`（带斜杠，原样或 `%2F` 编码均可）都返回 `200`，
+且分支名取到的内容与本地 `git show cann/<branch>:<path>` 的 md5 一致；不传 `ref` 时用默认分支。
+跨 fork PR 的 head commit 在**目标仓库**路径下也取得到（实测 PR!447 head `59bd5789…`，
+用 `cann/amct` 与源仓库 `m0_45199755/amct` 两条路径都 `200`、blob sha 相同）。
+
+> ⚠️ 审查 PR 时**仍应传 head commit sha**，不要用分支名：分支名指向分支**当前**位置，
+> PR 提交后分支若又推了新 commit，取到的就不是被审查的那一版，`grep -n` 得到的行号会与 diff 对不上。
 >
-> 另：`ref` **必须是 commit sha**，传分支名返回 `404 {"message":"404 Commit Not Found"}`（实测）。
-> `curl -s` 对 `403`/`404` 的退出码仍是 `0`，取完必须校验状态码 / 内容非空，
+> ⚠️ **`404` 区分不了「ref 不存在」和「文件在该 ref 上不存在」**：两种情况响应体完全相同，
+> 都是 `{"error_code":404,"error_code_name":"NOT_FOUND","error_message":"项目或文件不存在","trace_id":"…"}`
+> （实测三种组合返回一模一样：`ref=nonexist-branch-xyz` + 存在的 `README.md`；
+> `ref=feature/community-tasks` + 该分支上没有的 `.agents/…/SKILL.md`；`ref=master` + 不存在的文件）。
+> 遇到 `404` 要两种可能都排查。**没有** `{"message":"404 Commit Not Found"}` 这种响应体。
+>
+> ⚠️ `curl -s` 对 `403`/`404` 的退出码仍是 `0`，取完必须校验状态码 / 内容非空，
 > 否则会把错误页当成文件内容、`grep -n` 静默输出空结果。
 
 ---
