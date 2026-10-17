@@ -150,13 +150,27 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
 
 顶层直接返回数组，行内评论与普通评论混在同一列表，用 `comment_type` 区分。
 
-> ⚠️ **顶层数组不含回复**：回复嵌在父评论的 `reply[]` 里（实测 cann/amct PR!455：顶层 27 条，
-> 4 条父评论的 `reply[]` 内另有 11 条，这 11 个 ID 在顶层一个都查不到）。
+> ⚠️ **顶层数组不含回复**：回复嵌在父评论的 `reply[]` 里（实测 cann/amct PR!455
+> 测量当时：顶层 27 条、4 条父评论的 `reply[]` 内另有 11 条，这 11 个 ID 在顶层一个都查不到；
+> 数值随评论增长变化）。
 > `reply[]` 里的对象**只有** `id`/`body`/`user`/`created_at`/`updated_at`，
-> **没有** `discussion_id`/`comment_type`/`resolved`/`path`，需要时从父评论带下来
-> （`comment_type` 跟随父讨论种类，与单条接口的行为一致；`resolved` 是讨论级属性、以父评论为准）。
+> **没有** `discussion_id`/`comment_type`/`resolved`/`path`/`diff_position`，需要时从父评论带下来。
+>
+> 带下来的 `comment_type` 是**列表接口那一套取值**（`diff_comment`/`pr_comment`），
+> 与「跟随父讨论种类」是两回事：同一条回复用单条接口查会得到**另一套**取值
+> （实测回复 `194233994`：列表父评论 `diff_comment`，单条接口 `DiffNote`），
+> 两套不要混用，对照见下「两个接口的 `comment_type` 取值不是同一套」。
+> `resolved` 是讨论级属性、以父评论为准，**不要给回复伪造取值**。
 > 回复的完整字段仍需用 `note_id` 查单条接口 `GET /pulls/comments/<id>`。
-> **分页 `length` 数的是父评论条数**，回复不计入 `per_page`/`total_count`。
+>
+> **展开后的行形状与父行不同**：回复行没有 `resolved`/`lines`（`diff_position`）键，
+> 按这两个字段过滤只会命中父行——这正是想要的（讨论级属性只在父行）；
+> 需要区分时用 `reply_to`（`null` = 父评论，非 null = 回复，值为父评论 ID）。
+>
+> **分页 `length` 与响应头 `total_count` 数的都是父评论条数**，回复不计入
+> `per_page`/`total_count`（实测 PR!455：`total_count: 29` = 顶层 29 条，
+> `reply[]` 内 13 条不在其中）。因此校验「是否取全」要拿**父评论**条数去比，
+> **不要拿展开后的输出条数去比**（展开后必然偏大，会被误判成「多取了/取重了」）。
 
 ```bash
 # 单页（评论数 ≤ 100 时够用）
@@ -352,13 +366,18 @@ curl -s -X DELETE \
 | `401` | 未授权 |
 | `403` | 无权限删除此评论 |
 | `404` | 评论不存在 |
+| `405` | **该评论下还有回复**：`{"error_code":405,"error_message":"Can not delete a discussion that has replies."}`，必须先把 `reply[]` 里的回复全部删掉，再删父评论 |
+
+> ⚠️ **删除有顺序要求**：父评论带着回复时删不掉（`405`）。批量清理时必须**先删回复、再删父评论**。
+> 另：`curl -s` 不加 `-f`/`--fail` 时，`405` 这类 HTTP 错误的**退出码仍是 0**，
+> 只看 `$?` 会把「删失败」当成「删成功」——必须用 `-w '%{http_code}'` 显式校验状态码。
 
 ### 获取评论 ID
 
 ```bash
 # 顶层直接是数组；per_page 默认 20、最大 100，评论多时必须显式传 100 并翻页，否则 ID 会漏。
 # ⚠️ 顶层**不含回复**：自己以「回复」形式发的评论嵌在父评论 reply[] 里，不展开就永远收不到
-#    它的 id，DELETE 时会漏删（实测 PR!455 顶层 27 条、reply[] 内另有 11 条）。
+#    它的 id，DELETE 时会漏删（实测 PR!455 测量当时：顶层 27 条、reply[] 内另有 11 条）。
 page=1
 while :; do
   resp=$(curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100&page=${page}")
@@ -381,6 +400,28 @@ done
 > 而 `break` + `exit 0` 会让调用方把「取失败了」读成「已清理干净」。
 > 同理，**不展开 `reply[]` 也会漏删**：以回复形式留下的评论不在顶层，
 > 只投影顶层字段时它的 `id` 永远收不到——这类漏删还是静默的（脚本 `exit 0`）。
+>
+> ⚠️ **展开后还必须调整删除顺序**：上面的投影是「父在前、回复在后」，照这个顺序直接删，
+> 父评论会因「还有回复」返回 `405 Can not delete a discussion that has replies.` 而留下，
+> 回复反倒被删掉——清理只完成一半，且 `curl -s` 的退出码仍是 `0`，看起来像成功。
+> 实测（cann/amct PR!455 自测探针）：父 `194259915` 带回复 `194259921` 时删父 → `405`；
+> 先删回复（`200`）再删父 → `200`。
+> 因此按 `reply_to` 排序（**非 null 的回复先删**），并逐个校验 HTTP 状态码：
+>
+> ```bash
+> fail=0
+> # reply_to 非 null（回复）排在前，父评论在后
+> for id in $(printf '%s\n' "$resp" | jq -r '
+>     .[] | . as $c
+>     | ({id, body, reply_to: null}, ((.reply // [])[] | {id, body, reply_to: $c.id}))
+>     | select(.body | startswith("<唯一标记>"))
+>     | "\(if .reply_to then 1 else 0 end)\t\(.id)"' | sort -r | cut -f2); do
+>   code=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
+>     "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/${id}?access_token=$GITCODE_API_TOKEN")
+>   [ "$code" = "200" ] || { echo "ERROR: 删除评论 ${id} 失败（http=${code}），清理不完整" >&2; fail=1; }
+> done
+> [ "$fail" -eq 0 ] || exit 1
+> ```
 
 ### 权限说明
 

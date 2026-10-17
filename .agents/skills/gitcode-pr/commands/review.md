@@ -263,8 +263,8 @@ curl -s -X POST \
 # 读取 PR 评论（顶层直接是数组；comment_type 区分 diff_comment / pr_comment）
 # ⚠️ per_page 默认 20、最大 100：评论数超过 100 的 PR 必须按 page 递增翻页取完，
 #    否则步骤 1「Claude 是否已评论过」会漏读后面的评论而误判，导致重复发布审查意见。
-# ⚠️ 顶层数组**不含回复**：回复嵌在父评论的 reply[] 里（实测 PR!455 顶层 27 条、
-#    reply[] 内另有 11 条，回复 ID 在顶层一个都查不到），必须一并展开，
+# ⚠️ 顶层数组**不含回复**：回复嵌在父评论的 reply[] 里（实测 PR!455 测量当时：顶层 27 条、
+#    reply[] 内另有 11 条，回复 ID 在顶层一个都查不到；数值随评论增长变化），必须一并展开，
 #    否则「只在既有讨论里回复过」的活动看不到，步骤 1 同样会误判为未评论过。
 page=1
 while :; do
@@ -279,7 +279,8 @@ while :; do
     exit 1   # 取不全就是失败，必须非 0 退出（见下方「失败必须显式」）
   fi
   # 父评论原样输出，再把 reply[] 展开成同形对象；reply 对象只有 id/body/user/时间戳，
-  # discussion_id 与 comment_type 从父评论带下来（comment_type 跟随父讨论种类）
+  # discussion_id 与 comment_type 从父评论带下来（带下来的是**列表接口**那套取值：
+  # diff_comment / pr_comment；单条接口查同一条回复是另一套，如 DiffNote，别混用）
   echo "$resp" | jq -c '.[] | {id, discussion_id, comment_type, author: .user.login, body} as $c | $c, (.reply[]? | {id, discussion_id: $c.discussion_id, comment_type: $c.comment_type, author: .user.login, body, reply_to: $c.id})'
   count=$(echo "$resp" | jq 'length')
   [ "$count" -lt 100 ] && break   # count 数的是**父评论**条数（回复不计入分页），不足 100 即最后一页
@@ -300,6 +301,8 @@ done
 > `total_page`（总页数）——实测 `per_page=5&page=1` 返回 `total_count: 10`、`total_page: 2`，
 > `per_page=100` 返回 `total_page: 1`（数值随评论增长变化，此处为测量当时的值）。
 > 用 `curl -sD -` 取头即可核对是否已取全。
+> ⚠️ `total_count` 只数**父评论**，回复不计入（实测 PR!455：`total_count: 29` = 顶层 29 条，
+> `reply[]` 内 13 条不在其中）。核对时要拿**父评论**条数比，别拿展开 `reply[]` 后的输出条数比。
 > ⚠️ 该接口**不返回** GitHub 风格的 `Link` header，不要按 `rel="next"` 判断翻页。
 >
 > 终止条件用「本页条数 < per_page」而非「本页为空」：评论总数恰为 `per_page` 整数倍时

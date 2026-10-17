@@ -128,9 +128,10 @@ GitCode 使用 v5 API 获取 PR 评论：
 # 获取 PR 的所有评论（包括行内评论）
 # ⚠️ 必须显式传 per_page=100 并从 page=1 起翻页取完：per_page 默认只有 20，
 #    实测 cann/amct PR!431 共 38 条、PR!417 共 45 条，不带 per_page 都只返回 20 条。
-# ⚠️ 顶层数组**不含回复**：回复嵌在父评论的 reply[] 里（实测 PR!455 顶层 27 条、
-#    reply[] 内另有 11 条，回复 ID 在顶层一个都查不到），必须一并展开；
-#    reply 对象只有 id/body/user/时间戳，discussion_id 与 comment_type 要从父评论带下来。
+# ⚠️ 顶层数组**不含回复**：回复嵌在父评论的 reply[] 里（实测 PR!455 测量当时：顶层 27 条、
+#    reply[] 内另有 11 条，回复 ID 在顶层一个都查不到；数值随评论增长变化），必须一并展开；
+#    reply 对象只有 id/body/user/时间戳，discussion_id 与 comment_type 要从父评论带下来
+#    （带下来的是**列表接口**那套取值，单条接口查同一条回复会得到另一套，别混用）。
 page=1
 while :; do
   resp=$(curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100&page=${page}")
@@ -154,9 +155,20 @@ done
 >
 > **回复必须展开**：只投影顶层字段时，「只在既有讨论里回复过」的活动完全不可见——
 > 判断「是否已评论过」会漏判并重复发意见，给 `DELETE` 收集 ID 会漏删自己发过的回复。
-> 回复对象**没有** `discussion_id`/`comment_type`/`resolved`，前三者要从父评论带下来
-> （`comment_type` 跟随父讨论种类，与单条接口的行为一致），`resolved` 是讨论级属性、
-> 以父评论为准。回复的完整字段（含 `path`/`position`）仍需用 `note_id` 查单条接口。
+> 回复对象**没有** `discussion_id`/`comment_type`/`resolved`，前两者要从父评论带下来；
+> `resolved` 是讨论级属性、以父评论为准，不要给回复伪造取值。
+>
+> ⚠️ 带下来的 `comment_type` 是**列表接口**那套取值（`diff_comment`/`pr_comment`），
+> 不等于「和单条接口一致」：同一条回复用单条接口查是另一套
+> （实测回复 `194233994`：父评论列表值 `diff_comment`，单条接口 `DiffNote`），
+> 两套取值对照见 `references/gitcode_api.md` →「两个接口的 `comment_type` 取值不是同一套」。
+> 回复的完整字段（含 `path`/`position`）仍需用 `note_id` 查单条接口。
+>
+> ⚠️ **展开后的行形状与父行不同**（回复行没有 `resolved` 等父行才有的键），
+> 用 `reply_to` 区分：`null` = 父评论，非 null = 回复（值为父评论 ID）。
+> **校验「是否取全」要拿父评论条数比**：`per_page`/`total_count` 都只数父评论
+> （实测 PR!455：`total_count: 29` = 顶层 29 条，`reply[]` 内 13 条不计入），
+> 拿展开后的输出条数去比 `total_count` 必然偏大、会误判成取重了。
 
 ## GitCode API v5 说明
 
@@ -385,15 +397,21 @@ curl -X POST \
   **`discussion_id`** 共同过滤，缩小到唯一一条。
 
 ```bash
-# 推荐：用 POST 返回的 discussion_id 精确定位（最可靠）
+# 推荐：用 POST 返回的 discussion_id 定位，再用 reply_to 收敛到唯一一条
 DISCUSSION_ID="b227720346ef5a37e410d17e76a1c1e1f60d5d80"   # POST 返回的哈希串
 # 同样必须 per_page=100 + 翻页：目标评论在第 20 条之后时，不带 per_page 会查不到而误判「创建失败」
 # 顶层不含回复：若目标是「回复」而非新建评论，必须把 reply[] 一并展开才 select 得到
+# ⚠️ 展开后 discussion_id **不再唯一**：同一讨论的父评论与其全部回复共享同一个 discussion_id
+#    （实测 PR!455 讨论 d21d994a… 命中 3 条：父 194208411 + 回复 194229227/194233994），
+#    所以必须再加一层收敛条件：
+#      · 目标是刚新建的顶层评论 → 追加 select(.reply_to == null)
+#      · 目标是刚发出的回复     → 用回复响应里的 note_id 直接比 .id，或用唯一标记比 .body
 curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100" | \
   jq --arg did "$DISCUSSION_ID" --arg me "$MY_LOGIN" \
     '.[] | {id, discussion_id, comment_type, author: .user.login, body} as $c
      | $c, (.reply[]? | {id, discussion_id: $c.discussion_id, comment_type: $c.comment_type, author: .user.login, body, reply_to: $c.id})
      | select(.discussion_id == $did or (.author == $me and .body == "唯一标记内容"))
+     | select(.reply_to == null)          # 目标是新建的顶层评论；找回复则改用 .id == <note_id>
      | {id, discussion_id, comment_type, reply_to}'
 
 # 返回：
@@ -482,11 +500,17 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
 #    否则目标评论不在前 20 条时会漏查，清理不干净
 #    ⚠️ 必须把 reply[] 一并展开：自己以「回复」形式发的评论不在顶层，
 #       只投影顶层字段会永远收不到它的 id，DELETE 时就漏删
+#    ⚠️ 展开后还要**先删回复、再删父评论**：父评论带回复时 DELETE 返回
+#       405 {"error_message":"Can not delete a discussion that has replies."}（实测），
+#       下面用 reply_to 排序把回复排到前面
 curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100" | \
-  jq '.[] | . as $c | ({id: .id, body: .body}, ((.reply // [])[] | {id: .id, body: .body, reply_to: $c.id}))'
+  jq -r '.[] | . as $c | ({id: .id, body: .body, reply_to: null}, ((.reply // [])[] | {id: .id, body: .body, reply_to: $c.id}))
+         | "\(if .reply_to then 1 else 0 end)\t\(.id)\t\(.body)"' | sort -r
 
-# 2. 删除评论（<COMMENT_ID> 使用上一步列表返回的数字 id）
-curl -X DELETE \
+# 2. 删除评论（<COMMENT_ID> 使用上一步列表返回的数字 id，按上一步的顺序：回复在前）
+#    ⚠️ curl -s 不加 --fail 时，405/403/404 的退出码仍是 0，只看 $? 会把删失败当成删成功，
+#       必须用 -w '%{http_code}' 校验（成功为 200）
+curl -s -o /dev/null -w '%{http_code}\n' -X DELETE \
   "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<COMMENT_ID>?access_token=$GITCODE_API_TOKEN"
 ```
 
@@ -494,6 +518,10 @@ curl -X DELETE \
 返回的**数字 `id`**（如 `171431239`），`references/gitcode_api.md` 中该 `id` 字段类型为 integer。
 而 POST 创建评论时立即返回的**哈希字符串**（如 `b227720346...`）是 `discussion_id`/临时返回标识，
 **不能**直接作为删除接口的 `COMMENT_ID`——需先按上文「获取真正的数字 ID」查列表拿到数字 `id`。
+
+**删除顺序（实测）**：父评论下还有回复时删父评论会 `405 Can not delete a discussion that has replies.`；
+先删回复（`200`）再删父评论（`200`）才干净。批量清理必须按 `reply_to` 排序（回复在前），
+并逐条校验 HTTP 状态码，否则「删了一半」会以退出码 0 静默通过。
 
 详细 API 参数、响应码和权限说明请参考 `references/gitcode_api.md` 的「删除 PR 评论」章节。
 
