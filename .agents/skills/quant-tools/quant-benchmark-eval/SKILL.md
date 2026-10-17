@@ -38,22 +38,6 @@ description: 在 Ascend NPU 上用 lm-eval-harness / LiveCodeBench 官方 runner
 
 ---
 
-## 覆盖度状态
-
-下表只记录**功能是否打通**（任务能否接入、脚本链路是否跑通）：这与硬件无关，换卡不必重新验证。表内唯一一条显存相关状态（35B MoE 长 prompt OOM）是特定配置下的现象，量级与调优手段见 [references/constraints.md](references/constraints.md) 约束 8；速度量级见约束 6。这两条依赖 2× Ascend 910（每卡 64GB HBM），换硬件后按当机实测，不要当普适结论。
-
-| 场景 | 状态 |
-|---|---|
-| MMLU-Pro，8B W8A8 仅 mlp，单卡 | ✅ 已验证 |
-| 35B MoE 双卡 bf16（跨卡 generate + HFLM + 打分） | ✅ 已验证 |
-| 35B MoE 双卡 W8A8 装配 + 跨卡 generate 冒烟 | ✅ 已验证（需约束 7 的 hook 修复） |
-| 35B MoE 双卡 W8A8 + 长 prompt 评测 | ⚠️ npu:0 OOM（见约束 8，属显存调优） |
-| MATH500，lm-eval `hendrycks_math500` / 别名 `math500` | ✅ 已验证（离线读仓库实际的 `test.jsonl` 并出分；全量耗时按机器实测） |
-| LiveCodeBench code-generation-lite，官方 custom_evaluator hidden-tests pass@1 | ⚠️ 已接入生成官方 custom 输出；评分需安装并调用 `lcb_runner` |
-| ARC-Challenge / ARC-Easy / BoolQ / COPA / PIQA / SciQ | ✅ 已验证（bf16 与量化各 6 任务小样本出分，主指标键与下表一致） |
-
----
-
 ## 任务选择与资源成本
 
 **不要默认替用户决定 benchmark**：先按用户的资源、时间预算、能力覆盖需求给候选，让用户选。
