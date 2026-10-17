@@ -117,6 +117,86 @@ def _check_registry():
         raise AssertionError(f"unexpected DEFAULT_BIT_CONFIG: {DEFAULT_BIT_CONFIG}")
 
 
+def _check_shim_key_collisions():
+    """Two tasks sharing one `(repo_id, dataset_name)` must not silently win.
+
+    The offline shim keys `_LOCAL` by the pair lm-eval passes to
+    `datasets.load_dataset(path=..., name=...)`, so it is per *dataset config*,
+    not per task. Sharing a repo is fine and already happens (arc_challenge /
+    arc_easy on allenai/ai2_arc, livecodebench / livecodebench_release_v6 on
+    livecodebench/code_generation_lite) because `dataset_name` tells them apart.
+    Sharing the whole key while declaring different local data is a registry
+    bug that would otherwise be silent: one task's files get served for the
+    other, and the run scores data that is not the one datasets.json claims
+    (constraints.md #2). Inject registries -- no filesystem, no network, no NPU.
+    """
+    saved = config_module.load_dataset_registry
+
+    def _entry(subdir, name, rel="test-*.parquet"):
+        return {
+            "repo_id": "selfcheck/collide",
+            "subdir": subdir,
+            "dataset_name": name,
+            "splits": {"test": rel},
+            "allow_patterns": ["*.parquet"],
+        }
+
+    try:
+        # 1. Same repo, different dataset_name -> two distinct keys, both kept.
+        config_module.load_dataset_registry = lambda: {
+            "task_a": _entry("a", "cfg-a"),
+            "task_b": _entry("b", "cfg-b"),
+        }
+        got = config_module.local_dataset_map()
+        if len(got) != 2:
+            raise AssertionError(
+                "two tasks on one repo with different dataset_name must produce "
+                f"two shim keys, got {sorted(got)}"
+            )
+        # 2. Same key, different local data -> must raise, not overwrite.
+        config_module.load_dataset_registry = lambda: {
+            "task_a": _entry("a", "same"),
+            "task_b": _entry("b", "same"),
+        }
+        try:
+            config_module.local_dataset_map()
+        except ValueError as exc:
+            msg = str(exc)
+            for needle in ("task_a", "task_b", "('selfcheck/collide', 'same')"):
+                if needle not in msg:
+                    raise AssertionError(
+                        f"collision error must name both tasks and the key, "
+                        f"missing {needle!r}: {exc}"
+                    )
+        else:
+            raise AssertionError(
+                "two tasks declaring different data for one (repo_id, "
+                "dataset_name) were silently merged into one shim key"
+            )
+        # 3. Same key, identical declaration -> harmless duplicate, still works.
+        config_module.load_dataset_registry = lambda: {
+            "task_a": _entry("same_dir", "same"),
+            "task_b": _entry("same_dir", "same"),
+        }
+        got = config_module.local_dataset_map()
+        if len(got) != 1:
+            raise AssertionError(
+                "an identical duplicate declaration must collapse to one key, "
+                f"got {sorted(got)}"
+            )
+    finally:
+        config_module.load_dataset_registry = saved
+    # The shipped registry must be collision-free.
+    if len(local_dataset_map()) != len(
+        {
+            (s["repo_id"], s.get("dataset_name"))
+            for s in load_dataset_registry().values()
+        }
+    ):
+        raise AssertionError("datasets.json declares duplicate shim keys")
+    print("[self_check] shim key collisions rejected (same repo ok, same key not)")
+
+
 def _check_split_layout_semantics():
     """any_of must not double-read two cached layouts; all_of must merge shards.
 
@@ -1111,6 +1191,7 @@ def main():
     args = ap.parse_args()
     _check_registry()
     _check_prefetched_resolution()
+    _check_shim_key_collisions()
     _check_split_layout_semantics()
     _check_remote_glob_semantics()
     _check_split_list_arg()

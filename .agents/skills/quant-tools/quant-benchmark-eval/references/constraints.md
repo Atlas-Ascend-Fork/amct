@@ -37,6 +37,8 @@
 
 `self_check.py` 会把这两条反向对照跑一遍（未知任务名、未注册数据集都必须报错，且报错要能区分「索引里没有」和「注册表里没有」），避免预检被改成永真。
 
+shim 的键是 **`(repo_id, dataset_name)`，不是任务名**——它取的是 lm-eval 传给 `datasets.load_dataset(path=..., name=...)` 的那对值。多个任务共用一个仓是允许的（`arc_challenge` / `arc_easy` 共用 `allenai/ai2_arc`、`livecodebench` / `livecodebench_release_v6` 共用 `livecodebench/code_generation_lite`），前提是 `dataset_name` 把它们区分开。两个任务**共用同一对键却声明不同本地数据**是注册表自相矛盾：`local_dataset_map()` 会直接抛 `ValueError`（点名两个任务与该键），而不是让后写的静默覆盖前一个——否则 shim 会把 A 的文件喂给 B，评的不是注册表声明的那份数据。声明完全相同的重复项属无害，仍允许。
+
 ## 3. HFLM 直接接受内存中的模型对象
 
 脚本已处理，无需自定义 LM 子类。运行时 `pretrained not of type str` 的 warning 属正常，可忽略。

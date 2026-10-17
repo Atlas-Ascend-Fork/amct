@@ -170,14 +170,43 @@ def resolve_split_files(base, rels):
 
 
 def local_dataset_map():
-    """Return {(repo_id, dataset_name): {split: [absolute paths]}} for offline shim."""
+    """Return {(repo_id, dataset_name): {split: [absolute paths]}} for offline shim.
+
+    The key is what lm-eval hands to `datasets.load_dataset(path=..., name=...)`,
+    so it is *not* per task: several tasks may legitimately share one repo
+    (datasets.json already has livecodebench / livecodebench_release_v6 on
+    livecodebench/code_generation_lite, and arc_challenge / arc_easy / boolq /
+    copa on two repos) as long as their `dataset_name` tells them apart. Two
+    tasks that share the key but declare different local data are
+    contradictory -- one of them would silently win the dict slot and the shim
+    would serve the wrong files to the other, scoring data that is not the one
+    the registry claims (constraints.md #2). Raise instead of overwriting;
+    identical declarations are a harmless duplicate and stay allowed.
+    """
     reg = load_dataset_registry()
     out = {}
+    owner = {}
     for task, spec in reg.items():
         base = os.path.join(BENCH_ASSETS, spec["subdir"])
         key = (spec["repo_id"], spec.get("dataset_name"))
-        out[key] = {
+        entry = {
             split: resolve_split_files(base, rel)
             for split, rel in spec["splits"].items()
         }
+        if key in out:
+            prev_task = owner[key]
+            prev_base = os.path.join(BENCH_ASSETS, reg[prev_task]["subdir"])
+            if prev_base != base or out[key] != entry:
+                raise ValueError(
+                    f"datasets.json tasks '{prev_task}' and '{task}' both map to "
+                    f"(repo_id, dataset_name)={key}, but declare different local "
+                    f"data ({reg[prev_task]['subdir']!r} vs {spec['subdir']!r}). "
+                    "The offline shim keys by that pair, so one task would "
+                    "silently read the other's files. Give the second task a "
+                    "distinct dataset_name (the value lm-eval passes as "
+                    "`name=`), or point both at the same subdir."
+                )
+            continue
+        out[key] = entry
+        owner[key] = task
     return out
