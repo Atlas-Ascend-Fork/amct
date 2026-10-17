@@ -25,6 +25,7 @@ therefore opt-in.
 """
 
 import argparse
+import ast
 import contextlib
 import fnmatch
 import io
@@ -520,6 +521,59 @@ def _check_shim_key_collisions():
             )
     finally:
         config_module.load_dataset_registry = saved
+
+    # 4. Same as (3), but the cache is *partial*: both duplicates then hold a
+    #    deferred UnresolvedSplit. Their messages name different tasks (that is
+    #    what makes the deferred error actionable), so comparing messages called
+    #    this a shim-key collision -- a misleading "declare different local data
+    #    ('same_dir' vs 'same_dir')" raised while the map is built, i.e. one
+    #    task's incomplete cache blocking *every* task again, which is exactly
+    #    what the deferral exists to prevent. Equality must key on the
+    #    declaration, not the message.
+    saved_assets = config_module.BENCH_ASSETS
+    with tempfile.TemporaryDirectory() as tmp:
+        os.makedirs(os.path.join(tmp, "same_dir"))
+        for name in ("test-00000-of-00002.parquet",):
+            open(os.path.join(tmp, "same_dir", name), "w", encoding="utf-8").close()
+        partial = {
+            "all_of": ["test-00000-of-00002.parquet", "test-00001-of-00002.parquet"]
+        }
+        config_module.load_dataset_registry = lambda: {
+            "task_a": _entry("same_dir", "same", rel=partial),
+            "task_b": _entry("same_dir", "same", rel=partial),
+        }
+        config_module.BENCH_ASSETS = tmp
+        try:
+            try:
+                got = config_module.local_dataset_map()
+            except ValueError as exc:
+                raise AssertionError(
+                    "an identical duplicate declaration was reported as a "
+                    "shim-key collision just because both copies defer the same "
+                    f"partial-cache error: {exc}"
+                ) from exc
+            if len(got) != 1:
+                raise AssertionError(
+                    "an identical duplicate declaration with a partial cache "
+                    f"must still collapse to one key, got {sorted(got)}"
+                )
+            held = got[("selfcheck/collide", "same")]["test"]
+            if not isinstance(held, UnresolvedSplit):
+                raise AssertionError(
+                    f"the folded duplicate lost its deferred error: {held!r}"
+                )
+            # Folding must not swallow the failure: reading the split still raises.
+            try:
+                held.raise_it()
+            except FileNotFoundError:
+                pass
+            else:
+                raise AssertionError(
+                    "the folded duplicate's deferred error no longer raises"
+                )
+        finally:
+            config_module.load_dataset_registry = saved
+            config_module.BENCH_ASSETS = saved_assets
     # The shipped registry must be collision-free.
     if len(local_dataset_map()) != len(
         {
@@ -528,7 +582,10 @@ def _check_shim_key_collisions():
         }
     ):
         raise AssertionError("datasets.json declares duplicate shim keys")
-    print("[self_check] shim key collisions rejected (same repo ok, same key not)")
+    print(
+        "[self_check] shim key collisions rejected (same repo ok, same key not; "
+        "identical duplicate folds even with a partial cache)"
+    )
 
 
 def _check_split_layout_semantics():
@@ -1320,6 +1377,99 @@ def _check_quant_target_guard():
     ensure_supported_quant_target("attn-linear", allow_attn_quant=True)
 
 
+# Data-resolution / registry pre-flight calls that must run *before* any weight
+# is put on a card, and the calls that put weights on a card. A pre-flight that
+# drifts below the model load still "works" in every functional test -- it only
+# stops being a pre-flight, and the failure it was written to catch returns to
+# costing minutes of assembly plus a traceback that does not name its cause
+# (constraints.md #2).
+_PREFLIGHT_CALLS = {
+    "livecodebench_eval.py": ("resolve_dataset_files",),
+    "assemble_and_eval.py": ("check_task_offline_ready",),
+}
+_PREFLIGHT_IMPORTS = {"assemble_and_eval.py": ("bench_offline",)}
+_MODEL_LOAD_CALLS = ("load_float", "assemble_quant_model")
+
+
+def _check_data_preflight_order():
+    """Registry / dataset pre-flight must precede the model load in each CLI.
+
+    Two distinct fail-late traps, both invisible to a functional test:
+
+    - `livecodebench_eval.py` resolves its LiveCodeBench cache through
+      datasets.json. Done after assembly, an unprefetched (or partially
+      prefetched `all_of`) cache reports itself only once the float model is on
+      the card and every quant block is swapped in -- and the traceback never
+      mentions `--dataset_task`.
+    - `assemble_and_eval.py` builds the offline shim map by importing
+      `bench_offline` (`_LOCAL = local_dataset_map()`). That import is where a
+      contradictory datasets.json -- two tasks on one `(repo_id, dataset_name)`
+      declaring different local data -- raises, so importing it next to
+      `install()` (after the model load) turns a registry bug into a
+      post-assembly failure.
+
+    Static check on the parsed `main()` bodies: no NPU, no network, no model.
+    """
+    for fname, calls in sorted(_PREFLIGHT_CALLS.items()):
+        with open(os.path.join(SKILL_DIR, fname), encoding="utf-8") as f:
+            tree = ast.parse(f.read(), filename=fname)
+        main_fn = next(
+            (
+                node
+                for node in tree.body
+                if isinstance(node, ast.FunctionDef) and node.name == "main"
+            ),
+            None,
+        )
+        if main_fn is None:
+            raise AssertionError(f"{fname} has no main() to check pre-flight order in")
+        found = {}
+        loads = []
+        for node in ast.walk(main_fn):
+            if isinstance(node, ast.Call):
+                func = node.func
+                name = (
+                    func.id if isinstance(func, ast.Name) else getattr(func, "attr", "")
+                )
+                if name in calls:
+                    # Earliest occurrence: `ast.walk` is breadth-first, so a
+                    # pre-flight nested inside `if not a.smoke:` is visited
+                    # *after* a shallower node, and `bench_offline` is imported
+                    # twice on purpose (early to build the shim map, later next
+                    # to install()). What matters is the first one.
+                    found[name] = min(found.get(name, node.lineno), node.lineno)
+                elif name in _MODEL_LOAD_CALLS:
+                    loads.append((node.lineno, name))
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name in _PREFLIGHT_IMPORTS.get(fname, ()):
+                        found[alias.name] = min(
+                            found.get(alias.name, node.lineno), node.lineno
+                        )
+        if not loads:
+            raise AssertionError(
+                f"{fname}'s main() calls neither {' nor '.join(_MODEL_LOAD_CALLS)}: "
+                "this pre-flight-order check no longer tests anything"
+            )
+        first_load = min(loads)
+        for wanted in tuple(calls) + _PREFLIGHT_IMPORTS.get(fname, ()):
+            if wanted not in found:
+                raise AssertionError(
+                    f"{fname}'s main() never runs the {wanted} pre-flight, so the "
+                    f"registry / dataset problem it catches would surface only "
+                    f"after {first_load[1]}() (line {first_load[0]})"
+                )
+            if found[wanted] > first_load[0]:
+                raise AssertionError(
+                    f"{fname}: the {wanted} pre-flight sits at line "
+                    f"{found[wanted]}, *after* {first_load[1]}() at line "
+                    f"{first_load[0]} -- it is no longer a pre-flight, so the "
+                    f"error it exists to raise early would arrive only after the "
+                    f"model was loaded and assembled (constraints.md #2)"
+                )
+    print("[self_check] dataset / registry pre-flight runs before the model load")
+
+
 def _check_input_device_fallback():
     """`input_device()` must not guess `npu:0` when it cannot tell.
 
@@ -1732,6 +1882,7 @@ def main():
     _check_jsonl_reader()
     _check_lcb_validation()
     _check_quant_target_guard()
+    _check_data_preflight_order()
     _check_input_device_fallback()
     _check_offline_shim_install()
     _check_doc_code_drift()

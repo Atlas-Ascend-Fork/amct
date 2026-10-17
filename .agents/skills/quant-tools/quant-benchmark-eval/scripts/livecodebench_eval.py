@@ -58,14 +58,25 @@ from utils import (  # noqa: E402
 )
 
 
-def _dataset_files(task="livecodebench"):
-    return local_dataset_files(task, load_dataset_registry(), local_dataset_map())
+def resolve_dataset_files(task="livecodebench"):
+    """Local files backing `task`, resolved through datasets.json + $BENCH_ASSETS.
+
+    Called *before* the model is loaded: an unprefetched cache (or a partial
+    `all_of` shard set, deferred as `config.UnresolvedSplit`) used to surface
+    only after the float model was on the card and every quant block assembled,
+    i.e. minutes of work and a traceback that never mentions `--dataset_task`.
+    Resolving first turns it into an immediate, actionable error and also builds
+    the shim map, so a contradictory datasets.json fails here too
+    (constraints.md #2).
+    """
+    files = local_dataset_files(task, load_dataset_registry(), local_dataset_map())
+    print(f"[data] {task}: {len(files)} local file(s) from $BENCH_ASSETS")
+    return files
 
 
-def load_lcb_docs(task, limit):
-    frames = []
-    for fp in _dataset_files(task):
-        frames.append(read_dataset_file(fp))
+def load_lcb_docs(files, limit):
+    """Read already-resolved dataset files into LiveCodeBench doc records."""
+    frames = [read_dataset_file(fp) for fp in files]
     df = pd.concat(frames, ignore_index=True) if len(frames) > 1 else frames[0]
     if limit and limit > 0:
         df = df.head(limit)
@@ -200,6 +211,10 @@ def main():
     from transformers import AutoTokenizer
 
     dmap = a.device_map or None
+    # Before the model is loaded: an unprefetched / partially prefetched
+    # LiveCodeBench cache must fail here, not after assembly (see
+    # resolve_dataset_files).
+    dataset_files = resolve_dataset_files(a.dataset_task)
     warn_trust_remote_code(a.model, a.trust_remote_code)
     tok = AutoTokenizer.from_pretrained(
         a.model, use_fast=False, trust_remote_code=a.trust_remote_code
@@ -227,7 +242,7 @@ def main():
             trust_remote_code=a.trust_remote_code,
         )
 
-    docs = load_lcb_docs(a.dataset_task, a.limit)
+    docs = load_lcb_docs(dataset_files, a.limit)
     validate_lcb_docs(docs)
     custom_outputs = []
     raw_rows = []

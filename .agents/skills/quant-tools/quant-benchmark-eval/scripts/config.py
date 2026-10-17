@@ -166,20 +166,27 @@ class UnresolvedSplit:
     cache is incomplete. Store the error instead and let whoever actually asks
     for that split re-raise it (`bench_offline._patched` /
     `utils.local_dataset_files`): still fail-loud, but scoped to the data in
-    use. Compares by message so two identical declarations of one shim key stay
-    a harmless duplicate (see `local_dataset_map`).
+    use.
+
+    Equality compares `signature` -- *what* was declared and *where* -- not the
+    message. The message carries the owner label (`task '<task>' split
+    '<split>'`) that makes the deferred error actionable, so two tasks that
+    declare identical data produce different messages; comparing those would
+    report the harmless duplicate as a shim-key collision (see
+    `local_dataset_map`) and, worse, raise it while the map is built -- turning
+    one task's incomplete cache back into a blocker for every task, which is
+    exactly what this class exists to avoid.
     """
 
-    def __init__(self, error):
+    def __init__(self, error, signature=None):
         self.error = error
+        self.signature = signature
 
     def raise_it(self):
         raise self.error
 
     def __eq__(self, other):
-        return isinstance(other, UnresolvedSplit) and str(other.error) == str(
-            self.error
-        )
+        return isinstance(other, UnresolvedSplit) and other.signature == self.signature
 
     def __repr__(self):
         return f"<unresolved split: {self.error}>"
@@ -271,7 +278,13 @@ def local_dataset_map():
             except FileNotFoundError as exc:
                 # Deferred, not swallowed: see UnresolvedSplit. The error
                 # surfaces from whoever reads this split.
-                entry[split] = UnresolvedSplit(exc)
+                # Signature, not message: the message names *this* task, and
+                # two tasks declaring the same data must still compare equal
+                # for the collision check below (see UnresolvedSplit).
+                mode, rel_list = split_declaration(rel)
+                entry[split] = UnresolvedSplit(
+                    exc, signature=(base, mode, tuple(rel_list))
+                )
         if key in out:
             prev_task = owner[key]
             prev_base = os.path.join(BENCH_ASSETS, reg[prev_task]["subdir"])

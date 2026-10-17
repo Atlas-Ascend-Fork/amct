@@ -528,6 +528,15 @@ def main():
         # does not name --task (see utils.check_task_offline_ready).
         wanted = check_task_offline_ready(lm_task)
         print(f"[task] {lm_task} reads {sorted(wanted)} from $BENCH_ASSETS")
+        # Importing builds the shim map (`_LOCAL = local_dataset_map()`), which
+        # is where a contradictory datasets.json -- two tasks on one
+        # (repo_id, dataset_name) declaring different local data -- raises. Do
+        # it here, not next to install() below: that line runs after the float
+        # model is on the card and every quant block is assembled, so a registry
+        # bug would cost minutes and report itself far from its cause
+        # (constraints.md #2). `install()` stays where it is: patching
+        # load_dataset only matters once lm_eval is imported.
+        import bench_offline  # noqa: F401
     tok = AutoTokenizer.from_pretrained(
         a.model, use_fast=False, trust_remote_code=a.trust_remote_code
     )

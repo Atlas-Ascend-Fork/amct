@@ -37,6 +37,11 @@
 
 `self_check.py` 会把这两条反向对照跑一遍（未知任务名、未注册数据集都必须报错，且报错要能区分「索引里没有」和「注册表里没有」），避免预检被改成永真。
 
+「加载模型之前」这条时序对两个 CLI 都成立，且被 `_check_data_preflight_order` 按 AST 行号钉住（预检被挪到 `load_float()` / `assemble_quant_model()` 之后即变红——功能测试全绿也拦不住这种漂移，因为只有报错的时机变差了）：
+
+- `assemble_and_eval.py`：`check_task_offline_ready()` 之外，同一处还 import `bench_offline`，让离线 shim 映射（`_LOCAL = local_dataset_map()`）在装配前建好。注册表自相矛盾——两个任务共用一对 `(repo_id, dataset_name)` 却声明不同本地数据——是在建这张表时抛 `ValueError` 的，若把 import 留在 `install()` 旁边，它就要等到模型上卡、每层量化块都塞回去之后才炸。
+- `livecodebench_eval.py`：`resolve_dataset_files()` 在加载模型前解析 `--dataset_task` 的本地文件（打一行 `[data] <task>: N local file(s)`）。代码生成动辄数小时，缓存没预取 / `all_of` 缺片（`config.UnresolvedSplit`）必须立刻失败，不能等装配完才在读数据时抛。
+
 shim 的键是 **`(repo_id, dataset_name)`，不是任务名**——它取的是 lm-eval 传给 `datasets.load_dataset(path=..., name=...)` 的那对值。多个任务共用一个仓是允许的（`arc_challenge` / `arc_easy` 共用 `allenai/ai2_arc`、`livecodebench` / `livecodebench_release_v6` 共用 `livecodebench/code_generation_lite`），前提是 `dataset_name` 把它们区分开。两个任务**共用同一对键却声明不同本地数据**是注册表自相矛盾：`local_dataset_map()` 会直接抛 `ValueError`（点名两个任务与该键），而不是让后写的静默覆盖前一个——否则 shim 会把 A 的文件喂给 B，评的不是注册表声明的那份数据。声明完全相同的重复项属无害，仍允许。
 
 ## 3. HFLM 直接接受内存中的模型对象
