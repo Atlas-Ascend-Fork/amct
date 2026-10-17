@@ -526,6 +526,11 @@ curl -X POST \
 # 用于「响应没留档、只记得讨论」或需要确认落点（行号/文件）的场景
 NOTE_ID=194071029                                        # POST 响应里的 note_id（数字评论 ID）
 DISCUSSION_ID="b227720346ef5a37e410d17e76a1c1e1f60d5d80" # POST 响应里的 id（哈希串）
+# ⚠️ 第三条兜底条件用到 MY_LOGIN，必须先把它取出来：未定义时 `--arg me ""` **不会报错**，
+#    只会让 `.author == $me` 永远不成立、这条兜底**静默失效**（实测同一份响应：MY_LOGIN 为空
+#    时输出空，取到 login 后命中）。取法与 commands/review.md 步骤 1 一致。
+MY_LOGIN=$(curl -s "https://api.gitcode.com/api/v5/user?access_token=$GITCODE_API_TOKEN" | jq -r '.login // empty')
+[ -n "$MY_LOGIN" ] || { echo "ERROR: 取不到当前账号 login，无法按作者兜底匹配" >&2; exit 1; }
 # ⚠️ 同样必须 per_page=100 **并翻页**：目标评论在第 20 条之后时不带 per_page 会查不到、
 #    在第 100 条之后时不翻页会查不到，两种都会把「创建成功」误判成「创建失败」。
 #    下面按页查找，命中即停。
