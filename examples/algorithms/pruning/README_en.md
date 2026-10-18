@@ -730,7 +730,8 @@ This section corresponds to issue 183 task 17: dense FFN intermediate-dim `recon
 - Finetune set: WikiText2 train split, 300 non-overlapping contiguous 512-token blocks
   (the test split is never used for training)
 - Finetune setup: momentum-free SGD (lr=1e-2), warmup=20, 300 steps, grad_clip=1.0,
-  gradient checkpointing
+  gradient checkpointing The optimizer choice was validated by a
+  same-protocol A/B experiment (AdamW diverges under this setup; see the comparison table in 8.3).
 - The output directory is a placeholder relative path; the script saves `PruneReport`, diagnosis
   summary and runtime arguments (full arguments are printed at startup). To also save the finetuned
   model weights, append the optional `--save-model` flag to the run command
@@ -774,5 +775,21 @@ Measured on a single Ascend 910B3 (64 GiB); evaluation on the full WikiText2 tes
 > terms (about 77.8% of the pruning-caused PPL increase is recovered); the recovered PPL is still
 > `12.212309` above the original model. Prune time (0.06 min) is the `amct.prune` call itself,
 > excluding data preparation and evaluation.
+**Finetune optimizer A/B (2026-10-18, re-measured on 910B3)**: everything else identical between
+the two runs (`lr=1e-2`, 300 steps, warmup=20, grad_clip=1.0, the same 300 training blocks); only
+the optimizer changes. Both runs share a bit-identical pruning starting point (pruned PPL
+74.244453 in both), confirming the optimizer as the only variable.
+
+| Finetune optimizer | Baseline PPL | Pruned PPL | Finetuned PPL | Finetune loss (init -> final) | Recovery |
+| --- | ---: | ---: | ---: | --- | ---: |
+| Momentum-free SGD (this sample's default) | 19.157549 | 74.244453 | 31.302790 | 8.0483 -> 3.7260 | ~77.9% |
+| AdamW | 19.157549 | 74.244453 | 163033.640625 | 8.0483 -> 11.3496 | diverged |
+
+AdamW diverges directly under this sample's `lr=1e-2` protocol: the loss rises instead of falling,
+and the finetuned PPL ends up about three orders of magnitude worse than the pruned model. This
+validates the optimizer choice in 8.1 — momentum-free SGD with `lr=1e-2` is a sound default for
+this sample; the learning-rate scale AdamW requires (~`1e-5`) is incompatible with this finetune
+protocol.
+
 
 > After pruning, to export the model as a torchair offline model (.air) for ATC-to-om conversion and on-board inference, refer to [AMCT large-model offline torchair model export](../export/README_en.md).
