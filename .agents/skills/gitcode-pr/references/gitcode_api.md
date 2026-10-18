@@ -109,7 +109,7 @@ curl -s -H "Authorization: Bearer $GITCODE_API_TOKEN" \
 # 获取当前远程仓库名称
 repo_url=$(git remote get-url origin)
 if [ -z "$repo_url" ]; then
-  echo "错误：无法获取远程仓库 URL"
+  echo "错误：无法获取远程仓库 URL" >&2
   exit 1
 fi
 
@@ -130,7 +130,7 @@ else
 fi
 # ⚠️ sed 替换里必须写 `\1`/`\2`，写成 `\\1` 得到的是**字面量** `\1`（实测）
 if [ -z "$owner" ] || [ "$owner" = "$repo_url" ]; then
-  echo "错误：无法从 $repo_url 解析 owner/repo"
+  echo "错误：无法从 $repo_url 解析 owner/repo" >&2
   exit 1
 fi
 
@@ -143,7 +143,7 @@ response=$(curl -s -H "Authorization: Bearer $GITCODE_API_TOKEN" \
 #    退出码 1，于是**正常的非 fork 仓库**会被误报成「API 调用失败」（实测）。
 #    要判响应有效性，得看它是不是带 fork 键的对象。
 if [ "$(echo "$response" | jq -r 'if (type == "object") and (has("fork")) then "ok" else "bad" end' 2>/dev/null)" != "ok" ]; then
-  echo "API 调用失败或响应异常：$response"
+  echo "API 调用失败或响应异常：$response" >&2
   exit 1
 fi
 if [ "$(echo "$response" | jq -r '.fork')" = "true" ]; then
@@ -200,9 +200,8 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
       | $c, (.reply[]? | {id, discussion_id: $c.discussion_id, comment_type: $c.comment_type, author: .user.login, body, reply_to: $c.id})'
 
 # 翻页取完所有评论（评论数可能 > 100，必须循环，否则会漏读）
-# 终止判据用响应头 total_page，不要用「本页条数 < 请求的 per_page」：请求值超过 100 会被
-# 服务端静默夹回 100（实测 per_page=150/200 都只返回 100 条），而 total_page 按**生效**页长
-# 计算、不受夹影响，是唯一可靠的权威判据。
+# 终止判据只用响应头 total_page，**不要**用「本页条数 < 请求的 per_page」（请求值超过上限会被
+# 服务端静默夹回，判据会第一页就停）——实测依据见本节下方「翻页终止以响应头 total_page 为准」。
 MAX_PAGES=50   # 兜底上界（50 × 100 = 5000 条父评论，远超真实 PR 的评论量），正常永不触发，
                # 只防服务端分页异常导致空转；撞上界必须 exit 1，不能 break 后以 0 退出
 hdr=$(mktemp) || exit 1
@@ -222,6 +221,8 @@ while :; do
     exit 1   # 取不全即失败：空列表 + exit 0 会被调用方误读成「取全了且没有评论」
   fi
   # 父评论原样输出，再把 reply[] 展开成同形对象（回复没有 discussion_id/comment_type，从父评论带下来）
+  # 这里的投影是**全集**；SKILL.md 与 commands/review.md 里的同款循环按各自用途裁掉了用不到的
+  # 字段（如 review.md 步骤 1 只比 author，故不带 resolved），差异是有意的、不是漏抄
   echo "$resp" | jq -c '.[] | {id, discussion_id, comment_type, author: .user.login, resolved, body} as $c | $c, (.reply[]? | {id, discussion_id: $c.discussion_id, comment_type: $c.comment_type, author: .user.login, body, reply_to: $c.id})'
   # count 数的是**父评论**条数（回复不计入分页，也不计入 total_page/total_count）
   count=$(echo "$resp" | jq 'length')
@@ -266,7 +267,7 @@ done
 
 | 参数 | 说明 |
 |------|------|
-| `page` / `per_page` | 分页；`per_page` 默认 **20**，最大 **100**——请求值超过 100 会被服务端**静默夹回 100**（实测 `per_page=150/200` 都只返回 100 条）。评论较多时必须显式传；超过一页时必须从 `page=1` 起递增翻页取完，终止判据用响应头 `total_page`（**不要**用「本页条数 < 请求的 `per_page`」，请求值被夹时会第一页就停、静默丢数据），否则第 2 页之后的评论会被漏读 |
+| `page` / `per_page` | 分页；`per_page` 默认 **20**、最大 **100**（超出会被**静默夹回 100**）。评论较多时必须显式传，超过一页时必须从 `page=1` 起递增翻页取完，终止判据用响应头 `total_page`（**不要**用「本页条数 < 请求的 `per_page`」），否则第 2 页之后会被漏读。夹回行为与判据的实测依据见上「翻页终止以响应头 `total_page` 为准」 |
 | `direction` | `asc` / `desc` |
 | `comment_type` | 筛选评论类型：`diff_comment`（行内）/ `pr_comment`（普通） |
 
@@ -447,12 +448,10 @@ curl -s -o /dev/null -w '%{http_code}\n' -X DELETE \
 > 且当筛选条件只命中父评论、漏掉它的某条回复时，这个 `405` 是**必然**发生而非偶发——
 > 应在删除前就用 `reply[]` 预检出来并直接失败（见下文批量清理脚本第 2 步），
 > 否则会把 N 次注定失败的 `DELETE` 全发一遍，只留下 N 行看不出根因的 ERROR。
-> 另：`curl -s` 不加 `-f`/`--fail` 时，`405` 这类 HTTP 错误的**退出码仍是 0**，
-> 只看 `$?` 会把「删失败」当成「删成功」——必须用 `-w '%{http_code}'` 显式校验状态码。
 >
 > **证据边界（别把两类验证混为一谈）**：
-> - **真实 API 实测**（自测探针）：父评论带存活回复时删父 →
->   `405 Can not delete a discussion that has replies.`；先删回复（`200`）再删父 → `200`。
+> - **真实 API 实测**（自测探针）：父评论带存活回复时删父 → `405`（响应体见上表）；
+>   先删回复（`200`）再删父 → `200`。
 > - **「N 个父评论全部 405、脚本 exit 1、清理一条没完成」的批量场景是本地假 API 模拟得到的**
 >   （100 父 + 100 回复、标记只覆盖父评论），不是对真实 API 的批量实测——
 >   真实 API 上不会为验证这一点去批量制造/删除上百条评论。
@@ -461,10 +460,8 @@ curl -s -o /dev/null -w '%{http_code}\n' -X DELETE \
 ### 获取评论 ID
 
 ```bash
-# 顶层直接是数组；per_page 默认 20、最大 100（请求值超过 100 会被静默夹回 100），
-# 评论多时必须显式传 100 并翻页，否则 ID 会漏。终止判据用响应头 total_page（理由见
-# 「获取 PR 讨论（包含行内评论）」）：用「本页条数 < 请求的 per_page」会在请求值被夹时
-# 第一页就停、静默丢掉后面的 ID，而 ID 漏了就是漏删。
+# 顶层直接是数组；必须显式传 per_page=100 并从 page=1 翻页取完，终止判据用响应头 total_page
+# （分页规则与实测依据见「获取 PR 讨论（包含行内评论）」）——ID 漏了就是漏删。
 # ⚠️ 顶层**不含回复**：自己以「回复」形式发的评论嵌在父评论 reply[] 里，不展开就永远收不到
 #    它的 id，DELETE 时会漏删（实测：回复的 ID 在顶层一个都查不到）。
 MAX_PAGES=50   # 兜底上界（50 × 100 = 5000 条父评论），正常永不触发
@@ -496,11 +493,10 @@ done
 > 同理，**不展开 `reply[]` 也会漏删**：以回复形式留下的评论不在顶层，
 > 只投影顶层字段时它的 `id` 永远收不到——这类漏删还是静默的（脚本 `exit 0`）。
 
-⚠️ **展开后还必须调整删除顺序**：上面的投影是「父在前、回复在后」，照这个顺序直接删，
-父评论会因「还有回复」返回 `405 Can not delete a discussion that has replies.` 而留下，
-回复反倒被删掉——清理只完成一半，且 `curl -s` 的退出码仍是 `0`，看起来像成功。
-实测（自测探针）：父评论带回复时删父 → `405`；先删回复（`200`）再删父 → `200`。
-因此按 `reply_to` 排序（**非 null 的回复先删**），并逐个校验 HTTP 状态码：
+⚠️ **展开后还必须调整删除顺序**：上面的投影是「父在前、回复在后」，照这个顺序删只会删掉回复、
+父评论因「还有回复」返回 `405` 而留下（`405` 实测证据见上「证据边界」），
+清理只完成一半且 `curl -s` 退出码仍是 `0`，看起来像成功。
+规则：按 `reply_to` 排序（**非 null 的回复先删**），并逐个校验 HTTP 状态码：
 
 ⚠️ **另外两个同样会「少删却 exit 0」的坑**：
 
@@ -639,12 +635,16 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/contents/<文件�
 `sha`（**blob sha**）/ `url` / `html_url` / `download_url` / `_links`。
 
 `download_url` 是 `https://raw.gitcode.com/${owner}/${repo}/blobs/<blob_sha>/<文件路径>` 形式，
-直接返回明文，实测稳定 `200`，适合管道给 `grep -n` 定位行号。
+直接返回明文，实测稳定 `200`（连测 3 次全 `200`，且下载内容与本地文件 md5 一致），
+适合管道给 `grep -n` 定位行号。
 
 > ⚠️ **`…/raw/<commit_sha>/<文件路径>` 这个形式实测不稳定，不要当唯一手段**：同一 URL、同一 sha，
-> 在某一段时间内对同一批文件连续 3 次返回 `403`（body「暂不支持预览」），同一时刻同 sha 的
-> 另一些文件却返回 `200`；几分钟后同一批 URL 又连续 5 次全部 `200`；后续复查再次复现，
-> 且**命中哪些文件也在变**。`/pulls/<n>/files` 响应里的 `raw_url`、
+> 在某一段时间内对 `.agents/skills/gitcode-pr/` 下的 `commands/review.md`、
+> `references/gitcode_api.md`、`evals/evals.json` 连续 3 次返回 `403`（body「暂不支持预览」），
+> 而同一时刻同 sha 的 `SKILL.md`/`README.md`/`build.sh` 返回 `200`；几分钟后同一批 URL
+> 又连续 5 次全部 `200`；后续复查再次复现，且换成 `SKILL.md` 返回 `403`、
+> `review.md`/`README.md`/`build.sh` 返回 `200`——**命中哪些文件也在变**。
+> `/pulls/<n>/files` 响应里的 `raw_url`、
 > `files.json` 里 `diffs[].head.url` 都是该形式，同样不可靠。
 
 **`ref` 参数取值（实测）**：commit sha（40 位全 sha 或短 sha）与**分支名都可用**——
@@ -676,11 +676,7 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/contents/<文件�
 4. **API 版本**：只用 v5
 5. **多行选择**：写入用 `start_position`（起始行）+ `position`（结束行），
    读取看 `diff_position.start_new_line` / `end_new_line`
-6. **分页**：`per_page` 默认 20、最大 100；请求值超过 100 会被服务端**静默夹回 100**
-   （实测 `per_page=150/200` 都只返回 100 条）。故评论较多时必须显式传 `per_page=100`，
-   超过一页时必须从 `page=1` 起递增翻页取完，否则会漏读第 2 页之后的评论。
-   ⚠️ **终止判据用响应头 `total_page`，不要用「本页条数 < 请求的 `per_page`」**：
-   `total_page` 按服务端**生效**的页长计算、不受请求值被夹影响；而后者在请求值被夹时
-   会第一页就 `break`、静默丢掉后面全部数据（实测一个父评论远超一页的 PR，只剩前 100 条）。
-   读头要点与越界 `page` 行为见「获取 PR 讨论（包含行内评论）」
+6. **分页**：必须显式传 `per_page=100`、从 `page=1` 起递增翻页取完；⚠️ **终止判据用响应头
+   `total_page`**，不要用「本页条数 < 请求的 `per_page`」。上限静默夹回、`total_page` 读头要点、
+   越界 `page` 行为与全部实测依据见「获取 PR 讨论（包含行内评论）」
 7. **两种 ID 不要混用**：`discussion_id`（哈希串，用于回复）vs 评论 `id`（整数，用于删除）
