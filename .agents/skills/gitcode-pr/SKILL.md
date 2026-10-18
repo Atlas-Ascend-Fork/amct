@@ -86,7 +86,11 @@ echo "Repo: $repo"
 
 **后续所有 API 调用都应使用这些变量**：
 
-- GitHub API v5 格式：`/repos/${owner}/${repo}/...`
+- **API 版本纪律：一律使用 v5。** GitCode 官方文档《OpenAPI 使用简介》
+  （<https://docs.gitcode.com/docs/apis/>）原文：「对 GitCode API 发起请求必须包括 api 和
+  API 版本，**当前可用的版本为 `/api/v5`**」。本 skill 的全部读写调用只用 `/api/v5/...`，
+  不使用其他 API 版本；下文所有端点示例均为 v5。
+- GitCode API v5 端点格式：`https://api.gitcode.com/api/v5/repos/${owner}/${repo}/...`
 
 #### 查询 Fork 的原仓库（当当前仓库是 fork 时）
 
@@ -113,8 +117,7 @@ curl -s -H "Authorization: Bearer $GITCODE_API_TOKEN" \
 > token 失效时返回的 `{"message":"401 Unauthorized"}` 会走进 else，被读成「这不是 fork 仓库」，
 > 于是 PR 直接建到自己的 fork 上而不是上游仓库。
 > ⚠️ 原仓库网页地址的键名是 **`web_url`**，不是 `html_url`——v5 的 `repos` 响应里**没有**
-> `html_url` 键（实测 `yaoguangxiu/amct`：`parent` 只有 `url`/`ssh_url_to_repo`/
-> `http_url_to_repo`/`web_url`/`readme_url`），取错键不报错，只会静默输出空串。
+> `html_url` 这个键，取错键不报错，只会静默输出空串。
 
 **响应关键字段**：
 
@@ -125,16 +128,16 @@ curl -s -H "Authorization: Bearer $GITCODE_API_TOKEN" \
 | `parent.web_url` | 原仓库网页地址（实测键名；**不是** `html_url`，该键不存在） |
 | `parent.default_branch` | 原仓库默认分支 |
 
-**示例响应（实测 `GET /repos/yaoguangxiu/amct`，仅保留相关键）**：
+**示例响应（fork 仓库的 `GET /repos/<owner>/<repo>`，仅保留相关键）**：
 
 ```json
 {
   "fork": true,
   "parent": {
-    "full_name": "cann/amct",
-    "web_url": "https://gitcode.com/cann/amct",
-    "http_url_to_repo": "https://gitcode.com/cann/amct.git",
-    "default_branch": "master"
+    "full_name": "<owner>/<repo>",
+    "web_url": "https://gitcode.com/<owner>/<repo>",
+    "http_url_to_repo": "https://gitcode.com/<owner>/<repo>.git",
+    "default_branch": "<默认分支>"
   }
 }
 ```
@@ -148,17 +151,25 @@ GitCode 使用 v5 API 获取 PR 评论：
 ```bash
 # 获取 PR 的所有评论（包括行内评论）
 # ⚠️ 必须显式传 per_page=100 并从 page=1 起翻页取完：per_page 默认只有 20（实测：
-#    cann/amct PR!431 共 38 条父评论、PR!417 共 45 条，不带 per_page 都只返回 20 条）。
-#    「最大 100」取自官方文档，未实测（抽样中没有父评论 > 100 的 PR；在 38 条的 PR 上传
-#    per_page=150/200 都返回全部 38 条，既不能证明也不能推翻上限）。按 100 翻页在
-#    上限更大时也只是多翻几页、结果仍正确。
-# ⚠️ 顶层数组**不含回复**：回复嵌在父评论的 reply[] 里（实测 cann/amct PR!455：
-#    回复 ID 在顶层一个都查不到），必须一并展开；
+#    父评论数超过 20 的 PR，不带 per_page 一律只返回 20 条），最大 100——请求值超过 100
+#    会被服务端**静默夹回 100**（实测 per_page=150/200 都只返回 100 条）。
+#    所以翻页终止**不能**用「本页条数 < 请求的 per_page」：请求值被夹时会第一页就 break、
+#    静默丢掉后面所有评论（实测一个父评论远超一页的 PR，只剩前 100 条）。
+#    以响应头 total_page 为准——它按服务端**生效**的页长计算，不受请求值被夹影响。
+# ⚠️ 顶层数组**不含回复**：回复嵌在父评论的 reply[] 里（实测：任一带回复的 PR，回复 ID 在顶层一个都查不到），必须一并展开；
 #    reply 对象只有 id/body/user/时间戳，discussion_id 与 comment_type 要从父评论带下来
 #    （带下来的是**列表接口**那套取值，单条接口查同一条回复会得到另一套，别混用）。
+MAX_PAGES=50   # 兜底上界（50 × 100 = 5000 条父评论，远超真实 PR 的评论量），正常永不触发，
+               # 只防服务端分页异常导致空转；撞上界必须 exit 1，不能 break 后以 0 退出
+hdr=$(mktemp) || exit 1
+trap 'rm -f "$hdr"' EXIT   # 嵌进更大脚本时，把这个 rm 合并进已有的 trap，别覆盖它
 page=1
 while :; do
-  resp=$(curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100&page=${page}")
+  [ "$page" -gt "$MAX_PAGES" ] && { echo "ERROR: 翻页超过 ${MAX_PAGES} 页兜底上界，结果不可信" >&2; exit 1; }
+  # -D 把响应头落到文件：curl -s 会丢掉响应头，total_page 就读不到了
+  resp=$(curl -s -D "$hdr" "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100&page=${page}")
+  # 响应头是 CRLF 结尾，必须 tr -d '\r'，否则值带回车、下面的数值比较会失败
+  total_page=$(tr -d '\r' < "$hdr" | awk -F': *' 'tolower($1)=="total_page"{print $2}')
   # 响应必须是数组：无效 token 返回 {"message":"401 Unauthorized"}、网络失败返回空响应，
   # 两者都要显式失败退出，不能 break 后以 0 退出——空列表 + exit 0 会被读成「取全了且没有评论」。
   if [ "$(echo "$resp" | jq -r 'type' 2>/dev/null)" != "array" ]; then
@@ -167,8 +178,10 @@ while :; do
   fi
   # 每条父评论先原样输出，再把它 reply[] 里的回复展开成同形对象（带 reply_to 标记来源）
   echo "$resp" | jq -c '.[] | {id, discussion_id, comment_type, author: .user.login, body} as $c | $c, (.reply[]? | {id, discussion_id: $c.discussion_id, comment_type: $c.comment_type, author: .user.login, body, reply_to: $c.id})'
+  # count 数的是**父评论**条数（回复不计入分页，也不计入 total_page/total_count）
   count=$(echo "$resp" | jq 'length')
-  [ "$count" -lt 100 ] && break   # count 数的是**父评论**条数（回复不计入分页），不足 100 即最后一页
+  [ "$count" -eq 0 ] && break   # total_page 缺失时的兜底；越界 page 实测返回空数组+200，不会死循环
+  [ -n "$total_page" ] && [ "$page" -ge "$total_page" ] && break
   page=$((page + 1))
 done
 ```
@@ -184,7 +197,7 @@ done
 >
 > ⚠️ 带下来的 `comment_type` 是**列表接口**那套取值（`diff_comment`/`pr_comment`），
 > 不等于「和单条接口一致」：同一条回复用单条接口查是另一套
-> （实测回复 `194233994`：父评论列表值 `diff_comment`，单条接口 `DiffNote`），
+> （实测：行内讨论下的回复，父评论列表值 `diff_comment`，单条接口 `DiffNote`），
 > 两套取值对照见 `references/gitcode_api.md` →「两个接口的 `comment_type` 取值不是同一套」。
 > 回复的完整位置信息（文件路径 `position.new_path`、行号 `position.new_line`）
 > 仍需用 `note_id` 查单条接口——列表接口既不给回复也不给父评论文件路径。
@@ -192,7 +205,7 @@ done
 > ⚠️ **展开后的行形状与父行不同**（回复行没有 `resolved` 等父行才有的键），
 > 用 `reply_to` 区分：`null` = 父评论，非 null = 回复（值为父评论 ID）。
 > **校验「是否取全」要拿父评论条数比**：`per_page`/`total_count` 都只数父评论
-> （实测 cann/amct PR!455：响应头 `total_count` 的值等于顶层数组长度，`reply[]` 内的回复不计入），
+> （实测：响应头 `total_count` 的值等于顶层数组长度，`reply[]` 内的回复不计入），
 > 拿展开后的输出条数去比 `total_count` 必然偏大、会误判成取重了。
 
 ## GitCode API v5 说明
@@ -226,13 +239,13 @@ v5 API 返回**直接数组**，不是包装对象。评论数据包含以下关
 | `resolved` / `resolved_by` | 检视意见是否已解决、解决人 |
 | `reply[]` | 该讨论下的回复，**嵌在父评论里**，不单独出现在顶层数组 |
 
-**示例返回结构**：
+**示例返回结构**（键名与取值类型取自实测响应，下方 ID / 哈希为示意值）：
 
 ```json
 [
   {
-    "id": 171409022,
-    "discussion_id": "b4ecb001ec8af59d02c3ffeffeb83fb7a8226c84",
+    "id": 123456789,
+    "discussion_id": "<40 位十六进制哈希串>",
     "body": "评论内容",
     "user": {
       "login": "username",
@@ -249,7 +262,7 @@ v5 API 返回**直接数组**，不是包装对象。评论数据包含以下关
 ```json
 {
   "id": 123456,
-  "discussion_id": "a8d4cef18a01d322fa540cfcc2eccb94e9d544d0",
+  "discussion_id": "<40 位十六进制哈希串>",
   "body": "这段代码需要优化",
   "comment_type": "diff_comment",
   "resolved": false,
@@ -262,17 +275,16 @@ v5 API 返回**直接数组**，不是包装对象。评论数据包含以下关
 }
 ```
 
-**重要说明（实测 cann/amct PR!455 的全部父评论，条数随评论增长变化，不在此固化）**：
+**重要说明**（实测抽样中全部父评论得出；条数随评论增长变化，不在此固化）：
 
 - 列表接口**没有** `path` / `position` 这两个键（`has("path")` 与 `has("position")` 均为 `false`，
   不是「值为 `null`」）。用 `jq '.path'` 取值会得到 `null`，但**不要按这两个字段过滤**，永远命中不了。
 - **行号列表接口就能拿到**：在 `diff_position.start_new_line` / `end_new_line` 里
-  （实测 PR!455 全部 5 条 `diff_comment` 都带此键，单行评论两个值相同）。
+  （实测：抽样中全部 `diff_comment` 都带此键，单行评论两个值相同）。
   不需要为了行号再逐条调单条接口。
   ⚠️ 但**行号数值本身是易变的**：接口按 PR head **当前**指向的 commit 重算行号，锚定的
-  还是同一行源码，行号却会随该文件上方的增删而位移。实测同一条 `194143085`（锚在
-  `commands/review.md` 的 `… | jq -r '.[] | .patch.diff'` 那一行）：head 为 `ae35b167…` 时
-  `new_line=60`，head 推进到 `4e51dc0…` 后同一行变成 `81`（期间 `review.md` 净增 62 行、
+  还是同一行源码，行号却会随该文件上方的增删而位移。实测同一条行内评论：head 推进前
+  `new_line=60`，head 推进后同一行变成 `81`（期间被评论文件上方净增数十行、
   该行内容一字未变，`git show <head>:<path>` 两个行号取到的是同一句）。
   所以这里只固化「哪些键存在」这类结构事实，**不要把具体行号当稳定结论引用或写进 PR 描述**；
   要行号就现场查。
@@ -293,17 +305,17 @@ GET /repos/:owner/:repo/pulls/comments/:id
 curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<COMMENT_ID>?access_token=$GITCODE_API_TOKEN"
 ```
 
-**返回字段（实测 cann/amct PR!455，非构造示例）**：
+**返回字段**（键名与键的存在性取自实测真实响应，非构造；下方 ID / 哈希 / 行号为示意值）：
 
 > 下面 JSON 是**某一时刻的快照**：`position.head_sha` / `new_line` 会随 PR head 推进而漂移
 > （见下方 ⚠️），别把里面的具体行号、head sha 当稳定事实引用；**键名与键的存在性**才是要看的。
 
-行内评论（`194143085`，`comment_type` = `DiffNote`）：
+行内评论（`comment_type` = `DiffNote`）：
 
 ```json
 {
-  "id": 194143085,
-  "discussion_id": "b4ecb001ec8af59d02c3ffeffeb83fb7a8226c84",
+  "id": 123456789,
+  "discussion_id": "<40 位十六进制哈希串>",
   "body": "评论内容",
   "comment_type": "DiffNote",
   "user": { "id": 1, "object_id": "…", "login": "username", "name": "显示名称", "type": "…" },
@@ -311,22 +323,22 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<C
   "updated_at": "2026-05-14T16:06:24+08:00",
   "is_outdated": false,
   "position": {
-    "base_sha": "475eeb88…",
-    "start_sha": "e1c9cb37…",
-    "head_sha": "ae35b167…",
-    "old_path": ".agents/skills/gitcode-pr/commands/review.md",
-    "new_path": ".agents/skills/gitcode-pr/commands/review.md",
+    "base_sha": "<40 位 commit sha>",
+    "start_sha": "<40 位 commit sha>",
+    "head_sha": "<40 位 commit sha>",
+    "old_path": "<被评论文件路径>",
+    "new_path": "<被评论文件路径>",
     "position_type": "text",
     "new_line": 60
   }
 }
 ```
 
-普通评论（`194141205`）：
+普通评论：
 
 ```json
 {
-  "id": 194141205,
+  "id": 123456789,
   "discussion_id": "…",
   "body": "评论内容",
   "user": { "id": 1, "object_id": "…", "login": "username", "name": "显示名称", "type": "…" },
@@ -346,20 +358,20 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<C
 > - 单条接口**没有**列表接口才有的 `resolved` / `resolved_by` / `diff_position` / `reply` 键；
 >   要看检视意见是否已解决、要拿讨论下的回复，必须走列表接口。
 > - `position.head_sha` / `new_line` 是**按 PR head 当前指向的 commit 重算的快照值**：锚定的
->   还是同一行源码，但 head 推进、该文件上方有增删时行号就会漂移（实测同一条 `194143085`：
->   head `ae35b167…` 时 `new_line=60`，head 推进到 `4e51dc0…` 后同一行变 `81`，该行内容
->   一字未变）。`base_sha` / `start_sha` 才是稳定的。
+>   还是同一行源码，但 head 推进、该文件上方有增删时行号就会漂移（实测同一条行内评论：
+>   head 推进前 `new_line=60`，推进后同一行变 `81`，该行内容一字未变）。
+>   `base_sha` / `start_sha` 才是稳定的。
 >   所以上面 JSON 里的行号、head sha 只作形状示范，**不要当稳定事实引用**；要行号就现场查。
 
-> ⚠️ **两个接口的 `comment_type` 不是同一套取值**（实测 cann/amct PR!455）：
+> ⚠️ **两个接口的 `comment_type` 不是同一套取值**（实测）：
 >
 > | 评论种类 | 列表接口 `/pulls/<n>/comments` | 单条接口 `/pulls/comments/<id>` |
 > |----------|-------------------------------|----------------------------------|
 > | 行内评论 | `diff_comment` | `DiffNote` |
 > | 普通评论 | `pr_comment` | `null` |
 >
-> 同一条行内评论 `194208411`：列表里是 `diff_comment`，单条里是 `DiffNote`；
-> 普通评论 `194141205`/`194176110`：列表里是 `pr_comment`，单条里是 `null`
+> 同一条行内评论：列表里是 `diff_comment`，单条里是 `DiffNote`；
+> 同一条普通评论：列表里是 `pr_comment`，单条里是 `null`
 > （v5 见不到 `DiscussionNote` 这个取值）。
 > 所以**判断行内/普通一律用列表接口的值**；单条接口只能当「`comment_type` 非 `null` 即行内」用，
 > 不要拿列表接口的取值去匹配单条响应（反之亦然），否则永远匹配不上。
@@ -376,15 +388,15 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<C
 | `position.base_sha` | Base 提交 SHA |
 | `position.head_sha` | Head 提交 SHA |
 
-> ⚠️ 实测 5 条行内评论（PR!455 的 `194143085`/`194143153`/`194208411`/`194208419`/`194235149`）
-> 的 `position` 键**都只有** `base_sha`/`start_sha`/`head_sha`/`old_path`/`new_path`/`position_type`/`new_line`，
+> ⚠️ 实测抽样中的全部行内评论，`position` 键**都只有**
+> `base_sha`/`start_sha`/`head_sha`/`old_path`/`new_path`/`position_type`/`new_line`，
 > **没有 `old_line`**（多行评论额外多一个 `start_new_line`）。所以旧代码行号取不到，
 > 不要用 `position.old_line` 做判断或过滤。
 
 > ⚠️ 上表的 `position.*` 是**单条接口**的字段名，与列表接口的 `diff_position.*` **不是同一套键名**，
-> 且**结束行的字段名在两个接口里不同**（实测 cann/amct PR!447 多行行内评论 `193754581`，
+> 且**结束行的字段名在两个接口里不同**（实测一条多行行内评论，
 > 列表 `diff_position = {start_new_line:29, end_new_line:31}`，单条
-> `position = {new_line:31, start_new_line:29, new_path:"…/deploy_selection.py", …}`）：
+> `position = {new_line:31, start_new_line:29, new_path:"<被评论文件路径>", …}`）：
 >
 > | 含义 | 列表接口 `diff_position` | 单条接口 `position` |
 > |------|--------------------------|---------------------|
@@ -421,7 +433,7 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
   jq -r '.diffs[0].statistic.new_path'
 ```
 
-**响应字段说明（实测 cann/amct PR!455）**：
+**响应字段说明**（实测）：
 
 顶层是**对象**（不是数组），键为 `code` / `added_lines` / `remove_lines` / `count` / `diff_refs` / `diffs`：
 
@@ -441,7 +453,7 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
   别拿它当取内容的地址，改用 contents API 或 `…/blobs/<new_blob_id>/<path>`
 - `diffs[].content` - ⚠️ **不是 diff 文本，而是对象** `{"text":[…]}`；`text[]` 每项形如
   `{"line_content":"<diff 行原文>","old_line":"…","new_line":"…","type":"match"}`
-  （实测 PR!455 的 `SKILL.md` 即为此形状；**项数随该文件 diff 大小变化，不在此固化**）。
+  （实测：diff 较大的文件即为此形状；**项数随该文件 diff 大小变化，不在此固化**）。
   要拿可直接 `grep` 的 unified diff 文本，
   用 `/pulls/<n>/files` 的 `patch.diff`；非要从本接口拼，得
   `jq -r '.diffs[0].content.text[].line_content'`
@@ -450,13 +462,13 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
 > 要**整体统计与 `diff_refs`** 用 `files.json`，要**逐文件 patch / blob sha** 用 `files`。
 > 两者字段名不同（如 `diffs[].content` vs `patch.diff`），别把一套 jq 表达式套到另一个接口上。
 >
-> ⚠️ 两个接口的增删行数与本地 `git diff --numstat` **可能差 1**（实测本 PR 的
-> `references/gitcode_api.md`：本地 `358/90`，两接口都给 `357/89`，其余文件一致；两接口之间从未分歧）。
+> ⚠️ 两个接口的增删行数与本地 `git diff --numstat` **可能差 1**（实测：同一文件本地
+> numstat 比两接口给的值各多 1，其余文件完全一致；两接口之间从未分歧）。
 > 不影响判断，但别拿它做精确对账，也别把这类数字写进 PR 描述（易变）。
 
 ### 提交行内评论（支持多行选择）
 
-#### 使用 v5 API（推荐）
+#### 使用 v5 API
 
 ```bash
 curl -X POST \
@@ -518,7 +530,7 @@ curl -X POST \
 **重要**：POST 创建评论返回 **HTTP 201**，响应体是（实测，与「回复 discussion」接口同形）：
 
 ```json
-{"id": "<discussion_id 哈希串>", "body": "评论内容", "note_id": 194071029}
+{"id": "<discussion_id 哈希串>", "body": "评论内容", "note_id": 123456789}
 ```
 
 - `id` 是**讨论 ID**（哈希串），用于回复该讨论，**不能**用于删除；
@@ -530,49 +542,54 @@ curl -X POST \
 
 **仍建议回读校验**（POST 的 201 不代表评论内容/落点符合预期，例如行号错位、path 写错会静默落到别处）。
 回读时用列表接口按 `note_id` 精确比对 `.id`，不要用 `contains(.body)` 做宽匹配——若 PR 中已有包含相同
-文本的评论，会匹配到错误的评论 ID，导致误删/误操作他人评论。应满足以下任一精确条件：
+文本的评论，会匹配到错误的评论 ID，导致误删/误操作他人评论。用以下任一精确条件：
 
-- **首选**：直接用 POST 返回的 `note_id` 比 `.id`（唯一、无需标记）；
-- 或在评论正文里嵌入一个**唯一标记**（如随机串/时间戳），用 `==` 或 `contains(唯一标记)` 精确匹配；
-- 或结合**当前用户**（`.user.login`）、**创建时间**（`.created_at`）、POST 返回的
-  **`id`（讨论 ID）** 共同过滤，缩小到唯一一条。
+- **首选**：直接用 POST 返回的 `note_id` 比 `.id`（整数、唯一，既不用埋标记也不用加收敛条件）；
+- 或用评论正文里的**唯一标记**（如随机串/时间戳）比 `.body`，怕与他人撞车就再叠一层
+  **当前用户**（`.user.login`）过滤。
+
+> ⚠️ 别拿 POST 响应里的哈希串 `id`（那是 `discussion_id`）去列表里反查定位：`reply[]` 展开后父评论
+> 与其回复继承同一个 `discussion_id`，一个哈希会命中多条，还得再加收敛条件；`note_id` 本身就唯一。
 
 ```bash
-# 回读校验：首选直接用 POST 返回的 note_id 比 .id；下面额外保留按讨论 ID 定位的写法，
-# 用于「响应没留档、只记得讨论」或需要确认落点（行号/文件）的场景
-NOTE_ID=194071029                                        # POST 响应里的 note_id（数字评论 ID）
-DISCUSSION_ID="b227720346ef5a37e410d17e76a1c1e1f60d5d80" # POST 响应里的 id（哈希串）
-# ⚠️ 第三条兜底条件用到 MY_LOGIN，必须先把它取出来：未定义时 `--arg me ""` **不会报错**，
+# 回读校验：直接用 POST 返回的 note_id 比 .id（唯一命中，无需收敛条件）
+NOTE_ID="<NOTE_ID>"                                      # POST 响应里的 note_id（数字评论 ID）
+# ⚠️ NOTE_ID 必须是整数：占位符没替换时 `--argjson nid "<NOTE_ID>"` 会以 exit 2 报错，但报错被下面的
+#    循环吞掉后只剩一句「翻完所有页仍未找到」，看不出根因——所以先自己挡一道（同 MY_LOGIN 的处理）。
+case "$NOTE_ID" in ''|*[!0-9]*) echo "ERROR: NOTE_ID 必须是整数，当前=\"$NOTE_ID\"（占位符未替换？）" >&2; exit 1;; esac
+# ⚠️ 走「唯一标记」这条兜底时才用到 MY_LOGIN，必须先把它取出来：未定义时 `--arg me ""` **不会报错**，
 #    只会让 `.author == $me` 永远不成立、这条兜底**静默失效**（实测同一份响应：MY_LOGIN 为空
 #    时输出空，取到 login 后命中）。取法与 commands/review.md 步骤 1 一致。
 MY_LOGIN=$(curl -s "https://api.gitcode.com/api/v5/user?access_token=$GITCODE_API_TOKEN" | jq -r '.login // empty')
 [ -n "$MY_LOGIN" ] || { echo "ERROR: 取不到当前账号 login，无法按作者兜底匹配" >&2; exit 1; }
 # ⚠️ 同样必须 per_page=100 **并翻页**：目标评论在第 20 条之后时不带 per_page 会查不到、
 #    在第 100 条之后时不翻页会查不到，两种都会把「创建成功」误判成「创建失败」。
-#    下面按页查找，命中即停。
+#    下面按页查找，命中即停；翻页终止以响应头 total_page 为准（理由见「获取 PR 讨论列表」）。
 # 顶层不含回复：若目标是「回复」而非新建评论，必须把 reply[] 一并展开才 select 得到
-# ⚠️ 展开后 discussion_id **不再唯一**：同一讨论的父评论与其全部回复共享同一个 discussion_id
-#    （实测 PR!455 讨论 d21d994a… 命中 3 条：父 194208411 + 回复 194229227/194233994），
-#    所以必须再加一层收敛条件：
-#      · 目标是刚新建的顶层评论 → 追加 select(.reply_to == null)
-#      · 目标是刚发出的回复     → 用回复响应里的 note_id 直接比 .id，或用唯一标记比 .body
+# ⚠️ select 里的两支是**并集**（or），不是「任选其一」：两支都填又各自命中不同评论时会输出多条。
+#    只填你手上真有的那一支——有 note_id 就别再填标记文本。
+MAX_PAGES=50   # 兜底上界，正常永不触发
+hdr=$(mktemp) || exit 1
+trap 'rm -f "$hdr"' EXIT
 page=1
 found=""
 while :; do
-  resp=$(curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100&page=${page}")
+  [ "$page" -gt "$MAX_PAGES" ] && { echo "ERROR: 翻页超过 ${MAX_PAGES} 页兜底上界，无法确认评论是否创建成功" >&2; exit 1; }
+  resp=$(curl -s -D "$hdr" "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100&page=${page}")
+  total_page=$(tr -d '\r' < "$hdr" | awk -F': *' 'tolower($1)=="total_page"{print $2}')   # 头是 CRLF，必须 tr -d '\r'
   if [ "$(echo "$resp" | jq -r 'type' 2>/dev/null)" != "array" ]; then
     echo "ERROR: 第 ${page} 页评论请求失败或响应非数组，无法确认评论是否创建成功：$resp" >&2
     exit 1
   fi
-  found=$(echo "$resp" | jq -c --argjson nid "$NOTE_ID" --arg did "$DISCUSSION_ID" --arg me "$MY_LOGIN" '
+  found=$(echo "$resp" | jq -c --argjson nid "$NOTE_ID" --arg me "$MY_LOGIN" '
       .[] | {id, discussion_id, comment_type, author: .user.login, body} as $c
       | $c, (.reply[]? | {id, discussion_id: $c.discussion_id, comment_type: $c.comment_type, author: .user.login, body, reply_to: $c.id})
-      | select(.id == $nid or .discussion_id == $did or (.author == $me and .body == "唯一标记内容"))
-      | select(.reply_to == null)          # 目标是新建的顶层评论；找回复则改用 .id == <note_id>
+      | select(.id == $nid or (.author == $me and .body == "<唯一标记内容>"))
       | {id, discussion_id, comment_type, reply_to}')
   [ -n "$found" ] && break
   count=$(echo "$resp" | jq 'length')
-  [ "$count" -lt 100 ] && break   # count 数的是**父评论**条数（回复不计入分页）
+  [ "$count" -eq 0 ] && break   # total_page 缺失时的兜底；count 数的是**父评论**条数（回复不计入分页）
+  [ -n "$total_page" ] && [ "$page" -ge "$total_page" ] && break
   page=$((page + 1))
 done
 # ⚠️ 找不到必须显式失败：空结果 + exit 0 会被读成「查过了、确实没有」，
@@ -580,12 +597,12 @@ done
 [ -n "$found" ] || { echo "ERROR: 翻完所有页仍未找到该评论，创建可能真的失败了" >&2; exit 1; }
 echo "$found" | jq .
 
-# 返回：
+# 返回（reply_to 非 null 表示命中的是回复，值为父评论 ID；找回复也走同一段代码，不必再分支）：
 # {
-#   "id": 171431239,  // 数字 ID
-#   "discussion_id": "b227720346ef5a37e410d17e76a1c1e1f60d5d80",
+#   "id": <NOTE_ID>,              // 数字评论 ID，等于 POST 响应的 note_id
+#   "discussion_id": "<哈希串>",  // 回复这里是继承父评论的值
 #   "comment_type": "diff_comment",
-#   "reply_to": null        // 非 null 表示这条是回复，值为父评论 ID
+#   "reply_to": null
 # }
 ```
 
@@ -614,7 +631,8 @@ POST /repos/:owner/:repo/pulls/:number/discussions/:discussion_id/comments
 1. **获取 discussion_id**：
 
 ```bash
-# per_page 默认 20，必须显式传 100；评论数 > 100 时按 page 递增翻页取完（见「获取 PR 讨论列表」）
+# per_page 默认 20、最大 100（请求值超过 100 会被静默夹回 100），必须显式传；
+# 评论数 > 100 时按 page 递增翻页取完、以响应头 total_page 为终止判据（见「获取 PR 讨论列表」）
 # 此处只需父评论：回复不能单独被回复，reply[] 里的条目共享父评论的 discussion_id
 curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100" | \
   jq '.[] | {id: .id, discussion_id: .discussion_id}'
@@ -649,9 +667,8 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
 
 - 回复不作为独立条目出现在 `/pulls/:number/comments` 列表**顶层**，而是嵌进父评论的 `reply[]`；
   要验证就用回复响应里的 `note_id` 查单条接口
-- 单条接口查回复时，`comment_type` 跟随**父讨论**的种类：父讨论是行内评论 → `DiffNote`
-  （实测 PR!455 的回复 `194209148`、`194148955`），父讨论是普通评论 → `null`
-  （实测 PR!431 的回复 `193411043`/`193411048`/`193706419`）。v5 **没有** `DiscussionNote` 这个取值
+- 单条接口查回复时，`comment_type` 跟随**父讨论**的种类：父讨论是行内评论 → `DiffNote`，
+  父讨论是普通评论 → `null`（两种均已实测）。v5 **没有** `DiscussionNote` 这个取值
 - 因此校验「回复是否落在目标讨论」请用 `discussion_id` 是否相等，**不要**用 `comment_type` 匹配
 
 ### 删除 PR 评论
@@ -670,82 +687,29 @@ curl -s -o /dev/null -w '%{http_code}\n' -X DELETE \
   "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<COMMENT_ID>?access_token=$GITCODE_API_TOKEN"
 ```
 
-**批量清理**（按唯一标记删掉自己发过的测试评论）：必须**先翻完所有页把 ID 取全、再统一删**。
-下面这段可直接复制执行，六条不变式（翻页取全 / 非数组守卫 / 展开 `reply[]` / **405 预检** /
-回复在前 / 校验状态码）已全部落在代码里，不靠注释提醒：
+**批量清理**（按唯一标记删掉自己发过的测试评论）：脚本见 `references/gitcode_api.md`
+→「删除 PR 评论」→「批量清理脚本」，**直接复制那一份，别在这里另写一遍**。
+它必须同时满足下面六条不变式，漏掉任何一条都是「少删却 `exit 0`」的**静默失败**：
 
-```bash
-# ---- 第 1 步：翻页把所有待删 ID 取全（只读不删），追加进临时文件 ----
-# ⚠️ 不能边翻页边删：删除会让列表变短、后续条目**前移**，再取「下一页」拿到的已是挪位后的
-#    数据，中间被跳过的条目**永远删不到**（若坚持边翻边删，必须按 total_page **倒序**翻页）
-# ⚠️ 不能在循环里覆盖同一个变量、循环外再删：resp 每页都被覆盖，结束后只剩**最后一页**，
-#    评论超过 100 条时前面几页的 ID 全丢，而脚本仍 exit 0
-ids=$(mktemp)
-blocked=$(mktemp)
-trap 'rm -f "$ids" "$blocked"' EXIT
-page=1
-while :; do
-  resp=$(curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100&page=${page}")
-  if [ "$(echo "$resp" | jq -r 'type' 2>/dev/null)" != "array" ]; then
-    echo "ERROR: 第 ${page} 页评论请求失败或响应非数组，ID 未取全：$resp" >&2
-    exit 1
-  fi
-  # ⚠️ 必须展开 reply[]：自己以「回复」形式发的评论不在顶层，只投影顶层字段永远收不到它的 id
-  # ⚠️ (.body // "") 兜住 null（行内 diff 评论、系统评论的 body 可能为 null），
-  #    否则 jq 在 startswith 处中途报错退出：崩之前输出的 ID 算数、其后全丢，
-  #    而外层循环不检查 jq 退出码，会拿着残缺名单跑完并 exit 0
-  # ⚠️ 排序键**只放 reply_to 标志 + id，不要掺 .body**：body 常带换行，sort 是按行排序的，
-  #    掺进 body 会把一条评论拆成多行重排——记录数被撑大、带 id 的行被正文碎片淹没，
-  #    「回复在前」的顺序根本读不出来（实测同一批 43 条评论：掺 body 输出 475 行，
-  #    只留标志+id 输出 43 行）。要看正文另起一条命令用 jq -c 输出（一行一个 JSON 对象）
-  echo "$resp" | jq -r '
-      .[] | . as $c
-      | ({id, body, reply_to: null}, ((.reply // [])[] | {id, body, reply_to: $c.id}))
-      | select((.body // "") | startswith("<唯一标记>"))
-      | "\(if .reply_to then 1 else 0 end)\t\(.id)"' >> "$ids" \
-    || { echo "ERROR: 第 ${page} 页 jq 解析失败，ID 未取全" >&2; exit 1; }
-  # ⚠️ 405 预检：**被选中的父评论**若还有**未被选中的存活回复**，删它必然 405。
-  #    这类失败在翻页阶段就能算出来，没必要先发 N 次注定失败的 DELETE、再靠 405 反推
-  #    （**本地假 API 模拟**：100 父 + 100 回复、标记只覆盖父评论时，100 个父评论 DELETE **全部** 405、
-  #     脚本 exit 1、清理一条都没完成，且 100 行 ERROR 里看不出根因是「筛选条件没覆盖回复」。
-  #     **真实 API 只实测过单点**：父评论带存活回复时删父 → 405，先删回复再删父 → 200，
-  #     见 references/gitcode_api.md「删除 PR 评论」的证据边界）。
-  echo "$resp" | jq -r '
-      .[] | select((.body // "") | startswith("<唯一标记>")) as $p
-      | ($p.reply // [])[]
-      | select(((.body // "") | startswith("<唯一标记>")) | not)
-      | "父 \($p.id) 的回复 \(.id) 未被筛选条件命中"' >> "$blocked" \
-    || { echo "ERROR: 第 ${page} 页 405 预检 jq 解析失败" >&2; exit 1; }
-  count=$(echo "$resp" | jq 'length')
-  [ "$count" -lt 100 ] && break   # count 数的是**父评论**条数（回复不计入分页）
-  page=$((page + 1))
-done
+1. **先翻完所有页把 ID 取全、再统一删**——边翻边删时列表前移，被跳过的条目永远删不到
+   （坚持边翻边删就得按 `total_page` 倒序）；也不能在循环里覆盖同一个变量、循环外再删，
+   那样只剩最后一页的 ID；
+2. **响应非数组即 `exit 1`**——空响应 / 错误对象不能当成「本页 0 条」；
+3. **展开 `reply[]`**——以「回复」形式发的评论不在顶层，只投影顶层字段永远收不到它的 id；
+4. **删前做 405 预检**——被选中的父评论若还有**未被选中的存活回复**，删它必然 `405`；
+   有阻塞项就直接失败、一次 `DELETE` 都不发；
+5. **回复在前、父评论在后**——父评论带回复时删父返回
+   `405 Can not delete a discussion that has replies.`，照投影原顺序删会只删掉回复；
+6. **逐条校验 `-w '%{http_code}'`（成功为 `200`）**——`curl -s` 对 4xx/5xx 的退出码仍是 `0`，
+   只看 `$?` 会把「删了一半」当成删干净。
 
-# ---- 第 2 步：删除前的 405 预检，有阻塞项就直接失败、一次 DELETE 都不发 ----
-if [ -s "$blocked" ]; then
-  echo "ERROR: 以下父评论带「未被筛选条件命中的存活回复」，直接删必然 405：" >&2
-  sort -u "$blocked" >&2
-  echo "       处置：改筛选条件让它同时命中父评论与其回复，或先单独删掉上面列出的回复 ID。" >&2
-  exit 1
-fi
+> 另有两处同样会静默出错，脚本里已处理：`.body` 可能为 `null`（须 `(.body // "")` 兜底，
+> 并显式判 jq 退出码）；排序键只放 `reply_to` 标志 + id，掺 `.body` 会被 `sort` 按换行拆碎。
+> 想先看清单再删（不自动执行）：只跑那份脚本的第 1 步（取 ID），把第 3 步的 `DELETE` 循环
+> 换成打印 `sort -r "$ids"`。
+> 完整的坑位说明、证据边界与响应码表见 `references/gitcode_api.md` →「删除 PR 评论」。
 
-# ---- 第 3 步：全部取完后再统一删（sort -r 使「回复在前、父评论在后」）----
-# ⚠️ 必须先删回复再删父评论：父评论带回复时 DELETE 返回
-#    405 {"error_message":"Can not delete a discussion that has replies."}（实测），
-#    照投影原顺序（父在前）删会只删掉回复、留下父评论，清理只完成一半且退出码仍是 0
-fail=0
-for id in $(sort -r "$ids" | cut -f2); do
-  code=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
-    "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/${id}?access_token=$GITCODE_API_TOKEN")
-  [ "$code" = "200" ] || { echo "ERROR: 删除评论 ${id} 失败（http=${code}），清理不完整" >&2; fail=1; }
-done
-[ "$fail" -eq 0 ] || exit 1
-```
-
-> 想先看清单再删（不自动执行）：把上面第 3 步换成 `sort -r "$ids"` 打印即可。
-> 完整的坑位说明与响应码表见 `references/gitcode_api.md` →「删除 PR 评论」。
-
-**注意**：DELETE 接口的 `<COMMENT_ID>` 必须是**数字评论 ID**（如 `194071029`），
+**注意**：DELETE 接口的 `<COMMENT_ID>` 必须是**数字评论 ID**（整数，如 `123456789`），
 `references/gitcode_api.md` 中该 `id` 字段类型为 integer。它的两个来源等价、任选其一：
 
 - POST 创建评论 / 回复评论响应里的 **`note_id`**（见上文[创建评论的返回值](#创建评论的返回值)，
@@ -803,10 +767,8 @@ git push hgjupstream fix/gcc13-link-error -u
     jq -r '.default_branch'
   ```
 
-  > ⚠️ **各仓库的默认分支并不统一**，写死分支名会让建 PR 直接失败。实测本仓 `cann/amct`
-  > 的 `default_branch` 是 `master`，且**没有 `develop` 分支**（分支列表只有 `master`、
-  > `9.2.0`/`9.1.0`/`9.0.0`/`8.5.0` 及其 `-beta.N`、`feature/community-tasks`）；
-  > 而 skill 上游所在的 `cann-agent/skills` 默认分支是 `main`。
+  > ⚠️ **各仓库的默认分支并不统一**，写死分支名会让建 PR 直接失败。实测：本仓的
+  > `default_branch` 是 `master`（且没有 `develop` 分支），而 skill 上游仓的默认分支是 `main`。
   > `base` 传了不存在的分支会得到 `404 Can not find the branch`。
 - 仅当用户明确要求时，才合入其他分支（如 `release/x.y`、某特性分支）
 

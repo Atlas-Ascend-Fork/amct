@@ -92,12 +92,12 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
 > `400 {"error_code":1000,"error_code_name":"PARAMETER_ERROR","error_message":"参数 pr_number 类型错误"}`；
 > 只把 owner/repo 写成字面量、PR 号给数字时返回
 > `404 {"error_code_name":"UN_KNOW","error_message":"Project not found:owner/repo"}`
-> （同一时刻正确形式 `…/repos/cann/amct/pulls/455` 返回 `200`）。
+> （同一时刻正确形式 `…/repos/<owner>/<repo>/pulls/<PR_NUMBER>` 返回 `200`）。
 > 两种失败 `curl -s` 的退出码都仍是 `0`，不校验状态码就会拿着错误响应当 PR 信息往下走。
 >
 > 同理，**`${owner}`/`${repo}` 未赋值时拼出的是 `…/repos///pulls/<PR_NUMBER>`**，实测返回
 > `401 {"message":"401 Unauthorized"}`，与「token 失效」的响应体**一字不差**
-> （同一时刻正确路径 `…/repos/cann/amct/pulls/455` 无 token 返回 `200`，带坏 token 返回同样的
+> （同一时刻正确路径无 token 返回 `200`，带坏 token 返回同样的
 > `401 {"message":"401 Unauthorized"}`）。看到这个 401 先 `echo "$owner/$repo"` 确认变量非空，
 > 别一上来就怀疑 token。
 
@@ -151,17 +151,17 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/contents/path/to/
 > 因此：
 > - **取内容用 contents API 或它的 `download_url`（blobs 形式）**，两者实测稳定 `200`
 >   （blobs 形式连测 3 次全 200，且下载内容与本地文件 md5 一致）；
-> - `ref` **用 commit sha 或分支名都可以**（实测 cann/amct：`ref=master`、`ref=9.2.0`、
->   `ref=feature/community-tasks`（带斜杠，原样或 `%2F` 编码均可）、`ref=65dbe33`（短 sha）、
->   `ref=<40 位全 sha>` 全部 `200`，分支名取到的内容与本地 `git show cann/<branch>:<path>` md5 一致；
->   跨 fork PR 的 head commit 在**目标仓库**路径下也取得到，实测 PR!447 head `59bd5789…`
->   用 `cann/amct` 与源仓库 `m0_45199755/amct` 两条路径都 `200`、blob sha 相同）。
+> - `ref` **用 commit sha 或分支名都可以**（实测：`ref=<默认分支名>`、`ref=<带点的版本分支名>`、
+>   `ref=<带斜杠的特性分支名>`（原样或 `%2F` 编码均可）、`ref=<短 sha>`、
+>   `ref=<40 位全 sha>` 全部 `200`，分支名取到的内容与本地 `git show <remote>/<branch>:<path>` md5 一致；
+>   跨 fork PR 的 head commit 在**目标仓库**路径下也取得到，实测用目标仓库与源仓库
+>   两条路径都 `200`、blob sha 相同）。
 >   **审查 PR 时仍应传 head commit sha**：分支名指向的是分支**当前**位置，PR 提交后分支若又推了新
 >   commit，用分支名取到的就不是被审查的那一版，行号会与 diff 对不上；
 > - `404` **不能用来区分「ref 不存在」和「文件在该 ref 上不存在」**：两种情况响应体完全相同，
 >   都是 `{"error_code":404,"error_code_name":"NOT_FOUND","error_message":"项目或文件不存在","trace_id":"…"}`
->   （实测；`ref=nonexist-branch-xyz` + 存在的 `README.md`、`ref=feature/community-tasks` + 该分支上
->   没有的 `.agents/…/SKILL.md`、`ref=master` + 不存在的文件，三者返回一模一样）。
+>   （实测三种组合返回一模一样：「不存在的 ref + 存在的文件」、「存在的 ref + 该 ref 上没有的文件」、
+>   「存在的 ref + 不存在的文件」）。
 >   遇到 404 要两种可能都排查，别一口咬定是 ref 写错；
 > - 无论用哪种，都要**校验 HTTP 状态码 / 内容非空**再 `grep`——`curl -s` 对 403/404 的退出码
 >   仍是 `0`，不校验就会把错误页当成文件内容，`grep -n` 静默输出空结果，行号定位随之失败。
@@ -231,8 +231,6 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/contents/path/to/
 使用 GitCode API 为每个问题发布行内评论。
 
 > ⚠️ 统一使用 **v5** API（官方文档：「当前可用的版本为 `/api/v5`」）。
-> 不要使用 `/api/v4`，其写接口已被禁用，返回
-> `403 {"message":"当前 /api/v4 接口已禁用，请使用官方文档中的 /api/v5 接口"}`。
 
 #### 创建行内评论
 
@@ -310,7 +308,6 @@ curl -s -X POST \
 
 **重要**：读写**统一使用 v5 API**，认证方式为 query 参数
 `?access_token=$GITCODE_API_TOKEN`（或 `Authorization: Bearer $GITCODE_API_TOKEN`）。
-不要使用 `/api/v4`：官方文档只收录 v5，v4 写接口已被禁用（403），部分读接口从未发布（404）。
 
 ### 快速参考
 
@@ -318,7 +315,7 @@ curl -s -X POST \
 |------|---------|
 | 获取 PR 信息 | `GET /api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>` |
 | 获取 PR 变更 | `GET /api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/files` |
-| 获取 PR 评论 | `GET /api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?per_page=100&page=<N>`（`per_page` 默认 20（实测）、最大 100（文档值，未实测），**必须翻页取完**，见「基本格式」） |
+| 获取 PR 评论 | `GET /api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?per_page=100&page=<N>`（`per_page` 默认 20、最大 100，请求值超出会被静默夹回 100；**必须翻页取完**，终止判据用响应头 `total_page`，见「基本格式」） |
 | 发布普通评论 | `POST /api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments`（只传 `body`） |
 | 发布行内评论 | `POST /api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments`（传 `body`+`path`+`position`） |
 | 回复评论 | `POST /api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/discussions/<DISCUSSION_ID>/comments` |
@@ -328,20 +325,29 @@ curl -s -X POST \
 
 ```bash
 # 读取 PR 评论（顶层直接是数组；comment_type 区分 diff_comment / pr_comment）
-# ⚠️ per_page 默认 20（实测）；「最大 100」取自官方文档、未实测（抽样中没有父评论 > 100 的
-#    PR，在 38 条的 PR 上传 per_page=150/200 都返回全部 38 条，既不能证明也不能推翻上限）。
-#    按 100 翻页在上限更大时也只是多翻几页、结果仍正确，故评论数可能超过 100 的 PR
-#    必须按 page 递增翻页取完，
+# ⚠️ per_page 默认 20、最大 100，请求值超过 100 会被服务端**静默夹回 100**（实测
+#    per_page=150/200 都只返回 100 条）。故评论数可能超过 100 的 PR 必须按 page 递增翻页取完，
 #    否则步骤 1「本 agent 是否已评论过」会漏读后面的评论而误判，导致重复发布审查意见。
-# ⚠️ 顶层数组**不含回复**：回复嵌在父评论的 reply[] 里（实测 cann/amct PR!455：
+#    终止判据用响应头 total_page（它按**生效**页长算、不受请求值被夹影响），
+#    **不要**用「本页条数 < 请求的 per_page」——请求值被夹时会第一页就 break、静默漏读。
+# ⚠️ 顶层数组**不含回复**：回复嵌在父评论的 reply[] 里（实测：任一带回复的 PR，
 #    回复 ID 在顶层一个都查不到），必须一并展开，
 #    否则「只在既有讨论里回复过」的活动看不到，步骤 1 同样会误判为未评论过。
+MAX_PAGES=50   # 兜底上界（50 × 100 = 5000 条父评论，远超真实 PR 的评论量），正常永不触发，
+               # 只防服务端分页异常导致空转；撞上界必须 exit 1，不能 break 后以 0 退出
+hdr=$(mktemp) || exit 1
+trap 'rm -f "$hdr"' EXIT   # 嵌进更大脚本时，把这个 rm 合并进已有的 trap，别覆盖它
 page=1
 while :; do
-  resp=$(curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100&page=${page}")
+  [ "$page" -gt "$MAX_PAGES" ] && { echo "ERROR: 翻页超过 ${MAX_PAGES} 页兜底上界，结果不可信" >&2; exit 1; }
+  # -D 把响应头落到文件：curl -s 会丢掉响应头，total_page 就读不到了
+  resp=$(curl -s -D "$hdr" "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100&page=${page}")
+  # 响应头是 CRLF 结尾，必须 tr -d '\r'，否则值带回车、下面的数值比较会报
+  # `integer expression expected`
+  total_page=$(tr -d '\r' < "$hdr" | awk -F': *' 'tolower($1)=="total_page"{print $2}')
   # 响应必须是数组才继续。两类失败都要显式报错、不能静默 break：
-  #   ① 请求失败/空响应 —— `jq 'length'` 得空值，`[ "" -lt 100 ]` 报错返回非 0，
-  #      不触发 break，循环永不终止；
+  #   ① 请求失败/空响应 —— `jq 'length'` 得空值，数值比较报错返回非 0，
+  #      不触发 break，循环行为不可预期；
   #   ② 返回错误对象（如 {"error_code":"APIG.0101"}）—— `jq 'length'` 得键数，
   #      会被当成「本页 N 条」而提前静默终止，漏读后续评论却毫无提示。
   if [ "$(echo "$resp" | jq -r 'type' 2>/dev/null)" != "array" ]; then
@@ -352,8 +358,10 @@ while :; do
   # discussion_id 与 comment_type 从父评论带下来（带下来的是**列表接口**那套取值：
   # diff_comment / pr_comment；单条接口查同一条回复是另一套，如 DiffNote，别混用）
   echo "$resp" | jq -c '.[] | {id, discussion_id, comment_type, author: .user.login, body} as $c | $c, (.reply[]? | {id, discussion_id: $c.discussion_id, comment_type: $c.comment_type, author: .user.login, body, reply_to: $c.id})'
+  # count 数的是**父评论**条数（回复不计入分页，也不计入 total_page/total_count）
   count=$(echo "$resp" | jq 'length')
-  [ "$count" -lt 100 ] && break   # count 数的是**父评论**条数（回复不计入分页），不足 100 即最后一页
+  [ "$count" -eq 0 ] && break   # total_page 缺失时的兜底；越界 page 实测返回空数组+200，不会死循环
+  [ -n "$total_page" ] && [ "$page" -ge "$total_page" ] && break
   page=$((page + 1))
 done
 ```
@@ -367,20 +375,35 @@ done
 > 若这段循环嵌在更大的脚本里不能直接退出，则改成置标志（`incomplete=1`）后 `break`，
 > 并由调用方检查该标志，非 0/为真时停止审查。调用方无论如何都要检查退出码。
 
-> **是否取全可用响应头校验**：该接口在响应头返回 `total_count`（评论总数）与
-> `total_page`（总页数）——实测 `per_page=5&page=1` 返回 `total_count: 10`、`total_page: 2`，
-> `per_page=100` 返回 `total_page: 1`（数值随评论增长变化，此处为测量当时的值）。
-> 用 `curl -sD -` 取头即可核对是否已取全。
-> ⚠️ `total_count` 只数**父评论**，回复不计入（实测 cann/amct PR!455：响应头 `total_count`
-> 的值等于顶层数组长度，`reply[]` 内的回复不计入）。核对时要拿**父评论**条数比，
-> 别拿展开 `reply[]` 后的输出条数比。
-> ⚠️ 该接口**不返回** GitHub 风格的 `Link` header，不要按 `rel="next"` 判断翻页。
+> **翻页终止与「是否取全」都看响应头**：该接口在响应头返回 `total_count`（父评论总数）与
+> `total_page`（总页数），上面的循环已用 `total_page` 作终止判据。
 >
-> 终止条件用「本页条数 < per_page」而非「本页为空」：评论总数恰为 `per_page` 整数倍时
-> 会多发一次请求拿到空数组才停（实测 10 条 / `per_page=5` → 3 次请求），行为正确、无副作用；
-> 想省掉这次请求可改读 `total_page` 头。
+> ⚠️ **为什么不用「本页条数 < per_page」判终止**：请求值超过上限会被服务端**静默夹回 100**，
+> 而 `total_page` 按**生效**页长算、不受夹影响。实测一个父评论远超一页的 PR：请求
+> `per_page=150` 只返回 100 条，判据写成 `count < 150` 会第一页就 `break`、
+> **第一页之后的评论全部静默丢掉**；同一请求的 `total_page` 仍按生效页长 100 计算，按它翻页不会漏。
+> 步骤 1「本 agent 是否已评论过」正依赖这份列表，漏读就会重复发布审查意见。
+>
+> ⚠️ **读头的三个坑**：`curl -s` 会丢掉响应头（要 `-D <文件>`）；头是 **CRLF** 结尾，
+> 取值前必须 `tr -d '\r'`，否则数值比较报 `integer expression expected`；
+> 头名是全小写自定义头，`awk`/`grep` 大小写敏感，用 `tolower($1)` 或 `grep -i`。
+>
+> ⚠️ `total_count` 只数**父评论**，回复不计入（响应头 `total_count` 的值等于顶层数组长度，
+> `reply[]` 内的回复不计入）。核对「是否取全」要拿**父评论**条数比，
+> 别拿展开 `reply[]` 后的输出条数比。
+> ⚠️ 该接口**不返回** GitHub 风格的 `Link` header，不要按 `rel="next"` 判断翻页；
+> 单条资源接口（如 `GET /pulls/<n>`）也没有这两个分页头，只有列表接口才有。
+> ⚠️ `total_page` 是**本次请求时刻**的快照，翻页途中新增评论会让它变大——所以要**每页重读**、
+> 用最新值判终止（上面的循环就是这样），才能自纠正。
+>
+> 兜底判据的依据：越界 `page` 实测返回**空数组 + HTTP 200**（`page=2`/`99`/`100000` 都是 `[]`，
+> 不会回退返回第一页），所以 `total_page` 缺失时退回「本页为空」不会死循环；
+> `page=0`/负数/非数字返回 **HTTP 400 + 对象体**，由上面的非数组守卫 `exit 1` 覆盖。
+> `MAX_PAGES=50` 是最后一道保险（50 × 100 = 5000 条父评论，远超真实 PR 的评论量），
+> 正常永不触发，只防服务端分页异常导致空转；撞上界必须 `exit 1`，不能 `break` 后以 0 退出。
 >
 > 自检分页是否生效：把 `per_page` 临时调小（如 `per_page=5`）后分别请求
-> `page=1` 与 `page=2`，确认第 2 页返回的是剩余的评论而非重复内容。
+> `page=1` 与 `page=2`，确认第 2 页返回的是剩余的评论而非重复内容，
+> 且 `total_page` 等于 `ceil(total_count / 5)`。
 
 **完整 API 格式（包括多行行内评论）详见**：`../references/gitcode_api.md`
