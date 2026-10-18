@@ -691,3 +691,70 @@ dense FFN 中间维只占 Qwen3-0.6B 总参数的一部分（embedding、attenti
 （做法参考[第 6.6 节](#66-size_budget05-恢复训练)）缓解。
 
 > 剪枝完成后，如需将模型导出为 torchair 离线模型（.air）用于 ATC 转 om 板端推理，请参考 [AMCT大模型torchair离线模型导出](../export/README.md)。
+
+## 8 社区任务样例：Qwen3-0.6B dense FFN 剪枝（`reconstruct` + `finetune`，任务 17）
+
+本节对应 issue 183 的任务 17：dense FFN 中间维 `reconstruct`（最小二乘恢复）固定 `prune_ratio=0.5`
+剪枝，剪枝后进行恢复微调（finetune）。
+
+### 8.1 运行说明
+
+- 校准集：Pileval，`8` 个样本、`seq_len=2048`（共 16384 行校准 token；`reconstruct` 的最小二乘
+  恢复要求校准行数不低于保留神经元数，否则自动回退朴素切片并在日志中给出告警）
+- 评估集：WikiText2 test split，固定 `seq_len=4096`，使用全量测试集（73 个 batch）
+- 微调集：WikiText2 train split，300 个互不重复的连续 512-token 块（不使用 test split 训练）
+- 微调设置：无动量 SGD（lr=1e-2）、warmup=20、300 步、grad_clip=1.0、gradient checkpointing
+  （优化器选型经同协议对照实验验证：同设置下 AdamW 发散，见 8.3 对照表）
+- 输出目录为相对路径占位，脚本保存 `PruneReport`、诊断摘要与运行参数（启动时打印完整参数）；如需保存微调后的模型权重，可在运行命令中追加可选参数 `--save-model`
+- 模型加载：默认 `trust_remote_code=False` 并强制 `local_files_only=True`（仅从本地目录离线加载；
+  Qwen3 为 transformers 原生支持的架构，无需执行模型目录中的自定义代码）。确有需要时可显式传入
+  `--trust-remote-code`，脚本会打印安全告警
+
+运行命令：
+
+```bash
+python3 src/run_qwen3_0_6b_pruning_reconstruct_ratio_finetune.py \
+  --model-path ./path/to/Qwen3-0.6B \
+  --save-dir ./outputs/qwen3_0_6b_reconstruct_ratio_finetune/r0_5 \
+  --prune-ratio 0.5
+```
+
+不使用微调（仅剪枝）时可加 `--no-finetune`；`--preview-prune-ratio` 仅用于 `prune_diagnose()` 的
+dry-run，默认 `0.1`；`--eval-batches` 仅用于快速截断评测批次，默认不传即全量 WikiText2 test split。
+
+### 8.2 诊断与报告
+
+`prune_diagnose()` 在单卡 910B3 上识别出 dense 域 28 个可剪目标（28 层 FFN），固定剪枝率
+dry-run 可用；`PruneReport` 输出参数量变化；剪枝后模型 `config` 的 `intermediate_size` 已同步
+收窄，可直接 `save_pretrained/from_pretrained` 往返。
+
+### 8.3 结果表
+
+以下结果在单张 Ascend 910B3（64 GiB）上实测；评估集为全量 WikiText2 test split、`seq_len=4096`
+（73 个 batch，逐条前向）；校准集 Pileval 8 个样本、`seq_len=2048`。
+
+| 模型 | 方法 | 实验设置 | 基线 PPL | 剪枝后 PPL | 后处理 PPL | 参数量（前 → 后） | 参数削减率 | 剪枝时长（min） |
+| --- | --- | --- | ---: | ---: | ---: | --- | ---: | ---: |
+| Qwen3-0.6B | `reconstruct` + `finetune` | `prune_ratio=0.5` | 19.157549 | 74.244453 | 31.369858 | 596049920 -> 463929344 | 22.17% | 0.06 |
+
+> 后处理 PPL 为恢复微调（finetune）后的结果；微调从剪枝模型开始，未重新执行剪枝。相对剪枝模型
+> PPL 绝对下降 `42.874595`，按"剪枝造成的 PPL 增量"计恢复约 `77.8%`；恢复后 PPL 仍高于原始模型
+> `12.212309`。剪枝时长（0.06 min）为 `amct.prune` 调用本身耗时，不含数据准备与评测。
+
+**微调优化器对照（2026-10-18，910B3 复测）**：两组其余设置完全相同（`lr=1e-2`、300 步、
+warmup=20、grad_clip=1.0、同一批 300 个训练块），仅替换优化器；两组剪枝起点逐位一致
+（剪枝后 PPL 均为 74.244453），确认唯一变量为优化器本身。
+
+关于两组 SGD 数值：主表的 `31.369858` / `77.8%` 取自 issue 183 引用的主运行；上表 SGD 行取自 2026-10-18 的独立对照运行，`31.302790` / `77.9%`。两次运行从同一剪枝检查点出发、协议相同，但微调结果并非逐位一致，PPL 相差 `0.067068`（约 0.2%）。两张表各自保留当次运行的数值，issue 183 与主表继续作为准。
+
+| 微调优化器 | 基线 PPL | 剪枝后 PPL | 微调后 PPL | 微调 loss（初 → 末） | 恢复率 |
+| --- | ---: | ---: | ---: | --- | ---: |
+| 无动量 SGD（本样例默认） | 19.157549 | 74.244453 | 31.302790 | 8.0483 → 3.7260 | ≈77.9% |
+| AdamW | 19.157549 | 74.244453 | 163033.640625 | 8.0483 → 11.3496 | 发散 |
+
+AdamW 在本样例的 `lr=1e-2` 协议下直接发散：loss 不降反升，微调后 PPL 较剪枝模型恶化约三个
+数量级。该对照验证了 8.1 节的优化器选型——无动量 SGD 搭配 `lr=1e-2` 是本样例的合理默认；
+AdamW 需要的学习率量级（`1e-5` 级）与本样例的微调协议不兼容。
+
+
+> 剪枝完成后，如需将模型导出为 torchair 离线模型（.air）用于 ATC 转 om 板端推理，请参考 [AMCT大模型torchair离线模型导出](../export/README.md)。
