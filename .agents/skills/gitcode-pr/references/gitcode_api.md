@@ -3,13 +3,14 @@
 ## 目录
 
 1. [认证方式](#认证方式)
-2. [获取仓库信息（查询 Fork 来源）](#获取仓库信息查询-fork-来源)
-3. [获取 PR 信息](#获取-pr-信息)
-4. [获取 PR 讨论（包含行内评论）](#获取-pr-讨论包含行内评论)
-5. [提交行内评论（支持多行选择）](#提交行内评论支持多行选择)
-6. [提交普通评论](#提交普通评论)
-7. [删除 PR 评论](#删除-pr-评论)
-8. [获取 PR 文件变更](#获取-pr-文件变更)
+2. [获取当前用户（token 对应的账号）](#获取当前用户token-对应的账号)
+3. [获取仓库信息（查询 Fork 来源）](#获取仓库信息查询-fork-来源)
+4. [获取 PR 信息](#获取-pr-信息)
+5. [获取 PR 讨论（包含行内评论）](#获取-pr-讨论包含行内评论)
+6. [提交行内评论（支持多行选择）](#提交行内评论支持多行选择)
+7. [提交普通评论](#提交普通评论)
+8. [删除 PR 评论](#删除-pr-评论)
+9. [获取 PR 文件变更](#获取-pr-文件变更)
 
 ---
 
@@ -44,6 +45,76 @@
 > 判别：`404` 的 `path` 字段会**原样回显请求路径**，连续斜杠（`repos///pulls`）一眼可见 →
 > 变量没填上；`401` 则两种原因都可能（路径正确时无 token 也能 `200`，故 `401` 必是 token 无效，
 > 或变量为空叠加 token 无效）。**先 `echo "$owner/$repo"` 确认变量非空，再怀疑 token。**
+
+---
+
+## 获取当前用户（token 对应的账号）
+
+### API 端点
+
+取「当前 token 对应的账号」，用于把评论的 `user.login` 与「本 agent」比对
+（`commands/review.md` 步骤 1 判断是否已评论过、`SKILL.md` 回读校验的作者兜底）。
+
+```bash
+GET https://api.gitcode.com/api/v5/user
+```
+
+> ⚠️ **不带路径参数**：`/api/v5/user` 是「当前认证用户」，`/api/v5/users/<login>` 才是按 login 查任意用户。
+> 本 skill 只用前者。
+
+### 请求示例
+
+```bash
+# 三种认证写法实测等价（与「认证方式」一节同口径），此处用 query 参数
+curl -s "https://api.gitcode.com/api/v5/user?access_token=$GITCODE_API_TOKEN" | jq -r '.login // empty'
+```
+
+### 响应字段（`200`，实测）
+
+顶层是**对象**（不是数组）。本 skill 只依赖 `login`，其余字段列出以便扩展：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `login` | string | **账号 login**，与评论的 `user.login`、`/api/v5/user` 的 `html_url` 尾段一致 |
+| `name` | string | 显示名称（实测与 `login` 同值，不保证） |
+| `id` | string | 用户 ID（**字符串**，形如 `6822e242096b0e7b44aa67dc`；不是数字） |
+| `external_uid` | number | 外部 UID（数字） |
+| `type` | string | 实测 `User` |
+| `html_url` | string | 用户主页 `https://gitcode.com/<login>` |
+| `url` | string | 实测为 `https://api.gitcode.com/api/v5/user/<login>` |
+| `avatar_url` / `followers_url` | string | 头像、粉丝列表地址 |
+| `email` / `bio` / `blog` / `company` / `location` / `website` / `description` / `github_account` | string | 资料字段，未填写时为空串 |
+| `followers` / `following` | number | 粉丝数 / 关注数 |
+| `top_languages` | array | 主要语言列表 |
+| `created_at` / `updated_at` | string | 时间戳（`+08:00` 带时区） |
+
+### scope 前提与失败响应（关键）
+
+该端点要求 token 带 **`read_user`** scope；`SKILL.md`「获取访问令牌」的权限清单里必须勾上它。
+三类失败响应**互不相同**，处置方式也不同，所以取 login 时要把 HTTP 状态码与响应体一起留住
+（可执行写法见 `commands/review.md` 步骤 1）：
+
+| 场景 | HTTP | 响应体（实测/来源见下） | 处置 |
+|------|------|------------------------|------|
+| token 有效且带 `read_user` | `200` | 上面的字段对象 | 正常取 `.login` |
+| token 无效 / 缺失 | `401` | `{"message":"401 Unauthorized"}` | 换有效 token；确认 `GITCODE_API_TOKEN` 已导出 |
+| token 有效但**缺 `read_user`** | `403` | `{"error_code":403,"error_code_name":"FORBIDDEN","error_message":"no scopes:read_user"}` | 给 token 加 `read_user`；或设 `GITCODE_REVIEW_LOGIN=<自己的 login>` 跳过该请求 |
+
+> ⚠️ **`403 no scopes:read_user` 只影响这一步**：同一个 token 请求 `GET /api/v5/repos/<owner>/<repo>`、
+> `GET /api/v5/repos/<owner>/<repo>/pulls/<n>` 与评论读写接口仍是 `200`，即「评论能正常读写、
+> 只有取 login 失败」。所以别把这条 `403` 误判成 token 整体失效而去换 token。
+>
+> ⚠️ **只 `jq -r '.login // empty'` 会把状态码和响应体全丢掉**：`401`、`403`、网络失败三种情形
+> 都退化成「取不到 login」，读者无法区分是权限不够还是 token 失效。
+>
+> **证据边界**：`200` 与 `401` 两行为本机实测（token 带 `read_user`；`401` 用无效 token 与空 token
+> 各测一次，响应体一字不差）。`403 no scopes:read_user` 一行来自检视人 fujun19 在 PR
+> [cann/amct#455](https://gitcode.com/cann/amct/pull/455) 评论（note_id `194579998`）中的实测：
+> 其 token 对 `cann/amct` 有读写权限、能正常读写评论，但请求本端点三种认证写法均返回该 `403`。
+> 本机 token 带 `read_user`，**无法复现这条 `403`**，故按「检视人实测」记录，未标为本机实测。
+>
+> **环境变量兜底**：`GITCODE_REVIEW_LOGIN` 非空时直接作为 `MY_LOGIN`，不发这次请求
+> （适用于 token 无法加 scope、或离线/受限环境）。注意此时脚本 `exit 0` 不代表 token 有 `read_user`。
 
 ---
 

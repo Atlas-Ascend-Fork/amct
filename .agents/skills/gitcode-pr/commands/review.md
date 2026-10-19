@@ -27,20 +27,44 @@ description: 审查 GitCode Pull Request 的代码变更
 
 > ⚠️ **按 `user.login` 比对**。判断方法是拿当前 token 对应的账号 login（`GET /api/v5/user` 的 `.login`）去比评论的 `author`，命中即视为「已评论过」（含回复）。
 >
+> ⚠️ **`GET /api/v5/user` 有 scope 前提**：该端点要求 token 带 `read_user` 权限，权限不够时返回
+> `403 {"error_code":403,"error_code_name":"FORBIDDEN","error_message":"no scopes:read_user"}`
+> ——这与「token 无效/缺失」的 `401 {"message":"401 Unauthorized"}` 是**两种不同的失败**，处置方式也不同
+> （前者要给 token 加 `read_user`，后者要换有效 token）。所以取 login 必须把 **HTTP 状态码与响应体一起留住**，
+> 只 `jq -r '.login'` 会把两者都丢掉，读者看不出是权限不够还是 token 失效。两种响应体的区分与端点字段见
+> `../references/gitcode_api.md` →「获取当前用户（token 对应的账号）」。
+> 不便给 token 加权限时，可用环境变量 `GITCODE_REVIEW_LOGIN=<自己的 login>` 直接指定，跳过这一步请求。
+>
 > ⚠️ **评论列表取不全时必须停止审查，不得据此判断「未评论过」**：翻页脚本非 0 退出、或往 stderr 打了 `ERROR`，都说明列表不完整——此时空列表无法区分「确实没人评论过」与「请求失败/漏页」。必须先修好请求（token、网络、端点、分页）把评论取全再继续步骤 2，理由见「取评论：翻页取全（规范实现）」的「六条硬规则」第 3 条。
 
 下面这段可直接复制执行：
 
 ```bash
-# 取当前 token 对应的账号 login（token 无效/缺失时取不到，由下一行守卫 exit 1）
-MY_LOGIN=$(curl -s "https://api.gitcode.com/api/v5/user?access_token=$GITCODE_API_TOKEN" | jq -r '.login // empty')
-[ -n "$MY_LOGIN" ] || { echo "ERROR: 取不到当前账号 login，无法判断是否已评论过" >&2; exit 1; }
+# 取当前 token 对应的账号 login：状态码与响应体一起留住，失败时原样打出来（守卫仍 exit 1）
+# ⚠️ -w 用字面量标记 `__HTTP__` 分隔 body 与状态码，`${var%…}`/`${var##…}` 是 POSIX 参数展开，
+#    bash 与 dash 下实测都能跑（本机 `/bin/sh` 即 bash，不算独立数据点）。
+#    若改用 `-w '\n%{http_code}'` + `${var%$'\n'*}` 切分则是 **bash 专有**（`$'…'` 为 ANSI-C quoting）：
+#    dash 下 `$'\n'` 被当字面量、切分失效，实测 `${user_resp%$'\n'*}` 原样返回「响应体+状态码」整串，
+#    jq 报 `Cannot index number with string "login"`，状态码变量里是整个响应体。
+user_resp=$(curl -s -w '__HTTP__%{http_code}' "https://api.gitcode.com/api/v5/user?access_token=$GITCODE_API_TOKEN")
+user_body=${user_resp%__HTTP__*}      # HTTP 响应体
+user_status=${user_resp##*__HTTP__}   # HTTP 状态码
+# GITCODE_REVIEW_LOGIN 非空时直接用它，不发这次请求（token 缺 read_user 时的兜底）
+MY_LOGIN=${GITCODE_REVIEW_LOGIN:-$(printf '%s' "$user_body" | jq -r '.login // empty')}
+[ -n "$MY_LOGIN" ] || {
+  echo "ERROR: 取不到当前账号 login，无法判断是否已评论过（HTTP ${user_status}），响应体：${user_body}" >&2
+  echo "       HTTP 403 且响应体含 no scopes:read_user → token 缺 read_user 权限：给 token 加该权限，或设置 GITCODE_REVIEW_LOGIN=<自己的 login> 后重跑" >&2
+  echo "       HTTP 401 {\"message\":\"401 Unauthorized\"} → token 无效或缺失（GITCODE_API_TOKEN 未导出？）" >&2
+  exit 1
+}
 echo "MY_LOGIN=$MY_LOGIN"
 # 再拿「取评论：翻页取全（规范实现）」的翻页输出比 author（该脚本已展开 reply[]，回复一起比）：
 #   <翻页脚本输出> | jq -c --arg me "$MY_LOGIN" 'select(.author == $me) | {id, reply_to, body}'
 #   有输出 = 已评论过（含回复），按步骤 1 停止；无输出 = 未评论过
 # ⚠️ 过滤器别带 `.[]`：该脚本输出的是**逐行对象流**，带 `.[]` 是对每个对象的**值**再迭代，
 #    实测报 `Cannot index number with string "author"`（要先聚成数组再 `.[]` 得加 `-s`）
+# ⚠️ 设了 GITCODE_REVIEW_LOGIN 时上面 exit 0，但 `user_status` 仍可能是 401/403——这是预期的
+#    （覆盖值生效、请求本身失败），别把「exit 0」当成「token 有 read_user」。
 ```
 
 ### 步骤 2: 获取项目规范上下文

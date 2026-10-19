@@ -34,7 +34,14 @@ echo $GITCODE_API_TOKEN
 
 1. 登录 [GitCode](https://gitcode.com)
 2. 点击头像 → 设置 → 访问令牌
-3. 创建新令牌，选择 `read_repository`、`write_repository` 和 `read_api` 权限
+3. 创建新令牌，选择 `read_repository`、`write_repository`、`read_api` 和 `read_user` 权限
+   > ⚠️ **`read_user` 不能省**：`GET /api/v5/user`（取当前 token 对应的账号 login，用于判断
+   > 「本 agent 是否已评论过」与回读校验的作者兜底）要求该 scope，缺了会返回
+   > `403 {"error_code":403,"error_code_name":"FORBIDDEN","error_message":"no scopes:read_user"}`，
+   > 而仓库读写接口（`GET /repos/...`、`POST/DELETE .../comments`）不受影响——即「评论能正常读写、
+   > 只有取 login 这步失败」。端点字段与 401/403 区分见
+   > [references/gitcode_api.md](references/gitcode_api.md) →「获取当前用户（token 对应的账号）」；
+   > 不便加权限时可用 `GITCODE_REVIEW_LOGIN=<自己的 login>` 跳过该请求（见 commands/review.md 步骤 1）。
 4. 复制令牌，建议保存到 `~/.bashrc`：`export GITCODE_API_TOKEN="your_token_here"`
 
 ### 识别PR的目标仓库
@@ -511,9 +518,10 @@ NOTE_ID="<NOTE_ID>"                                      # POST 响应里的 not
 case "$NOTE_ID" in ''|*[!0-9]*) echo "ERROR: NOTE_ID 必须是整数，当前=\"$NOTE_ID\"（占位符未替换？）" >&2; exit 1;; esac
 # ⚠️ 走「唯一标记」这条兜底时才用到 MY_LOGIN，必须先把它取出来：未定义时 `--arg me ""` **不会报错**，
 #    只会让 `.author == $me` 永远不成立、这条兜底**静默失效**（实测同一份响应：MY_LOGIN 为空
-#    时输出空，取到 login 后命中）。取法与 commands/review.md 步骤 1 一致。
-MY_LOGIN=$(curl -s "https://api.gitcode.com/api/v5/user?access_token=$GITCODE_API_TOKEN" | jq -r '.login // empty')
-[ -n "$MY_LOGIN" ] || { echo "ERROR: 取不到当前账号 login，无法按作者兜底匹配" >&2; exit 1; }
+#    时输出空，取到 login 后命中）。
+# MY_LOGIN 的取法**全仓只此一份**，在 commands/review.md 步骤 1「判断『本 agent 是否已评论过』」，
+# 照抄那段（含 HTTP 状态码/响应体回显、403 no scopes:read_user 与 401 的区分提示、
+# GITCODE_REVIEW_LOGIN 覆盖），此处不重抄。
 # ⚠️ 同样必须 per_page=100 **并翻页**：目标评论在第 20 条之后时不带 per_page 会查不到、
 #    在第 100 条之后时不翻页会查不到，两种都会把「创建成功」误判成「创建失败」。
 #
