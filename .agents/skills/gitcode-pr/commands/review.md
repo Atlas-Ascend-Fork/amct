@@ -73,10 +73,9 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
 ```
 
 > ⚠️ 本文件所有 bash 命令 / API 请求 URL 里的占位符统一写 `${owner}` / `${repo}` / `<PR_NUMBER>`。
-> `{owner}` 这种花括号写法在 bash 里不展开，会原样拼进 URL，且报错会赖在 `pr_number` 上——别去改
-> PR 号。`curl -s` 对 4xx 的退出码仍是 `0`，必须校验状态码 / 响应是数组，否则错误响应会被当成 PR
-> 信息往下走。`${owner}`/`${repo}` 未赋值时的 `401`/`404` 鉴别方法见
-> `../references/gitcode_api.md` →「认证方式」。
+> `{owner}` 这种花括号写法在 bash 里不展开，会原样拼进 URL，且报错会赖在 `pr_number` 上。
+> `curl -s` 对 4xx 的退出码仍是 `0`，必须校验状态码 / 响应是数组，否则错误响应会被当成 PR 信息往下走。
+> `${owner}`/`${repo}` 未赋值时的 `401`/`404` 鉴别方法见 `../references/gitcode_api.md` →「认证方式」。
 
 ### 步骤 3.1: 确定问题代码的准确行号
 
@@ -117,8 +116,7 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/contents/path/to/
   | jq -r '.download_url' | xargs -r curl -s | grep -n "问题代码模式"
 ```
 
-> ⚠️ **不要用 `…/raw/<commit_sha>/<path>` 取内容**（`/pulls/<n>/files` 的 `raw_url`、
-> `files.json` 的 `diffs[].head.url` 都是这个形式）：实测间歇 `403`，改用上面方法 2 的两条路径。
+> ⚠️ **不要用 `…/raw/<commit_sha>/<path>` 取内容**（`/pulls/<n>/files` 的 `raw_url`、`files.json` 的 `diffs[].head.url` 都是这个形式）：实测间歇 `403`，改用上面方法 2 的两条路径。
 > 403 的完整实测记录与 `ref` 取值枚举见 `../references/gitcode_api.md` →「获取文件原始内容」。
 >
 > **两条硬纪律（与用哪个地址无关；上面的代码示例本身不含这两道防护，得自己加）：**
