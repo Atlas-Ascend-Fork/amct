@@ -119,36 +119,6 @@ python -m amct_pytorch.eval \
 
 参数详细解释请参见[参数说明](#参数说明)。
 
-#### Blockwise 断点续测
-
-GLM-5.2 使用 `--dump` 时，会在同一个断点文件中额外保存各评估样本的完整 forward kwargs，并将 block 返回的 DSA indexer 索引更新到 `prev_topk_indices`。每层统一覆盖 kwargs，不保留各层历史；后续层提取对应样本的 `prev_topk_indices`，由 attention 自身决定重新计算还是共享索引。恢复时若还有 block 需要执行，但 kwargs 缺失或索引不是 Tensor，则放弃该断点，从第 0 层重新评估。其他模型不要求存在额外 kwargs 状态。
-
-在 blockwise PPL 评估命令中增加 `--dump`，可以在每个 block 完成后保存其 CPU 输出：
-
-```bash
-python -m amct_pytorch.eval \
-  --trust_remote_code \
-  --model /path/to/model \
-  --model_name qwen3 \
-  --device npu:0 \
-  --granularity block \
-  --eval_mode quant \
-  --quant_target mlp \
-  --quant_dtype int \
-  --bit_config amct_pytorch/configs/example_w4a8.yaml \
-  --dump
-```
-
-断点保存在 `output_dir/temp/eval/<model_name>_<quant_dtype>_<block_id>.pt`，block 下标从 0 开始，
-BF16 评估的类型字段固定为 `bf16`。同一模型名和类型仅保留最近一个已完成 block 的输出；
-再次运行时从最大有效 block 下标的下一个 block 继续。恢复前仍会执行 embedding，以初始化
-模型所需的 position、attention mask 等状态。
-
-启用 `--dump` 时会提醒当前模型名和类型，不再校验模型路径、算法、YAML 或量化参数。
-用户需自行确认断点与当前评估配置一致；配置不一致时先删除对应文件。同名同类型的评估不要并行运行。
-PPL 成功输出后只删除当前模型名和类型的断点文件，保留公共目录及其他任务文件；运行中断或
-评估失败时保留断点。保存采用临时文件原子替换，新文件保存成功后删除旧文件，写入期间最多需要约两份 checkpoint 的磁盘空间。
-
 `eval`相关启动指令也可参考[eval.sh](../../examples/eval.sh)
 
 ### `extract_ptq_data`
