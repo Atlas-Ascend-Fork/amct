@@ -62,7 +62,6 @@ class EvalCheckpointManager:
         with temporary_path.open("wb") as file_obj:
             torch.save(
                 {
-                    "completed_block_idx": completed_block_idx,
                     "inter_io": inter_io,
                     "model_state": model_state,
                 },
@@ -89,20 +88,16 @@ class EvalCheckpointManager:
                 payload = safe_torch_load(path, map_location="cpu")
             except (EOFError, pickle.UnpicklingError, RuntimeError):
                 payload = None
-            inter_io = payload.get("inter_io") if isinstance(payload, dict) else None
-            if (
-                not isinstance(payload, dict)
-                or type(payload.get("completed_block_idx")) is not int
-                or payload["completed_block_idx"] != block_idx
-                or not 0 <= block_idx < self.num_layers
-                or not isinstance(inter_io, (list, tuple))
-                or not inter_io
-                or not all(isinstance(item, torch.Tensor) for item in inter_io)
-            ):
-                logger.warning("Discard invalid eval checkpoint '{}'.", path)
-                path.unlink()
-                continue
-            return block_idx, inter_io, payload.get("model_state")
+            if isinstance(payload, dict) and 0 <= block_idx < self.num_layers:
+                inter_io = payload.get("inter_io")
+                if (
+                    isinstance(inter_io, (list, tuple))
+                    and inter_io
+                    and all(isinstance(item, torch.Tensor) for item in inter_io)
+                ):
+                    return block_idx, inter_io, payload.get("model_state")
+            logger.warning("Discard invalid eval checkpoint '{}'.", path)
+            path.unlink()
         return None
 
     def cleanup(self):

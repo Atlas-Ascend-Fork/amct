@@ -95,9 +95,12 @@ def test_failed_save_keeps_previous_checkpoint(tmp_path):
 @pytest.mark.parametrize(
     "payload",
     [
-        {"completed_block_idx": 0, "inter_io": ["invalid"]},
-        {"completed_block_idx": 1, "inter_io": [torch.tensor([1.0])]},
-        {"completed_block_idx": 0, "inter_io": []},
+        None,
+        [],
+        {},
+        {"inter_io": ["invalid"]},
+        {"inter_io": torch.tensor([1.0])},
+        {"inter_io": []},
     ],
 )
 def test_invalid_checkpoint_restarts(tmp_path, payload):
@@ -105,6 +108,26 @@ def test_invalid_checkpoint_restarts(tmp_path, payload):
     manager.run_dir.mkdir(parents=True)
     torch.save(payload, manager.run_dir / "qwen3_int_0.pt")
     assert manager.load() is None
+
+
+@pytest.mark.parametrize("legacy_fields", [{}, {"completed_block_idx": "unused"}])
+def test_load_uses_filename_block_index(tmp_path, legacy_fields):
+    manager = _manager(tmp_path)
+    manager.run_dir.mkdir(parents=True)
+    torch.save(
+        {"inter_io": [torch.tensor([2.0])], **legacy_fields},
+        manager.run_dir / "qwen3_int_2.pt",
+    )
+    assert manager.load()[0] == 2
+
+
+def test_out_of_range_checkpoint_restarts(tmp_path):
+    manager = _manager(tmp_path)
+    manager.run_dir.mkdir(parents=True)
+    path = manager.run_dir / "qwen3_int_20.pt"
+    torch.save({"inter_io": [torch.tensor([1.0])]}, path)
+    assert manager.load() is None
+    assert not path.exists()
 
 
 def test_missing_checkpoint_creates_directory(tmp_path):
