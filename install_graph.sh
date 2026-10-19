@@ -27,6 +27,12 @@ BUNDLE_DIR="${WORKING_DIR}/amctgraph"
 OUTPUT_FILE="${BASE_NAME}_*_linux-${ARCH}.tar.gz"
 AMCT_GRAPH_FILE="${BASE_NAME}_linux-${ARCH}.tar.gz"
 AMCT_GRAPH_PATH="${WORKING_DIR}/build"
+# Pinned sha256 checksums per architecture to verify downloaded package integrity.
+case "${ARCH}" in
+  aarch64) AMCT_GRAPH_SHA256="da20354657c9d6e5369d74f2e39db694f505ceed36124c664a8585b8ec3b179e" ;;
+  x86_64)  AMCT_GRAPH_SHA256="5bf9aae8b5964dbc5bff69524e659f08e48b5486132343240ac3e595b5613e97" ;;
+  *)       AMCT_GRAPH_SHA256="" ;;
+esac
 
 # Display current directory
 echo "Current directory: $(pwd)"
@@ -49,6 +55,20 @@ else
         [ -n "${BUNDLE_DIR}" ] && rm -rf "$BUNDLE_DIR"
         exit 1
     fi
+fi
+
+# Verify sha256 before extraction for both downloaded and reused packages
+if [ -n "${AMCT_GRAPH_SHA256}" ]; then
+    echo "Verifying sha256 of ${AMCT_GRAPH_FILE}..."
+    echo "${AMCT_GRAPH_SHA256}  ${AMCT_GRAPH_FILE}" | sha256sum -c -
+    if [ $? -ne 0 ]; then
+        echo "Error: sha256 verification failed for ${AMCT_GRAPH_FILE}"
+        rm -f "${AMCT_GRAPH_FILE}"
+        [ -n "${BUNDLE_DIR}" ] && rm -rf "$BUNDLE_DIR"
+        exit 1
+    fi
+else
+    echo "Warning: no sha256 checksum defined for ${ARCH}, skip verification"
 fi
 
 echo "tar -zxvf ${AMCT_GRAPH_FILE} -C $BUNDLE_DIR"
