@@ -1,6 +1,6 @@
-# Qwen3-0.6B w4a8 `lwc` + `lac` 以及 Qwen3-0.6B w4a4 `autoround` 量化样例
+# Qwen3-0.6B w4a8 `lwc` + `lac`、`flatquant` 以及 Qwen3-0.6B w4a4 `autoround` 量化样例
 
-对应 Issue [#182](https://gitcode.com/cann/amct/issues/182) 任务 1 和 任务8：对 Qwen3-0.6B 做 `w4a8` + `lwc`/`lac` 量化，以及`w4a4` + `autoround` 量化，**int4/int8 与 mxfp4/mxfp8 各跑一遍** 以及 **int4/int4 与 mxfp4/mxfp4 各跑一遍**
+对应 Issue [#182](https://gitcode.com/cann/amct/issues/182) 任务 1、任务 2 和 任务8：对 Qwen3-0.6B 做 `w4a8` + `lwc`/`lac` 量化、`w4a8` + `flatquant` 量化，以及`w4a4` + `autoround` 量化，**int4/int8 与 mxfp4/mxfp8 各跑一遍** 以及 **int4/int4 与 mxfp4/mxfp4 各跑一遍**
 本目录与 `qwen3.6`、`deepseekv4` 并列，不修改 Qwen3.6 文档。
 
 CLI 入口与 [Qwen3.6-Moe.md](../qwen3.6/Qwen3.6-Moe.md) 一致：`python3 -m amct_pytorch.eval` / `extract_ptq_data` / `ptq`。
@@ -170,6 +170,9 @@ python3 -m amct_pytorch.eval \
 #    --output_dir / 参数目录改为 outputs/lwc_lac/qwen3_0_6b_w4a8_mxfp 后各跑一遍。
 # 8) mxfp4/mxfp4：将步骤 4、6 的命令 --quant_dtype int 改为 mxfp，
 #    --output_dir / 参数目录改为 outputs/autoround/qwen3_0_6b_w4a4_mxfp 后各跑一遍。
+# 9) flatquant（w4a8）：将步骤 3、5 的命令 --algos lwc lac 改为 --algos flatquant，
+#    --output_dir / 参数目录改为 outputs/flatquant/qwen3_0_6b_w4a8_{int,mxfp} 后各跑一遍；
+#    mxfp4/mxfp8 再将其 --quant_dtype int 改为 mxfp。
 ```
 
 ## Qwen3-0.6B w4a8 `lwc` + `lac`
@@ -218,6 +221,35 @@ QUANT_DTYPE=int QUANT_TYPE=w4a4 ALGOS=autoround bash scripts/eval_quant.sh
 # 要测试mxfp数据类型，可以将QUANT_DTYPE切换为mxfp
 ```
 
+## Qwen3-0.6B w4a8 `flatquant`
+
+主要参数：
+
+| 参数 / 环境变量 | 含义 |
+|:--|:--|
+| `MODEL` | 本地权重目录（占位路径） |
+| `--model_name qwen3` | Dense Qwen3 通路 |
+| `--seq_len 4096` | 校准与评估序列长度 |
+| `--granularity block` | Block 粒度 |
+| `--quant_dtype int\|mxfp` | int4/int8 或 mxfp4/mxfp8 |
+| `--algos flatquant` | 量化算法（结构类算法，同一 `structure` 目标下只允许一个算法） |
+| `--bit_config` | 仓内 `amct_pytorch/configs/w4a8.yaml` |
+| `--quant_target` | extract/PTQ 每次一个目标：`attn-linear` 或 `mlp`；量化评估同时加载两者 |
+| `--nsamples` | Pileval 校准条数，默认 128 |
+| `--end_block_idx` | Qwen3-0.6B 默认 28 层 |
+
+**注** 无需新增脚本：`common.sh` 已把算法外置为 `ALGOS`，跑 `flatquant` 直接覆盖该变量即可（`bit_config` 仍为 `w4a8.yaml`）
+
+例如：
+```bash
+export MODEL=/path/to/Qwen3-0.6B
+cd examples/models/qwen3
+QUANT_DTYPE=int ALGOS=flatquant bash scripts/ptq_attn.sh
+QUANT_DTYPE=int ALGOS=flatquant bash scripts/ptq_mlp.sh
+QUANT_DTYPE=int ALGOS=flatquant bash scripts/eval_quant.sh
+# 要测试 mxfp 数据类型，可以将 QUANT_DTYPE 切换为 mxfp
+```
+
 ## 产物说明
 
 Qwen3-0.6B w4a8 `lwc` + `lac`
@@ -248,6 +280,22 @@ Qwen3-0.6B w4a4 `autoround`
 | mxfp PTQ 参数 Attention | `./outputs/autoround/qwen3_0_6b_w4a4_mxfp/ptq_params/qwen3/attn-linear` | 715 MiB |
 | mxfp PTQ 参数 MLP | `./outputs/autoround/qwen3_0_6b_w4a4_mxfp/ptq_params/qwen3/mlp` | 1072 MiB |
 
+Qwen3-0.6B w4a8 `flatquant`
+
+相对占位目录（默认在本样例目录下）：
+
+| 产物 | 路径 | 大小 |
+|:--|:--|:--|
+| PTQ 离线数据 Attention | `./outputs/qwen3_0_6b/ptq_data/attn-linear` | 28.002 GiB |
+| PTQ 离线数据 MLP | `./outputs/qwen3_0_6b/ptq_data/mlp` | 28.002 GiB |
+| 离线数据合计（attn+mlp） | 上述两目录之和 | 56.004 GiB |
+| int PTQ 参数 Attention | `./outputs/flatquant/qwen3_0_6b_w4a8_int/ptq_params/qwen3/attn-linear` | 3.95 MiB |
+| int PTQ 参数 MLP | `./outputs/flatquant/qwen3_0_6b_w4a8_int/ptq_params/qwen3/mlp` | 4.09 MiB |
+| mxfp PTQ 参数 Attention | `./outputs/flatquant/qwen3_0_6b_w4a8_mxfp/ptq_params/qwen3/attn-linear` | 3.95 MiB |
+| mxfp PTQ 参数 MLP | `./outputs/flatquant/qwen3_0_6b_w4a8_mxfp/ptq_params/qwen3/mlp` | 4.09 MiB |
+
+flatquant 的 PTQ 参数是结构变换矩阵（`diag_scale` 与分解矩阵），本身与量化位宽无关，因此 int 与 mxfp 的参数量相同。
+
 量化时长口径：从该格式第一次 `ptq` 开始到 attn+mlp 参数全部写完（不含模型下载和环境构建）。离线数据大小为 extract 输出目录合计，GiB。
 
 ## 结果表
@@ -260,3 +308,5 @@ BF16 与量化评估使用同一 `MODEL` 与同一 `seq_len=4096` / `granularity
 | Qwen3-0.6B | `w4a8` | `lwc` + `lac` | `mxfp4/mxfp8` | 19.157549 | 23.898159 | 4.740610 | 48.88 | 56.004 |
 | Qwen3-0.6B | `w4a4` | `autoround` | `int4/int4` | 19.157549 | 97.062500 | 77.904951 | 87.68        | 56.004 |
 | Qwen3-0.6B | `w4a4` | `autoround` | `mxfp4/mxfp4` | 19.157549 | 31.795736     | 12.638187    | 88.51         | 56.004    |
+| Qwen3-0.6B | `w4a8` | `flatquant` | `int4/int8` | 19.157549 | 25.472147 | 6.314598 | 35.95 | 56.004 |
+| Qwen3-0.6B | `w4a8` | `flatquant` | `mxfp4/mxfp8` | 19.157549 | 24.000681 | 4.843132 | 52.77 | 56.004 |
