@@ -292,6 +292,37 @@ def test_prepare_950_plan_rejects_unselected_fp8_candidate(tmp_path, monkeypatch
         model.prepare_tensor_deploy_plan(dict.fromkeys(tensors, SHARD))
 
 
+def test_prepare_950_plan_detects_fp8_pair_across_shards(tmp_path):
+    model = _bare_model(tmp_path, platform="ascend950")
+    weight_name = f"{MODULE}.weight"
+    scale_name = f"{MODULE}.scale"
+    _write_shard(
+        model,
+        {weight_name: torch.ones((32, 64), dtype=torch.float8_e4m3fn)},
+        "weight.safetensors",
+    )
+    scale_path = model.model_path / "scale.safetensors"
+    save_file(
+        {scale_name: torch.ones((1, 2), dtype=torch.uint8).view(torch.float8_e8m0fnu)},
+        str(scale_path),
+    )
+    model.safetensors_files = frozenset(
+        {
+            (model.model_path / "weight.safetensors").resolve(),
+            scale_path.resolve(),
+        }
+    )
+    weight_map = {
+        weight_name: "weight.safetensors",
+        scale_name: "scale.safetensors",
+    }
+
+    plan = model.prepare_tensor_deploy_plan(weight_map)
+
+    assert plan.selected_modules == {MODULE}
+    assert plan.quant_layers == {MODULE: 8}
+
+
 def test_convert_a3_shard_dequantizes_then_exports_selected_weight(
     tmp_path, monkeypatch
 ):
@@ -624,11 +655,12 @@ def test_convert_950_shard_expands_only_selected_fp8_scale(tmp_path):
     }
     _write_shard(model, tensors)
 
+    plan = model.prepare_tensor_deploy_plan(dict.fromkeys(tensors, SHARD))
     routing = model.convert_tensorwise_shard(
         SHARD,
         model.model_path,
         dict.fromkeys(tensors, SHARD),
-        {MODULE: 8},
+        plan.quant_layers,
         {},
     )
     output = load_file(str(model.output_dir / SHARD))
@@ -637,6 +669,52 @@ def test_convert_950_shard_expands_only_selected_fp8_scale(tmp_path):
     assert output[f"{MODULE}.scale"].dtype == torch.float8_e8m0fnu
     assert output["model.norm.weight"].shape == (32,)
     assert routing == dict.fromkeys(output, SHARD)
+    assert plan.selected_modules == {MODULE}
+    assert model.processed_modules == {MODULE}
+
+
+def test_convert_950_shard_expands_fp8_scale_from_other_shard(tmp_path):
+    model = _bare_model(tmp_path, platform="ascend950")
+    weight_name = f"{MODULE}.weight"
+    scale_name = f"{MODULE}.scale"
+    weight = (
+        torch.arange(32 * 32, dtype=torch.float32)
+        .reshape(32, 32)
+        .to(torch.float8_e4m3fn)
+    )
+    scale = torch.ones((1, 1), dtype=torch.uint8).view(torch.float8_e8m0fnu)
+    _write_shard(model, {weight_name: weight}, "weight.safetensors")
+    scale_path = model.model_path / "scale.safetensors"
+    save_file({scale_name: scale}, str(scale_path))
+    model.safetensors_files = frozenset(
+        {
+            (model.model_path / "weight.safetensors").resolve(),
+            scale_path.resolve(),
+        }
+    )
+    weight_map = {
+        weight_name: "weight.safetensors",
+        scale_name: "scale.safetensors",
+    }
+
+    plan = model.prepare_tensor_deploy_plan(weight_map)
+    routing = {}
+    for source_file in sorted(set(weight_map.values())):
+        routing.update(
+            model.convert_tensorwise_shard(
+                source_file, model.model_path, weight_map, plan.quant_layers, {}
+            )
+        )
+    output_scale = load_file(str(model.output_dir / "scale.safetensors"))[scale_name]
+    output_weight = load_file(str(model.output_dir / "weight.safetensors"))[weight_name]
+
+    assert output_scale.shape == (32, 1)
+    assert output_scale.dtype == torch.float8_e8m0fnu
+    assert torch.equal(output_weight.view(torch.uint8), weight.view(torch.uint8))
+    assert routing == {
+        weight_name: "weight.safetensors",
+        scale_name: "scale.safetensors",
+    }
     assert model.processed_modules == {MODULE}
 
 
