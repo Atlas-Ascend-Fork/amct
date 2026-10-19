@@ -1,10 +1,5 @@
 ---
 description: 审查 GitCode Pull Request 的代码变更
-# ⚠️ allowed-tools 三项来源，删任何一项前先对号：
-#    ① 正文里会被复制执行的命令: curl / jq / grep / echo / base64 / xargs
-#    ② ${owner}/${repo} 靠 SKILL.md「提取仓库 owner/repo 信息」填，用到 git remote get-url 与 sed
-#    ③ 审查时查本地提交的预留授权: git diff / git log / git show
-allowed-tools: Bash(curl:*), Bash(jq:*), Bash(grep:*), Bash(base64:*), Bash(xargs:*), Bash(sed:*), Bash(echo:*), Bash(git remote get-url:*), Bash(git diff:*), Bash(git log:*), Bash(git show:*)
 ---
 
 # GitCode PR 代码审查
