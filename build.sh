@@ -258,7 +258,7 @@ clean_build_out() {
 build_package() {
   echo "--------------- build package start ---------------"
   # 清理 dist/ 避免残留旧构建产物导致重复文件
-  rm -rf ${BASEPATH}/dist
+  rm -rf "${BASEPATH}/dist"
   bash install_graph.sh --cann_3rd_lib_path=${CANN_3RD_LIB_PATH}
   build || { echo "Build failed."; exit 1; }
   echo "--------------- build package end ---------------"
