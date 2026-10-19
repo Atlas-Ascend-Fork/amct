@@ -18,19 +18,21 @@
 from __future__ import annotations
 
 import os
-from tqdm import tqdm
+
 import torch
 from loguru import logger
+from tqdm import tqdm
 
-from amct_pytorch.common.datasets.preproc import get_wiki_inputs
-from amct_pytorch.common.evaluate.eval_ppl import wikitext2_ppl
-from amct_pytorch.common.models.llm import register_llm_models
-from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.algorithms.quant import register_algorithms
+from amct_pytorch.common.datasets.preproc import get_wiki_inputs
+from amct_pytorch.common.evaluate.eval_checkpoint import EvalCheckpointManager
+from amct_pytorch.common.evaluate.eval_ppl import wikitext2_ppl
 from amct_pytorch.common.models import MODEL_REGISTRY
+from amct_pytorch.common.models.llm import register_llm_models
 from amct_pytorch.common.utils.run_logging import setup_run_logging
 from amct_pytorch.common.utils.seed_utils import seed_everything
 from amct_pytorch.quantization.bit_policy import ensure_bit_policy
+from amct_pytorch.quantization.dtypes import register_dtype
 
 
 class LlmEvalWorkflow:
@@ -46,9 +48,13 @@ class LlmEvalWorkflow:
                 f"eval only supports granularity 'block' or 'model', "
                 f"got '{self.granularity}'."
             )
+        self.dump = bool(getattr(args, "dump", False))
+        if self.dump and self.granularity != "block":
+            raise ValueError("--dump only supports eval with granularity 'block'.")
         self.eval_mode = args.eval_mode
         self.pipeline = None
         self.data_provider = None
+        self.checkpoint_manager = None
         self.model_name = args.model_name
         self.quant_target = args.quant_target
         self.quant_dtype = args.quant_dtype
@@ -75,17 +81,24 @@ class LlmEvalWorkflow:
 
     def run(self):
         sink_id = self.setup()
-        if self.granularity == "block":
-            ppl = self._run_blockwise()
-        elif self.granularity == "model":
-            ppl = self._run_modelwise()
-        else:
-            raise ValueError(f"Unsupported granularity '{self.granularity}' for eval.")
-        logger.info(
-            f"Model: {self.model_name}; Quant target: {self.quant_target}; Quant dtype: {self.quant_dtype}; "
-            f"PPL: {ppl}\n{self.bit_policy.summary()}"
-        )
-        logger.remove(sink_id)
+        try:
+            if self.granularity == "block":
+                ppl = self._run_blockwise()
+            elif self.granularity == "model":
+                ppl = self._run_modelwise()
+            else:
+                raise ValueError(
+                    f"Unsupported granularity '{self.granularity}' for eval."
+                )
+            logger.info(
+                f"Model: {self.model_name}; Quant target: {self.quant_target}; Quant dtype: {self.quant_dtype}; "
+                f"PPL: {ppl}\n{self.bit_policy.summary()}"
+            )
+            checkpoint_manager = getattr(self, "checkpoint_manager", None)
+            if getattr(self, "dump", False) and checkpoint_manager is not None:
+                checkpoint_manager.cleanup()
+        finally:
+            logger.remove(sink_id)
 
     def _build_pipeline(self):
         model_cls = MODEL_REGISTRY.get(self.model_name)
@@ -138,14 +151,41 @@ class LlmEvalWorkflow:
     def _run_blockwise(
         self,
     ):
+        if getattr(self, "dump", False):
+            self.checkpoint_manager = EvalCheckpointManager(
+                self.args, self.pipeline.num_layers
+            )
+            logger.warning(
+                "Dump enabled: model_name={}, quant_dtype={}. Ensure existing checkpoints "
+                "match the model and evaluation configuration you intend to use.",
+                self.checkpoint_manager.model_name,
+                self.checkpoint_manager.quant_dtype,
+            )
         tokenizer = self.pipeline.tokenizer
         samples = get_wiki_inputs(tokenizer, self.seq_len)
         logger.info("Loaded {} eval samples for blockwise eval.", len(samples))
         inter_io = self.pipeline.do_embedding_forward(samples, self.args.output_dir)
+        start_layer_idx = 0
+        if self.checkpoint_manager is not None:
+            restored = self.checkpoint_manager.load()
+            if restored is not None:
+                completed_block_idx, restored_io, model_state = restored
+                try:
+                    self.pipeline.restore_eval_state(
+                        model_state, completed_block_idx, restored_io
+                    )
+                except ValueError as error:
+                    logger.warning("Discard unusable eval checkpoint state: {}", error)
+                    self.pipeline.restore_eval_state(None, -1, inter_io)
+                else:
+                    inter_io = restored_io
+                    start_layer_idx = completed_block_idx + 1
+                del restored, restored_io, model_state
         use_quant_block, enable_quant, eval_message = self._resolve_eval_states()
         logger.info(eval_message)
         for layer_idx in tqdm(
-            range(self.pipeline.num_layers), desc="Block Processing..."
+            range(start_layer_idx, self.pipeline.num_layers),
+            desc="Block Processing...",
         ):
             inter_io = self.pipeline.do_block_forward(
                 layer_idx,
@@ -153,6 +193,10 @@ class LlmEvalWorkflow:
                 use_quant_block=use_quant_block,
                 enable_quant=enable_quant,
             )
+            if self.checkpoint_manager is not None:
+                self.checkpoint_manager.save(
+                    layer_idx, inter_io, self.pipeline.export_eval_state()
+                )
 
         ppl = wikitext2_ppl(
             self.pipeline.do_head_forward(inter_io),

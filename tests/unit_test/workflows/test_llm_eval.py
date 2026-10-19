@@ -24,13 +24,14 @@ NPU device, so we cover only the pure decision logic here:
 
 import gc
 import importlib
+import weakref
 from types import SimpleNamespace
 from unittest.mock import MagicMock
-import weakref
 
 import pytest
 import torch
 
+from amct_pytorch.common.evaluate.eval_checkpoint import EvalCheckpointManager
 from amct_pytorch.quantization.bit_policy import BitPolicy
 from amct_pytorch.workflows.llm_eval import LlmEvalWorkflow
 
@@ -241,6 +242,13 @@ def _make_eval_workflow(**overrides):
         seq_len=2048,
         output_dir="/tmp/fake",
         quant_dtype="int",
+        algos=[],
+        bit_config=None,
+        attn_linear_param_dir="",
+        attn_cache_param_dir="",
+        moe_mlp_param_dir="",
+        seed=42,
+        dump=False,
     )
     defaults.update(overrides)
     args = SimpleNamespace(bit_policy=bit_policy, **defaults)
@@ -248,6 +256,7 @@ def _make_eval_workflow(**overrides):
     for k, v in vars(args).items():
         setattr(wf, k, v)
     wf.args = args
+    wf.checkpoint_manager = None
     return wf
 
 
@@ -391,6 +400,178 @@ def test_eval_run_blockwise_streams_head_logits_on_workflow_device(
         "Loaded {} eval samples for blockwise eval.",
         "Eval mode=bf16: use original BF16 blocks.",
     ]
+
+
+@pytest.mark.parametrize("reject_state", [False, True])
+def test_eval_run_blockwise_resumes_after_last_completed_block(
+    monkeypatch, tmp_path, reject_state
+):
+    fake_logger = MagicMock()
+    monkeypatch.setattr("amct_pytorch.workflows.llm_eval.logger", fake_logger)
+    samples = [torch.tensor([[1, 2, 3, 4]])]
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_eval.get_wiki_inputs",
+        lambda tokenizer, seq_len: samples,
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_eval.wikitext2_ppl",
+        lambda logits, actual_samples, device, seq_len: 7.5,
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_eval.tqdm",
+        lambda iterable, desc="": iterable,
+    )
+
+    wf = _make_eval_workflow(
+        eval_mode="bf16",
+        output_dir=str(tmp_path),
+        dump=True,
+    )
+    processed_layers = []
+    wf.pipeline = MagicMock()
+    wf.pipeline.tokenizer = MagicMock()
+    wf.pipeline.num_layers = 4
+    model_state = [{"prev_topk_indices": torch.zeros(1, 1, 1, dtype=torch.int32)}]
+    wf.pipeline.export_eval_state.return_value = model_state
+    if reject_state:
+        wf.pipeline.restore_eval_state.side_effect = [
+            ValueError("missing indices"),
+            None,
+        ]
+    wf.pipeline.do_embedding_forward.return_value = [torch.tensor([99.0])]
+
+    def forward_block(layer_idx, inter_io, **kwargs):
+        processed_layers.append(layer_idx)
+        return [torch.tensor([float(layer_idx)])]
+
+    wf.pipeline.do_block_forward.side_effect = forward_block
+    wf.pipeline.do_head_forward.return_value = iter([torch.randn(1, 3, 10)])
+
+    manager = EvalCheckpointManager(wf.args, num_layers=4)
+    manager.save(1, [torch.tensor([1.0])], model_state)
+
+    result = wf._run_blockwise()  # pylint: disable=protected-access
+
+    assert result == pytest.approx(7.5)
+    assert processed_layers == ([0, 1, 2, 3] if reject_state else [2, 3])
+    assert wf.pipeline.restore_eval_state.call_args_list[0].args[1] == 1
+    restored_state = wf.pipeline.restore_eval_state.call_args_list[0].args[0]
+    torch.testing.assert_close(
+        restored_state[0]["prev_topk_indices"],
+        model_state[0]["prev_topk_indices"],
+    )
+    if reject_state:
+        assert wf.pipeline.restore_eval_state.call_args.args[:2] == (None, -1)
+        assert wf.pipeline.restore_eval_state.call_args.args[2][0].item() == 99.0
+    completed_idx, inter_io, saved_state = manager.load()
+    assert completed_idx == 3
+    assert torch.equal(inter_io[0], torch.tensor([3.0]))
+    wf.pipeline.do_embedding_forward.assert_called_once()
+    assert fake_logger.warning.call_count == (2 if reject_state else 1)
+    assert fake_logger.warning.call_args_list[0].args[1:] == ("qwen3", "bf16")
+    torch.testing.assert_close(
+        saved_state[0]["prev_topk_indices"],
+        model_state[0]["prev_topk_indices"],
+    )
+    assert not any("Resume" in call.args[0] for call in fake_logger.info.call_args_list)
+
+
+def test_eval_run_blockwise_reuses_embedding_when_checkpoint_is_corrupt(
+    monkeypatch, tmp_path
+):
+    samples = [torch.tensor([[1, 2, 3, 4]])]
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_eval.get_wiki_inputs",
+        lambda tokenizer, seq_len: samples,
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_eval.wikitext2_ppl",
+        lambda logits, actual_samples, device, seq_len: 7.5,
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_eval.tqdm",
+        lambda iterable, desc="": iterable,
+    )
+
+    wf = _make_eval_workflow(
+        eval_mode="bf16",
+        output_dir=str(tmp_path),
+        dump=True,
+    )
+    embedding_output = [torch.tensor([99.0])]
+    first_block_inputs = []
+    wf.pipeline = MagicMock()
+    wf.pipeline.tokenizer = MagicMock()
+    wf.pipeline.num_layers = 2
+    wf.pipeline.do_embedding_forward.return_value = embedding_output
+    wf.pipeline.export_eval_state.return_value = None
+
+    def forward_block(layer_idx, inter_io, **kwargs):
+        if layer_idx == 0:
+            first_block_inputs.extend(inter_io)
+        return [torch.tensor([float(layer_idx)])]
+
+    wf.pipeline.do_block_forward.side_effect = forward_block
+    wf.pipeline.do_head_forward.return_value = iter([torch.randn(1, 3, 10)])
+
+    manager = EvalCheckpointManager(wf.args, num_layers=2)
+    manager.run_dir.mkdir(parents=True)
+    (manager.run_dir / "qwen3_bf16_0.pt").write_bytes(b"not a torch checkpoint")
+
+    result = wf._run_blockwise()  # pylint: disable=protected-access
+
+    assert result == pytest.approx(7.5)
+    wf.pipeline.do_embedding_forward.assert_called_once()
+    assert first_block_inputs == embedding_output
+
+
+def test_eval_run_removes_checkpoint_only_after_success_log(monkeypatch, tmp_path):
+    wf = _make_eval_workflow(output_dir=str(tmp_path), dump=True)
+    manager = EvalCheckpointManager(wf.args, num_layers=2)
+    manager.save(0, [torch.tensor([1.0])])
+    wf.checkpoint_manager = manager
+    wf.setup = lambda: "sink"
+    wf._run_blockwise = lambda: 8.25
+
+    events = []
+    real_cleanup = manager.cleanup
+
+    def cleanup():
+        events.append("cleanup")
+        real_cleanup()
+
+    manager.cleanup = cleanup
+    fake_logger = SimpleNamespace(
+        info=lambda message: events.append("ppl_log"),
+        remove=lambda sink_id: events.append("remove_log_sink"),
+    )
+    monkeypatch.setattr("amct_pytorch.workflows.llm_eval.logger", fake_logger)
+
+    wf.run()
+
+    assert events == ["ppl_log", "cleanup", "remove_log_sink"]
+    assert list(manager.run_dir.iterdir()) == []
+
+
+def test_eval_run_preserves_checkpoint_when_eval_fails(monkeypatch, tmp_path):
+    wf = _make_eval_workflow(output_dir=str(tmp_path), dump=True)
+    manager = EvalCheckpointManager(wf.args, num_layers=2)
+    manager.save(0, [torch.tensor([1.0])])
+    wf.checkpoint_manager = manager
+    wf.setup = lambda: "sink"
+
+    def fail_eval():
+        raise RuntimeError("interrupted")
+
+    wf._run_blockwise = fail_eval
+    fake_logger = MagicMock()
+    monkeypatch.setattr("amct_pytorch.workflows.llm_eval.logger", fake_logger)
+
+    with pytest.raises(RuntimeError, match="interrupted"):
+        wf.run()
+
+    assert (manager.run_dir / "qwen3_bf16_0.pt").exists()
+    fake_logger.remove.assert_called_once_with("sink")
 
 
 # ---- _iter_model_logits --------------------------------------------------
@@ -740,3 +921,30 @@ def test_init_applies_seed_from_args(monkeypatch):
     workflow = LlmEvalWorkflow(args)
     assert captured == [13]
     assert workflow.seed == 13
+
+
+@pytest.mark.parametrize("eval_mode", ["bf16", "quant"])
+def test_init_accepts_dump_for_glm5_2(eval_mode):
+    wf = _make_eval_workflow(model_name="glm5_2", dump=True, eval_mode=eval_mode)
+    assert LlmEvalWorkflow(wf.args).dump
+
+
+def test_init_rejects_dump_for_modelwise_eval(monkeypatch):
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_eval.seed_everything", lambda seed: None
+    )
+    args = SimpleNamespace(
+        seq_len=512,
+        device="cpu",
+        granularity="model",
+        eval_mode="bf16",
+        model_name="qwen3",
+        quant_target=(),
+        quant_dtype="int",
+        bit_policy=_make_bit_policy(),
+        seed=13,
+        dump=True,
+    )
+
+    with pytest.raises(ValueError, match="dump.*block"):
+        LlmEvalWorkflow(args)
