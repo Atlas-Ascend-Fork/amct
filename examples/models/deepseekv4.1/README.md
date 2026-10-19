@@ -105,7 +105,7 @@ python -m amct_pytorch.cli.llm.deploy \
 - `--quant_dtype hifp`：启用 HiFloat8 重编码，与 `mxfp` 的保位宽路径并列。
 - `--quant_layers_config`：选中 attn 的 `wq_a`/`wkv`/`wq_b`/`wo_a`/`wo_b`、indexer 的 `wq_b`、engram 的 `wkv`，以及 MTP 块的同名 Linear。
 
-转换后选中层的 weight 为 `U8 [out, in]`，scale 为 `F32 [out, 1]`；`config.json` 新增 `hif8_weight_range`、`hif8_o_groups`、`hif8_o_lora_rank`。
+转换后选中层的 weight 为 `U8 [out, in]`，scale 为 `F32 [out, 1]`；`config.json` 保持源文件不变。
 
 ## 使用限制
 

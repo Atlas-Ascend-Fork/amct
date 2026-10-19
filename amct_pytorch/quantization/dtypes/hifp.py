@@ -25,7 +25,6 @@ from amct_pytorch.quantization.dtypes.hifp_impl import (
     hifloat8_fake_quant,
     hifloat4_fake_quant,
     hif4_pack,
-    hif8_pack,
 )
 
 
@@ -62,7 +61,7 @@ class QuantDequantHifp(torch.nn.Module):
             raise ValueError(f"HiFloat only supports 16/8/4-bit, got {self.bits}.")
 
     def export_deploy(self, x: Tensor, v: Tensor | float = 0.0):
-        if self.bits in (4, 8):
+        if self.bits == 4:
             value, scale = self.deploy(x)
             return {"qweight": value, "scale": scale}
         raise NotImplementedError(
@@ -70,11 +69,8 @@ class QuantDequantHifp(torch.nn.Module):
         )
 
     def deploy(self, x: Tensor, qdim: int = -1, v: Tensor | float = 0.0):
-        mat = x.reshape(-1, x.shape[-1]).to(torch.float32)
         if self.bits == 4:
+            mat = x.reshape(-1, x.shape[-1]).to(torch.float32)
             scale, value = hif4_pack(mat)
-            return value.contiguous().cpu(), scale.contiguous().cpu()
-        if self.bits == 8:
-            value, scale = hif8_pack(mat)
             return value.contiguous().cpu(), scale.contiguous().cpu()
         raise NotImplementedError(f"HiFloat-{self.bits} deploy is not supported yet.")

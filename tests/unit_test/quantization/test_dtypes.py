@@ -457,33 +457,13 @@ def test_hifp_forward_bits16_is_passthrough():
 
 
 def test_hifp_deploy_and_export_deploy_are_unsupported():
-    qdq = QuantDequantHifp(bits=16)
+    qdq = QuantDequantHifp(bits=8)
     x = torch.randn(2, 8, dtype=torch.bfloat16)
 
     with pytest.raises(NotImplementedError, match="export_deploy is not supported"):
         qdq.export_deploy(x)
     with pytest.raises(NotImplementedError, match="deploy is not supported"):
         qdq.deploy(x)
-
-
-def test_hifp_bits8_export_deploy_returns_codes_and_row_scales(monkeypatch):
-    import torch_npu
-
-    monkeypatch.setattr(hifp_impl, "is_native_hifloat8_cast_available", lambda: True)
-    monkeypatch.setattr(
-        torch_npu,
-        "npu_dtype_cast",
-        lambda tensor, dtype, **kwargs: tensor.abs().to(torch.uint8),
-        raising=False,
-    )
-    monkeypatch.setattr(torch.Tensor, "npu", lambda self, *a, **k: self, raising=False)
-    qdq = QuantDequantHifp(bits=8)
-    payload = qdq.export_deploy(torch.randn(2, 8, dtype=torch.bfloat16))
-
-    assert payload["qweight"].dtype == torch.uint8
-    assert payload["qweight"].shape == (2, 8)
-    assert payload["scale"].dtype == torch.float32
-    assert payload["scale"].shape == (2, 1)
 
 
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16, torch.float32])

@@ -222,20 +222,26 @@ def test_prepare_hif8_plan_rejects_selected_non_fp8_module(tmp_path):
         model.prepare_tensor_deploy_plan(dict.fromkeys(source, SHARD))
 
 
-def test_refresh_config_hif8_records_layout_and_keeps_source(tmp_path):
+def test_refresh_config_hif8_writes_source_config_unchanged(tmp_path):
     model, _ = _hif8_model(tmp_path)
-    original = json.loads(json.dumps(model.config))
 
     model.refresh_config([], tensor_plan=None)
 
     written = json.loads((model.output_dir / "config.json").read_text())
-    assert model.config == original
-    assert written["quantization_config"] == {
-        "quant_method": "fp8",
-        "hif8_weight_range": HIF8_WEIGHT_SCOPE,
-        "hif8_o_groups": GROUPS,
-        "hif8_o_lora_rank": RANK,
-    }
+    assert written == model.config
+
+
+@pytest.mark.parametrize("value", [None, "2"])
+def test_convert_hif8_shard_rejects_invalid_o_groups(
+    tmp_path, fake_hifloat8_cast, value
+):
+    model, source = _hif8_model(tmp_path)
+    model.config["text_config"]["o_groups"] = value
+
+    with pytest.raises(ValueError, match="integer 'o_groups'"):
+        model.convert_tensorwise_shard(
+            SHARD, model.model_path, dict.fromkeys(source, SHARD), {WO_A: 8}, {}
+        )
 
 
 def test_validate_platform_accepts_hifp_on_ascend950():

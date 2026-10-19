@@ -38,7 +38,7 @@ from amct_pytorch.common.models.llm.common.weight_path_validation import (
     resolve_safetensors_path,
 )
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY, register_dtype
-from amct_pytorch.quantization.dtypes.hifp_impl import HIF8_WEIGHT_SCOPE
+from amct_pytorch.quantization.dtypes.hifp_impl import hif8_pack
 
 BLOCK = 32
 # Source scales are read one tensor at a time. Handles of the shards holding
@@ -434,11 +434,7 @@ class DeepseekV41:
             else:
                 raise ValueError(f"Missing source scale tensor: {scale_name}")
             weight = self._dequantize_block_fp8(tensors[weight_name], scale)
-            tensors.update(
-                self._export_hif8_payload(
-                    weight_name, weight, quant_layers[module_name]
-                )
-            )
+            tensors.update(self._export_hif8_payload(weight_name, weight))
             processed.add(module_name)
         destination = self.output_dir / source_file
         temporary = destination.with_name(f".{destination.name}.tmp")
@@ -455,15 +451,15 @@ class DeepseekV41:
         dense = dense.repeat_interleave(BLOCK, dim=1)[:, :columns]
         return weight.to(torch.float32) * dense
 
-    def _export_hif8_payload(self, weight_name, weight, bit):
-        register_dtype()
+    def _export_hif8_payload(self, weight_name, weight):
         module_name = weight_name.removesuffix(".weight")
+        scale_name = module_name + ".scale"
         text_config = self.config.get("text_config", self.config)
         grouped = module_name.endswith(GROUPED_SUFFIX)
         if grouped:
             # npu_transpose_quant_batchmatmul needs wo_a groups to share one scale.
-            groups = text_config["o_groups"]
-            rank = text_config["o_lora_rank"]
+            groups = self._required_int(text_config, "o_groups")
+            rank = self._required_int(text_config, "o_lora_rank")
             rows, columns = weight.shape
             if rows != groups * rank:
                 raise ValueError(
@@ -475,7 +471,8 @@ class DeepseekV41:
                 .transpose(0, 1)
                 .reshape(rank, groups * columns)
             )
-        payload = quant_payload(DTYPE_REGISTRY.get("hifp"), weight_name, weight, bit)
+        codes, scale = hif8_pack(weight)
+        payload = {weight_name: codes, scale_name: scale}
         if grouped:
             payload[weight_name] = (
                 payload[weight_name]
@@ -484,7 +481,6 @@ class DeepseekV41:
                 .reshape(rows, columns)
                 .contiguous()
             )
-            scale_name = module_name + ".scale"
             payload[scale_name] = (
                 payload[scale_name]
                 .view(1, rank)
@@ -493,6 +489,16 @@ class DeepseekV41:
                 .contiguous()
             )
         return payload
+
+    @staticmethod
+    def _required_int(text_config, key):
+        value = text_config.get(key)
+        if type(value) is not int:
+            raise ValueError(
+                f"config.json text_config requires integer '{key}' for HiFloat8 "
+                f"export, got {value!r}"
+            )
+        return value
 
     def _convert_tensorwise_shard_950(
         self, source_file, model_dir, original_weight_map, quant_layers, loaded_files
@@ -633,13 +639,10 @@ class DeepseekV41:
         os.replace(temporary, self.output_dir / "config.json")
 
     def _refresh_config_hif8(self, quant_ignore_layers, *, tensor_plan=None):
+        # Written unchanged: vLLM-Ascend picks its FP8 config from quant_method
+        # "fp8" and finds the HiFloat8 Linears by their uint8 weights, so no
+        # ignore list is needed either.
         config = copy.deepcopy(self.config)
-        text_config = config.get("text_config", config)
-        quant_config = config.get("quantization_config", {})
-        quant_config["hif8_weight_range"] = HIF8_WEIGHT_SCOPE
-        quant_config["hif8_o_groups"] = text_config["o_groups"]
-        quant_config["hif8_o_lora_rank"] = text_config["o_lora_rank"]
-        config["quantization_config"] = quant_config
         temporary = self.output_dir / ".config.json.tmp"
         temporary.write_text(json.dumps(config, indent=2), encoding="utf-8")
         os.replace(temporary, self.output_dir / "config.json")

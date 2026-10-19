@@ -105,7 +105,7 @@ Key arguments:
 - `--quant_dtype hifp`: enables the HiFloat8 re-encoding, alongside the bit-width preserving `mxfp` path.
 - `--quant_layers_config`: selects `wq_a`/`wkv`/`wq_b`/`wo_a`/`wo_b` under attn, `wq_b` under the indexer, `wkv` under engram, and the same Linears in the MTP blocks.
 
-After conversion, a selected layer has a `U8 [out, in]` weight and an `F32 [out, 1]` scale; `config.json` adds `hif8_weight_range`, `hif8_o_groups` and `hif8_o_lora_rank`.
+After conversion, a selected layer has a `U8 [out, in]` weight and an `F32 [out, 1]` scale; `config.json` is copied from the source unchanged.
 
 ## Limitations
 
