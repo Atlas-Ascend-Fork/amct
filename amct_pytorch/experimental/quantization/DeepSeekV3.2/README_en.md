@@ -55,7 +55,7 @@ python ./main.py \
  --model $model_path \
  --w_bits 8 --a_bits 8 \
  --q_bits 8 --k_bits 8 --v_bits 8 \
- --cali_bsz 1 --epoch 25 --base_lr 1e-2 \
+ --cali_bsz 1 --epochs 25 --base_lr 1e-2 \
  --lwc --lac \
  --cls c8 \
  --output_dir $output_path --data_dir $data_path \
@@ -70,7 +70,7 @@ python ./main.py \
  --model $model_path \
  --w_bits 8 --a_bits 8 \
  --q_bits 8 --k_bits 8 --v_bits 8 \
- --cali_bsz 1 --epoch 25 --base_lr 1e-2 \
+ --cali_bsz 1 --epochs 25 --base_lr 1e-2 \
  --lwc --lac \
  --cls bf16 \
  --output_dir $output_path --data_dir $data_path \

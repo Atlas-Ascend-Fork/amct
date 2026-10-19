@@ -53,7 +53,7 @@ def build_optimizer(args: Any, parameters):
     weight_decay = getattr(args, "weight_decay", 0.0)
 
     if optimizer_name == "adamw":
-        return torch.optim.AdamW(parameters)
+        return torch.optim.AdamW(parameters, lr=base_lr, weight_decay=weight_decay)
     if optimizer_name == "adam":
         return torch.optim.Adam(parameters, lr=base_lr, weight_decay=weight_decay)
     if optimizer_name == "sgd":
@@ -87,7 +87,7 @@ def build_lr_scheduler(args: Any, optimizer):
         nsamples = getattr(args, "nsamples", 128)
         cali_bsz = getattr(args, "cali_bsz", 1)
         epochs = getattr(args, "epochs", 20)
-        t_max = epochs * (nsamples // cali_bsz)
+        t_max = epochs * ((nsamples + cali_bsz - 1) // cali_bsz)
         return torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer,
             T_max=t_max,

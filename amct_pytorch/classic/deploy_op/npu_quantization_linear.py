@@ -54,6 +54,8 @@ class NpuQuantizationLinear(torch.nn.Module):
         self.y_scale = None
         self.group_sizes = None
         self.dynamic = getattr(quant_module, 'dynamic', None)
+        self.input_quant_disabled = getattr(quant_module, 'input_quant_disabled', False)
+        self.smooth_scale_skipped = getattr(quant_module, 'smooth_scale_skipped', False)
         self._init_weight_quant(quant_module, device)
         self._init_deq_weight_scale(quant_module, device)
         self._init_bias(quant_module)
@@ -61,7 +63,7 @@ class NpuQuantizationLinear(torch.nn.Module):
             self._init_act_quant_params(quant_module, device)
             self._init_deq_act_scale(quant_module, device)
 
-    def forward(self, x):
+    def forward(self, x, pertoken_scale=None):
         """
         do inference process
         Params:
@@ -69,13 +71,23 @@ class NpuQuantizationLinear(torch.nn.Module):
         """
         import torch_npu
 
-        if hasattr(self, 'scale_factor'):
+        if pertoken_scale is not None and not self.input_quant_disabled:
+            raise ValueError(
+                'pertoken_scale can only be passed to a shared-input deploy linear'
+            )
+
+        if hasattr(self, 'scale_factor') and not self.input_quant_disabled:
             x = x * self.scale_factor
 
-        if self.act_granularity == 'token':
-            # per-token activation quant is inherently dynamic: the token dim equals
-            # batch * seqlen and changes per input, so the scale must be computed at
-            # runtime. HIF8 needs dst_type_max=15; INT8 uses the default range.
+        matmul_token_scale = self.pertoken_scale
+        if self.input_quant_disabled:
+            if self.dynamic is True and pertoken_scale is None:
+                raise ValueError('shared dynamic input requires pertoken_scale')
+            quant_x = x
+            if pertoken_scale is not None:
+                matmul_token_scale = pertoken_scale.reshape(-1).to(torch.float32)
+        elif self.act_granularity == 'token':
+            # Preserve the legacy non-shared per-token deployment behavior.
             if self.act_type == HIFLOAT8:
                 quant_x, pertoken_scale = torch_npu.npu_dynamic_quant(
                     x, dst_type=self.npu_quantize_act_type, dst_type_max=15
@@ -84,7 +96,7 @@ class NpuQuantizationLinear(torch.nn.Module):
                 quant_x, pertoken_scale = torch_npu.npu_dynamic_quant(
                     x, dst_type=self.npu_quantize_act_type
                 )
-            self.pertoken_scale = pertoken_scale.reshape(-1).to(torch.float32)
+            matmul_token_scale = pertoken_scale.reshape(-1).to(torch.float32)
         else:
             quant_x = torch_npu.npu_quantize(
                 x,
@@ -94,15 +106,18 @@ class NpuQuantizationLinear(torch.nn.Module):
                 axis=self.quantize_axis,
                 div_mode=False,
             )
+        ori_shape = quant_x.shape
+        flatten_input = self.is_new_torch_npu and (
+            self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1
+        )
+        if flatten_input:
+            quant_x = quant_x.reshape(-1, ori_shape[-1])
         if self.is_new_torch_npu:
-            if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
-                ori_shape = quant_x.shape
-                quant_x = quant_x.reshape(-1, x.shape[-1])
             output = torch_npu.npu_quant_matmul(
                 quant_x,
                 self.quantized_weight,
                 scale=self.deq_scale,
-                pertoken_scale=self.pertoken_scale,
+                pertoken_scale=matmul_token_scale,
                 bias=self.bias,
                 output_dtype=self.output_dtype,
                 x1_dtype=self.x1_dtype,
@@ -110,18 +125,18 @@ class NpuQuantizationLinear(torch.nn.Module):
                 group_sizes=self.group_sizes,
                 y_scale=self.y_scale,
             )
-            if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
-                output = output.reshape(*ori_shape[:-1], -1)
         else:
             output = torch_npu.npu_quant_matmul(
                 quant_x,
                 self.quantized_weight,
                 scale=self.deq_scale,
-                pertoken_scale=self.pertoken_scale,
+                pertoken_scale=matmul_token_scale,
                 bias=self.bias,
                 output_dtype=self.output_dtype,
             )
 
+        if flatten_input:
+            output = output.reshape(*ori_shape[:-1], -1)
         return output
 
     def _init_act_quant_params(self, quant_module, device):
@@ -160,7 +175,7 @@ class NpuQuantizationLinear(torch.nn.Module):
         """
         weight = quant_module.weight.data
         self.scale_w_tensor = None
-        if quant_module.scale is not None:
+        if quant_module.scale is not None and not self.smooth_scale_skipped:
             weight = apply_smooth_weight(quant_module.scale, weight)
             self.register_buffer(
                 'scale_factor', (1 / quant_module.scale).to(device=device)

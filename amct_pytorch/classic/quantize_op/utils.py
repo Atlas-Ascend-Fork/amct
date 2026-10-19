@@ -168,9 +168,11 @@ def calculate_hifloat8_weight_scale(weight_data, strategy):
     """
     Function: compute the HiFloat8 weight scale (channel/tensor, flattened to 1-D).
 
-    Scales weight_max into the HiF8 normal range (weight_max / 16). HiFloat8 is always
-    symmetric (the config layer rejects asymmetric). Shared by the cast quantize op
-    (HIF8CastQuant) and deploy op (NpuHIF8CastLinear) to keep scales aligned.
+    Scales the per-group absolute maximum into the HiF8 normal range
+    (max(abs(weight)) / 16). HiFloat8 is always symmetric (the config layer rejects
+    asymmetric), so the scale covers whichever side of zero holds the larger
+    magnitude. Shared by the cast quantize op (HIF8CastQuant) and deploy op
+    (NpuHIF8CastLinear) to keep scales aligned.
 
     Parameters:
         weight_data (Tensor): weight data
@@ -178,10 +180,11 @@ def calculate_hifloat8_weight_scale(weight_data, strategy):
     Returns:
         Tensor: HiFloat8 weight scale flattened to 1-D
     """
+    weight_abs = weight_data.abs()
     if strategy == 'tensor':
-        weight_max = weight_data.max().reshape(1, 1)
+        weight_max = weight_abs.max().reshape(1, 1)
     else:
-        weight_max = weight_data.max(dim=1, keepdim=True).values
+        weight_max = weight_abs.max(dim=1, keepdim=True).values
     scale_w = (weight_max / QUANT_SCOPE[HIFLOAT8]).to(torch.float32)
     scale_w, _ = process_scale(scale_w, None, symmetric=True)
     scale_w = (

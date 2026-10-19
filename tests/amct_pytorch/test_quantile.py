@@ -60,6 +60,70 @@ class TestQuantileQuant(unittest.TestCase):
     def tearDown(self):
         del sys.modules['torch_npu']
 
+    def test_zero_weight_and_activation_scales_keep_fake_quant_finite(self):
+        """HIF8 Quantile must not emit a zero scale for all-zero data (#225).
+
+        An all-zero weight channel (per-channel) or all-zero calibration tensor
+        (per-tensor) used to yield scale == 0; fake quant then divided by it and
+        returned NaN. Covers zero weight channel, zero activations and a nonzero
+        control that must stay bit-identical.
+        """
+        for case in ('zero_channel', 'zero_activation', 'control'):
+            with self.subTest(case=case):
+                zero_channel = case == 'zero_channel'
+                zero_activation = case == 'zero_activation'
+                model = nn.Sequential(nn.Linear(4, 3, bias=False).to(torch.bfloat16))
+                with torch.no_grad():
+                    model[0].weight.fill_(1.0)
+                    if zero_channel:
+                        model[0].weight[0].zero_()
+                cfg = {
+                    'batch_num': 1,
+                    'quant_cfg': {
+                        'weights': {
+                            'type': 'hifloat8',
+                            'symmetric': True,
+                            'strategy': 'channel' if zero_channel else 'tensor',
+                        },
+                        'inputs': {
+                            'type': 'hifloat8',
+                            'symmetric': True,
+                            'strategy': 'tensor',
+                        },
+                    },
+                    'algorithm': {'quantile'},
+                }
+                quantize(model, cfg)
+                inputs = torch.zeros(2, 4, dtype=torch.bfloat16)
+                if not zero_activation:
+                    inputs.fill_(1.0)
+
+                # First forward calibrates and returns the unquantized output; the
+                # second one runs fake quant. hifloat8_fake_quant is stubbed to an
+                # identity round trip so the assertion targets the scale, not the codec.
+                with patch.object(
+                    quant_util,
+                    'hifloat8_fake_quant',
+                    side_effect=lambda tensor: tensor,
+                ):
+                    model(inputs)
+                    output = model(inputs)
+
+                scale_w = model[0].scale_w
+                scale_d = model[0].scale_d
+                self.assertTrue(torch.isfinite(output).all())
+                self.assertFalse(bool((scale_w == 0).any()))
+                self.assertFalse(bool((scale_d == 0).any()))
+                if zero_channel:
+                    expected = torch.tensor(
+                        [[0.0, 4.0, 4.0]], dtype=output.dtype
+                    ).expand(2, -1)
+                elif zero_activation:
+                    expected = torch.zeros_like(output)
+                else:
+                    expected = torch.full_like(output, 4.0)
+                torch.testing.assert_close(output, expected)
+
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch(

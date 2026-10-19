@@ -106,13 +106,20 @@ class PruningStage:
             return model
         warn_skip = config.stage_error_policy == "warn_skip"
         target_model = copy.deepcopy(model) if warn_skip else model
+        stage_report = copy.deepcopy(report) if warn_skip else report
         if warn_skip and target_model is not model:
             targets = self.domain.find_targets(target_model, config)
             if config.skip_layers:
                 targets = [t for t in targets if not _is_skipped(t, config.skip_layers)]
         try:
             self.method.apply(
-                target_model, self.domain, targets, context, report, config, self.spec
+                target_model,
+                self.domain,
+                targets,
+                context,
+                stage_report,
+                config,
+                self.spec,
             )
         except Exception as exc:
             if warn_skip:
@@ -123,6 +130,8 @@ class PruningStage:
                 )
                 return model
             raise
+        if warn_skip:
+            report.copy_from(stage_report)
         return target_model
 
 

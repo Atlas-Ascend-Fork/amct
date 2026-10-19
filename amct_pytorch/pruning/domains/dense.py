@@ -210,8 +210,11 @@ def _match_two_layer_pair(
     out1 = linear_like_out_features(mod1)
     for j in range(idx + 1, len(items)):
         name2, mod2 = items[j]
-        if is_activation_like(mod2) or is_norm_like(mod2):
+        if is_activation_like(mod2):
             continue
+        if is_norm_like(mod2):
+            # The pair update does not resize this normalization's hidden width.
+            return None
         paramless = not any(True for _ in mod2.parameters(recurse=False))
         if not is_linear_like(mod2) and paramless:
             if _is_shape_transparent(mod2, out1):

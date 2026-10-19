@@ -19,10 +19,11 @@
 namespace {
 
 // ── Schema ──────────────────────────────────────────────────────────────────
-// FP -> HiF4 -> FP fake-quant. FP16/BF16/FP32 in, same shape/dtype out (FP16 runs on the FP32
-// kernel via an up-convert/down-convert in the host impl). 64-element shared-scale
-// blocks are formed along `qdim` (default: last). The op is self-describing (qdim is a schema
-// arg); the layout work lives in the host impl, not in python.
+// FP -> HiF4 -> FP fake-quant. FP16/BF16 in, same shape/dtype out (FP16 runs on the FP32
+// kernel via an up-convert/down-convert in the host impl; FP32 input is not part of the
+// contract). 64-element shared-scale blocks are formed along `qdim` (default: last). The op
+// is self-describing (qdim is a schema arg); the layout work lives in the host impl, not in
+// python.
 
 TORCH_LIBRARY_FRAGMENT(amct, m) {
     m.def("hifloat4_fake_quant(Tensor input, int qdim=-1) -> Tensor");
@@ -35,8 +36,8 @@ static at::Tensor Hifloat4FakeQuantImpl(const at::Tensor &input, int64_t qdim) {
     TORCH_CHECK(input.device().type() == c10::DeviceType::PrivateUse1,
         "hifloat4_fake_quant: input must be on NPU device, got ", input.device());
     auto dtype = input.scalar_type();
-    TORCH_CHECK(dtype == at::kHalf || dtype == at::kBFloat16 || dtype == at::kFloat,
-        "hifloat4_fake_quant: expected float16, bfloat16 or float32, got ", input.dtype());
+    TORCH_CHECK(dtype == at::kHalf || dtype == at::kBFloat16, "hifloat4_fake_quant: expected float16 or bfloat16, got ",
+        input.dtype());
     return AscendKernel::Hifloat4CastTorch(input, qdim);
 }
 

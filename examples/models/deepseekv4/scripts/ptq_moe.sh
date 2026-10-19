@@ -41,7 +41,7 @@ BASE_LR=${BASE_LR:-1e-3}
 SEQ_LEN=${SEQ_LEN:-4096}
 CALI_BSZ=${CALI_BSZ:-1}
 # Must match the NSAMPLES used in step 2 (extract_ptq_data.sh): the cosine LR
-# scheduler sizes its period as T_max = epochs * (nsamples // cali_bsz), while
+# scheduler sizes its period as T_max = epochs * ((nsamples + cali_bsz - 1) // cali_bsz), while
 # the real step count comes from the extracted samples. A mismatch leaves the
 # learning rate barely annealed (nsamples default 128 vs 16 extracted -> the
 # schedule only covers 1/8 of a period, ending at ~96% of base_lr).

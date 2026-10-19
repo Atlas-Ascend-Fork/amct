@@ -178,11 +178,17 @@ def scale_input_by_shared_exponents(input_tensor, shared_exponents, block_size=3
         torch.tensor, shape is same with input_tensor
     """
     n = input_tensor.shape[-1]
+    # FP16 factors can overflow or underflow before multiplication.
+    factor_dtype = (
+        torch.float32
+        if shared_exponents.dtype == torch.float16
+        else shared_exponents.dtype
+    )
     expanded_tensor = torch.repeat_interleave(
-        torch.pow(2, shared_exponents), repeats=block_size, dim=-1
+        torch.pow(2, shared_exponents.to(factor_dtype)), repeats=block_size, dim=-1
     )[..., :n]
     result = input_tensor * expanded_tensor
-    return result
+    return result.to(torch.promote_types(input_tensor.dtype, shared_exponents.dtype))
 
 
 @torch.no_grad()
@@ -237,13 +243,21 @@ def quant_dequant_weight(tensor, wts_type, scale, offset=None, group_size=None):
     quant_weight so per-channel scale (shape [Cout]) broadcasts correctly
     against weight (shape [Cout, Cin, ...]).
     """
-    if not group_size:
+    if group_size:
+        return quant_dequant_tensor(tensor, wts_type, scale, offset, group_size)
+
+    scale = scale.reshape(-1)
+    offset = offset.reshape(-1) if offset is not None else None
+    if tensor.dim() == 2:
         tensor = tensor.transpose(-1, -2).contiguous()
-        scale = scale.reshape(-1)
-        offset = offset.reshape(-1) if offset is not None else None
         dq = quant_dequant_tensor(tensor, wts_type, scale, offset)
         return dq.transpose(-1, -2).contiguous()
-    return quant_dequant_tensor(tensor, wts_type, scale, offset, group_size)
+
+    if scale.numel() > 1:
+        scale = scale.reshape(-1, *([1] * (tensor.dim() - 1)))
+        if offset is not None:
+            offset = offset.reshape(-1, *([1] * (tensor.dim() - 1)))
+    return quant_dequant_tensor(tensor, wts_type, scale, offset)
 
 
 def apply_smooth_weight(smooth_factor, ori_weight):

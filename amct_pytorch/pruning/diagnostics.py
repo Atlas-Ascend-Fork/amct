@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional
 from torch import nn
 
 from ..common.utils.log import LOGGER
+from .calib import _unwrap_logits
 from .config import PruneConfig
 from .context import BatchAdapter
 from .domains.cnn import CNNPruningDomain
@@ -85,7 +86,7 @@ def _forward_ok(
         model.eval()
         with torch.no_grad():
             out = model(*args, **kwargs)
-        logits = out.logits if hasattr(out, "logits") else out
+        logits = out.logits if hasattr(out, "logits") else _unwrap_logits(out)
         return bool(torch.isfinite(logits).all().item())
     except Exception as exc:
         LOGGER.logw(

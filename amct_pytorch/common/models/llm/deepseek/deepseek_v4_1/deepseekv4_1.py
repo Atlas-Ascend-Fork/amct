@@ -41,6 +41,11 @@ from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY, register_dtype
 from amct_pytorch.quantization.dtypes.hifp_impl import HIF8_WEIGHT_SCOPE
 
 BLOCK = 32
+# Source scales are read one tensor at a time. Handles of the shards holding
+# them stay open for the duration of a single shard conversion, so the bound
+# only protects the file-descriptor count for exotic layouts that spread scales
+# over many shards.
+MAX_OPEN_SCALE_FILES = 8
 GROUPED_SUFFIX = "attn.wo_a"
 
 
@@ -175,38 +180,48 @@ class DeepseekV41:
         candidates = set()
         selected = set(selected)
         platform = self._validate_platform(self.args)
+        weight_keys = {key for key in weight_map if key.endswith(".weight")}
+        header_keys = weight_keys | {
+            key.removesuffix(".weight") + ".scale"
+            for key in weight_keys
+            if key.removesuffix(".weight") + ".scale" in weight_map
+        }
+        header_keys_by_file = {}
+        for key in header_keys:
+            header_keys_by_file.setdefault(weight_map[key], set()).add(key)
+        headers = {}
         for filename in sorted(set(weight_map.values())):
             path = resolve_safetensors_path(
                 self.model_path, filename, self.safetensors_files
             )
             with safe_open(str(path), framework="pt", device="cpu") as shard:
-                keys = set(shard.keys())
-                for key in keys:
-                    if not key.endswith(".weight"):
-                        continue
-                    base = key.removesuffix(".weight")
-                    if platform == "A3" and base in selected:
-                        view = shard.get_slice(key)
-                        if len(view.get_shape()) != 2 or any(
-                            size <= 0 for size in view.get_shape()
-                        ):
-                            raise ValueError(
-                                f"Selected A3 module is not a nonempty 2-D weight: {base}"
-                            )
-                        candidates.add(base)
-                        continue
-                    scale_key = base + ".scale"
-                    if scale_key not in keys:
-                        continue
-                    weight = shard.get_slice(key)
-                    scale = shard.get_slice(scale_key)
-                    if self._is_block_fp8(
-                        weight.get_dtype(),
-                        weight.get_shape(),
-                        scale.get_dtype(),
-                        scale.get_shape(),
-                    ):
-                        candidates.add(base)
+                present_keys = set(shard.keys()) & header_keys_by_file.get(
+                    filename, set()
+                )
+                for key in present_keys:
+                    view = shard.get_slice(key)
+                    headers[key] = (view.get_dtype(), view.get_shape())
+        for key in sorted(weight_keys):
+            base = key.removesuffix(".weight")
+            weight_header = headers.get(key)
+            if weight_header is None:
+                continue
+            if platform == "A3" and base in selected:
+                weight_shape = weight_header[1]
+                if len(weight_shape) != 2 or any(size <= 0 for size in weight_shape):
+                    raise ValueError(
+                        f"Selected A3 module is not a nonempty 2-D weight: {base}"
+                    )
+                candidates.add(base)
+                continue
+            scale_header = headers.get(base + ".scale")
+            if scale_header is not None and self._is_block_fp8(
+                weight_header[0],
+                weight_header[1],
+                scale_header[0],
+                scale_header[1],
+            ):
+                candidates.add(base)
         if platform == "A3" and (missing := selected - candidates):
             raise ValueError(
                 f"Selected A3 modules are not nonempty 2-D weights: {sorted(missing)}"
@@ -271,12 +286,18 @@ class DeepseekV41:
     def _convert_tensorwise_shard_a3(
         self, source_file, model_dir, original_weight_map, quant_layers, loaded_files
     ):
+        # Nothing read for this shard may outlive the call: the workflow hands
+        # the same dict to every shard of the export, so caching processed
+        # source shards there kept all of them resident and made peak host
+        # memory grow with the whole checkpoint instead of the working set of
+        # one shard. Only the source shard is materialised; scales are read one
+        # tensor at a time and never as whole shards.
+        del loaded_files
         source_path = resolve_safetensors_path(
             model_dir, source_file, self.safetensors_files
         )
-        if source_file not in loaded_files:
-            loaded_files[source_file] = load_file(str(source_path), device="cpu")
-        current_state_dict = loaded_files[source_file]
+        current_state_dict = load_file(str(source_path), device="cpu")
+        scale_files = {}
         new_state_dict = {}
         processed = set()
 
@@ -295,26 +316,22 @@ class DeepseekV41:
                 scale_name = weight_name.removesuffix(".weight") + ".scale"
                 if scale_name in original_weight_map:
                     scale_file = original_weight_map[scale_name]
-                    if scale_file not in loaded_files:
-                        scale_path = resolve_safetensors_path(
-                            model_dir, scale_file, self.safetensors_files
-                        )
-                        loaded_files[scale_file] = load_file(
-                            str(scale_path), device="cpu"
-                        )
-                    scale = loaded_files[scale_file].get(scale_name)
-                    if scale is None:
-                        raise ValueError(f"Missing source scale tensor: {scale_name}")
-                    loaded_files[scale_file][scale_name] = self._prepare_a3_scale(
-                        weight, scale
+                    scale = self._read_source_scale(
+                        model_dir, scale_file, scale_name, scale_files
                     )
+                    # The adapted scale reaches convert_state_dict through a
+                    # single-entry overlay, so the loaded shard is never
+                    # mutated and no adapted scale is retained afterwards.
+                    scale_overlay = {
+                        scale_file: {scale_name: self._prepare_a3_scale(weight, scale)}
+                    }
                     weight = convert_state_dict(
                         weight,
                         weight_name,
                         scale_name,
                         original_weight_map,
                         model_dir,
-                        loaded_files,
+                        scale_overlay,
                         block_size=BLOCK,
                         safetensors_files=self.safetensors_files,
                     )
@@ -353,6 +370,33 @@ class DeepseekV41:
         payload = quant_payload(DTYPE_REGISTRY.get("int"), weight_name, weight, bit)
         return adapt_ascend_payload(weight_name, payload)
 
+    def _read_source_scale(self, model_dir, scale_file, scale_name, open_files):
+        """Read one source scale tensor without materialising its whole shard.
+
+        ``open_files`` caches ``(handle, names)`` per shard for the duration of
+        a single shard conversion and is bounded by ``MAX_OPEN_SCALE_FILES``;
+        dropping an entry closes its file descriptor. ``names`` is the shard's
+        tensor-name set: ``handle.keys()`` rebuilds a fresh list of Python
+        strings on every call (roughly 0.3-0.6 ms at 2000 tensors, and it grows
+        with the shard), so caching it once per shard keeps the membership
+        check off the per-weight path.
+        """
+        entry = open_files.pop(scale_file, None)
+        if entry is None:
+            scale_path = resolve_safetensors_path(
+                model_dir, scale_file, self.safetensors_files
+            )
+            handle = safe_open(str(scale_path), framework="pt", device="cpu")
+            entry = (handle, frozenset(handle.keys()))
+            while len(open_files) >= MAX_OPEN_SCALE_FILES:
+                open_files.pop(next(iter(open_files)))
+        # Re-insert last so eviction drops the least recently used handle.
+        open_files[scale_file] = entry
+        handle, names = entry
+        if scale_name not in names:
+            raise ValueError(f"Missing source scale tensor: {scale_name}")
+        return handle.get_tensor(scale_name)
+
     @staticmethod
     def _prepare_a3_scale(weight, scale):
         """Adapt official UE8M0 scales to the common MX dequant contract."""
@@ -372,17 +416,24 @@ class DeepseekV41:
     ):
         path = resolve_safetensors_path(model_dir, source_file, self.safetensors_files)
         tensors = load_file(str(path), device="cpu")
+        scale_files = {}
         processed = set()
         for module_name in sorted(quant_layers):
             weight_name = module_name + ".weight"
             scale_name = module_name + ".scale"
             if weight_name not in tensors:
+                # The new scale is written next to its weight.
+                tensors.pop(scale_name, None)
                 continue
-            if scale_name not in tensors:
+            if scale_name in tensors:
+                scale = tensors[scale_name]
+            elif scale_name in original_weight_map:
+                scale = self._read_source_scale(
+                    model_dir, original_weight_map[scale_name], scale_name, scale_files
+                )
+            else:
                 raise ValueError(f"Missing source scale tensor: {scale_name}")
-            weight = self._dequantize_block_fp8(
-                tensors[weight_name], tensors[scale_name]
-            )
+            weight = self._dequantize_block_fp8(tensors[weight_name], scale)
             tensors.update(
                 self._export_hif8_payload(
                     weight_name, weight, quant_layers[module_name]
@@ -453,13 +504,30 @@ class DeepseekV41:
             if not name.endswith(".scale"):
                 continue
             base = name.removesuffix(".scale")
-            weight = tensors.get(base + ".weight")
-            if weight is None or base not in quant_layers:
+            weight_name = base + ".weight"
+            weight_file = original_weight_map.get(weight_name)
+            if weight_file is None or base not in quant_layers:
                 continue
-            if (
-                weight.dtype == torch.float8_e4m3fn
-                and scale.dtype == torch.float8_e8m0fnu
-                and self._is_block_fp8("F8_E4M3", weight.shape, "F8_E8M0", scale.shape)
+            if weight_file == source_file:
+                weight = tensors.get(weight_name)
+                if weight is None:
+                    continue
+                weight_dtype = (
+                    "F8_E4M3"
+                    if weight.dtype == torch.float8_e4m3fn
+                    else str(weight.dtype)
+                )
+                weight_shape = tuple(weight.shape)
+            else:
+                weight_path = resolve_safetensors_path(
+                    model_dir, weight_file, self.safetensors_files
+                )
+                with safe_open(str(weight_path), framework="pt", device="cpu") as shard:
+                    weight_view = shard.get_slice(weight_name)
+                    weight_dtype = weight_view.get_dtype()
+                    weight_shape = weight_view.get_shape()
+            if scale.dtype == torch.float8_e8m0fnu and self._is_block_fp8(
+                weight_dtype, weight_shape, "F8_E8M0", scale.shape
             ):
                 tensors[name] = (
                     scale.view(torch.uint8)

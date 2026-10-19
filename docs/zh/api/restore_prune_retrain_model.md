@@ -115,7 +115,7 @@ import amct_pytorch as amct
 config_defination = './prune_cfg.cfg'
 model = build_model()
 input_data = tuple([torch.randn(input_shape)])
-save_pth_path = /your/path/to/save/tmp.pth
+save_pth_path = "/your/path/to/save/tmp.pth"
 model.load_state_dict(torch.load(state_dict_path))
  
 # 调用稀疏模型API

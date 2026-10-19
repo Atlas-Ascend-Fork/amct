@@ -1403,6 +1403,7 @@ class TestConfigParse(unittest.TestCase):
             )
 
     def test_multi_algo_fail_cfg(self):
+        """Two algorithms claiming the same src_op must raise, not silently pick one."""
         cfg = {
             KEY_BATCH_NUM: 1,
             QUANT_CFG: {
@@ -1415,10 +1416,13 @@ class TestConfigParse(unittest.TestCase):
             ALGORITHM_KEY: {'minmax', 'gptq'},
         }
         model_bfloat16 = copy.deepcopy(TestModel()).to(torch.bfloat16)
-        try:
+        with self.assertRaises(ValueError) as ctx:
             parse_config(model_bfloat16, cfg, AlgorithmRegistry)
-        except Exception as e:
-            self.assertIn('One src_op only support one algorithm, current algo', str(e))
+        msg = str(ctx.exception)
+        self.assertIn('One src_op only support one algorithm, current algo', msg)
+        # Both clashing algorithms must be named, so the user can tell which pair conflicts
+        self.assertIn('minmax', msg)
+        self.assertIn('gptq', msg)
 
     def test_int8_minmax_skip_lm_head_with_hidden_layers(self):
         """INT8_MINMAX_WEIGHT_QUANT_CFG should skip lm_head but quantize all hidden layers.

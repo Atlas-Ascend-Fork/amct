@@ -53,6 +53,7 @@ def fake_hifloat8_cast(monkeypatch):
     monkeypatch.setattr(torch.Tensor, "npu", lambda self, *a, **k: self, raising=False)
 
 
+@pytest.mark.npu
 @requires_hifloat8_npu
 def test_hif8_pack_round_trips_on_npu():
     import torch_npu
@@ -150,6 +151,40 @@ def test_convert_hif8_shard_writes_codes_and_leaves_the_rest_alone(
     assert torch.equal(per_group, per_group[0].expand(GROUPS, RANK))
     assert unselected.dtype == torch.float8_e4m3fn
     assert torch.equal(untouched, source[UNTOUCHED])
+
+
+def test_convert_hif8_reads_scale_from_another_shard(tmp_path, fake_hifloat8_cast):
+    model, _ = _hif8_model(tmp_path, selected=(PLAIN,))
+    weight, scale = _block_fp8(GROUPS * RANK)
+    other = "model-00002.safetensors"
+    save_file({f"{PLAIN}.weight": weight}, str(model.model_path / SHARD))
+    save_file(
+        {f"{PLAIN}.scale": scale, UNTOUCHED: torch.ones(COLUMNS)},
+        str(model.model_path / other),
+    )
+    model.safetensors_files = frozenset(
+        (model.model_path / name).resolve() for name in (SHARD, other)
+    )
+    weight_map = {f"{PLAIN}.weight": SHARD, f"{PLAIN}.scale": other, UNTOUCHED: other}
+
+    routing = {}
+    for shard in (SHARD, other):
+        routing.update(
+            model.convert_tensorwise_shard(
+                shard, model.model_path, weight_map, {PLAIN: 8}, {}
+            )
+        )
+
+    assert routing == {
+        f"{PLAIN}.weight": SHARD,
+        f"{PLAIN}.scale": SHARD,
+        UNTOUCHED: other,
+    }
+    with safe_open(str(model.output_dir / SHARD), framework="pt") as shard:
+        assert shard.get_slice(f"{PLAIN}.weight").get_dtype() == "U8"
+        assert shard.get_slice(f"{PLAIN}.scale").get_dtype() == "F32"
+    with safe_open(str(model.output_dir / other), framework="pt") as shard:
+        assert set(shard.keys()) == {UNTOUCHED}
 
 
 def test_convert_hif8_shard_rejects_missing_scale(tmp_path):

@@ -109,6 +109,127 @@ def check_config(quant_data_comb, quant_config, algo):
             )
 
 
+def _check_layer_quant_dtype_comb_rules(
+    quant_data_comb, weights_cfg, inputs_cfg, prefix=''
+):
+    """
+    Per layer counterpart of _check_quant_dtype_comb_rules(), working on the
+    resolved layer config dicts produced by QuantConfig.get_layer_config().
+    prefix: error message prefix carrying the layer name, see check_layer_config
+    """
+    if (
+        quant_data_comb in ACT_GRANULARITY_SUPPORT_MAP["tensor"]
+        and weights_cfg.get('symmetric') is False
+    ):
+        raise ValueError(
+            f"{prefix}{quant_data_comb} only support symmetric weight quantization"
+        )
+
+    if quant_data_comb != 'int8 int4':
+        return
+
+    if weights_cfg.get('strategy') not in ['tensor', 'channel']:
+        raise ValueError(
+            f"{prefix}{quant_data_comb} only support weight quant strategy "
+            f"tensor or channel"
+        )
+    if inputs_cfg.get('strategy') != 'tensor':
+        raise ValueError(
+            f"{prefix}{quant_data_comb} only support activation quant strategy tensor"
+        )
+
+
+def _resolve_layer_quant_type_comb(layer_quant_cfg, global_comb):
+    """
+    Resolve the act/wts dtype combination that applies to a single layer.
+
+    Fuzzy patterns such as '*down_proj.weights' may override the weight or the
+    activation dtype per layer, so the combination driving layer level checks
+    has to come from the resolved layer config instead of the global one.
+    Params:
+    layer_quant_cfg: dict or None, merged quant config of one layer
+    global_comb: str or None, combination computed from the global config
+    Return: str or None, combination of the layer, falls back to global_comb
+    """
+    if not layer_quant_cfg:
+        return global_comb
+    weights_cfg = layer_quant_cfg.get('weights_cfg')
+    if not weights_cfg or weights_cfg.get('quant_type') is None:
+        return global_comb
+    inputs_cfg = layer_quant_cfg.get('inputs_cfg') or {}
+    act_type = inputs_cfg.get('quant_type') or "NOT_QUANTIZE"
+    return '{} {}'.format(act_type, weights_cfg.get('quant_type'))
+
+
+def check_layer_config(quant_data_comb, layer_quant_cfg, algo, layer_name=None):
+    """
+    Check whether the resolved config of a single layer is valid.
+
+    Mirrors check_config() for per layer values, so that a fuzzy override which
+    changes the dtype or the granularity fails fast during quantize() instead of
+    being validated against the global config only.
+    Params:
+    quant_data_comb: quantize data type combination str of the layer
+    layer_quant_cfg: dict or None, merged quant config of one layer
+    algo: quantization algorithm
+    layer_name: str or None, name of the layer being checked, tells the user
+    which layer (and thus which fuzzy pattern) produced the error
+    """
+    if quant_data_comb is None or algo not in BUILT_IN_ALGORITHM:
+        return
+    # Layer level checks run per layer, so several fuzzy patterns of one model
+    # can raise the same error. Naming the layer tells which pattern is wrong;
+    # the prefix is empty when the caller has no layer name.
+    prefix = f"layer:{layer_name} " if layer_name else ''
+    if quant_data_comb not in ALGORITHM_SUPPORTED_QUANT_TYPE_COMB.keys():
+        raise ValueError(
+            f"{prefix}Do not support combination {quant_data_comb} of act and "
+            f"weight quant dtype."
+        )
+    if algo not in ALGORITHM_SUPPORTED_QUANT_TYPE_COMB[quant_data_comb]:
+        raise ValueError(
+            f"{prefix}Algorithm {algo} do not support act and weight quant dtype "
+            f"{quant_data_comb}"
+        )
+
+    layer_quant_cfg = layer_quant_cfg or {}
+    weights_cfg = layer_quant_cfg.get('weights_cfg') or {}
+    inputs_cfg = layer_quant_cfg.get('inputs_cfg') or {}
+    _check_layer_quant_dtype_comb_rules(
+        quant_data_comb, weights_cfg, inputs_cfg, prefix
+    )
+
+    weight_strategy = weights_cfg.get('strategy')
+    if quant_data_comb not in (WTS_GRANULARITY_SUPPORT_MAP.get(weight_strategy) or []):
+        raise ValueError(
+            f"{prefix}act_dtype and wts_dtype {quant_data_comb} do not support "
+            f"weight quant strategy {weight_strategy}"
+        )
+
+    act_dtype = inputs_cfg.get('quant_type')
+    if act_dtype is not None:
+        act_strategy = inputs_cfg.get('strategy')
+        if act_dtype not in ["mxfp8_e4m3fn"] and quant_data_comb not in (
+            ACT_GRANULARITY_SUPPORT_MAP.get(act_strategy) or []
+        ):
+            raise ValueError(
+                f"{prefix}act_dtype and wts_dtype {quant_data_comb} do not support "
+                f"activation quant strategy {act_strategy}"
+            )
+        if act_dtype in ['mxfp8_e4m3fn'] and act_strategy != 'group':
+            raise ValueError(
+                f"{prefix}act_dtype and wts_dtype {quant_data_comb} only support "
+                f"activation quant strategy group"
+            )
+
+    group_size = weights_cfg.get('group_size')
+    if group_size is not None and (group_size < 32 or group_size % 32 != 0):
+        raise ValueError(
+            f"{prefix}act_type and wts_type {quant_data_comb} only support group_size "
+            f"larger than 32 and integer multiple of 32, current is {group_size}"
+        )
+
+
 def _check_quant_dtype_comb_rules(quant_data_comb, quant_config):
     """
     Check combination-specific constraints that should fail during config parsing.
@@ -180,13 +301,35 @@ def _check_fuzzy_config_warnings(all_layer_names, quant_config):
             )
 
 
-def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
+def _resolve_layer_group_size(layer_quant_cfg, quant_config):
+    """
+    Resolve the weight group_size which is effective for one layer.
+
+    A fuzzy override replaces the whole weights config of the matched layers, so
+    the global group_size must not be reused when the layer resolved its own
+    weights config.
+    Params:
+    layer_quant_cfg: dict or None, merged quant config of one layer
+    quant_config: QuantConfig, global quant parameters
+    Return: int or None, group_size of the layer, falls back to the global one
+    """
+    if layer_quant_cfg:
+        weights_cfg = layer_quant_cfg.get('weights_cfg') or {}
+        return weights_cfg.get('group_size')
+    weights_cfg = getattr(getattr(quant_config, 'quant_cfg', None), 'weights_cfg', None)
+    return getattr(weights_cfg, 'group_size', None)
+
+
+def check_quant_op_constraint(
+    mod, layer_name, quant_data_comb, quant_config, layer_quant_cfg=None
+):
     """
     Check whether the current layer fits requirements of deploy op
     Params:
     layer_name: string, Specifies whether to skip the quantized layer name
     quant_data_comb: quantize data type combination str
     quant_config: quant parameters
+    layer_quant_cfg: dict or None, merged quant config of the current layer
     Return: bool, Indicates whether the current layer is supported to quantization
     """
     mod_type = type(mod).__name__
@@ -222,7 +365,7 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
     # npu op check cin length be integer multiple of 64
     support_quant_dtype_comb = ['float8_e4m3fn float4_e2m1']
     if quant_data_comb in support_quant_dtype_comb and mod.weight.shape[1] % 64 != 0:
-        LOGGER.logd(
+        LOGGER.logw(
             "layer:{} cannot be quantized, act_dtype and wts dtype {} has a shape requirement: "
             "the cin length should be an integer multiple of 64".format(
                 layer_name, quant_data_comb
@@ -231,7 +374,7 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
         return False
     # npu op check no bias
     if quant_data_comb in support_quant_dtype_comb and mod.bias is not None:
-        LOGGER.logd(
+        LOGGER.logw(
             "layer:{} cannot be quantized, act_dtype and wts dtype {} has a shape requirement: "
             "bias is not supported".format(layer_name, quant_data_comb)
         )
@@ -242,7 +385,7 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
         quant_data_comb == "mxfp8_e4m3fn mxfp8_e4m3fn"
         and ((mod.weight.shape[1] + 31) // 32) % 2 != 0
     ):
-        LOGGER.logd(
+        LOGGER.logw(
             "layer:{} cannot be quantized, act_dtype and wts dtype {} has a shape requirement: "
             "ceildiv(cin, 32) must be an even number".format(
                 layer_name, quant_data_comb
@@ -253,7 +396,7 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
     # npu op check cin length be integer multiple of 32b
     if quant_data_comb in ['NOT_QUANTIZE mxfp4_e2m1', 'NOT_QUANTIZE float4_e2m1']:
         if mod.weight.shape[1] % 64 != 0 or mod.weight.shape[0] % 64 != 0:
-            LOGGER.logd(
+            LOGGER.logw(
                 "layer:{} cannot be quantized, act_dtype and wts dtype {} has shape requirement "
                 "cin and cout length should be integer multiple of 64".format(
                     layer_name, quant_data_comb
@@ -263,7 +406,7 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
 
     if quant_data_comb in ['NOT_QUANTIZE int4', 'int8 int4']:
         if mod.weight.shape[0] % 8 != 0 or mod.weight.shape[1] % 8 != 0:
-            LOGGER.logd(
+            LOGGER.logw(
                 "layer:{} cannot be quantized, act_dtype and wts dtype {} has a shape requirement:"
                 " cin and cout lengths should be integer multiples of 8".format(
                     layer_name, quant_data_comb
@@ -271,14 +414,14 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
             )
             return False
 
-    group_size = quant_config.quant_cfg.weights_cfg.group_size
+    group_size = _resolve_layer_group_size(layer_quant_cfg, quant_config)
     if group_size is None:
         return True
 
     if group_size >= mod.weight.shape[1]:
-        LOGGER.logd(
-            f"Group size should be less than cout. Current group_size is {group_size}, "
-            f"cout is {mod.weight.shape[1]}. Skip quantization of current layer {layer_name}."
+        LOGGER.logw(
+            f"Group size should be less than cin. Current group_size is {group_size}, "
+            f"cin is {mod.weight.shape[1]}. Skip quantization of current layer {layer_name}."
         )
         return False
     return True
@@ -355,7 +498,9 @@ def _is_layer_supported(mod, name, layer_types, quant_type_comb, quant_config):
     return True
 
 
-def _check_layer_constraints(mod, name, algo, quant_type_comb, quant_config):
+def _check_layer_constraints(
+    mod, name, algo, quant_type_comb, quant_config, layer_quant_cfg=None
+):
     '''Check layer constraints for built-in algorithms'''
     if algo not in BUILT_IN_ALGORITHM:
         return True
@@ -364,7 +509,7 @@ def _check_layer_constraints(mod, name, algo, quant_type_comb, quant_config):
         and hasattr(mod, "weight")
         and mod.weight.dtype not in ALLOWED_WEIGHT_DTYPES.get(quant_type_comb)
     ):
-        LOGGER.logd(
+        LOGGER.logw(
             "Layer {} cannot be quantized. The act_dtype and wts dtype combination {} only supports "
             "original dtypes {}, but the weight dtype is {}.".format(
                 name,
@@ -375,7 +520,7 @@ def _check_layer_constraints(mod, name, algo, quant_type_comb, quant_config):
         )
         return False
     if quant_type_comb is not None and not check_quant_op_constraint(
-        mod, name, quant_type_comb, quant_config
+        mod, name, quant_type_comb, quant_config, layer_quant_cfg
     ):
         return False
     return True
@@ -403,11 +548,25 @@ def get_supported_layers(model, quant_config, registed_alg):
             continue
 
         algo = layer_types[type(mod).__name__]
-        if not _check_layer_constraints(mod, name, algo, quant_type_comb, quant_config):
-            continue
-
         layer_quant_cfg = quant_config.get_layer_config(name)
         if layer_quant_cfg is None:
+            continue
+
+        # A fuzzy override may change the dtype or the granularity of this layer,
+        # so every layer level check has to run on the resolved layer config.
+        layer_quant_type_comb = _resolve_layer_quant_type_comb(
+            layer_quant_cfg, quant_type_comb
+        )
+        check_layer_config(layer_quant_type_comb, layer_quant_cfg, algo, name)
+
+        if not _check_layer_constraints(
+            mod,
+            name,
+            algo,
+            layer_quant_type_comb,
+            quant_config,
+            layer_quant_cfg,
+        ):
             continue
 
         detail_config_algo = {

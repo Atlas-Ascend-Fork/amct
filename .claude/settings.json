@@ -45,7 +45,8 @@
       "Skill(algorithm-validation)",
       "Skill(deploy-export)",
       "Skill(quant-run)",
-      "Skill(amct-ops-dev)"
+      "Skill(amct-ops-dev)",
+      "Skill(amct-coder)"
     ],
     "deny": [],
     "ask": [

@@ -48,16 +48,26 @@ def _channel_saliency(acts: torch.Tensor, n_channels: int) -> torch.Tensor:
     return a.pow(2).mean(dim=(0, 2)).sqrt()
 
 
+def _conv_input_and_padding(consumer: nn.Conv2d, inputs: torch.Tensor):
+    """Mirror Conv2d's explicit padding before Host reconstruction expressions."""
+    if consumer.padding_mode != "zeros" or isinstance(consumer.padding, str):
+        mode = "constant" if consumer.padding_mode == "zeros" else consumer.padding_mode
+        inputs = F.pad(inputs, consumer._reversed_padding_repeated_twice, mode=mode)
+        return inputs, 0
+    return inputs, consumer.padding
+
+
 @torch.no_grad()
 def _reconstruct_conv_consumer(
     consumer: nn.Conv2d, x_keep: torch.Tensor, y: torch.Tensor, ridge: float
 ):
     """Reconstruct conv consumer weights on the kept input channels via im2col least squares."""
     k = consumer.kernel_size
+    inputs, padding = _conv_input_and_padding(consumer, x_keep.float())
     cols = F.unfold(
-        x_keep.float(),
+        inputs,
         kernel_size=k,
-        padding=consumer.padding,
+        padding=padding,
         stride=consumer.stride,
         dilation=consumer.dilation,
     )
@@ -81,12 +91,13 @@ def _conv_bias_fold_delta(consumer, x_full, keep, total):
     keep_mask[torch.as_tensor(keep)] = True
     xp = x_full.float().clone()
     xp[:, keep_mask] = 0.0
+    inputs, padding = _conv_input_and_padding(consumer, xp)
     y_pruned = nn.functional.conv2d(
-        xp,
+        inputs,
         consumer.weight.detach().float(),
         None,
         stride=consumer.stride,
-        padding=consumer.padding,
+        padding=padding,
         dilation=consumer.dilation,
     )
     return y_pruned.mean(dim=(0, 2, 3))
@@ -199,8 +210,8 @@ def _register_consumer_hooks(model, conv_targets):
         caches[id(t)] = {"x": [], "y": []}
 
         def hook(mod, inp, out, key=id(t)):
-            caches[key]["x"].append(inp[0].detach())
-            caches[key]["y"].append(out.detach())
+            caches[key]["x"].append(inp[0].detach().clone())
+            caches[key]["y"].append(out.detach().clone())
 
         handles.append(mod.register_forward_hook(hook))
     return caches, handles

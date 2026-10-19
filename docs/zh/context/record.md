@@ -4,7 +4,7 @@ record文件，为基于protobuf协议的序列化数据结构文件，记录量
 
 ## record原型定义<a name="section851092965013"></a>
 
-record文件对应的protobuf原型定义为（或查看_AMCT安装目录_/amct\_pytorch/proto/scale\_offset\_record\_pytorch.proto文件）：
+record文件对应的protobuf原型定义为（或查看AMCT安装目录/amct\_pytorch/proto/scale\_offset\_record\_pytorch.proto文件）：
 
 ```
 syntax = "proto2";
@@ -17,10 +17,15 @@ message SingleLayerRecord {
     repeated int32 offset_w = 4;
     repeated uint32 shift_bit = 5;
     repeated float tensor_balance_factor = 6;
-    optional bool skip_fusion = 9 [default = true];
+    optional bool skip_fusion = 9 [default = false];
     optional string dst_type = 10 [default = 'INT8'];
     optional string act_type = 11 [default = 'INT8'];
     optional string wts_type = 12 [default = 'INT8'];
+    optional string fakequant_precision_mode = 13 [default = 'DEFAULT'];
+    optional float scale_h = 21;
+    optional int32 offset_h = 22;
+    repeated float scale_r = 23;
+    repeated int32 offset_r = 24;
 }
 
 message SingleLayerKVCacheRecord {
@@ -59,15 +64,14 @@ message PruneNode {
 </th>
 <th class="cellrowborder" valign="top" width="7.3992600739926%" id="mcps1.1.6.1.2"><p id="zh-cn_topic_0254211904_p194851125105014"><a name="zh-cn_topic_0254211904_p194851125105014"></a><a name="zh-cn_topic_0254211904_p194851125105014"></a>是否必填</p>
 </th>
-<th class="cellrowborder" valign="top" width="11.42885711428857%" id="mcps1.1.6.1.3"><p id="zh-cn_topic_0254211904_p466892519514"><a name="zh-cn_topic_0254211904_p466892519514"></a><a name="zh-cn_topic_0254211904_p466892519514"></a>类型</p>
-</th>
+<th class="cellrowborder" valign="top" width="11.42885711428857%" id="mcps1.1.6.1.3"><p id="zh-cn_topic_0254211904_p466892519514"><a name="zh-cn_topic_0254211904_p466892519514"></a><a name="zh-cn_topic_0254211904_p466892519514"></a>类型</p></th>
 <th class="cellrowborder" valign="top" width="12.968703129687032%" id="mcps1.1.6.1.4"><p id="zh-cn_topic_0254211904_zh-cn_topic_0240188735_p499481531910"><a name="zh-cn_topic_0254211904_zh-cn_topic_0240188735_p499481531910"></a><a name="zh-cn_topic_0254211904_zh-cn_topic_0240188735_p499481531910"></a>字段</p>
 </th>
 <th class="cellrowborder" valign="top" width="51.32486751324868%" id="mcps1.1.6.1.5"><p id="zh-cn_topic_0254211904_zh-cn_topic_0240188735_p122551335563"><a name="zh-cn_topic_0254211904_zh-cn_topic_0240188735_p122551335563"></a><a name="zh-cn_topic_0254211904_zh-cn_topic_0240188735_p122551335563"></a>说明</p>
 </th>
 </tr>
 </thead>
-<tbody><tr id="zh-cn_topic_0254211904_row173077381744"><td class="cellrowborder" rowspan="11" valign="top" width="16.878312168783122%" headers="mcps1.1.6.1.1 "><p id="zh-cn_topic_0254211904_p1574404011413"><a name="zh-cn_topic_0254211904_p1574404011413"></a><a name="zh-cn_topic_0254211904_p1574404011413"></a>SingleLayerRecord</p>
+<tbody><tr id="zh-cn_topic_0254211904_row173077381744"><td class="cellrowborder" rowspan="16" valign="top" width="16.878312168783122%" headers="mcps1.1.6.1.1 "><p id="zh-cn_topic_0254211904_p1574404011413"><a name="zh-cn_topic_0254211904_p1574404011413"></a><a name="zh-cn_topic_0254211904_p1574404011413"></a>SingleLayerRecord</p>
 <p id="p12702171315511"><a name="p12702171315511"></a><a name="p12702171315511"></a></p>
 <p id="p20534911145111"><a name="p20534911145111"></a><a name="p20534911145111"></a></p>
 </td>
@@ -169,6 +173,52 @@ message PruneNode {
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="p631761122611"><a name="p631761122611"></a><a name="p631761122611"></a>权重量化位宽。</p>
 <p id="p10450313192011"><a name="p10450313192011"></a><a name="p10450313192011"></a>当前INT6、INT7量化后的量化因子仍保存为INT8类型。</p>
+</td>
+</tr>
+<tr id="row2601110001"><td class="cellrowborder" valign="top" headers="mcps1.1.6.1.1 "><p id="p2601110002"><a name="p2601110002"></a><a name="p2601110002"></a>optional</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.2 "><p id="p2601110003"><a name="p2601110003"></a><a name="p2601110003"></a>string</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.3 "><p id="p2601110004"><a name="p2601110004"></a><a name="p2601110004"></a>fakequant_precision_mode</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="p2601110005"><a name="p2601110005"></a><a name="p2601110005"></a>fakequant阶段scale的落盘精度模式。开启后把scale的数值精度压到float16（存储类型仍是 float32），用于对齐AI处理器硬件上scale以fp16生效的场景。<br>- DEFAULT：scale保持float32精度<br>
+- FORCE_FP16_QUANT：scale转float16精度</p>
+</td>
+</tr>
+<tr id="row2601120001"><td class="cellrowborder" valign="top" headers="mcps1.1.6.1.1 "><p id="p2601120002"><a name="p2601120002"></a><a name="p2601120002"></a>optional</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.2 "><p id="p2601120003"><a name="p2601120003"></a><a name="p2601120003"></a>float</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.3 "><p id="p2601120004"><a name="p2601120004"></a><a name="p2601120004"></a>scale_h</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="p2601120005"><a name="p2601120005"></a><a name="p2601120005"></a>激活量化因子，与scale_d配对使用。<br>当前版本不支持该字段。</p>
+</td>
+</tr>
+<tr id="row2601130001"><td class="cellrowborder" valign="top" headers="mcps1.1.6.1.1 "><p id="p2601130002"><a name="p2601130002"></a><a name="p2601130002"></a>optional</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.2 "><p id="p2601130003"><a name="p2601130003"></a><a name="p2601130003"></a>int32</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.3 "><p id="p2601130004"><a name="p2601130004"></a><a name="p2601130004"></a>offset_h</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="p2601130005"><a name="p2601130005"></a><a name="p2601130005"></a>激活量化因子，与offset_d配对使用。<br>当前版本不支持该字段。</p>
+</td>
+</tr>
+<tr id="row2601140001"><td class="cellrowborder" valign="top" headers="mcps1.1.6.1.1 "><p id="p2601140002"><a name="p2601140002"></a><a name="p2601140002"></a>repeated</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.2 "><p id="p2601140003"><a name="p2601140003"></a><a name="p2601140003"></a>float</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.3 "><p id="p2601140004"><a name="p2601140004"></a><a name="p2601140004"></a>scale_r</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="p2601140005"><a name="p2601140005"></a><a name="p2601140005"></a>权重量化因子，与scale_w配对使用。<br>当前版本不支持该字段。</p>
+</td>
+</tr>
+<tr id="row2601150001"><td class="cellrowborder" valign="top" headers="mcps1.1.6.1.1 "><p id="p2601150002"><a name="p2601150002"></a><a name="p2601150002"></a>repeated</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.2 "><p id="p2601150003"><a name="p2601150003"></a><a name="p2601150003"></a>int32</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.3 "><p id="p2601150004"><a name="p2601150004"></a><a name="p2601150004"></a>offset_r</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="p2601150005"><a name="p2601150005"></a><a name="p2601150005"></a>权重量化因子，与offset_w配对使用。<br>当前版本不支持该字段。</p>
 </td>
 </tr>
 <tr id="row11121216131510"><td class="cellrowborder" rowspan="3" valign="top" width="16.878312168783122%" headers="mcps1.1.6.1.1 "><p id="p2011231691515"><a name="p2011231691515"></a><a name="p2011231691515"></a>SingleLayerKVCacheRecord</p>
@@ -458,4 +508,3 @@ message PruneNode {
       }
     }
     ```
-

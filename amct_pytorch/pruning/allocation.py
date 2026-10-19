@@ -33,6 +33,7 @@ from .accuracy_based_auto_prune import (
 from .calib import calib_nll
 from .compat import detect_backend
 from .config import PruneConfig
+from .context import BatchAdapter
 from .pruner import AutoPruner
 from .report import PruneReport
 from .utils import count_parameters
@@ -130,6 +131,7 @@ def measure_layer_sensitivity(
     config: Optional[PruneConfig] = None,
     ref_ratio: float = 0.5,
     skip_layers: Optional[Sequence[str]] = None,
+    batch_adapter: Optional[BatchAdapter] = None,
 ) -> "dict[str, float]":
     """Prune each layer alone at ref_ratio, measure top-1 fidelity drop -> {layer prefix: drop}."""
     batches = list(data)
@@ -146,12 +148,14 @@ def measure_layer_sensitivity(
         base_cfg["skip_layers"] = list(base_cfg.get("skip_layers") or []) + list(
             skip_layers
         )
-    fid = _make_fidelity_quality(model, batches, None)
+    fid = _make_fidelity_quality(model, batches, batch_adapter)
     sens: dict = {}
     for key in keys:
         cand = copy.deepcopy(model)
         try:
-            _prune_single_layer(cand, base_cfg, keys, key, ref_ratio, batches, None)
+            _prune_single_layer(
+                cand, base_cfg, keys, key, ref_ratio, batches, batch_adapter
+            )
             sens[key] = 1.0 - float(fid(cand))
         except (
             RuntimeError,
@@ -239,8 +243,8 @@ def _guard_pick(model, base_cfg, keys, ratios, cut, batches, batch_adapter):
         copy.deepcopy(model), base_cfg, keys, [cut] * len(keys), batches, batch_adapter
     )
     try:
-        nll_sens = calib_nll(cand_sens, batches)
-        nll_uni = calib_nll(cand_uni, batches)
+        nll_sens = calib_nll(cand_sens, batches, batch_adapter=batch_adapter)
+        nll_uni = calib_nll(cand_uni, batches, batch_adapter=batch_adapter)
     except (ValueError, AttributeError, TypeError) as exc:
         LOGGER.logw(
             f"[allocation] calib NLL guard unavailable ({type(exc).__name__}); "
@@ -312,6 +316,7 @@ def prune_with_allocation(
         config,
         float(alloc.get("ref_ratio", cut)),
         config.skip_layers,
+        batch_adapter=batch_adapter,
     )
     ratios = water_fill_ratios(
         sens,

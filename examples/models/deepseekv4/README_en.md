@@ -38,7 +38,7 @@ QUANT_TARGET=moe bash scripts/extract_ptq_data.sh
 
 `--nsamples` is bounded by disk budget: the capture hooks persist the outputs of `attn_norm` / `ffn_norm`, and `Block.forward` first collapses the Hyper-Connection `hc` dimension (`hc_mult=4`) into `[b, s, d]` through `hc_pre`, after which RMSNorm casts back to bf16 via `.to(dtype)`. The saved tensors are therefore 3D bf16 — roughly 32 MiB per sample per layer (`seq_len 4096 × hidden 4096 × 2 B`); `nsamples=128` would need ~172 GiB per target, so this example uses 16 (16 samples × 43 layers ≈ 21.5 GiB).
 
-> **Step 3 must reuse the very same `NSAMPLES` value** (the scripts default to 16 consistently): the PTQ cosine LR scheduler sizes its period as `T_max = epochs × (nsamples // cali_bsz)`, while the real number of optimization steps is determined by the samples extracted here. If step 3 falls back to the CLI default `nsamples=128`, the period becomes 8× the real step count, so training ends with the learning rate still at ~96% of `base_lr` and the `lwc/lac` clip factors barely anneal.
+> **Step 3 must reuse the very same `NSAMPLES` value** (the scripts default to 16 consistently): the PTQ cosine LR scheduler sizes its period as `T_max = epochs × ((nsamples + cali_bsz - 1) // cali_bsz)`, while the real number of optimization steps is determined by the samples extracted here. If step 3 falls back to the CLI default `nsamples=128`, the period becomes 8× the real step count, so training ends with the learning rate still at ~96% of `base_lr` and the `lwc/lac` clip factors barely anneal.
 
 ### Step 3: PTQ training
 

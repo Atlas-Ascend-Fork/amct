@@ -98,7 +98,7 @@ def _slice_expert_dim(module: nn.Module, keep: torch.Tensor, orig_n: int) -> Non
             setattr(module, name, nn.Parameter(sliced, requires_grad=p.requires_grad))
     for name, b in list(module.named_buffers(recurse=False)):
         if b is not None and b.dim() >= 1 and b.shape[0] == orig_n:
-            module.register_buffer(name, b.index_select(0, keep.to(b.device)).clone())
+            setattr(module, name, b.index_select(0, keep.to(b.device)).clone())
 
 
 _EXPERT_COUNT_ATTRS = (
@@ -179,7 +179,7 @@ def _slice_router_experts(router: nn.Module, keep: torch.Tensor, orig_n: int) ->
                     "amct_prune",
                 )
                 continue
-            m.register_buffer(name, b.index_select(ax, keep.to(b.device)).clone())
+            setattr(m, name, b.index_select(ax, keep.to(b.device)).clone())
         if isinstance(m, nn.Linear) and m.weight.shape[0] != m.out_features:
             m.out_features = m.weight.shape[0]
 

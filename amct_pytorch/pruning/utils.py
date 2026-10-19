@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import copy
+from collections.abc import Mapping
 from typing import Dict, List, Sequence, Tuple
 
 import torch
@@ -28,33 +29,35 @@ from ..common.utils.model_util import ModuleHelper
 class RunningVariance:
     def __init__(self) -> None:
         self.count: int = 0
-        self.sum: torch.Tensor | None = None
-        self.sum_sq: torch.Tensor | None = None
+        self.mean: torch.Tensor | None = None
+        self.m2: torch.Tensor | None = None
 
     def update(self, values: torch.Tensor) -> None:
         flat = (
             values.detach()
             .reshape(-1, values.shape[-1])
-            .to(dtype=torch.float32, device="cpu")
+            .to(dtype=torch.float64, device="cpu")
         )
         if flat.numel() == 0:
             return
-        current_sum = flat.sum(dim=0)
-        current_sum_sq = (flat * flat).sum(dim=0)
-        if self.sum is None:
-            self.sum = current_sum
-            self.sum_sq = current_sum_sq
+        batch_var, batch_mean = torch.var_mean(flat, dim=0, correction=0)
+        batch_count = int(flat.shape[0])
+        batch_m2 = batch_var * batch_count
+        if self.mean is None:
+            self.mean = batch_mean
+            self.m2 = batch_m2
         else:
-            self.sum += current_sum
-            self.sum_sq += current_sum_sq
-        self.count += int(flat.shape[0])
+            # Merge centered moments without subtracting two large squares.
+            total = self.count + batch_count
+            delta = batch_mean - self.mean
+            self.m2 += batch_m2 + delta.square() * (self.count * batch_count / total)
+            self.mean += delta * (batch_count / total)
+        self.count += batch_count
 
     def variance(self) -> torch.Tensor:
-        if self.count == 0 or self.sum is None or self.sum_sq is None:
+        if self.count == 0 or self.mean is None or self.m2 is None:
             raise RuntimeError("RunningVariance has no samples.")
-        mean = self.sum / float(self.count)
-        var = self.sum_sq / float(self.count) - mean * mean
-        return torch.clamp(var, min=0.0)
+        return torch.clamp(self.m2 / self.count, min=0.0)
 
 
 def clone_model_if_needed(model: nn.Module, copy_model: bool) -> nn.Module:
@@ -378,6 +381,12 @@ def move_batch_to_device(
     kwargs: Dict[str, object],
     device: torch.device,
 ) -> Tuple[Tuple[object, ...], Dict[str, object]]:
+    """Recursively move Tensor leaves to device without mutating the input.
+
+    Any Mapping is normalized to a plain dict. Tuple/list container kinds
+    are retained, but their subclasses are not preserved.
+    """
+
     def move(value: object) -> object:
         if torch.is_tensor(value):
             return value.to(device)
@@ -385,7 +394,7 @@ def move_batch_to_device(
             return tuple(move(x) for x in value)
         if isinstance(value, list):
             return [move(x) for x in value]
-        if isinstance(value, dict):
+        if isinstance(value, Mapping):
             return {k: move(v) for k, v in value.items()}
         return value
 
@@ -434,5 +443,9 @@ def solve_least_squares(gram: torch.Tensor, rhs: torch.Tensor) -> torch.Tensor:
 
 def ridge_solve(gram: torch.Tensor, rhs: torch.Tensor, ridge: float) -> torch.Tensor:
     """Add a ridge to gram's diagonal (in place) and solve (with CPU fallback)."""
-    gram.diagonal().add_(ridge * gram.diagonal().mean())
+    scale = gram.diagonal().mean()
+    # All-zero activations still need a positive ridge: multiplying by their
+    # zero diagonal mean would leave the system singular.
+    scale = torch.where(scale == 0, torch.ones_like(scale), scale)
+    gram.diagonal().add_(ridge * scale)
     return solve_least_squares(gram, rhs)

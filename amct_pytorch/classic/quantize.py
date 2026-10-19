@@ -21,8 +21,12 @@ from torch import nn
 from amct_pytorch.algorithms import AlgorithmRegistry
 from amct_pytorch.classic.optimizer import (
     InsertQuantizeModulePass,
+    InsertLayerNormQuantPass,
     ModelOptimizer,
     ReplaceNpuQuantModulePass,
+)
+from amct_pytorch.classic.optimizer.apply_scaling_fusion_pass import (
+    ApplyScalingFusionPass,
 )
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.common.config import parse_config, set_default_config
@@ -44,6 +48,7 @@ def quantize(model, config=None):
 
     optimizer = ModelOptimizer()
     optimizer.add_pass(InsertQuantizeModulePass(layer_config))
+    optimizer.add_pass(InsertLayerNormQuantPass())
     optimizer.do_optimizer(model)
 
 
@@ -55,6 +60,7 @@ def convert(model):
     Return: None
     """
     optimizer = ModelOptimizer()
+    optimizer.add_pass(ApplyScalingFusionPass())
     optimizer.add_pass(ReplaceNpuQuantModulePass())
     optimizer.do_optimizer(model)
 
