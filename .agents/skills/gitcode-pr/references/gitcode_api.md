@@ -26,9 +26,24 @@
 指向同一套 v5 接口（同一 token 下 GET 返回同一份 JSON；对不存在仓库 POST 也返回同样的
 `400 head或base不能为空`），两者都可用，但**不要在同一份脚本里混用**，便于排查与替换。
 
-**认证方式（实测均可用，返回 200）**：`?access_token=` query 参数、`Authorization: Bearer <token>`
+**认证方式（三种实测均可用）**：`?access_token=` query 参数、`Authorization: Bearer <token>`
 请求头、`PRIVATE-TOKEN: <token>` 请求头。token 错误或缺失时返回 `401 {"message":"401 Unauthorized"}`
 （不是 403），**且 `curl -s` 的退出码仍是 0**——判成功要看 HTTP 状态码或校验响应里有没有期望的键。
+
+> ⚠️ **`401` 不一定是 token 的问题**：`${owner}`/`${repo}` 未赋值时 URL 会拼成
+> `…/repos///pulls/<n>`，若此时 token 也缺失 / 无效，返回的正是上面那个 `401`，与「路径正确、
+> token 失效」**响应体一字不差**。实测四格（只读的 `GET /pulls/<n>`）：
+>
+> | URL | token | 实测响应 |
+> |---|---|---|
+> | `…/repos///pulls/<n>`（变量为空） | 有效 | `404`，Spring 体：`{"timestamp":…,"status":404,"error":"Not Found","path":"/api/v5/repos///pulls/<n>"}` |
+> | `…/repos///pulls/<n>`（变量为空） | 缺失 / 无效 | `401 {"message":"401 Unauthorized"}` |
+> | 路径正确 | 有效 / **缺失** | `200`（该接口公开可读，无 token 也返回完整 JSON） |
+> | 路径正确 | 无效 | `401 {"message":"401 Unauthorized"}` |
+>
+> 判别：`404` 的 `path` 字段会**原样回显请求路径**，连续斜杠（`repos///pulls`）一眼可见 →
+> 变量没填上；`401` 则两种原因都可能（路径正确时无 token 也能 `200`，故 `401` 必是 token 无效，
+> 或变量为空叠加 token 无效）。**先 `echo "$owner/$repo"` 确认变量非空，再怀疑 token。**
 
 ---
 
@@ -106,33 +121,9 @@ curl -s -H "Authorization: Bearer $GITCODE_API_TOKEN" \
 ```bash
 #!/bin/bash
 
-# 获取当前远程仓库名称
-repo_url=$(git remote get-url origin)
-if [ -z "$repo_url" ]; then
-  echo "错误：无法获取远程仓库 URL" >&2
-  exit 1
-fi
-
-# 提取 owner 和 repo
-# ⚠️ SSH 与 HTTPS 两种 remote 格式都要处理：只用 `.*:` 这套 SSH 模式时，
-#    HTTPS 地址（https://gitcode.com/owner/repo.git）匹配不上，sed 会**原样输出整串 URL**，
-#    owner 和 repo 都变成那条 URL，后续 API 请求直接 404（实测）
-# ⚠️ 尾部 `.git` 是**可选**的：用 `\.git$` 锚定时，`https://gitcode.com/owner/repo`
-#    这种 remote 同样匹配不上、同样退化成整串 URL 而 404（实测本仓 origin 就是无 `.git` 形式），
-#    故先去掉可选后缀，再按「无后缀」模式提取。
-repo_url=${repo_url%.git}
-if [[ $repo_url == git@* ]]; then
-  owner=$(echo "$repo_url" | sed 's|.*:\([^/]*\)/\([^/]*\)$|\1|')
-  repo=$(echo "$repo_url" | sed 's|.*:\([^/]*\)/\([^/]*\)$|\2|')
-else
-  owner=$(echo "$repo_url" | sed 's|.*gitcode\.com/\([^/]*\)/\([^/]*\)$|\1|')
-  repo=$(echo "$repo_url" | sed 's|.*gitcode\.com/\([^/]*\)/\([^/]*\)$|\2|')
-fi
-# ⚠️ sed 替换里必须写 `\1`/`\2`，写成 `\\1` 得到的是**字面量** `\1`（实测）
-if [ -z "$owner" ] || [ "$owner" = "$repo_url" ]; then
-  echo "错误：无法从 $repo_url 解析 owner/repo" >&2
-  exit 1
-fi
+# ${owner}/${repo} 的解析脚本见 SKILL.md「提取仓库 owner/repo 信息」（含 SSH 与 HTTPS 两种
+# remote 格式都要处理、尾部 `.git` 可选、sed 里 `\1` 不能写成 `\\1` 这三条实测坑），此处不重复。
+# 下面假定这两个变量已按该节设好。
 
 # 查询仓库信息
 response=$(curl -s -H "Authorization: Bearer $GITCODE_API_TOKEN" \
@@ -193,50 +184,23 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
 > `reply[]` 内的回复不计入）。因此校验「是否取全」要拿**父评论**条数去比，
 > **不要拿展开后的输出条数去比**（展开后必然偏大，会被误判成「多取了/取重了」）。
 
+⚠️ **可执行的翻页循环全仓只有一份**，在 `SKILL.md` →「获取 PR 讨论列表（包含行内评论）」，
+此处不重抄。评论数可能 > 100，必须从 `page=1` 起翻页取完，终止判据只用响应头 `total_page`
+（实测依据见本节下方「翻页终止以响应头 `total_page` 为准」）。
+
+本节只给**字段投影的全集版**（含 `resolved` / `diff_position`；`SKILL.md` 那份按用途裁掉了
+这两个字段，差异是有意的、不是漏抄）。下面这条**只取第一页**，用于看单页字段形状，
+不要拿它当「取全」的实现：
+
 ```bash
-# 单页（评论数 ≤ 100 时够用）
 curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100" | \
   jq '.[] | {id, discussion_id, comment_type, author: .user.login, resolved, lines: .diff_position, body} as $c
       | $c, (.reply[]? | {id, discussion_id: $c.discussion_id, comment_type: $c.comment_type, author: .user.login, body, reply_to: $c.id})'
-
-# 翻页取完所有评论（评论数可能 > 100，必须循环，否则会漏读）
-# 终止判据只用响应头 total_page，**不要**用「本页条数 < 请求的 per_page」（请求值超过上限会被
-# 服务端静默夹回，判据会第一页就停）——实测依据见本节下方「翻页终止以响应头 total_page 为准」。
-MAX_PAGES=50   # 兜底上界（50 × 100 = 5000 条父评论，远超真实 PR 的评论量），正常永不触发，
-               # 只防服务端分页异常导致空转；撞上界必须 exit 1，不能 break 后以 0 退出
-hdr=$(mktemp) || exit 1
-trap 'rm -f "$hdr"' EXIT   # 嵌进更大脚本时，把这个 rm 合并进已有的 trap，别覆盖它
-page=1
-while :; do
-  [ "$page" -gt "$MAX_PAGES" ] && { echo "ERROR: 翻页超过 ${MAX_PAGES} 页兜底上界，结果不可信" >&2; exit 1; }
-  # -D 把响应头落到文件：curl -s 会丢掉响应头，total_page 就读不到了
-  resp=$(curl -s -D "$hdr" "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100&page=${page}")
-  # 响应头是 CRLF 结尾，必须 tr -d '\r'，否则值带回车、下面的数值比较会失败
-  total_page=$(tr -d '\r' < "$hdr" | awk -F': *' 'tolower($1)=="total_page"{print $2}')
-  # 响应必须是数组：空响应会让数值比较报错、循环行为不可预期，
-  # 错误对象（{"error_code":...}）的 `jq 'length'` 是键数，会被当成「本页 N 条」
-  # 静默提前终止。两者都必须显式报错。
-  if [ "$(echo "$resp" | jq -r 'type' 2>/dev/null)" != "array" ]; then
-    echo "ERROR: 第 ${page} 页评论请求失败或响应非数组，已取结果不完整：$resp" >&2
-    exit 1   # 取不全即失败：空列表 + exit 0 会被调用方误读成「取全了且没有评论」
-  fi
-  # 父评论原样输出，再把 reply[] 展开成同形对象（回复没有 discussion_id/comment_type，从父评论带下来）
-  # 这里的投影是**全集**；SKILL.md 与 commands/review.md 里的同款循环按各自用途裁掉了用不到的
-  # 字段（如 review.md 步骤 1 只比 author，故不带 resolved），差异是有意的、不是漏抄
-  echo "$resp" | jq -c '.[] | {id, discussion_id, comment_type, author: .user.login, resolved, body} as $c | $c, (.reply[]? | {id, discussion_id: $c.discussion_id, comment_type: $c.comment_type, author: .user.login, body, reply_to: $c.id})'
-  # count 数的是**父评论**条数（回复不计入分页，也不计入 total_page/total_count）
-  count=$(echo "$resp" | jq 'length')
-  [ "$count" -eq 0 ] && break   # total_page 缺失时的兜底；越界 page 实测返回空数组+200，不会死循环
-  [ -n "$total_page" ] && [ "$page" -ge "$total_page" ] && break
-  page=$((page + 1))
-done
 ```
 
-> **失败必须显式**：无效 token（`{"message":"401 Unauthorized"}`）、不可解析域名（空响应）
-> 都会走进上面的非数组分支。若那里用 `break`，脚本仍以 `exit 0` 结束、stdout 是空列表，
-> 调用方无法区分「取全了但没有评论」与「取失败了」，据空列表判断「尚未评论过」就会重复发评论。
-> 因此失败分支用 `exit 1`；嵌在更大脚本里不能直接退出时，改置 `incomplete=1` 标志再 `break`，
-> 由调用方检查该标志。调用方无论如何都要检查退出码。
+> **失败必须显式**：无效 token（`{"message":"401 Unauthorized"}`）与不可解析域名（空响应）
+> 都会让响应不是数组，该分支必须 `exit 1`（完整理由与 `incomplete=1` 兜底写法见
+> `commands/review.md` →「六条硬规则」第 3 条）。
 
 > **翻页终止以响应头 `total_page` 为准**（上面的循环就是这么写的）。该接口在响应头返回
 > `total_count`（父评论总数）与 `total_page`（总页数），`total_page = ceil(total_count / 生效页长)`。
@@ -449,74 +413,32 @@ curl -s -o /dev/null -w '%{http_code}\n' -X DELETE \
 > 应在删除前就用 `reply[]` 预检出来并直接失败（见下文批量清理脚本第 2 步），
 > 否则会把 N 次注定失败的 `DELETE` 全发一遍，只留下 N 行看不出根因的 ERROR。
 >
-> **证据边界（别把两类验证混为一谈）**：
-> - **真实 API 实测**（自测探针）：父评论带存活回复时删父 → `405`（响应体见上表）；
->   先删回复（`200`）再删父 → `200`。
-> - **「N 个父评论全部 405、脚本 exit 1、清理一条没完成」的批量场景是本地假 API 模拟得到的**
->   （100 父 + 100 回复、标记只覆盖父评论），不是对真实 API 的批量实测——
->   真实 API 上不会为验证这一点去批量制造/删除上百条评论。
->   由单点实测（父带存活回复删不掉）+ 筛选条件没覆盖回复，可**推得**批量场景必然逐条 `405`。
+> **证据边界**：`405` 与「先删回复再删父 → `200`」是真实 API 单点实测；
+> 「N 个父评论全部 `405`、脚本 `exit 1`、一条没删掉」的批量场景由本地假 API 模拟
+> （100 父 + 100 回复、标记只覆盖父评论）+ 单点实测**推得**，未在真实 API 上批量制造评论验证。
 
 ### 获取评论 ID
 
-```bash
-# 顶层直接是数组；必须显式传 per_page=100 并从 page=1 翻页取完，终止判据用响应头 total_page
-# （分页规则与实测依据见「获取 PR 讨论（包含行内评论）」）——ID 漏了就是漏删。
-# ⚠️ 顶层**不含回复**：自己以「回复」形式发的评论嵌在父评论 reply[] 里，不展开就永远收不到
-#    它的 id，DELETE 时会漏删（实测：回复的 ID 在顶层一个都查不到）。
-MAX_PAGES=50   # 兜底上界（50 × 100 = 5000 条父评论），正常永不触发
-hdr=$(mktemp) || exit 1
-trap 'rm -f "$hdr"' EXIT
-page=1
-while :; do
-  [ "$page" -gt "$MAX_PAGES" ] && { echo "ERROR: 翻页超过 ${MAX_PAGES} 页兜底上界，ID 未取全" >&2; exit 1; }
-  resp=$(curl -s -D "$hdr" "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100&page=${page}")
-  total_page=$(tr -d '\r' < "$hdr" | awk -F': *' 'tolower($1)=="total_page"{print $2}')   # 头是 CRLF，必须 tr -d '\r'
-  # 空响应会让数值比较报错、循环行为不可预期；错误对象的 `jq 'length'`
-  # 是键数，会被当成「本页 N 条」静默提前终止、漏掉后续 ID。两者都必须显式报错。
-  if [ "$(echo "$resp" | jq -r 'type' 2>/dev/null)" != "array" ]; then
-    echo "ERROR: 第 ${page} 页评论请求失败或响应非数组，已取 ID 不完整：$resp" >&2
-    exit 1   # 取不全即失败：ID 列表不完整时继续删会漏删，且 exit 0 会被读成「已清理干净」
-  fi
-  # 父评论 + 其 reply[] 一并输出（回复没有 discussion_id/comment_type，从父评论带下来）
-  echo "$resp" | jq -c '.[] | {id, discussion_id, comment_type, author: .user.login, body} as $c | $c, (.reply[]? | {id, discussion_id: $c.discussion_id, comment_type: $c.comment_type, author: .user.login, body, reply_to: $c.id})'
-  count=$(echo "$resp" | jq 'length')   # count 数的是**父评论**条数（回复不计入分页）
-  [ "$count" -eq 0 ] && break           # total_page 缺失时的兜底
-  [ -n "$total_page" ] && [ "$page" -ge "$total_page" ] && break
-  page=$((page + 1))
-done
-```
+翻页把 ID 取全的循环**不在此重抄**：清理场景直接用下面「批量清理脚本」的第 1 步
+（它已把翻页、`reply[]` 展开、唯一标记筛选、405 预检合在一起）；要另写筛选条件，
+就用 `SKILL.md` →「获取 PR 讨论列表（包含行内评论）」那份循环（分页规则与实测依据见上）。
 
-> 这里的整数 `id` 就是 `DELETE` 要用的评论 ID（发表评论时响应里的 `note_id`）。
-> 该循环失败分支同样必须 `exit 1`（理由见上「失败必须显式」）：ID 没取全就继续删会**漏删**，
-> 而 `break` + `exit 0` 会让调用方把「取失败了」读成「已清理干净」。
-> 同理，**不展开 `reply[]` 也会漏删**：以回复形式留下的评论不在顶层，
-> 只投影顶层字段时它的 `id` 永远收不到——这类漏删还是静默的（脚本 `exit 0`）。
+⚠️ **四条会「少删却 `exit 0`」的坑**（批量清理脚本已逐条落地，改写时别丢）：
 
-⚠️ **展开后还必须调整删除顺序**：上面的投影是「父在前、回复在后」，照这个顺序删只会删掉回复、
-父评论因「还有回复」返回 `405` 而留下（`405` 实测证据见上「证据边界」），
-清理只完成一半且 `curl -s` 退出码仍是 `0`，看起来像成功。
-规则：按 `reply_to` 排序（**非 null 的回复先删**），并逐个校验 HTTP 状态码：
+1. **不能边翻页边删**：删除会让列表前移，被跳过的条目永远删不到。必须**先取全 ID（只读不删）
+   再统一删**；坚持边翻边删就得按 `total_page` **倒序**翻页。
+2. **不能在循环里覆盖同一个变量、循环外再删**：那样只剩最后一页的 ID，评论超过 100 条时
+   前面几页全丢且脚本仍 `exit 0`。必须在循环内**追加**到累积容器（临时文件/变量）。
+3. **`.body` 可能为 `null`**（行内 diff 评论、系统评论）：对 `null` 调 `startswith` 会让 jq
+   **中途报错退出**——崩之前输出的 ID 算数、其后的全丢，外层 `for` 又不检查 jq 退出码，
+   于是拿着残缺名单跑完并 `exit 0`。必须写 `(.body // "")` 并显式判断 jq 退出码。
+4. **排序键只放 `reply_to` 标志 + id，不要掺 `.body`**：`body` 常带换行而 `sort` 按行排序，
+   掺进去会把一条评论拆成多行重排，「回复在前」的顺序读不出来（实测同一批 43 条评论：
+   掺 `body` 输出 475 行，只留标志 + id 输出 43 行）。要看正文另起一条 `jq -c` 命令。
 
-⚠️ **另外两个同样会「少删却 exit 0」的坑**：
-
-1. **不能边翻页边删**。删除会让列表变短、后续条目前移，此时再取「下一页」拿到的已不是
-   原来那批数据，中间被跳过的条目**永远删不到**。必须**先把所有页的 ID 取全（只读不删），
-   再统一删**；若坚持边翻边删，则必须用 `total_page` **倒序**翻页（从最后一页往前删，
-   前面的偏移才不受影响）。
-2. **不能在循环里覆盖同一个变量、循环外再用它删**。`resp=$(...)` 每翻一页都会覆盖上一页，
-   循环结束后只剩**最后一页**——评论超过 100 条时前面几页的 ID 全丢，且脚本仍 `exit 0`。
-   必须在循环内把 ID **追加**到累积容器（临时文件/变量），循环结束后统一删。
-
-此外 `select(.body | startswith(...))` 里的 `.body` **可能为 `null`**（行内 diff 评论、
-系统生成的评论等），对 `null` 调 `startswith` 会让 jq **中途报错退出**：崩之前已输出的 ID
-算数、其后的 ID 全部丢失，而外层 `for` 不检查 jq 退出码，于是拿着残缺名单照常跑完并 `exit 0`。
-必须写成 `(.body // "")`，并对 jq 的退出码显式判断。
-
-⚠️ **排序键只放 `reply_to` 标志 + id，不要掺 `.body`**：`body` 常带换行，而 `sort` 是按行排序的，
-掺进 `body` 会把一条评论拆成多行重排——记录数被撑大、带 id 的行被正文碎片淹没，
-「回复在前」的顺序根本读不出来（实测同一批 43 条评论：掺 `body` 输出 475 行，
-只留标志 + id 输出 43 行）。要看正文另起一条命令用 `jq -c` 输出（一行一个 JSON 对象）。
+⚠️ **展开后还必须调整删除顺序**：投影是「父在前、回复在后」，照这个顺序删只会删掉回复、
+父评论因「还有回复」返回 `405` 而留下，清理只完成一半且 `curl -s` 退出码仍是 `0`。
+规则：按 `reply_to` 排序（**非 null 的回复先删**），并逐个校验 HTTP 状态码。
 
 ### 批量清理脚本（六条不变式全部落在代码里）
 
@@ -670,13 +592,9 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/contents/<文件�
 ## 注意事项
 
 1. **Token 配置**：使用环境变量 `GITCODE_API_TOKEN`
-2. **项目路径**：动态从当前仓库获取 `owner` 和 `repo`，直接拼进
-   `/api/v5/repos/${owner}/${repo}/...`，无需 URL 编码
-3. **认证方式**：`?access_token=<token>`（或 `Authorization: Bearer <token>`）
-4. **API 版本**：只用 v5
-5. **多行选择**：写入用 `start_position`（起始行）+ `position`（结束行），
+2. **多行选择**：写入用 `start_position`（起始行）+ `position`（结束行），
    读取看 `diff_position.start_new_line` / `end_new_line`
-6. **分页**：必须显式传 `per_page=100`、从 `page=1` 起递增翻页取完；⚠️ **终止判据用响应头
+3. **分页**：必须显式传 `per_page=100`、从 `page=1` 起递增翻页取完；⚠️ **终止判据用响应头
    `total_page`**，不要用「本页条数 < 请求的 `per_page`」。上限静默夹回、`total_page` 读头要点、
    越界 `page` 行为与全部实测依据见「获取 PR 讨论（包含行内评论）」
-7. **两种 ID 不要混用**：`discussion_id`（哈希串，用于回复）vs 评论 `id`（整数，用于删除）
+4. **两种 ID 不要混用**：`discussion_id`（哈希串，用于回复）vs 评论 `id`（整数，用于删除）
