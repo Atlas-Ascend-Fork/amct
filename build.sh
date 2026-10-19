@@ -5,7 +5,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -57,7 +57,7 @@ checkopts() {
   OUTPUT_PATH="${BASEPATH}/build_out/"
 
   # Process the options
-  parsed_args=$(getopt -a -o j:hvt -l help,verbose,pkg,torch,experimental,utest,cov,asan,build-type:,cann_3rd_lib_path:,output_path: -- "$@") || {
+  parsed_args=$(getopt -a -o j:hvu -l help,verbose,pkg,torch,experimental,utest,cov,asan,build-type:,cann_3rd_lib_path:,output_path: -- "$@") || {
     usage
     exit 1
   }
@@ -257,6 +257,8 @@ clean_build_out() {
 
 build_package() {
   echo "--------------- build package start ---------------"
+  # 清理 dist/ 避免残留旧构建产物导致重复文件
+  rm -rf "${BASEPATH}/dist"
   bash install_graph.sh --cann_3rd_lib_path=${CANN_3RD_LIB_PATH}
   build || { echo "Build failed."; exit 1; }
   echo "--------------- build package end ---------------"
@@ -264,6 +266,7 @@ build_package() {
 
 build_pytorch_package() {
   echo "--------------- build amct_pytorch package start ---------------"
+  rm -rf "${BASEPATH}/dist"
   build || { echo "Build failed."; exit 1; }
   if [ -d "${OUTPUT_PATH}" ];then
     echo "${OUTPUT_PATH} exist, delete old path"
