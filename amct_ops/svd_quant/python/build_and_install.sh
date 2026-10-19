@@ -19,7 +19,7 @@ BASE_DIR=$(pwd)
 
 rm -rf build dist svd_quant.egg-info
 
-python3 setup.py build bdist_wheel 
+python3 setup.py build bdist_wheel
 
 #cd ${BASE_DIR}/dist
 #pip3 install *.whl --force-reinstall --no-deps
