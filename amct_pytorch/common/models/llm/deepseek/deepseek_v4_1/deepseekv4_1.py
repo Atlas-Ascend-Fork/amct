@@ -174,38 +174,48 @@ class DeepseekV41:
         candidates = set()
         selected = set(selected)
         platform = self._validate_platform(self.args)
+        weight_keys = {key for key in weight_map if key.endswith(".weight")}
+        header_keys = weight_keys | {
+            key.removesuffix(".weight") + ".scale"
+            for key in weight_keys
+            if key.removesuffix(".weight") + ".scale" in weight_map
+        }
+        header_keys_by_file = {}
+        for key in header_keys:
+            header_keys_by_file.setdefault(weight_map[key], set()).add(key)
+        headers = {}
         for filename in sorted(set(weight_map.values())):
             path = resolve_safetensors_path(
                 self.model_path, filename, self.safetensors_files
             )
             with safe_open(str(path), framework="pt", device="cpu") as shard:
-                keys = set(shard.keys())
-                for key in keys:
-                    if not key.endswith(".weight"):
-                        continue
-                    base = key.removesuffix(".weight")
-                    if platform == "A3" and base in selected:
-                        view = shard.get_slice(key)
-                        if len(view.get_shape()) != 2 or any(
-                            size <= 0 for size in view.get_shape()
-                        ):
-                            raise ValueError(
-                                f"Selected A3 module is not a nonempty 2-D weight: {base}"
-                            )
-                        candidates.add(base)
-                        continue
-                    scale_key = base + ".scale"
-                    if scale_key not in keys:
-                        continue
-                    weight = shard.get_slice(key)
-                    scale = shard.get_slice(scale_key)
-                    if self._is_block_fp8(
-                        weight.get_dtype(),
-                        weight.get_shape(),
-                        scale.get_dtype(),
-                        scale.get_shape(),
-                    ):
-                        candidates.add(base)
+                present_keys = set(shard.keys()) & header_keys_by_file.get(
+                    filename, set()
+                )
+                for key in present_keys:
+                    view = shard.get_slice(key)
+                    headers[key] = (view.get_dtype(), view.get_shape())
+        for key in sorted(weight_keys):
+            base = key.removesuffix(".weight")
+            weight_header = headers.get(key)
+            if weight_header is None:
+                continue
+            if platform == "A3" and base in selected:
+                weight_shape = weight_header[1]
+                if len(weight_shape) != 2 or any(size <= 0 for size in weight_shape):
+                    raise ValueError(
+                        f"Selected A3 module is not a nonempty 2-D weight: {base}"
+                    )
+                candidates.add(base)
+                continue
+            scale_header = headers.get(base + ".scale")
+            if scale_header is not None and self._is_block_fp8(
+                weight_header[0],
+                weight_header[1],
+                scale_header[0],
+                scale_header[1],
+            ):
+                candidates.add(base)
         if platform == "A3" and (missing := selected - candidates):
             raise ValueError(
                 f"Selected A3 modules are not nonempty 2-D weights: {sorted(missing)}"
@@ -399,13 +409,30 @@ class DeepseekV41:
             if not name.endswith(".scale"):
                 continue
             base = name.removesuffix(".scale")
-            weight = tensors.get(base + ".weight")
-            if weight is None or base not in quant_layers:
+            weight_name = base + ".weight"
+            weight_file = original_weight_map.get(weight_name)
+            if weight_file is None or base not in quant_layers:
                 continue
-            if (
-                weight.dtype == torch.float8_e4m3fn
-                and scale.dtype == torch.float8_e8m0fnu
-                and self._is_block_fp8("F8_E4M3", weight.shape, "F8_E8M0", scale.shape)
+            if weight_file == source_file:
+                weight = tensors.get(weight_name)
+                if weight is None:
+                    continue
+                weight_dtype = (
+                    "F8_E4M3"
+                    if weight.dtype == torch.float8_e4m3fn
+                    else str(weight.dtype)
+                )
+                weight_shape = tuple(weight.shape)
+            else:
+                weight_path = resolve_safetensors_path(
+                    model_dir, weight_file, self.safetensors_files
+                )
+                with safe_open(str(weight_path), framework="pt", device="cpu") as shard:
+                    weight_view = shard.get_slice(weight_name)
+                    weight_dtype = weight_view.get_dtype()
+                    weight_shape = weight_view.get_shape()
+            if scale.dtype == torch.float8_e8m0fnu and self._is_block_fp8(
+                weight_dtype, weight_shape, "F8_E8M0", scale.shape
             ):
                 tensors[name] = (
                     scale.view(torch.uint8)
