@@ -34,13 +34,21 @@ echo $GITCODE_API_TOKEN
 
 1. 登录 [GitCode](https://gitcode.com)
 2. 点击头像 → 设置 → 访问令牌
-3. 创建新令牌，选择 `read_repository`、`write_repository`、`read_api` 和 `read_user` 权限
-   > ⚠️ **`read_user` 不能省**：`GET /api/v5/user`（取当前 token 对应的账号 login，用于判断
-   > 「本 agent 是否已评论过」与回读校验的作者兜底）要求该 scope，缺了会返回
-   > `403 {"error_code":403,"error_code_name":"FORBIDDEN","error_message":"no scopes:read_user"}`，
-   > 而仓库读写接口（`GET /repos/...`、`POST/DELETE .../comments`）不受影响——即「评论能正常读写、
-   > 只有取 login 这步失败」。端点字段与 401/403 区分见
+3. 创建新令牌，勾上**仓库读写 + PR/评论读写 + 用户信息读取**相关的权限项
+   > ⚠️ **权限项的确切名字以令牌页实际显示的勾选项为准，不要照抄本行**。官方文档**从不枚举** PAT 的
+   > scope 名（`user_center/security_management/user_pat` 只说「如项目、Issue 等」），全站仅 OAuth 2.0
+   > 两页给出**另一套**词汇（`all_user`/`all_pr`/`all_repository`…），而服务端报错串用的又是 GitLab
+   > 风格的 `no scopes:<name>`——三套词汇互不映射。旧写法里的
+   > `read_repository`/`write_repository`/`read_api`/`read_user` **既无文档依据也无运行时证据**，
+   > 只能当「大概长这样」的线索。缺陷清单与复核方法见
+   > [references/gitcode_api.md](references/gitcode_api.md) →「官方文档已知缺陷（先读）」。
+   >
+   > ⚠️ **建好令牌后先自证一次，别等用到时才发现权限不够**：`GET /api/v5/user`（取当前 token 对应的
+   > 账号 login，用于判断「本 agent 是否已评论过」与回读校验的作者兜底）的 scope 前提**官方文档
+   > 不记载**，权限不够时只在运行时暴露，且**只影响这一步**（仓库/评论读写接口仍正常）。探测法
+   > （状态码 + 响应体 + `X-OAuth-Scopes` 响应头一起留住）、失败分支与端点字段见
    > [references/gitcode_api.md](references/gitcode_api.md) →「获取当前用户（token 对应的账号）」；
+   > 失败时**按响应体里的 `no scopes:<name>` 去补权限**（名字以响应体为准，不要背）。
    > 不便加权限时可用 `GITCODE_REVIEW_LOGIN=<自己的 login>` 跳过该请求（见 commands/review.md 步骤 1）。
 4. 复制令牌，建议保存到 `~/.bashrc`：`export GITCODE_API_TOKEN="your_token_here"`
 
@@ -216,7 +224,14 @@ done
 
 ## GitCode API v5 说明
 
-**认证头**：推荐 query 参数 `?access_token=$GITCODE_API_TOKEN`（`PRIVATE-TOKEN` / `Authorization: Bearer` 两种 Header 实测同样可用）；判成功要看 HTTP 状态码或校验响应里有没有期望的键，`curl -s` 的退出码不作数。三种写法、token 错误/缺失的实测响应形态与 `401` 的两种成因见 [references/gitcode_api.md](references/gitcode_api.md) →「认证方式」。
+**认证头**：`?access_token=`、`Authorization: Bearer`、`PRIVATE-TOKEN` 三种写法曾观测到均可用，
+`Authorization: token`（官方流水线页的示范写法）则返回 `401`；**这些是观测样本、不是契约，
+请在自己环境里跑一次自证矩阵确认**。共享环境或 CI 里优先用请求头——query 形式会把长期凭证带进
+shell history / CI 日志 / 服务端 access log。判成功要看 HTTP 状态码或校验响应里有没有期望的键，
+`curl -s` 的退出码不作数（恒为 0）。认证写法自证矩阵、官方文档在认证上的 4 处缺陷
+（`access_token` 标 `required`、被称作「用户授权码」、流水线页示范写法 401、不提请求头形式）、
+token 错误/缺失的响应形态与 `401` 的两种成因见
+[references/gitcode_api.md](references/gitcode_api.md) →「官方文档已知缺陷（先读）」「认证方式」。
 
 #### 解析评论数据
 
@@ -520,8 +535,8 @@ case "$NOTE_ID" in ''|*[!0-9]*) echo "ERROR: NOTE_ID 必须是整数，当前=\"
 #    只会让 `.author == $me` 永远不成立、这条兜底**静默失效**（实测同一份响应：MY_LOGIN 为空
 #    时输出空，取到 login 后命中）。
 # MY_LOGIN 的取法**全仓只此一份**，在 commands/review.md 步骤 1「判断『本 agent 是否已评论过』」，
-# 照抄那段（含 HTTP 状态码/响应体回显、403 no scopes:read_user 与 401 的区分提示、
-# GITCODE_REVIEW_LOGIN 覆盖），此处不重抄。
+# 照抄那段（含 HTTP 状态码 / 响应体 / `X-OAuth-Scopes` 响应头回显、按**实际观测到的状态码**分支的
+# 失败提示、GITCODE_REVIEW_LOGIN 覆盖），此处不重抄。
 # ⚠️ 同样必须 per_page=100 **并翻页**：目标评论在第 20 条之后时不带 per_page 会查不到、
 #    在第 100 条之后时不翻页会查不到，两种都会把「创建成功」误判成「创建失败」。
 #

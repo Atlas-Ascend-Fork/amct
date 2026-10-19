@@ -2,15 +2,50 @@
 
 ## 目录
 
-1. [认证方式](#认证方式)
-2. [获取当前用户（token 对应的账号）](#获取当前用户token-对应的账号)
-3. [获取仓库信息（查询 Fork 来源）](#获取仓库信息查询-fork-来源)
-4. [获取 PR 信息](#获取-pr-信息)
-5. [获取 PR 讨论（包含行内评论）](#获取-pr-讨论包含行内评论)
-6. [提交行内评论（支持多行选择）](#提交行内评论支持多行选择)
-7. [提交普通评论](#提交普通评论)
-8. [删除 PR 评论](#删除-pr-评论)
-9. [获取 PR 文件变更](#获取-pr-文件变更)
+1. [官方文档已知缺陷（先读）](#官方文档已知缺陷先读)
+2. [认证方式](#认证方式)
+3. [获取当前用户（token 对应的账号）](#获取当前用户token-对应的账号)
+4. [获取仓库信息（查询 Fork 来源）](#获取仓库信息查询-fork-来源)
+5. [获取 PR 信息](#获取-pr-信息)
+6. [获取 PR 讨论（包含行内评论）](#获取-pr-讨论包含行内评论)
+7. [提交行内评论（支持多行选择）](#提交行内评论支持多行选择)
+8. [提交普通评论](#提交普通评论)
+9. [删除 PR 评论](#删除-pr-评论)
+10. [获取 PR 文件变更](#获取-pr-文件变更)
+
+---
+
+## 官方文档已知缺陷（先读）
+
+> ⚠️ **本节是诚实声明，不是让你背结论。** 官方文档（docs.gitcode.com）在本 skill 依赖的几个点上
+> **有缺失、滞后和硬错误**，所以「以官方文档为准」在这些问题上无从执行。下面每条都附**复核方法**：
+> 请在**你自己的环境**里跑一遍验证或推翻，**不要照抄本文件的观测值**。
+> 观测日期 2026-10-19，样本 = docs.gitcode.com sitemap 全部 604 页 + docs.atomgit.com 全部 602 页
+> （后者 sitemap 里的 URL 全部指回前者，是同一套内容）。
+
+| # | 缺陷 | 对你的影响 | 复核方法 |
+|---|------|-----------|----------|
+| 1 | **PAT 的 scope 名全站不枚举**：`docs/help/home/user_center/security_management/user_pat` 只说「根据需要选择不同的范围，如项目、Issue 等」；全站仅 OAuth 2.0 两页出现 scope 名，且是**另一套词汇** `all_user all_key all_groups all_projects all_pr all_issue all_note all_hook all_repository` | 建令牌时无从知道该勾哪项，权限不足只能等运行时报错 | 抓 `https://docs.gitcode.com/sitemap.xml` 取全部 URL，逐页抓正文 grep `read_user\|read_api\|read_repository\|write_repository\|all_user`。**务必 gzip 解压并剥掉 `script/style/svg`**：内联 SVG 图标的 path 坐标（如 `0.403`）会让 `\b40[13]\b` 这类正则大面积误报 |
+| 2 | **接口页不写 scope 前提**：`docs/apis/get-api-v-5-user` 通篇无 `scope` / `read_user` / `all_user` 字样 | 只能运行时自证 | 单页抓正文 grep |
+| 3 | **几乎不文档化错误响应**：368 个 API 页中 315 页有 `Responses` 段，其中 **312 页只有 2xx**；正文真出现 4xx/5xx 的仅 5 页（含 1 个索引页清单、1 个 release note） | 照文档写的解析代码没有失败分支 → **静默失败** | 全量抓 API 页，剥标签后 grep `\b(4[0-9]{2}\|5[0-9]{2})\b` |
+| 4 | **`access_token` 被标 `required`（query 参数）**，共 193 页这么标；而 `Authorization: Bearer` / `PRIVATE-TOKEN` 请求头同样可用（实测见「认证方式」） | 照文档做等于把长期凭证放进 URL：进 shell history、CI 日志、服务端 access log、代理日志 | 用你自己的 token 重跑「认证方式」的实测矩阵 |
+| 5 | **`access_token` 被描述成「用户授权码」**，共 278 页；而 OAuth 页里「授权码」是另一个东西（`code`，一次性、需换 token） | 按字面执行会拿 OAuth 的 `code` 当 token → 401 | 对照任一接口页的参数描述与 `docs/apis/oauth` |
+| 6 | **流水线页示范的认证头在本 API 上 401**：`docs/help/home/org_project/pipeline/security-permissions/token-permissions` 给的是 `Authorization: token $ATOMGIT_TOKEN`，且示例域名指向 `atomgit.com` | 照抄示例直接 401 | 见「认证方式」实测矩阵第 4 行 |
+| 7 | **三套权限词汇表并存且无映射**：OAuth 页 `all_*`；流水线页 `project/pr/issue/note/repository/action` × `read/write/none`；服务端报错串用 GitLab 风格 `no scopes:<name>` | 无法从文档推断 PAT 该勾哪项 | 对照三页 + 你自己 token 的 `X-OAuth-Scopes` 响应头 |
+| 8 | **响应 Schema 滞后**（页面自称 `Example (auto)`）：`get-api-v-5-user` 文档 15 字段，实测响应 22 字段，缺 `created_at`/`updated_at`/`description`/`location`/`website`/`external_uid`/`github_account` | 按文档 Schema 做严格解析会丢数据 | 文档页 Schema 段 vs 你自己的 `GET /api/v5/user` 响应 |
+| 9 | **品牌/域名混用**：docs.gitcode.com 页面标题是「AtomGit 帮助文档」，示例打 `atomgit.com` | 干扰判断，易把两个产品的权限模型混为一谈 | 看任一页标题与示例域名 |
+
+### 由此确立的取值原则（本 skill 全篇适用）
+
+1. **官方文档只作线索，不作契约**。文档没写的（scope 前提、错误响应形态）一律按「未知」处理，
+   在运行时探测后再分支。
+2. **本文件里的响应体、状态码、scope 名、字段清单都只是「某次观测样本」**，写出来只为让你认得
+   形状。服务端可能改，你的环境也可能不同（不同 token 的 scope 集就不一样）——**不要背样本，
+   要读你自己那次请求的原始输出**。
+3. **失败时原样上报**：把实际状态码、响应体、`X-OAuth-Scopes` 打给用户，不要拿本文件的样本
+   去套、更不要猜。未知状态码就走「原样上报 + 停止依赖它的判断」。
+4. **需要断言权限时，用服务端回显而不是文档**：`X-OAuth-Scopes` 响应头在所有 v5 端点都返回，
+   是零成本的权威诊断；错误响应体里的 `no scopes:<name>` 则是服务端自己说出的 scope 名。
 
 ---
 
@@ -27,9 +62,29 @@
 指向同一套 v5 接口（同一 token 下 GET 返回同一份 JSON；对不存在仓库 POST 也返回同样的
 `400 head或base不能为空`），两者都可用，但**不要在同一份脚本里混用**，便于排查与替换。
 
-**认证方式（三种实测均可用）**：`?access_token=` query 参数、`Authorization: Bearer <token>`
-请求头、`PRIVATE-TOKEN: <token>` 请求头。token 错误或缺失时返回 `401 {"message":"401 Unauthorized"}`
-（不是 403），**且 `curl -s` 的退出码仍是 0**——判成功要看 HTTP 状态码或校验响应里有没有期望的键。
+**认证方式**：曾观测到 `?access_token=` query 参数、`Authorization: Bearer <token>` 请求头、
+`PRIVATE-TOKEN: <token>` 请求头三种均可用；而**官方流水线页示范的 `Authorization: token <token>`
+返回 `401`**（见「官方文档已知缺陷」#6）。**这三种/四种写法在你的环境里是否同样成立，请自己跑一遍
+下面的矩阵确认**，不要直接采信：
+
+```bash
+# 认证方式自证矩阵：把 4 种写法的真实状态码打出来对比（只读端点，无副作用）
+T="$GITCODE_API_TOKEN"; U="https://api.gitcode.com/api/v5/user"
+printf '%-26s %s\n' "写法" "HTTP"
+printf '%-26s %s\n' "?access_token="   "$(curl -s -o /dev/null -w '%{http_code}' "$U?access_token=$T")"
+printf '%-26s %s\n' "Authorization: Bearer" "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $T" "$U")"
+printf '%-26s %s\n' "PRIVATE-TOKEN"      "$(curl -s -o /dev/null -w '%{http_code}' -H "PRIVATE-TOKEN: $T" "$U")"
+printf '%-26s %s\n' "Authorization: token" "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: token $T" "$U")"
+```
+
+> ⚠️ **官方文档把 `access_token`（query 参数）标为 `required`、且完全不提请求头写法**
+> （见「官方文档已知缺陷」#4）。query 形式会把长期凭证带进 shell history、CI 日志、服务端
+> access log 与代理日志；**共享环境或 CI 里请优先用请求头**。本 skill 下文示例为简洁仍写 query
+> 形式，这是**已知取舍**，不是推荐做法。
+>
+> ⚠️ token 错误或缺失时曾观测到返回 `401 {"message":"401 Unauthorized"}`（不是 `403`），
+> **且 `curl -s` 的退出码仍是 0**——判成功要看 HTTP 状态码或校验响应里有没有期望的键。
+> 该响应体同样是观测样本，你的环境以实测为准。
 
 > ⚠️ **`401` 不一定是 token 的问题**：`${owner}`/`${repo}` 未赋值时 URL 会拼成
 > `…/repos///pulls/<n>`，若此时 token 也缺失 / 无效，返回的正是上面那个 `401`，与「路径正确、
@@ -62,16 +117,34 @@ GET https://api.gitcode.com/api/v5/user
 > ⚠️ **不带路径参数**：`/api/v5/user` 是「当前认证用户」，`/api/v5/users/<login>` 才是按 login 查任意用户。
 > 本 skill 只用前者。
 
-### 请求示例
+### 请求示例：先探测，再取字段
+
+> ⚠️ **不要写成 `curl -s … | jq -r '.login // empty'`**（官方文档只给了 `200` 的 Schema，照它写
+> 就会漏掉失败分支，见「官方文档已知缺陷」#3）：本端点可能返回 `401`/`403`，而 `curl -s` 的退出码
+> 恒为 `0`、jq 对错误体取 `.login` 得空串——「权限不够」「token 失效」「变量没导出」三种故障会
+> 退化成同一个空输出。必须把 **HTTP 状态码、响应体、`X-OAuth-Scopes` 响应头**一起留住，
+> 可执行写法见 `commands/review.md` 步骤 1。
 
 ```bash
-# 三种认证写法实测等价（与「认证方式」一节同口径），此处用 query 参数
-curl -s "https://api.gitcode.com/api/v5/user?access_token=$GITCODE_API_TOKEN" | jq -r '.login // empty'
+# 一次请求同时拿到：响应体 + HTTP 状态码 + 服务端回显的「本 token 实际持有的 scope」
+hdr=$(mktemp) || exit 1
+trap 'rm -f "$hdr"' EXIT   # 嵌进更大脚本时，把这个 rm 合并进已有的 trap，别覆盖它
+resp=$(curl -s -D "$hdr" -w '__HTTP__%{http_code}' \
+  "https://api.gitcode.com/api/v5/user?access_token=$GITCODE_API_TOKEN")
+body=${resp%__HTTP__*}; status=${resp##*__HTTP__}
+# 响应头是 CRLF 结尾，必须 tr -d '\r'
+scopes=$(tr -d '\r' < "$hdr" | awk -F': *' 'tolower($1)=="x-oauth-scopes"{print $2}')
+echo "HTTP $status"; echo "scopes: ${scopes:-<无此响应头>}"; echo "body: $body"
 ```
 
-### 响应字段（`200`，实测）
+> **`X-OAuth-Scopes` 是服务端回显，比任何文档都权威**，且所有 v5 端点都返回它（零成本诊断）。
+> 想知道「我的 token 到底有哪些权限」，看这个头，别去猜令牌页的勾选项叫什么名字。
 
-顶层是**对象**（不是数组）。本 skill 只依赖 `login`，其余字段列出以便扩展：
+### 响应字段（`200`；**一次观测样本，非契约**）
+
+顶层是**对象**（不是数组）。本 skill **只依赖 `login` 这一个字段**——这是唯一需要依赖的字段。
+下表其余条目仅为某次观测的记录：官方文档的 Schema 比实测少 7 个字段
+（见「官方文档已知缺陷」#8），所以**别按文档 Schema 做严格解析**，也别把下表当完整清单。
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -88,33 +161,43 @@ curl -s "https://api.gitcode.com/api/v5/user?access_token=$GITCODE_API_TOKEN" | 
 | `top_languages` | array | 主要语言列表 |
 | `created_at` / `updated_at` | string | 时间戳（`+08:00` 带时区） |
 
-### scope 前提与失败响应（关键）
+### scope 前提与失败分支：**运行时自证，不要背样本**
 
-该端点要求 token 带 **`read_user`** scope；`SKILL.md`「获取访问令牌」的权限清单里必须勾上它。
-三类失败响应**互不相同**，处置方式也不同，所以取 login 时要把 HTTP 状态码与响应体一起留住
-（可执行写法见 `commands/review.md` 步骤 1）：
+**官方文档不记载本端点的任何 scope 前提**（见「官方文档已知缺陷」#1、#2），所以本 skill
+**不断言「必须有某个 scope」**。正确做法是：在**你自己的环境**里跑一次上面的探测，按
+**实际观测到的状态码**分支——下表是「观测到过哪些形状」，不是「服务端承诺的行为」：
 
-| 场景 | HTTP | 响应体（实测/来源见下） | 处置 |
-|------|------|------------------------|------|
-| token 有效且带 `read_user` | `200` | 上面的字段对象 | 正常取 `.login` |
-| token 无效 / 缺失 | `401` | `{"message":"401 Unauthorized"}` | 换有效 token；确认 `GITCODE_API_TOKEN` 已导出 |
-| token 有效但**缺 `read_user`** | `403` | `{"error_code":403,"error_code_name":"FORBIDDEN","error_message":"no scopes:read_user"}` | 给 token 加 `read_user`；或设 `GITCODE_REVIEW_LOGIN=<自己的 login>` 跳过该请求 |
+| 你观测到的 | 含义 | 处置 |
+|------|------|------|
+| `200` 且 `.login` 非空 | 权限够 | 用它 |
+| `403`，响应体含 `no scopes:<name>` | token 缺 `<name>` 权限 | 按**响应体里的 `<name>`** 去令牌页补权限；或设 `GITCODE_REVIEW_LOGIN=<自己的 login>` 跳过该请求 |
+| `401` | token 无效 / 缺失 | 换有效 token；确认 `GITCODE_API_TOKEN` 已导出 |
+| 其它状态码 / 网络失败 / 响应体非预期 | 未知 | **原样把状态码、响应体、`X-OAuth-Scopes` 报给用户**；停止依赖 login 的判断（如「是否已评论过」），别猜、别套本表样本 |
 
-> ⚠️ **`403 no scopes:read_user` 只影响这一步**：同一个 token 请求 `GET /api/v5/repos/<owner>/<repo>`、
+> ⚠️ **`<name>` 以你自己那次请求的响应体为准，不要背名字**：曾观测到的一次取值是 `read_user`
+> （检视人 fujun19 在 PR [cann/amct#455](https://gitcode.com/cann/amct/pull/455) 评论
+> note_id `194579998` 中的实测：其 token 对该仓有读写权限、评论读写正常，但请求本端点三种认证
+> 写法均返回该 `403`）；而另一台机器的 token `X-OAuth-Scopes` 为 `all_user,…`（**不含**
+> `read_user`）时同一请求返回 `200`——说明服务端接受的名字**不止一个、且可能随时间变化**。
+> 拿 `read_user` 去核对令牌页很可能对不上号，拿响应体里的 `<name>` 才对得上。
+>
+> ⚠️ **权限类 `403` 只影响这一步**：曾观测到同一 token 请求 `GET /api/v5/repos/<owner>/<repo>`、
 > `GET /api/v5/repos/<owner>/<repo>/pulls/<n>` 与评论读写接口仍是 `200`，即「评论能正常读写、
-> 只有取 login 失败」。所以别把这条 `403` 误判成 token 整体失效而去换 token。
+> 只有取 login 失败」。所以别把这条 `403` 误判成 token 整体失效而去换 token——**但这条同样要在
+> 你的环境里验一遍**（用同一个 token 打一次仓库读接口即可），不要直接采信。
 >
-> ⚠️ **只 `jq -r '.login // empty'` 会把状态码和响应体全丢掉**：`401`、`403`、网络失败三种情形
-> 都退化成「取不到 login」，读者无法区分是权限不够还是 token 失效。
+> ⚠️ **只 `jq -r '.login // empty'` 会把状态码、响应体、scope 回显全丢掉**：`401`、`403`、
+> 网络失败三种情形都退化成「取不到 login」，无法区分是权限不够还是 token 失效，
+> 下游会带着空 login 继续跑（正是「官方文档已知缺陷」#3 的直接后果）。
 >
-> **证据边界**：`200` 与 `401` 两行为本机实测（token 带 `read_user`；`401` 用无效 token 与空 token
-> 各测一次，响应体一字不差）。`403 no scopes:read_user` 一行来自检视人 fujun19 在 PR
-> [cann/amct#455](https://gitcode.com/cann/amct/pull/455) 评论（note_id `194579998`）中的实测：
-> 其 token 对 `cann/amct` 有读写权限、能正常读写评论，但请求本端点三种认证写法均返回该 `403`。
-> 本机 token 带 `read_user`，**无法复现这条 `403`**，故按「检视人实测」记录，未标为本机实测。
+> **证据边界（诚实声明）**：上表 `200` 与 `401` 两行是本机实测（`401` 用无效 token 与空 token
+> 各测一次，响应体一字不差）；`403` 一行**本机无法复现**（本机 token 的 `X-OAuth-Scopes` 含
+> `all_user`、不含 `read_user`，请求返回 `200`），按「检视人实测」记录。两者都只是**样本**，
+> 不能替代你在自己环境里的探测。
 >
 > **环境变量兜底**：`GITCODE_REVIEW_LOGIN` 非空时直接作为 `MY_LOGIN`，不发这次请求
-> （适用于 token 无法加 scope、或离线/受限环境）。注意此时脚本 `exit 0` 不代表 token 有 `read_user`。
+> （适用于 token 无法加 scope、或离线/受限环境）。注意此时脚本 `exit 0` **不代表** token 权限够，
+> 只代表「这一步被人为跳过了」。
 
 ---
 
