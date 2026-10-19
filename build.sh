@@ -57,7 +57,7 @@ checkopts() {
   OUTPUT_PATH="${BASEPATH}/build_out/"
 
   # Process the options
-  parsed_args=$(getopt -a -o j:hvt -l help,verbose,pkg,torch,experimental,utest,cov,asan,build-type:,cann_3rd_lib_path:,output_path: -- "$@") || {
+  parsed_args=$(getopt -a -o j:hvtu -l help,verbose,pkg,torch,experimental,utest,cov,asan,build-type:,cann_3rd_lib_path:,output_path: -- "$@") || {
     usage
     exit 1
   }
