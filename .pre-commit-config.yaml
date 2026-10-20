@@ -42,7 +42,8 @@ repos:
       - id: ruff-format
         types: [python]
 
-  # 拼写检查（CANN 专用词典白名单见 .codespellrc）
+  # 拼写检查（CANN 专用词典白名单见 pyproject.toml 的 [tool.codespell]，
+  # 注意同名配置项会被 .codespellrc/setup.cfg 覆盖，故统一在 pyproject.toml 维护）
   - repo: https://gitcode.com/gh_mirrors/co/codespell
     rev: v2.4.1
     hooks:
