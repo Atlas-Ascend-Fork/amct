@@ -44,7 +44,7 @@ prune_finetune(model, data, loss_fn=None, steps=200, lr=1e-4, weight_decay=0.0, 
 <td class="cellrowborder" valign="top" width="8.01%" headers="mcps1.1.4.1.2 "><p id="zh-cn_topic_0000002600000401_p104000010009"><a name="zh-cn_topic_0000002600000401_p104000010009"></a><a name="zh-cn_topic_0000002600000401_p104000010009"></a>输入</p>
 </td>
 <td class="cellrowborder" valign="top" width="78.21%" headers="mcps1.1.4.1.3 "><p id="zh-cn_topic_0000002600000401_p104000010010"><a name="zh-cn_topic_0000002600000401_p104000010010"></a><a name="zh-cn_topic_0000002600000401_p104000010010"></a>含义：训练批序列，循环复用直至达到 <code>steps</code> 指定的步数。</p>
-<p id="zh-cn_topic_0000002600000401_p104000010011"><a name="zh-cn_topic_0000002600000401_p104000010011"></a><a name="zh-cn_topic_0000002600000401_p104000010011"></a>数据类型：Sequence[Any]。</p>
+<p id="zh-cn_topic_0000002600000401_p104000010011"><a name="zh-cn_topic_0000002600000401_p104000010011"></a><a name="zh-cn_topic_0000002600000401_p104000010011"></a>数据类型：Sequence[Any]；dict 等 Mapping 视为单个 batch（<code>data=D</code> 与 <code>data=[D]</code> 等价）。</p>
 </td>
 </tr>
 <tr id="zh-cn_topic_0000002600000401_row104000010004"><td class="cellrowborder" valign="top" width="13.78%" headers="mcps1.1.4.1.1 "><p id="zh-cn_topic_0000002600000401_p104000010012"><a name="zh-cn_topic_0000002600000401_p104000010012"></a><a name="zh-cn_topic_0000002600000401_p104000010012"></a>loss_fn</p>

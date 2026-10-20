@@ -54,7 +54,7 @@ prune(model, config=None, data=None, batch_adapter=None, tolerance=None,
 </td>
 <td class="cellrowborder" valign="top" width="8.01%" headers="mcps1.1.4.1.2 "><p id="zh-cn_topic_0000002600000201_p102000010014"><a name="zh-cn_topic_0000002600000201_p102000010014"></a><a name="zh-cn_topic_0000002600000201_p102000010014"></a>输入</p>
 </td>
-<td class="cellrowborder" valign="top" width="78.21%" headers="mcps1.1.4.1.3 "><p id="zh-cn_topic_0000002600000201_p102000010015"><a name="zh-cn_topic_0000002600000201_p102000010015"></a><a name="zh-cn_topic_0000002600000201_p102000010015"></a>含义：校准数据（DataLoader / tensor / dict），方差类方法必需，也作默认评估集。</p>
+<td class="cellrowborder" valign="top" width="78.21%" headers="mcps1.1.4.1.3 "><p id="zh-cn_topic_0000002600000201_p102000010015"><a name="zh-cn_topic_0000002600000201_p102000010015"></a><a name="zh-cn_topic_0000002600000201_p102000010015"></a>含义：校准数据（DataLoader / tensor / dict），方差类方法必需，也作默认评估集。形态约定：dict 等 Mapping 视为<b>单个 batch</b>（如 <code>{"input_ids": ids}</code>，不会被拆成按 key 迭代的多个 batch）；list / tuple / DataLoader / 生成器等可迭代对象视为<b>多个 batch</b>；tensor 按第 0 维切分为多个 batch。因此 <code>data=D</code> 与 <code>data=[D]</code> 等价。</p>
 <p id="zh-cn_topic_0000002600000201_p102000010016"><a name="zh-cn_topic_0000002600000201_p102000010016"></a><a name="zh-cn_topic_0000002600000201_p102000010016"></a>默认值：None。</p>
 <p id="zh-cn_topic_0000002600000201_p102000010017"><a name="zh-cn_topic_0000002600000201_p102000010017"></a><a name="zh-cn_topic_0000002600000201_p102000010017"></a>数据类型：Any。</p>
 </td>
@@ -99,7 +99,7 @@ prune(model, config=None, data=None, batch_adapter=None, tolerance=None,
 </td>
 <td class="cellrowborder" valign="top" width="8.01%" headers="mcps1.1.4.1.2 "><p id="zh-cn_topic_0000002600000201_p102000010039"><a name="zh-cn_topic_0000002600000201_p102000010039"></a><a name="zh-cn_topic_0000002600000201_p102000010039"></a>输入</p>
 </td>
-<td class="cellrowborder" valign="top" width="78.21%" headers="mcps1.1.4.1.3 "><p id="zh-cn_topic_0000002600000201_p102000010040"><a name="zh-cn_topic_0000002600000201_p102000010040"></a><a name="zh-cn_topic_0000002600000201_p102000010040"></a>含义：容差模式下传入自动剪枝的评估数据；默认回退到 data。</p>
+<td class="cellrowborder" valign="top" width="78.21%" headers="mcps1.1.4.1.3 "><p id="zh-cn_topic_0000002600000201_p102000010040"><a name="zh-cn_topic_0000002600000201_p102000010040"></a><a name="zh-cn_topic_0000002600000201_p102000010040"></a>含义：容差模式下传入自动剪枝的评估数据；默认回退到 data。形态约定与 data 一致：Mapping 为单个 batch，list / tuple / DataLoader / 生成器为多个 batch（如 <code>eval_data={"input_ids": ids, "labels": labels}</code> 与 <code>eval_data=[{...}]</code> 等价）。</p>
 <p id="zh-cn_topic_0000002600000201_p102000010041"><a name="zh-cn_topic_0000002600000201_p102000010041"></a><a name="zh-cn_topic_0000002600000201_p102000010041"></a>默认值：None。</p>
 <p id="zh-cn_topic_0000002600000201_p102000010042"><a name="zh-cn_topic_0000002600000201_p102000010042"></a><a name="zh-cn_topic_0000002600000201_p102000010042"></a>数据类型：Any。</p>
 </td>

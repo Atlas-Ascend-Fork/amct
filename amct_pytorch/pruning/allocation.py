@@ -33,7 +33,7 @@ from .accuracy_based_auto_prune import (
 from .calib import calib_nll
 from .compat import detect_backend
 from .config import PruneConfig
-from .context import BatchAdapter
+from .context import BatchAdapter, as_batch_sequence
 from .pruner import AutoPruner
 from .report import PruneReport
 from .utils import count_parameters
@@ -134,7 +134,7 @@ def measure_layer_sensitivity(
     batch_adapter: Optional[BatchAdapter] = None,
 ) -> "dict[str, float]":
     """Prune each layer alone at ref_ratio, measure top-1 fidelity drop -> {layer prefix: drop}."""
-    batches = list(data)
+    batches = list(as_batch_sequence(data))
     if not batches:
         raise ValueError("measure_layer_sensitivity needs calibration data batches.")
     keys = layer_prefixes(model)
@@ -299,7 +299,7 @@ def prune_with_allocation(
             "pass prune(..., data=...)."
         )
     alloc = dict(config.allocation or {})
-    batches = list(data)
+    batches = list(as_batch_sequence(data))
     backend = detect_backend(model)
     params_before = count_parameters(model)
     base_cfg = _base_config_dict(config)

@@ -23,7 +23,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from .context import BatchAdapter
+from .context import BatchAdapter, as_batch_sequence
 from .utils import infer_model_device, move_batch_to_device
 
 LossFn = Callable[[nn.Module, Any], torch.Tensor]
@@ -109,7 +109,7 @@ def prune_finetune(
             "final_loss": None,
             "loss_history": [],
         }
-    batches: List[Any] = list(data)
+    batches: List[Any] = list(as_batch_sequence(data))
     if not batches:
         raise ValueError("finetune needs at least one training batch.")
 

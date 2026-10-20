@@ -24,7 +24,7 @@ from torch import nn
 from ..common.utils.log import LOGGER
 from .calib import _unwrap_logits
 from .config import PruneConfig
-from .context import BatchAdapter
+from .context import BatchAdapter, as_batch_sequence
 from .domains.cnn import CNNPruningDomain
 from .domains.dense import DensePruningDomain
 from .domains.moe import MoEPruningDomain
@@ -111,7 +111,11 @@ def _diag_fixed_ratio(model, base_cfg, prune_ratio, *, data, batch_adapter, note
         reduction = 1.0 - after / before if before else 0.0
         sample = None
         if data is not None:
-            sample = data if torch.is_tensor(data) else next(iter(data), None)
+            sample = (
+                data
+                if torch.is_tensor(data)
+                else next(iter(as_batch_sequence(data)), None)
+            )
         forward_ok = (
             _forward_ok(pruned, sample, batch_adapter) if sample is not None else None
         )
