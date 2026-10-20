@@ -27,19 +27,21 @@ description: 审查 GitCode Pull Request 的代码变更
 
 > ⚠️ **按 `user.login` 比对**。判断方法是拿当前 token 对应的账号 login（`GET /api/v5/user` 的 `.login`）去比评论的 `author`，命中即视为「已评论过」（含回复）。
 >
-> ⚠️ **`GET /api/v5/user` 的 scope 前提官方文档不记载，必须在自己的环境里探测**：该端点的接口文档页
-> 通篇不提 scope（全站也从不枚举 PAT 的 scope 名），且只文档化 `200`。权限不够时运行时才暴露，
-> 曾观测到形如 `403 {"error_code":403,…,"error_message":"no scopes:<name>"}` 的响应
-> （那次的 `<name>` 是 `read_user`；另一台机器 token 带 `all_user`、不含 `read_user` 时同一请求返回
-> `200`，说明服务端接受的名字不止一个）。这与「token 无效/缺失」的 `401 {"message":"401 Unauthorized"}`
-> 是**两种不同的失败**，处置方式也不同（前者按响应体里的 `<name>` 补权限，后者要换有效 token）。
+> ⚠️ **这一步必须「先探测、再取字段」**：`GET /api/v5/user` 的 scope 前提官方文档不记载（该端点
+> 只文档化 `200`），失败形状（`401` / `403 no scopes:<name>` / 超时 `000`）只能在运行时看到。
 > 所以取 login 必须把 **HTTP 状态码、响应体、`X-OAuth-Scopes` 响应头一起留住**，并按**实际观测到的
 > 状态码**分支——只 `jq -r '.login'` 会把三者都丢掉，而 `curl -s` 退出码恒为 0，于是「权限不够 /
-> token 失效 / 变量没导出」退化成同一个空输出，脚本会带着空 login 继续跑。
-> **不要把本文件里的响应体样本当契约去套**，以你自己那次请求的原始输出为准。
-> 探测法、失败分支与文档缺陷清单见 `../references/gitcode_api.md` →「官方文档已知缺陷（先读）」
-> 「获取当前用户（token 对应的账号）」。
-> 不便给 token 加权限时，可用环境变量 `GITCODE_REVIEW_LOGIN=<自己的 login>` 直接指定，跳过这一步请求。
+> token 失效 / 变量没导出 / 网络不通」退化成同一个空输出，脚本会带着空 login 继续跑。
+> **不要把响应体样本当契约去套**，以你自己那次请求的原始输出为准。
+> 各状态码的含义与处置表（含「在 `atomgit.com` 上看到 `403 no scopes:<name>` 要先怀疑凭证没送达、
+> 而不是缺权限」这个坑）**只写在** `../references/gitcode_api.md` →「获取当前用户（token 对应的账号）」
+> →「scope 前提与失败分支」，**此处不重抄**；文档缺陷清单见同文件「官方文档已知缺陷（先读）」。
+>
+> ⚠️ **权限补不上时：原样上报 + 停止步骤 1，不提供绕过开关**。把状态码、响应体、
+> `X-OAuth-Scopes` 三件套打给用户，说明「无法判断是否已评论过」，然后停在这里等用户处置。
+> **不得**据空 login 判断「未评论过」，也**不得**用环境变量伪造一个 login 继续跑——
+> 伪造值会让「是否已评论过」这个判断失去意义（可能重复刷屏评论），且绕过失败是用户的决定，
+> 不是 skill 替用户做的决定。理由见 `../references/gitcode_api.md` →「应对原则」第 3、5 条。
 >
 > ⚠️ **评论列表取不全时必须停止审查，不得据此判断「未评论过」**：翻页脚本非 0 退出、或往 stderr 打了 `ERROR`，都说明列表不完整——此时空列表无法区分「确实没人评论过」与「请求失败/漏页」。必须先修好请求（token、网络、端点、分页）把评论取全再继续步骤 2，理由见「取评论：翻页取全（规范实现）」的「六条硬规则」第 3 条。
 
@@ -47,34 +49,34 @@ description: 审查 GitCode Pull Request 的代码变更
 
 ```bash
 # 取当前 token 对应的账号 login：**先探测**——状态码 / 响应体 / X-OAuth-Scopes 一起留住，
-# 失败时按「实际观测到的状态码」原样打出来（守卫仍 exit 1）。
-# ⚠️ 下面 403/401 的文案只是**提示样本**，不是契约：分支要看你这次请求的真实状态码与响应体，
-#    未知状态码一律「原样上报 + 停止依赖 login 的判断」，别猜、别套样本。
+# 失败时把三件套原样打出来（守卫仍 exit 1），**不在脚本里逐状态码写解释文案**：判别表全仓只一份，
+# 在 ../references/gitcode_api.md →「scope 前提与失败分支」。未知状态码一律「原样上报 + 停止依赖
+# login 的判断」，别猜、别套样本。
 # ⚠️ -w 用字面量标记 `__HTTP__` 分隔 body 与状态码，`${var%…}`/`${var##…}` 是 POSIX 参数展开，
-#    bash 与 dash 下实测都能跑（本机 `/bin/sh` 即 bash，不算独立数据点）。
+#    bash 与 dash 下都能跑；换到别的 shell 前自己验一次。
 #    若改用 `-w '\n%{http_code}'` + `${var%$'\n'*}` 切分则是 **bash 专有**（`$'…'` 为 ANSI-C quoting）：
-#    dash 下 `$'\n'` 被当字面量、切分失效，实测 `${user_resp%$'\n'*}` 原样返回「响应体+状态码」整串，
+#    dash 下 `$'\n'` 被当字面量、切分失效，`${user_resp%$'\n'*}` 原样返回「响应体+状态码」整串，
 #    jq 报 `Cannot index number with string "login"`，状态码变量里是整个响应体。
+# ⚠️ --connect-timeout/--max-time 必带：不带的话网络挂起会无限等待；超时后状态码是 000，走失败分支。
 user_hdr=$(mktemp) || exit 1
 trap 'rm -f "$user_hdr"' EXIT   # 嵌进更大脚本时，把这个 rm 合并进已有的 trap，别覆盖它
 # -D 把响应头落到文件：curl -s 会丢掉响应头，X-OAuth-Scopes 就读不到了
-user_resp=$(curl -s -D "$user_hdr" -w '__HTTP__%{http_code}' "https://api.gitcode.com/api/v5/user?access_token=$GITCODE_API_TOKEN")
+user_resp=$(curl -s --connect-timeout 10 --max-time 30 -D "$user_hdr" -w '__HTTP__%{http_code}' \
+  "https://api.gitcode.com/api/v5/user?access_token=$GITCODE_API_TOKEN")
 user_body=${user_resp%__HTTP__*}      # HTTP 响应体
 user_status=${user_resp##*__HTTP__}   # HTTP 状态码
 # 服务端回显的「本 token 实际持有的 scope」——比任何文档都权威（响应头 CRLF 结尾，必须 tr -d '\r'）
 user_scopes=$(tr -d '\r' < "$user_hdr" | awk -F': *' 'tolower($1)=="x-oauth-scopes"{print $2}')
-# GITCODE_REVIEW_LOGIN 非空时直接用它，不发这次请求（token 权限不够时的兜底）
-MY_LOGIN=${GITCODE_REVIEW_LOGIN:-$(printf '%s' "$user_body" | jq -r '.login // empty')}
-[ "$user_status" = "200" ] || {
-  echo "WARN: GET /api/v5/user 返回 HTTP ${user_status}（非 200）" >&2
+MY_LOGIN=$(printf '%s' "$user_body" | jq -r '.login // empty')
+# 失败判据要覆盖两种「没拿到 login」：非 200，以及 **200 但 .login 为空**。只按状态码分支会漏掉后者。
+if [ "$user_status" != "200" ] || [ -z "$MY_LOGIN" ]; then
+  echo "WARN: GET /api/v5/user 未取到 login（HTTP ${user_status}）" >&2
   # 响应体自带换行，直接 echo 会多打一个空行，故先 tr 掉（POSIX 安全，bash/dash 均可）
   echo "      响应体：$(printf '%s' "$user_body" | tr -d '\r\n')" >&2
   echo "      本 token 的 X-OAuth-Scopes：${user_scopes:-<无此响应头>}" >&2
-  echo "      403 且响应体含 no scopes:<name> → 按该 <name> 给 token 补权限（名字以响应体为准，不要背），" >&2
-  echo "                                        或设 GITCODE_REVIEW_LOGIN=<自己的 login> 后重跑" >&2
-  echo "      401 {\"message\":\"401 Unauthorized\"} → token 无效或缺失（GITCODE_API_TOKEN 未导出？）" >&2
-  echo "      其它状态码 → 原样上报给用户，不要照套上面的提示" >&2
-}
+  # 各状态码的含义与处置**不在此重抄**（上面 ⚠️ 已声明）：拿这三件套去查
+  # ../references/gitcode_api.md →「获取当前用户（token 对应的账号）」→「scope 前提与失败分支」的判别表。
+fi
 [ -n "$MY_LOGIN" ] || { echo "ERROR: 取不到当前账号 login，无法判断是否已评论过（HTTP ${user_status}）" >&2; exit 1; }
 echo "MY_LOGIN=$MY_LOGIN"
 echo "token scopes: ${user_scopes:-<无此响应头>}"
@@ -82,9 +84,9 @@ echo "token scopes: ${user_scopes:-<无此响应头>}"
 #   <翻页脚本输出> | jq -c --arg me "$MY_LOGIN" 'select(.author == $me) | {id, reply_to, body}'
 #   有输出 = 已评论过（含回复），按步骤 1 停止；无输出 = 未评论过
 # ⚠️ 过滤器别带 `.[]`：该脚本输出的是**逐行对象流**，带 `.[]` 是对每个对象的**值**再迭代，
-#    实测报 `Cannot index number with string "author"`（要先聚成数组再 `.[]` 得加 `-s`）
-# ⚠️ 设了 GITCODE_REVIEW_LOGIN 时上面 exit 0，但 `user_status` 仍可能是 401/403（WARN 照打）——
-#    这是预期的（覆盖值生效、请求本身失败），别把「exit 0」当成「token 权限够」。
+#    会报 `Cannot index number with string "author"`（要先聚成数组再 `.[]` 得加 `-s`）
+# ⚠️ 上面 exit 1 时**不要找旁路绕过**：把 WARN 打出的三件套（状态码 / 响应体 / X-OAuth-Scopes）
+#    原样报给用户，说明「无法判断是否已评论过，暂停审查」，然后停止。
 ```
 
 ### 步骤 2: 获取项目规范上下文
@@ -99,15 +101,15 @@ echo "token scopes: ${user_scopes:-<无此响应头>}"
 
 ```bash
 # 获取 PR 信息
-curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>" \
+curl -s --connect-timeout 10 --max-time 60 "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>" \
   -H "Authorization: Bearer $GITCODE_API_TOKEN"
 
 # 获取 PR 变更文件列表（每项含 patch.diff）
-curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/files" \
+curl -s --connect-timeout 10 --max-time 60 "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/files" \
   -H "Authorization: Bearer $GITCODE_API_TOKEN"
 
 # 获取 PR diff：v5 没有 diff=true 参数，diff 在 files 的 patch.diff 字段里
-curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/files" \
+curl -s --connect-timeout 10 --max-time 60 "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/files" \
   -H "Authorization: Bearer $GITCODE_API_TOKEN" | jq -r '.[] | .patch.diff'
 ```
 
@@ -124,7 +126,7 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
 
 ```bash
 # 获取 PR 变更文件列表（包含 diff 信息）
-curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/files" \
+curl -s --connect-timeout 10 --max-time 60 "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/files" \
   -H "Authorization: Bearer $GITCODE_API_TOKEN"
 ```
 
@@ -144,19 +146,19 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
 （`content` 是 base64，需解码）：
 
 ```bash
-curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/contents/path/to/file.cc?ref=<HEAD_SHA>&access_token=$GITCODE_API_TOKEN" \
+curl -s --connect-timeout 10 --max-time 60 "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/contents/path/to/file.cc?ref=<HEAD_SHA>&access_token=$GITCODE_API_TOKEN" \
   | jq -r '.content' | base64 -d | grep -n "问题代码模式"
 ```
 
 或用同一响应的 `download_url`（`…/blobs/<blob_sha>/<path>` 形式，返回明文，无需解码）：
 
 ```bash
-curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/contents/path/to/file.cc?ref=<HEAD_SHA>&access_token=$GITCODE_API_TOKEN" \
-  | jq -r '.download_url' | xargs -r curl -s | grep -n "问题代码模式"
+curl -s --connect-timeout 10 --max-time 60 "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/contents/path/to/file.cc?ref=<HEAD_SHA>&access_token=$GITCODE_API_TOKEN" \
+  | jq -r '.download_url' | xargs -r curl -s --connect-timeout 10 --max-time 60 | grep -n "问题代码模式"
 ```
 
-> ⚠️ **不要用 `…/raw/<commit_sha>/<path>` 取内容**（`/pulls/<n>/files` 的 `raw_url`、`files.json` 的 `diffs[].head.url` 都是这个形式）：实测间歇 `403`，改用上面方法 2 的两条路径。
-> 403 的完整实测记录与 `ref` 取值枚举见 `../references/gitcode_api.md` →「获取文件原始内容」。
+> ⚠️ **不要用 `…/raw/<commit_sha>/<path>` 取内容**（`/pulls/<n>/files` 的 `raw_url`、`files.json` 的 `diffs[].head.url` 都是这个形式）：间歇 `403`，改用上面方法 2 的两条路径。
+> 间歇 403 的成因与 `ref` 取值枚举见 `../references/gitcode_api.md` →「获取文件原始内容」。
 >
 > **两条硬纪律（与用哪个地址无关；上面的代码示例本身不含这两道防护，得自己加）：**
 > - `ref` **必须传 PR head commit sha**，不要用分支名——分支名指向分支**当前**位置，PR 提交后分支若又推了新 commit，取到的就不是被审查的那一版，`grep -n` 的行号会与 diff 对不上；
@@ -228,7 +230,7 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/contents/path/to/
 #### 创建行内评论
 
 ```bash
-curl -s -X POST \
+curl -s --connect-timeout 10 --max-time 60 -X POST \
   -H "Content-Type: application/json" \
   "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN" \
   -d '{
@@ -239,9 +241,18 @@ curl -s -X POST \
   }'
 ```
 
+> ⚠️ **必须校验 HTTP 状态码，不能只看 `$?`**：成功是 `201`；token 缺失/无效时返回
+> `401 {"message":"401 Unauthorized"}`，而 `curl -s` 的**退出码仍是 `0`**——只看 `$?`
+> 会把「一条都没发出去」当成「发布成功」。用 `-o <文件> -w '%{http_code}'` 取状态码（或用步骤 1 的
+> `-D <头文件> -w '__HTTP__%{http_code}'` 标记法）；**不要**用 `-w '\n%{http_code}'` +
+> `${var%$'\n'*}` 切分——那是 bash 专有写法，dash 下失效，见步骤 1 的 ⚠️。
+> 非 `201` 就停下、把状态码与响应体原样上报，**不要继续发后面几条**，也不要重发已成功的。
+> 发完仍建议回读校验（`201` 不代表落点正确，行号错位 / `path` 写错会静默落到别处），
+> 见 `../SKILL.md` →「回读校验」。
+
 **参数与多行选择**：`body`（内容）、`path`（文件相对路径）、`position`（**结束**行号）必填；
 多行选择再加 `start_position`（**起始**行号），单行评论只传 `position`（或与 `start_position` 同值）。
-完整参数表（另有 `position_type`、query 里的 `access_token`）与实测读回结果见
+完整参数表（另有 `position_type`、query 里的 `access_token`）与读回结果见
 `../references/gitcode_api.md` →「提交行内评论（支持多行选择）」。
 
 对于每个评论：
@@ -303,14 +314,14 @@ curl -s -X POST \
 要按「检视意见是否已解决」或行号过滤，把这两个字段加进**两处**投影（父行与 `reply` 行）。
 
 > **六条硬规则（改写这段循环、或把它嵌进更大脚本时同样适用）**：
-> 1. 终止判据**只用响应头 `total_page`**（它按服务端**生效**页长算），**不要**用「本页条数 < 请求的 `per_page`」——请求值超过上限会被静默夹回，该判据第一页就 `break`、后面评论全丢；
+> 1. 终止判据**只用响应头 `total_page`**（它按服务端**生效**页长算），**不要**用「本页条数 < 请求的 `per_page`」——请求值超过上限会被静默夹回，该判据第一页就 `break`、后面评论全丢；`total_page`/`total_count` **缺失时直接 `exit 1`**（守卫①），同样**不要**退回「本页为空就算翻完」这类猜测判据——那会把「不知道取全没有」伪装成「取全了」；
 > 2. `total_page` 必须**每页重读**、用最新值判终止（它是本次请求时刻的快照，翻页途中新增评论会让它变大，每页重读才能自纠正）；
-> 3. **失败必须显式**：失败分支用 `exit 1`，**不能 `break` 后以 0 退出**——空列表 + `exit 0` 会被读成「取全了且没人评论过」，步骤 1 就会重复发布审查意见。嵌在更大脚本里不能直接退出时，改置 `incomplete=1` 标志后 `break`，由调用方检查该标志；调用方无论如何都要检查退出码；
+> 3. **失败必须显式**：失败分支用 `exit 1`，**不能 `break` 后以 0 退出**——空列表 + `exit 0` 会被读成「取全了且没人评论过」，步骤 1 就会重复发布审查意见。「本页为空但 `page < total_page`」是服务端**自相矛盾**（响应头与体出自同一次响应），按守卫②同样 `exit 1`，不是「翻完了」。嵌在更大脚本里不能直接退出时，改置 `incomplete=1` 标志后 `break`，调用方**必须**检查该标志并**自行以非 0 退出**（只置标志、不改退出码，就又造出一个「`exit 0` 但不代表成功」的状态，见 `../references/gitcode_api.md` →「应对原则」第 5 条）；调用方无论如何都要检查退出码；
 > 4. 读响应头必须 `-D <文件>`（`curl -s` 会丢掉响应头）、取值前必须 `tr -d '\r'`（头是 CRLF）、匹配头名必须 `tolower($1)` 或 `grep -i`（头名是全小写自定义头，`awk`/`grep` 大小写敏感）；
-> 5. `total_count` 只数**父评论**，回复不计入——核对「是否取全」要拿父评论条数比，别拿展开 `reply[]` 后的输出条数比；
+> 5. `total_count` 只数**父评论**，回复不计入——核对「是否取全」要拿父评论条数比，别拿展开 `reply[]` 后的输出条数比（已落成守卫③）。守卫③**只适用于「必须取全」的场景**（本步骤判断「是否已评论过」、批量清理收集待删 ID）；「命中即停」的回读校验变体**不适用**，照抄会把「找到了」误报成「未取全」。不等时脚本只 `exit 1` 报数、**不自动重跑、不打 WARN 后继续**，由**人**判读；完整判读规则与适用边界见 `../SKILL.md` 守卫③注释；
 > 6. 该接口**不返回** GitHub 风格的 `Link` header，不要按 `rel="next"` 判断翻页；单条资源接口（如 `GET /pulls/<n>`）也没有这两个分页头，只有列表接口才有。
 >
-> 每条规则的实测依据（`per_page=150` 只返回 100 条、无效 token 与不可解析域名的响应体、越界 `page` 返回空数组 + `200`、`page=0`/负数返回 `400`、`total_count` 等于顶层数组长度等）见 `../references/gitcode_api.md` →「获取 PR 讨论（包含行内评论）」。
+> 每条规则对应的响应形状样本见 `../references/gitcode_api.md` →「获取 PR 讨论（包含行内评论）」。
 >
 > 自检分页是否生效：把 `per_page` 临时调小（如 `per_page=5`）后分别请求 `page=1` 与 `page=2`，确认第 2 页返回的是剩余的评论而非重复内容，且 `total_page` 等于 `ceil(total_count / 5)`。
 

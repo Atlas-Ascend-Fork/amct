@@ -83,7 +83,7 @@
       "prompt": "审查 https://gitcode.com/cann/ge/pull/1437，发现问题后发布行内评论到 PR。重要：评论内容必须以 [TEST] 开头，并在测试完成后记录评论 ID 以便清理。",
       "expected_output": "成功发布行内评论到 hcom_graph_optimizer.cc 第 844 行附近，评论以 [TEST] 开头",
       "files": [],
-      "cleanup": "删除已发布的测试评论：直接复制 references/gitcode_api.md →「删除 PR 评论」→「批量清理脚本」那一份（全仓唯一一份，勿在此另写），把其中的占位符替换为本用例的实例参数——${owner}=cann、${repo}=ge、<PR_NUMBER>=1437、<唯一标记>=[TEST]；脚本必须满足的六条不变式清单见 SKILL.md →「删除 PR 评论」，坑位说明与证据边界见同一章节。注意 cann/ge#1437 是真实上游 PR（非占位符），脚本第 3 步会对它发 DELETE，故本用例默认跳过（见 last_result.reason）；确需实跑请先换成自有仓的测试 PR 并同步改上述参数。",
+      "cleanup": "删除已发布的测试评论：直接复制 references/gitcode_api.md →「删除 PR 评论」→「批量清理脚本」那一份（全仓唯一一份，勿在此另写），把其中的占位符替换为本用例的实例参数——${owner}=cann、${repo}=ge、<PR_NUMBER>=1437、<唯一标记>=[TEST]；脚本必须满足的六条不变式清单见 SKILL.md →「删除 PR 评论」，坑位说明与响应码表见同一章节。注意 cann/ge#1437 是真实上游 PR（非占位符），脚本第 3 步会对它发 DELETE，故本用例默认跳过（见 last_result.reason）；确需实跑请先换成自有仓的测试 PR 并同步改上述参数。",
       "last_result": {
         "status": "skipped",
         "reason": "跳过以避免向真实 PR 发布测试评论"

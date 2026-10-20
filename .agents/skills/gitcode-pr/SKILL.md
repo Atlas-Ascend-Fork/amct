@@ -24,32 +24,52 @@ description: |
 
 **询问用户**："请提供您的 GitCode 访问令牌（Access Token）"
 
-检查环境变量：
+检查环境变量（**别用裸 `echo $GITCODE_API_TOKEN`**：为空时只打印一个空行、退出码仍是 `0`，
+看不出「未设置」与「已设置」的区别；也不要打印值本身，长期凭证会进 shell history / CI 日志）：
 
 ```bash
-echo $GITCODE_API_TOKEN
+# 只看长度，不看值
+echo "GITCODE_API_TOKEN 长度 = ${#GITCODE_API_TOKEN}"
+# 长度为 0 **不等于**必须停止：读 PR 详情 / 读评论列表匿名也能跑，但**查仓库信息（fork 判定）、
+# 取 MY_LOGIN、发评论 / 删评论匿名必然失败**——「只读流程」并不是整条都能匿名跑；而且匿名调用
+# **共用服务端账号的额度桶**（会撞上 429 限流，何时恢复不由你决定），「能匿名跑」≠「能连着匿名跑」。
+# 所以不要在入口处加「无 token 就 exit 1」的硬守卫（那会误伤能匿名跑的那几步）；该守的是下面三处：
+# GET /repos/<owner>/<repo> 的响应形状守卫、GET /user 的状态码守卫、写操作的状态码校验。
+# ⚠️ 各步匿名时的**实际状态码 / 响应体 / 429 细节**不在本文件重复（应对原则第 5 条末句），
+#    见 references/gitcode_api.md →「匿名（无 token / 空 token）时各步骤的真实行为」。
 ```
 
-如果不存在，提示用户获取令牌：
+> **只有「哪步能匿名跑」这个规则结论写在本文件，运行时证据写在 references**：匿名行为表
+> （各端点的状态码与响应体）、`429` 的成因（匿名共用额度桶）、以及「匿名 `401` 与无效 token `401`
+> 同形、先确认凭证非空再怀疑 token」的消歧顺序，见
+> [references/gitcode_api.md](references/gitcode_api.md) →「认证方式」→「匿名（无 token / 空 token）
+> 时各步骤的真实行为」。**那是观测样本不是契约**（应对原则第 2 条），你自己的环境按同文件
+> 「认证写法：先自证，再采信」的矩阵实测一次。
+
+如果长度为 0 且你要执行写操作（或步骤 1 需要 MY_LOGIN），提示用户获取令牌：
 
 1. 登录 [GitCode](https://gitcode.com)
 2. 点击头像 → 设置 → 访问令牌
 3. 创建新令牌，勾上**仓库读写 + PR/评论读写 + 用户信息读取**相关的权限项
    > ⚠️ **权限项的确切名字以令牌页实际显示的勾选项为准，不要照抄本行**。官方文档**从不枚举** PAT 的
-   > scope 名（`user_center/security_management/user_pat` 只说「如项目、Issue 等」），全站仅 OAuth 2.0
-   > 两页给出**另一套**词汇（`all_user`/`all_pr`/`all_repository`…），而服务端报错串用的又是 GitLab
-   > 风格的 `no scopes:<name>`——三套词汇互不映射。旧写法里的
+   > scope 名（`user_center/security_management/user_pat` 只说「如项目、Issue 等」），文档里并存
+   > **两套**互不映射的词汇（OAuth 2.0 两页的 `all_user`/`all_pr`/`all_repository`…，与流水线页的
+   > `project/pr/issue/note/repository/action` × `read/write/none`）；而服务端报错串用的是**第三种**
+   > ——GitLab 风格的 `no scopes:<name>`（运行时观测，不在文档里）。旧写法里的
    > `read_repository`/`write_repository`/`read_api`/`read_user` **既无文档依据也无运行时证据**，
    > 只能当「大概长这样」的线索。缺陷清单与复核方法见
-   > [references/gitcode_api.md](references/gitcode_api.md) →「官方文档已知缺陷（先读）」。
+   > [references/gitcode_api.md](references/gitcode_api.md) →「官方文档已知缺陷（先读）」#1、#7。
    >
    > ⚠️ **建好令牌后先自证一次，别等用到时才发现权限不够**：`GET /api/v5/user`（取当前 token 对应的
-   > 账号 login，用于判断「本 agent 是否已评论过」与回读校验的作者兜底）的 scope 前提**官方文档
+   > 账号 login，用于判断「本 agent 是否已评论过」与回读校验里「按作者 + 唯一标记匹配」这条备选
+   > 判据）的 scope 前提**官方文档
    > 不记载**，权限不够时只在运行时暴露，且**只影响这一步**（仓库/评论读写接口仍正常）。探测法
    > （状态码 + 响应体 + `X-OAuth-Scopes` 响应头一起留住）、失败分支与端点字段见
    > [references/gitcode_api.md](references/gitcode_api.md) →「获取当前用户（token 对应的账号）」；
-   > 失败时**按响应体里的 `no scopes:<name>` 去补权限**（名字以响应体为准，不要背）。
-   > 不便加权限时可用 `GITCODE_REVIEW_LOGIN=<自己的 login>` 跳过该请求（见 commands/review.md 步骤 1）。
+   > 失败时**按响应体里的 `no scopes:<name>` 去补权限**（名字以响应体为准，不要背）；**补不上就把
+   > 状态码 + 响应体 + `X-OAuth-Scopes` 原样上报并停止该步**，不要用环境变量伪造 login 绕过
+   > （伪造值会让「是否已评论过」的判断失效，可能重复刷屏评论；理由见
+   > [references/gitcode_api.md](references/gitcode_api.md) →「应对原则」第 3、5 条）。
 4. 复制令牌，建议保存到 `~/.bashrc`：`export GITCODE_API_TOKEN="your_token_here"`
 
 ### 识别PR的目标仓库
@@ -114,7 +134,11 @@ echo "Repo: $repo"
 
 ```bash
 # 查询仓库信息获取 fork 来源
-curl -s -H "Authorization: Bearer $GITCODE_API_TOKEN" \
+# ⚠️ 这个端点**匿名必然失败**（无 token / token 失效都会走进下面的 ERROR 分支；实际状态码与响应体见
+#    references/gitcode_api.md →「匿名（无 token / 空 token）时各步骤的真实行为」）。
+#    ERROR 必须 exit 1、不能只打印：jq 管道自身的退出码是 0，只打印就等于把
+#    「不知道是不是 fork」伪装成「查过了、不是 fork」（与下面第 1 条 ⚠️ 同一种失败模式）。
+fork_info=$(curl -s --connect-timeout 10 --max-time 60 -H "Authorization: Bearer $GITCODE_API_TOKEN" \
   "https://api.gitcode.com/api/v5/repos/${owner}/${repo}" | \
   jq -r '
     if (type != "object") or (has("fork") | not) then
@@ -126,7 +150,16 @@ curl -s -H "Authorization: Bearer $GITCODE_API_TOKEN" \
     else
       "这不是一个 fork 仓库，直接使用当前仓库"
     end
-  '
+  ')
+echo "$fork_info"
+case $fork_info in
+  # ⚠️ `""` 必须一起当失败：curl 超时 / DNS 不通 / 代理返回 HTML 时 jq 拿到空输入或非 JSON，
+  #    **什么都不输出且退出码仍是 0**（实测），只匹配 `ERROR:*` 的写法会静默穿过去 —— 那正是
+  #    本段注释要防的失败模式（把「不知道是不是 fork」伪装成「查过了、不是 fork」）。
+  #    别再叠状态码解析、jq 退出码判断等更多守卫：jq 的输出空间只有「ERROR… / fork 信息 /
+  #    不是 fork / 空」四种，这一个分支拦下首末两种，剩下两种就是全部的良好形状。
+  ERROR:*|"") echo "错误：无法判定当前仓库是否为 fork（${fork_info:-响应为空：超时 / DNS / 非 JSON}），停止该步（把原样响应报给用户，别猜）" >&2; exit 1 ;;
+esac
 ```
 
 > ⚠️ 必须显式区分「响应异常」和「不是 fork」：`if .fork then … else …` 里 `null` 也是假值，
@@ -168,45 +201,75 @@ GitCode 使用 v5 API 获取 PR 评论：
 # 获取 PR 的所有评论（包括行内评论）
 # ⚠️ 必须显式传 per_page=100 并从 page=1 起翻页取完；终止判据只用响应头 total_page，
 #    **不要**用「本页条数 < 请求的 per_page」：请求值超过上限会被服务端静默夹回，该判据
-#    会第一页就 break、静默丢掉后面所有评论。默认值 / 上限 / 夹回行为的实测依据见
-#    references/gitcode_api.md →「翻页终止以响应头 total_page 为准」。
+#    会第一页就 break、静默丢掉后面所有评论。默认值 / 上限 / 夹回行为的依据见
+#    references/gitcode_api.md →「翻页终止以响应头 `total_page` 为准」。
 # ⚠️ 顶层数组**不含回复**：回复嵌在父评论的 reply[] 里（实测：任一带回复的 PR，回复 ID 在顶层一个都查不到），必须一并展开；
 #    reply 对象只有 id/body/user/时间戳，discussion_id 与 comment_type 要从父评论带下来
 #    （带下来的是**列表接口**那套取值，单条接口查同一条回复会得到另一套，别混用）。
-MAX_PAGES=50   # 兜底上界（50 × 100 = 5000 条父评论，远超真实 PR 的评论量），正常永不触发，
-               # 只防服务端分页异常导致空转；撞上界必须 exit 1，不能 break 后以 0 退出
+MAX_PAGES=50   # 上界（50 × 100 = 5000 条父评论，远超真实 PR 的评论量），正常永不触发，
+               # 只防服务端分页异常导致空转；撞上界必须 exit 1，不能 break 后以 0 退出。
+               # 注意这是「响亮失败的上界」，不是 references/gitcode_api.md「应对原则」第 5 条
+               # 禁止的那种「绕过失败的旁路」：撞界只产出 exit 1，不产出可用结果
 hdr=$(mktemp) || exit 1
 trap 'rm -f "$hdr"' EXIT   # 嵌进更大脚本时，把这个 rm 合并进已有的 trap，别覆盖它
 page=1
+sum=0; tc_first=""; tc_last=""   # 守卫③的总账：Σ父评论条数、首页与末页 total_count
 while :; do
-  [ "$page" -gt "$MAX_PAGES" ] && { echo "ERROR: 翻页超过 ${MAX_PAGES} 页兜底上界，结果不可信" >&2; exit 1; }
-  # -D 把响应头落到文件：curl -s 会丢掉响应头，total_page 就读不到了
-  resp=$(curl -s -D "$hdr" "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100&page=${page}")
+  [ "$page" -gt "$MAX_PAGES" ] && { echo "ERROR: 翻页超过 ${MAX_PAGES} 页上界（末页 http=${http_status:-未取到}），结果不可信" >&2; exit 1; }
+  # -D 把响应头落到文件：curl -s 会丢掉响应头，total_page / total_count / 状态行就读不到了
+  resp=$(curl -s --connect-timeout 10 --max-time 60 -D "$hdr" "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100&page=${page}")
   # 响应头是 CRLF 结尾，必须 tr -d '\r'，否则值带回车、下面的数值比较会失败
   total_page=$(tr -d '\r' < "$hdr" | awk -F': *' 'tolower($1)=="total_page"{print $2}')
+  total_count=$(tr -d '\r' < "$hdr" | awk -F': *' 'tolower($1)=="total_count"{print $2}')
+  # 状态码从 -D 落盘的头文件**第一行状态行**取（`head -n1 | awk '{print $2}'`），不必为此多发一次请求；
+  # 连接失败 / 超时时头文件是空的（curl 的 %{http_code} 此时为 000），故取不到就用固定文案兜住。
+  # ⚠️ **失败分支必须把状态码与响应体一起打**（references/gitcode_api.md「应对原则」第 3 条）：
+  #    只打响应体分不清 401（凭证无效）/ 403（缺权限）/ 404（PR 不存在或 owner/repo 拼错）/
+  #    429（限流；匿名调用共用服务端账号的额度桶，何时恢复不由你决定）/ 空（网络不通），排查方向完全不同。
+  http_status=$(head -n1 "$hdr" | awk '{print $2}' | tr -d '\r')
+  http_status=${http_status:-000(无响应头：连接失败或超时)}
   # 响应必须是数组：无效 token 返回 {"message":"401 Unauthorized"}、网络失败返回空响应，
   # 两者都要显式失败退出，不能 break 后以 0 退出——空列表 + exit 0 会被读成「取全了且没有评论」。
   if [ "$(echo "$resp" | jq -r 'type' 2>/dev/null)" != "array" ]; then
-    echo "ERROR: 第 ${page} 页评论请求失败或响应非数组，结果不完整：$resp" >&2
+    echo "ERROR: 第 ${page} 页评论请求失败或响应非数组（http=${http_status}），结果不完整：$resp" >&2
     exit 1
   fi
+  # 守卫①：缺分页头就无从判断是否取全 —— 必须失败，**不**退回「本页为空」「本页不满 per_page」等猜测判据
+  #        （total_count 也一并要求，守卫③要做数值比较，空值会让 `[ -eq ]` 直接报错）
+  [ -n "$total_page" ] && [ -n "$total_count" ] || {
+    echo "ERROR: 第 ${page} 页响应缺 total_page/total_count 头（http=${http_status}），无法判断评论是否取全" >&2; exit 1; }
   # 每条父评论先原样输出，再把它 reply[] 里的回复展开成同形对象（带 reply_to 标记来源）
   # 投影字段**按用途裁剪**（此处不带 resolved / diff_position）；含这两个字段的全集投影见
   # `references/gitcode_api.md` →「获取 PR 讨论（包含行内评论）」，差异是有意的、不是漏抄
   echo "$resp" | jq -c '.[] | {id, discussion_id, comment_type, author: .user.login, body} as $c | $c, (.reply[]? | {id, discussion_id: $c.discussion_id, comment_type: $c.comment_type, author: .user.login, body, reply_to: $c.id})'
   # count 数的是**父评论**条数（回复不计入分页，也不计入 total_page/total_count）
   count=$(echo "$resp" | jq 'length')
-  [ "$count" -eq 0 ] && break   # total_page 缺失时的兜底；越界 page 实测返回空数组+200，不会死循环
-  [ -n "$total_page" ] && [ "$page" -ge "$total_page" ] && break
+  # 守卫②：头与体出自**同一次响应**，「体空但 page < total_page」是服务端自相矛盾，不是「翻完了」
+  #        （判据推导、零评论 PR 不会误伤的分析与形状样本，全仓只写一份：
+  #          references/gitcode_api.md →「翻页终止以响应头 `total_page` 为准」→「越界 `page` 的行为」）
+  [ "$count" -eq 0 ] && [ "$page" -lt "$total_page" ] && {
+    echo "ERROR: 第 ${page} 页为空但 total_page=${total_page}（http=${http_status}），响应自相矛盾，评论未取全" >&2; exit 1; }
+  # 守卫③的累加：total_count 是快照，翻页途中有人增删评论会让它变，故首末两次的值都留住
+  [ "$page" -eq 1 ] && tc_first=$total_count
+  sum=$((sum + count)); tc_last=$total_count
+  [ "$page" -ge "$total_page" ] && break
   page=$((page + 1))
 done
+# 守卫③：Σ父评论条数必须等于 total_count，对不上就是没取全。
+# **不自愈**：不自动重跑、不打 WARN 后继续——重跑是人的决定，且活跃 PR 重跑照样会撞上移动靶。
+[ "$sum" -eq "$tc_last" ] || {
+  echo "ERROR: 评论未取全 —— Σ父评论条数=${sum} ≠ total_count=${tc_last}（首页 total_count=${tc_first}，翻了 ${page} 页）" >&2
+  echo "       首末 total_count 不同 → 翻页期间有人增删评论（移动靶），重跑即可；" >&2
+  echo "       首末相同但 Σ 与 total_count 不等 → 请把上面数字原样上报，不要据本次列表做任何判断：" >&2
+  echo "         Σ 偏小 = 服务端漏数据；Σ 偏大 = 翻页期间有评论被删、列表前移导致同一条被读了两次。" >&2
+  exit 1; }
 ```
 
 > 评论列表**取不全时必须停止**依赖它的判断（如「是否已评论过」「该删哪条」），
 > 不得据空列表推断「没有评论」。上面是**取评论列表的通用翻页循环**，全仓只此一份，其他地方一律
 > 指回本节；唯一例外是 `references/gitcode_api.md` →「批量清理脚本」第 1 步内联的那份**删除场景
 > 变体**（多带唯一标记筛选与 `405` 预检），它不复用本节循环。单页字段形状、`per_page` 夹回 /
-> `total_page` 判据，以及下面三条「展开回复」纪律的实测依据，都在
+> `total_page` 判据，以及下面三条「展开回复」纪律的依据，都在
 > `references/gitcode_api.md` →「获取 PR 讨论（包含行内评论）」。
 >
 > - **回复必须展开**：只投影顶层字段时，「只在既有讨论里回复过」的活动完全不可见——
@@ -224,12 +287,31 @@ done
 
 ## GitCode API v5 说明
 
-**认证头**：`?access_token=`、`Authorization: Bearer`、`PRIVATE-TOKEN` 三种写法曾观测到均可用，
-`Authorization: token`（官方流水线页的示范写法）则返回 `401`；**这些是观测样本、不是契约，
+**认证头**：`?access_token=`、`Authorization: Bearer`、`PRIVATE-TOKEN` 三种写法均可用，
+`Authorization: token`（官方流水线页的示范写法）则在 **`api.gitcode.com` 与 `atomgit.com` 两个域名上
+都返回 `401`**——那是流水线内部注入令牌的专用格式，不适用 v5 REST；**这些是观测样本、不是契约，
 请在自己环境里跑一次自证矩阵确认**。共享环境或 CI 里优先用请求头——query 形式会把长期凭证带进
 shell history / CI 日志 / 服务端 access log。判成功要看 HTTP 状态码或校验响应里有没有期望的键，
-`curl -s` 的退出码不作数（恒为 0）。认证写法自证矩阵、官方文档在认证上的 4 处缺陷
-（`access_token` 标 `required`、被称作「用户授权码」、流水线页示范写法 401、不提请求头形式）、
+`curl -s` 的退出码不作数（恒为 0）。
+
+**域名**：本 skill 一律用 `https://api.gitcode.com`。`atomgit.com` 与它**是同一套后端**（同一枚 PAT
+两域名通用、同一账号 `id` 相同），但**同一份脚本不要混用域名**；两者在**需要凭证的端点**上
+（`GET /user`、`GET /repos/<owner>/<repo>` 等）**错误响应形状不同**，混用会把「凭证没送达」误判成
+「缺权限」（公开可读的端点如 `GET /pulls/<n>` 匿名是 `200`，不在此列）。域名对比表、
+「哪些步骤匿名能跑」见
+[references/gitcode_api.md](references/gitcode_api.md) →「基址（host）」与「匿名（无 token / 空 token）
+时各步骤的真实行为」。
+
+> 范围说明：`scripts/create_pr.py` 里的 `base_url` 是 `https://gitcode.com/api/v5`（仓内既有实现）。
+> 它与 `api.gitcode.com` 是同一套 v5 后端，所以不是错误，但**新写的 shell 命令一律用
+> `api.gitcode.com`**，别在一份脚本里混两个域名。
+
+**超时**：本 skill 所有 `curl` 必须带 `--connect-timeout 10 --max-time 60`（小请求可 30）。
+不带的话网络挂起会**无限等待**；超时后 `%{http_code}` 是 `000`，走既有失败分支即可，
+**不要**把 `000` 当成权限问题。
+
+认证写法自证矩阵（4 写法 × 2 域名）、两域名同后端的对比、官方文档在认证上的 4 处缺陷
+（`access_token` 标 `required`、被称作「用户授权码」、流水线页示范写法不适用 v5 REST、不提请求头形式）、
 token 错误/缺失的响应形态与 `401` 的两种成因见
 [references/gitcode_api.md](references/gitcode_api.md) →「官方文档已知缺陷（先读）」「认证方式」。
 
@@ -296,7 +378,7 @@ v5 API 返回**直接数组**，不是包装对象。评论数据包含以下关
   ⚠️ 但**行号数值本身易变**：接口按 PR head **当前**指向的 commit 重算，锚定的还是同一行源码，
   行号却会随该文件上方的增删位移。所以这里只固化「哪些键存在」这类结构事实，
   **不要把具体行号当稳定结论引用或写进 PR 描述**，要行号就现场查
-  （漂移实测例见 `references/gitcode_api.md` →「获取 PR 讨论（包含行内评论）」）。
+  （漂移样例见 `references/gitcode_api.md` →「获取 PR 讨论（包含行内评论）」）。
 - **只有「被评论的文件路径」列表接口拿不到**，需要查单条评论接口的 `position.new_path`。
 - `comment_type` 只有 `diff_comment`（行内）/ `pr_comment`（普通）两种取值。
 
@@ -311,7 +393,7 @@ GET /repos/:owner/:repo/pulls/comments/:id
 **示例**：
 
 ```bash
-curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<COMMENT_ID>?access_token=$GITCODE_API_TOKEN"
+curl -s --connect-timeout 10 --max-time 60 "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<COMMENT_ID>?access_token=$GITCODE_API_TOKEN"
 ```
 
 **返回字段**（键名与键的存在性取自实测真实响应，非构造；下方 ID / 哈希 / 行号为示意值）：
@@ -369,7 +451,7 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<C
 > - `position.head_sha` / `new_line` 是**按 PR head 当前指向的 commit 重算的快照值**，head 推进、
 >   该文件上方有增删时行号就会漂移；`base_sha` / `start_sha` 才是稳定的。所以上面 JSON 里的
 >   行号、head sha 只作形状示范，**不要当稳定事实引用**，要行号就现场查
->   （漂移实测例见 `references/gitcode_api.md` →「获取 PR 讨论（包含行内评论）」）。
+>   （漂移样例见 `references/gitcode_api.md` →「获取 PR 讨论（包含行内评论）」）。
 
 > ⚠️ **两个接口的 `comment_type` 不是同一套取值**：列表接口给 `diff_comment`/`pr_comment`，
 > 单条接口给 `DiffNote`/`null`。**判断行内/普通一律用列表接口的值**，单条接口只能当
@@ -395,7 +477,7 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<C
 
 > ⚠️ 上表的 `position.*` 是**单条接口**的字段名，与列表接口的 `diff_position.*` **不是同一套键名**：
 > **行号两个接口都能拿到**（列表叫 `end_new_line`、单条叫 `new_line`，别串用），
-> **文件路径与 SHA 只有单条接口有**。两接口键名逐项对照表与实测例见
+> **文件路径与 SHA 只有单条接口有**。两接口键名逐项对照表与样例见
 > `references/gitcode_api.md` →「获取 PR 讨论（包含行内评论）」。
 
 **接口对比**：
@@ -409,10 +491,10 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<C
 
 ```bash
 # 使用 v5 API（files.json）
-curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/files.json?access_token=$GITCODE_API_TOKEN"
+curl -s --connect-timeout 10 --max-time 60 "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/files.json?access_token=$GITCODE_API_TOKEN"
 
 # 解析第一个文件路径
-curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/files.json?access_token=$GITCODE_API_TOKEN" | \
+curl -s --connect-timeout 10 --max-time 60 "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/files.json?access_token=$GITCODE_API_TOKEN" | \
   jq -r '.diffs[0].statistic.new_path'
 ```
 
@@ -432,9 +514,9 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
 - `diffs[].new_blob_id` - 变更后文件的 blob sha（实测等于 contents API 的 `sha`，
   可拼成稳定的 `…/blobs/<new_blob_id>/<path>` 取内容地址）
 - `diffs[].head` - **对象**，键为 `commit_id`（= `diff_refs.head_sha`）与 `url`；
-  ⚠️ `url` 是 `…/raw/<commit_sha>/<path>` 形式，**实测不稳定**（间歇 `403`「暂不支持预览」），
+  ⚠️ `url` 是 `…/raw/<commit_sha>/<path>` 形式，**不稳定**（间歇 `403`「暂不支持预览」），
   别拿它当取内容的地址，改用 contents API 或 `…/blobs/<new_blob_id>/<path>`
-  （403 的完整实测记录见 `references/gitcode_api.md` →「获取文件原始内容」）
+  （间歇 403 的成因与替代地址见 `references/gitcode_api.md` →「获取文件原始内容」）
 - `diffs[].content` - ⚠️ **不是 diff 文本，而是对象** `{"text":[…]}`；`text[]` 每项形如
   `{"line_content":"<diff 行原文>","old_line":"…","new_line":"…","type":"match"}`
   （实测：diff 较大的文件即为此形状；**项数随该文件 diff 大小变化，不在此固化**）。
@@ -447,14 +529,14 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
 > 两者字段名不同（如 `diffs[].content` vs `patch.diff`），别把一套 jq 表达式套到另一个接口上。
 >
 > ⚠️ 两个接口的增删行数与本地 `git diff --numstat` **可能差 1**。不影响判断，但别拿它做精确对账，
-> 也别把这类数字写进 PR 描述（易变）。实测细节见 `references/gitcode_api.md` →「获取 PR 文件变更」。
+> 也别把这类数字写进 PR 描述（易变）。细节见 `references/gitcode_api.md` →「获取 PR 文件变更」。
 
 ### 提交行内评论（支持多行选择）
 
 #### 使用 v5 API
 
 ```bash
-curl -s -X POST \
+curl -s --connect-timeout 10 --max-time 60 -X POST \
   -H "Content-Type: application/json" \
   "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN" \
   -d '{
@@ -472,7 +554,7 @@ curl -s -X POST \
 **单行评论示例**：
 
 ```bash
-curl -s -X POST \
+curl -s --connect-timeout 10 --max-time 60 -X POST \
   -H "Content-Type: application/json" \
   "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN" \
   -d '{
@@ -485,7 +567,7 @@ curl -s -X POST \
 **多行评论示例**：
 
 ```bash
-curl -s -X POST \
+curl -s --connect-timeout 10 --max-time 60 -X POST \
   -H "Content-Type: application/json" \
   "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN" \
   -d '{
@@ -497,7 +579,7 @@ curl -s -X POST \
 ```
 
 **注意**：`start_position` **未出现在官方文档的请求体 schema 里**，但**实测有效**。
-实测取值与读回结果见 `references/gitcode_api.md` →「多行选择说明」。
+取值与读回结果见 `references/gitcode_api.md` →「多行选择说明」。
 
 #### 创建评论的返回值
 
@@ -531,18 +613,32 @@ NOTE_ID="<NOTE_ID>"                                      # POST 响应里的 not
 # ⚠️ NOTE_ID 必须是整数：占位符没替换时 `--argjson nid "<NOTE_ID>"` 会以 exit 2 报错，但报错被下面的
 #    循环吞掉后只剩一句「翻完所有页仍未找到」，看不出根因——所以先自己挡一道（同 MY_LOGIN 的处理）。
 case "$NOTE_ID" in ''|*[!0-9]*) echo "ERROR: NOTE_ID 必须是整数，当前=\"$NOTE_ID\"（占位符未替换？）" >&2; exit 1;; esac
-# ⚠️ 走「唯一标记」这条兜底时才用到 MY_LOGIN，必须先把它取出来：未定义时 `--arg me ""` **不会报错**，
-#    只会让 `.author == $me` 永远不成立、这条兜底**静默失效**（实测同一份响应：MY_LOGIN 为空
-#    时输出空，取到 login 后命中）。
+# ⚠️ 走「作者 + 唯一标记」这条**备选判据**时才用到 MY_LOGIN（首选是 `note_id` 比 `.id`；
+#    注意这不是「应对原则」第 5 条说的兜底/旁路——它不掩盖失败，只是另一种匹配方式）。
+#    必须先把它取出来：未定义时 `--arg me ""` **不会报错**，
+#    只会让 `.author == $me` 永远不成立、这条判据**静默失效**（MY_LOGIN 为空时输出恒为空，
+#    取到 login 后才可能命中）。
 # MY_LOGIN 的取法**全仓只此一份**，在 commands/review.md 步骤 1「判断『本 agent 是否已评论过』」，
 # 照抄那段（含 HTTP 状态码 / 响应体 / `X-OAuth-Scopes` 响应头回显、按**实际观测到的状态码**分支的
-# 失败提示、GITCODE_REVIEW_LOGIN 覆盖），此处不重抄。
+# 失败提示），此处不重抄。取不到 login 时按那段 exit 1 并原样上报，不要绕过。
 # ⚠️ 同样必须 per_page=100 **并翻页**：目标评论在第 20 条之后时不带 per_page 会查不到、
 #    在第 100 条之后时不翻页会查不到，两种都会把「创建成功」误判成「创建失败」。
 #
-# 翻页骨架（per_page=100、-D 读 total_page、响应非数组守卫、MAX_PAGES 兜底、trap 清理）
+# 翻页骨架（per_page=100、-D 读 total_page、响应非数组守卫、MAX_PAGES 上界、trap 清理）
 # **照抄**上面「获取 PR 讨论列表（包含行内评论）」那一节，此处不重抄；只把每页的 jq 换成
-# 下面这段「命中即停」的增量，并在循环外补一句判空 exit 1：
+# 下面这段「命中即停」的增量，并在循环外补一句判空 exit 1。
+#
+# ⚠️ **照抄范围：守卫①（缺 total_page/total_count 头即 exit 1）、守卫②（体空但 page<total_page
+#    即 exit 1）、非数组守卫、MAX_PAGES、trap 全部照抄；唯独守卫③（Σ父评论条数 == total_count）
+#    不要抄进来** —— 指循环外那句判定块，**以及循环内标注「守卫③的累加」的两行
+#    （`tc_first=$total_count` 与 `sum=$((sum + count)); tc_last=$total_count`）一并省掉**，
+#    留着只是三个没人读的死变量（`count=$(… jq 'length')` 那行本身别省，守卫②要用）。
+#    本变体是「命中即停」，早停时 Σ 必然小于 total_count，照抄守卫③会把「找到了」
+#    误报成「评论未取全」——目标在第 1 页就命中时 Σ 只有那一页的条数、必不等于 total_count，
+#    脚本 exit 1 报「评论未取全」，而评论其实已经找到、创建也其实成功了。
+#    这里的目的是「找到目标」不是「取全列表」，所以总账校验不适用；「没找到」这个结论的可靠性
+#    由守卫①②+MAX_PAGES 保证（缺头 / 自相矛盾 / 空转都 exit 1，不会退化成「查过了、确实没有」）。
+#    守卫③只适用于**必须取全**的场景：步骤 1「是否已评论过」、批量清理收集待删 ID。
 #
 #   found=$(echo "$resp" | jq -c --argjson nid "$NOTE_ID" --arg me "$MY_LOGIN" '
 #       .[] | {id, discussion_id, comment_type, author: .user.login, body} as $c
@@ -569,7 +665,7 @@ case "$NOTE_ID" in ''|*[!0-9]*) echo "ERROR: NOTE_ID 必须是整数，当前=\"
 ### 提交普通评论
 
 ```bash
-curl -s -X POST \
+curl -s --connect-timeout 10 --max-time 60 -X POST \
   -H "Content-Type: application/json" \
   "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN" \
   -d '{
@@ -593,14 +689,14 @@ POST /repos/:owner/:repo/pulls/:number/discussions/:discussion_id/comments
 # per_page 默认 20、最大 100（请求值超过 100 会被静默夹回 100），必须显式传；
 # 评论数 > 100 时按 page 递增翻页取完、以响应头 total_page 为终止判据（见「获取 PR 讨论列表」）
 # 此处只需父评论：回复不能单独被回复，reply[] 里的条目共享父评论的 discussion_id
-curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100" | \
+curl -s --connect-timeout 10 --max-time 60 "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN&per_page=100" | \
   jq '.[] | {id: .id, discussion_id: .discussion_id}'
 ```
 
 2. **回复评论**：
 
     ```bash
-    curl -s -X POST \
+    curl -s --connect-timeout 10 --max-time 60 -X POST \
       -H "Content-Type: application/json" \
       "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/discussions/<DISCUSSION_ID>/comments?access_token=$GITCODE_API_TOKEN" \
     -d '{
@@ -613,7 +709,7 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
     ```bash
     # 回复接口（HTTP 201）只返回 {"id":"<discussion_id>","body":"...","note_id":<评论 ID 整数>}，
     # 不含 comment_type；用 note_id 查单条接口，比对 discussion_id 是否等于父讨论的 discussion_id
-    curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<NOTE_ID>?access_token=$GITCODE_API_TOKEN" | \
+    curl -s --connect-timeout 10 --max-time 60 "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<NOTE_ID>?access_token=$GITCODE_API_TOKEN" | \
     jq '{discussion_id: .discussion_id, comment_type: .comment_type}'
     ```
 
@@ -641,7 +737,7 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>
 ```bash
 # ⚠️ 必须用 -w '%{http_code}' 校验（成功为 200）：curl -s 的退出码对 4xx 不作数（理由见下方第 6 条）
 # ⚠️ 父评论下还有回复时会返回 405，必须先删掉它的回复
-curl -s -o /dev/null -w '%{http_code}\n' -X DELETE \
+curl -s --connect-timeout 10 --max-time 60 -o /dev/null -w '%{http_code}\n' -X DELETE \
   "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<COMMENT_ID>?access_token=$GITCODE_API_TOKEN"
 ```
 
@@ -661,7 +757,7 @@ curl -s -o /dev/null -w '%{http_code}\n' -X DELETE \
    只看 `$?` 会把「删了一半」当成删干净。
 
 > 脚本里还处理了两处同样会静默出错的坑（`.body` 为 `null`、排序键掺 `.body`），
-> 连同「只看清单不执行」的跑法、完整坑位说明、证据边界与响应码表，
+> 连同「只看清单不执行」的跑法、完整坑位说明与响应码表，
 > 都见 `references/gitcode_api.md` →「删除 PR 评论」。
 
 **注意**：DELETE 接口的 `<COMMENT_ID>` 必须是**数字评论 ID**（整数，如 `123456789`）；
@@ -671,7 +767,7 @@ POST 响应里的**哈希串 `id`** 是 `discussion_id`，**不能**用来删—
 响应原文见上文[创建评论的返回值](#创建评论的返回值)。删除顺序与状态码校验已由上面六条
 不变式的第 5、6 条覆盖，此处不重复。
 
-详细 API 参数、响应码原文、证据边界和权限说明请参考 `references/gitcode_api.md` 的「删除 PR 评论」章节。
+详细 API 参数、响应码原文和权限说明请参考 `references/gitcode_api.md` 的「删除 PR 评论」章节。
 
 ### 创建 PR 的正确流程
 
@@ -710,7 +806,7 @@ git push hgjupstream fix/gcc13-link-error -u
 
   ```bash
   # 跨 fork 时 target_owner/target_repo 是上游仓库（由 parent.full_name 得到）
-  curl -s "https://api.gitcode.com/api/v5/repos/${target_owner}/${target_repo}?access_token=$GITCODE_API_TOKEN" | \
+  curl -s --connect-timeout 10 --max-time 60 "https://api.gitcode.com/api/v5/repos/${target_owner}/${target_repo}?access_token=$GITCODE_API_TOKEN" | \
     jq -r '.default_branch'
   ```
 
@@ -750,7 +846,7 @@ done
 ```bash
 # 注意：endpoint 的 ${owner}/${repo} 必须是 PR 要合入的【目标仓库】；
 # 跨 fork 时目标仓库是上游仓库，而非你的 fork
-curl -s -X POST "https://api.gitcode.com/api/v5/repos/${target_owner}/${target_repo}/pulls" \
+curl -s --connect-timeout 10 --max-time 60 -X POST "https://api.gitcode.com/api/v5/repos/${target_owner}/${target_repo}/pulls" \
   -H "Authorization: Bearer $GITCODE_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
