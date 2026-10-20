@@ -109,6 +109,18 @@ python3 -c "import torch; assert '+cpu' in torch.__version__, 'must use CPU torc
 python3 -c "import amct_pytorch as amct; print(f'successfully installed AMCT ')"
 ```
 
+<details>
+<summary>Building in an offline environment</summary>
+
+If the build environment has no network access, download all third-party packages in advance on a networked machine, then copy them to the offline environment:
+
+```bash
+bash download_3rd_party.sh
+bash build.sh --torch --cann_3rd_lib_path=third_party
+```
+
+</details>
+
 For more build options and local verification, please refer to [Build Guide](docs/zh/build.md).
 
 ### 🏃 One-Stop Platform Quick Experience

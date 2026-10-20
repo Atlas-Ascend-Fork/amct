@@ -26,9 +26,11 @@
 
 | 类型 | 开源代码地址 | 文件名　　　　　　　　　　　　　 | 公网IP地址/公网URL地址/域名/邮箱地址/压缩文件地址　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　 | 用途说明　　　　　　　　　　　　　　　　　|
 | :----:| :------------:| :---------------------------------| :--------------------------------------------------------------------------------------------------------------| :------------------------------------------|
-| 依赖 | 不涉及　　　 | cmake/third_party/protobuf.cmake | https://gitcode.com/cann-src-third-party/protobuf/releases/download/v3.13.0/protobuf-3.13.0.tar.gz　　　　　　| 从gitcode下载protobuf源码，作用编译依赖　 |
-| 依赖 | 不涉及　　　 | cmake/third_party/protobuf.cmake | https://gitcode.com/cann-src-third-party/abseil-cpp/releases/download/20230802.1/abseil-cpp-20230802.1.tar.gz | 从gitcode下载abseil源码，作用编译依赖　　 |
-| 依赖 | 不涉及　　　 | cmake/fetch_cann_cmake.cmake　　 | https://cann-3rd.obs.cn-north-4.myhuaweicloud.com/cmake/cmake-master-049.tar.gz　　　　　　　　　　　　　　　 | 从gitcode下载cann cmake源码，作用编译依赖 |
+| 依赖 | 不涉及　　　 | download_3rd_party.sh　　　　　 | https://cann-3rd.obs.cn-north-4.myhuaweicloud.com/protobuf/protobuf-25.1.tar.gz　　　　　　　　　　　　　　　 | 从华为云下载protobuf源码，作用编译依赖　　 |
+| 依赖 | 不涉及　　　 | download_3rd_party.sh　　　　　 | https://cann-3rd.obs.cn-north-4.myhuaweicloud.com/abseil-cpp/abseil-cpp-20230802.1.tar.gz　　　　　　　　　　 | 从华为云下载abseil源码，作用编译依赖　　　 |
+| 依赖 | 不涉及　　　 | download_3rd_party.sh　　　　　 | https://gitcode.com/cann-src-third-party/abseil-cpp/releases/download/20230802.1-h0/backport-CVE-2025-0838.patch | 从gitcode下载abseil补丁，作用编译依赖　 |
+| 依赖 | 不涉及　　　 | download_3rd_party.sh　　　　　 | https://raw.gitcode.com/cann/cmake/archive/refs/heads/master-059.tar.gz　　　　　　　　　　　　　　　　　　　　 | 从gitcode下载cann/cmake master-059构建配置，作用编译依赖 |
+| 依赖 | 不涉及　　　 | cmake/fetch_cann_cmake.cmake　　 | https://gitcode.com/cann/cmake.git　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　 | 在线获取cann/cmake master-059构建配置　 |
 | 依赖 | 不涉及　　　 | install_graph.sh　　　　　　　 | https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/CANN/20260902_newest/cann-amct-graph_9.2.0_linux-${ARCH}.tar.gz | 从OBS下载amct-graph包，作用构建依赖　　　 |
 ---
 
