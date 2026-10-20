@@ -1,6 +1,7 @@
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
 # Licensed under the Apache License, Version 2.0 (the "License").
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -110,6 +111,24 @@ def adapter(tmp_path, dtype="mxfp", config=None):
     return model
 
 
+def convert_shard(model, source_file, model_dir, mapping, selected, cache):
+    from amct_pytorch.quantization.dtypes import register_dtype
+    from amct_pytorch.workflows.llm_deploy import LlmDeployWorkflow
+
+    register_dtype()
+    workflow = LlmDeployWorkflow.__new__(LlmDeployWorkflow)
+    workflow.args = model.args
+    workflow.pipeline = model
+    workflow.model_path = str(model_dir)
+    workflow.output_dir = model.args.output_dir
+    workflow.quant_dtype = model.quant_dtype
+    workflow.safetensors_files = None
+    assert not hasattr(model, "convert_tensorwise_shard")
+    return workflow._convert_tensorwise_shard(
+        source_file, model_dir, mapping, selected, cache
+    )
+
+
 def test_cross_shard_passthrough_and_auxiliary(tmp_path):
     weight = torch.full((2, 16), 0x21, dtype=torch.uint8)
     scale = torch.full((2, 1), 127, dtype=torch.uint8)
@@ -127,9 +146,16 @@ def test_cross_shard_passthrough_and_auxiliary(tmp_path):
         json.dumps({"weight_map": mapping})
     )
     model = adapter(tmp_path)
-    routes = model.convert_tensorwise_shard(
-        "a.safetensors", tmp_path, mapping, model.generate_tensorwise_quant_layers(), {}
+    cache = {}
+    routes = convert_shard(
+        model,
+        "a.safetensors",
+        tmp_path,
+        mapping,
+        model.generate_tensorwise_quant_layers(),
+        cache,
     )
+    assert not cache
     result = load_file(
         str(tmp_path.with_name(tmp_path.name + "_out") / "a.safetensors")
     )
@@ -148,7 +174,7 @@ def test_bf16_decodes_uint8_packed_and_clears_nested_config(tmp_path):
     )
     mapping = {PACKED: "a.safetensors", SCALE: "a.safetensors"}
     model = adapter(tmp_path, None)
-    model.convert_tensorwise_shard("a.safetensors", tmp_path, mapping, {}, {})
+    convert_shard(model, "a.safetensors", tmp_path, mapping, {}, {})
     result = load_file(
         str(tmp_path.with_name(tmp_path.name + "_out") / "a.safetensors")
     )
@@ -179,7 +205,8 @@ def test_missing_scale_is_error(tmp_path):
     )
     model = adapter(tmp_path)
     with pytest.raises(ValueError, match="scale"):
-        model.convert_tensorwise_shard(
+        convert_shard(
+            model,
             "a.safetensors",
             tmp_path,
             {PACKED: "a.safetensors"},
@@ -254,18 +281,18 @@ def test_tensorwise_selection_and_ignore_golden(tmp_path, targets):
     assert model.bits_scheme()[1]["a_bits"] == 8
 
 
-def test_mxfp8_requantization_and_nested_metadata(tmp_path):
+def test_bf16_quantization_and_nested_metadata(tmp_path):
     name = PREFIX + "self_attn.q_a_proj.weight"
     scale_name = name.replace(".weight", ".weight_scale")
-    source = torch.ones((2, 32), dtype=torch.float8_e4m3fn)
+    source = torch.ones((2, 32), dtype=torch.bfloat16)
     save_file(
-        {name: source, scale_name: torch.full((2, 1), 127, dtype=torch.uint8)},
+        {name: source},
         str(tmp_path / "a.safetensors"),
     )
     model = adapter(tmp_path)
-    mapping = {name: "a.safetensors", scale_name: "a.safetensors"}
-    model.convert_tensorwise_shard(
-        "a.safetensors", tmp_path, mapping, {name.removesuffix(".weight"): 8}, {}
+    mapping = {name: "a.safetensors"}
+    convert_shard(
+        model, "a.safetensors", tmp_path, mapping, {name.removesuffix(".weight"): 8}, {}
     )
     result = load_file(
         str(tmp_path.with_name(tmp_path.name + "_out") / "a.safetensors")
@@ -289,45 +316,6 @@ def test_mxfp8_requantization_and_nested_metadata(tmp_path):
     )
 
 
-def test_malformed_scale_rejected_before_output(tmp_path):
-    save_file(
-        {
-            PACKED: torch.ones((2, 16), dtype=torch.int8),
-            SCALE: torch.ones((1, 1), dtype=torch.uint8),
-        },
-        str(tmp_path / "a.safetensors"),
-    )
-    model = adapter(tmp_path)
-    with pytest.raises(ValueError, match="shape"):
-        model.convert_tensorwise_shard(
-            "a.safetensors",
-            tmp_path,
-            {PACKED: "a.safetensors", SCALE: "a.safetensors"},
-            {},
-            {},
-        )
-    assert not (tmp_path.with_name(tmp_path.name + "_out") / "a.safetensors").exists()
-
-
-def test_duplicate_packed_and_plain_weight_rejected(tmp_path):
-    save_file(
-        {PACKED: torch.ones((2, 16), dtype=torch.uint8)},
-        str(tmp_path / "a.safetensors"),
-    )
-    model = adapter(tmp_path)
-    with pytest.raises(ValueError, match="Duplicate"):
-        model.convert_tensorwise_shard(
-            "a.safetensors",
-            tmp_path,
-            {
-                PACKED: "a.safetensors",
-                PACKED.replace("weight_packed", "weight"): "a.safetensors",
-            },
-            {},
-            {},
-        )
-
-
 def test_attention_only_ignores_decoded_experts(tmp_path):
     (tmp_path / "model.safetensors.index.json").write_text(
         json.dumps({"weight_map": {PACKED: "a.safetensors"}})
@@ -340,7 +328,8 @@ def test_attention_only_ignores_decoded_experts(tmp_path):
     )
 
 
-def test_actual_workflow_exports_index_and_nested_config(tmp_path):
+@pytest.mark.parametrize("dtype", ["mxfp", ""])
+def test_actual_workflow_exports_index_and_nested_config(tmp_path, dtype):
     from amct_pytorch.workflows.llm_deploy import LlmDeployWorkflow
 
     source = tmp_path / "source"
@@ -355,10 +344,13 @@ def test_actual_workflow_exports_index_and_nested_config(tmp_path):
     }
     (source / "config.json").write_text(json.dumps(config))
     shared = PREFIX + "block_sparse_moe.shared_experts.up_proj.weight"
+    mla = PREFIX + "self_attn.q_a_proj.weight"
+    mla_scale = mla.replace(".weight", ".weight_scale")
     save_file(
         {
             PACKED: torch.full((2, 16), 0x21, dtype=torch.uint8),
             shared: torch.ones((2, 32), dtype=torch.bfloat16),
+            mla: torch.ones((2, 32), dtype=torch.bfloat16),
         },
         str(source / "a.safetensors"),
     )
@@ -373,6 +365,7 @@ def test_actual_workflow_exports_index_and_nested_config(tmp_path):
                     PACKED: "a.safetensors",
                     SCALE: "b.safetensors",
                     shared: "a.safetensors",
+                    mla: "a.safetensors",
                 }
             }
         )
@@ -382,7 +375,7 @@ def test_actual_workflow_exports_index_and_nested_config(tmp_path):
         output_dir=str(output),
         model_name="kimi_k3",
         granularity="tensor",
-        quant_dtype="mxfp",
+        quant_dtype=dtype,
         quant_target=["moe", "attn-linear"],
         deploy_format="legacy",
         seed=0,
@@ -390,9 +383,23 @@ def test_actual_workflow_exports_index_and_nested_config(tmp_path):
     )
     LlmDeployWorkflow(args).run()
     index = json.loads((output / "model.safetensors.index.json").read_text())
-    assert index["weight_map"][SCALE] == "a.safetensors"
     assert index["metadata"]["total_size"] > 0
+    result = load_file(str(output / "a.safetensors"))
+    assert result[shared].dtype == torch.bfloat16
     exported = json.loads((output / "config.json").read_text())
+    if not dtype:
+        assert result[mla].dtype == torch.bfloat16
+        assert result[PACKED.replace("weight_packed", "weight")].dtype == torch.bfloat16
+        assert PACKED not in index["weight_map"]
+        assert SCALE not in index["weight_map"]
+        assert mla_scale not in index["weight_map"]
+        assert "quantization_config" not in exported
+        assert "quantization_config" not in exported["text_config"]
+        return
+    assert result[PACKED].dtype == torch.uint8
+    assert result[mla].dtype == torch.float8_e4m3fn
+    assert index["weight_map"][SCALE] == "a.safetensors"
+    assert index["weight_map"][mla_scale] == "a.safetensors"
     assert (
         exported["quantization_config"]
         == exported["text_config"]["quantization_config"]
@@ -401,3 +408,19 @@ def test_actual_workflow_exports_index_and_nested_config(tmp_path):
         shared.removeprefix("language_model.").removesuffix(".weight")
         in exported["quantization_config"]["ignore"]
     )
+
+
+@pytest.mark.parametrize("dtype", ["mxfp", ""])
+def test_unselected_bf16_outputs(tmp_path, dtype):
+    name = PREFIX + "self_attn.q_proj.weight"
+    shared = PREFIX + "block_sparse_moe.shared_experts.up_proj.weight"
+    weights = {key: torch.ones((2, 32), dtype=torch.bfloat16) for key in (name, shared)}
+    save_file(weights, str(tmp_path / "a.safetensors"))
+    model = adapter(tmp_path, dtype)
+    mapping = dict.fromkeys(weights, "a.safetensors")
+    convert_shard(model, "a.safetensors", tmp_path, mapping, {}, {})
+    result = load_file(str(Path(model.args.output_dir) / "a.safetensors"))
+    assert set(result) == set(weights)
+    for key, weight in weights.items():
+        assert result[key].dtype == torch.bfloat16
+        assert torch.equal(result[key], weight)

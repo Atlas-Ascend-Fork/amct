@@ -347,7 +347,7 @@ def test_refresh_weight_index_writes_metadata_and_total_size(tmp_path):
 
 
 def test_refresh_config_attaches_quantization_block(tmp_path):
-    wf = _make_workflow(output_dir=str(tmp_path))
+    wf = _make_workflow(output_dir=str(tmp_path), quant_dtype="int")
     wf.pipeline = SimpleNamespace(cache_scheme=lambda: {}, bits_scheme=lambda: None)
     # Original config that the workflow reads in.
     (tmp_path / CONFIG_JSON).write_text(json.dumps({"hidden_size": 4096}))
@@ -362,7 +362,7 @@ def test_refresh_config_attaches_quantization_block(tmp_path):
 
 
 def test_refresh_config_uses_float_format_for_mx_dtype(tmp_path):
-    wf = _make_workflow(output_dir=str(tmp_path), quant_dtype="mxfp8")
+    wf = _make_workflow(output_dir=str(tmp_path), quant_dtype="mxfp")
     wf.pipeline = SimpleNamespace(cache_scheme=lambda: {}, bits_scheme=lambda: None)
     (tmp_path / CONFIG_JSON).write_text("{}")
     wf._refresh_config(quant_ignore_layers=[])
@@ -924,11 +924,11 @@ def test_non_configured_tensor_model_uses_legacy_adapter_selection(
     output_config = json.loads((dst / CONFIG_JSON).read_text())
     assert result["num_output_files"] == 1
     assert output_index["weight_map"] == {weight_name: MODEL_SAFETENSORS}
-    assert output_config[QUANTIZATION_CONFIG]["ignore"] == ["lm_head"]
+    assert QUANTIZATION_CONFIG not in output_config
     assert not hasattr(wf, "deploy_plan")
 
 
-# ---- Task 14: _convert_tensor / _refresh_config_tensor --------------------
+# ---- _convert_tensor / BF16 config --------------------------------------
 
 
 def _make_bit_policy():
@@ -959,7 +959,7 @@ def test_convert_tensor_unsupported_raises():
         wf._convert_tensor("test.weight", t)
 
 
-def test_refresh_config_bf16_uses_pipeline_quant_config(tmp_path):
+def test_refresh_config_bf16_removes_quant_config(tmp_path):
     wf = _make_workflow(output_dir=str(tmp_path), quant_dtype="bf16")
     wf.pipeline = SimpleNamespace(cache_scheme=lambda: {}, bits_scheme=lambda: None)
     config = {"torch_dtype": "float32", "quantization_config": {"old": True}}
@@ -967,7 +967,7 @@ def test_refresh_config_bf16_uses_pipeline_quant_config(tmp_path):
     wf._refresh_config(quant_ignore_layers=[])
     refreshed = json.loads((tmp_path / "config.json").read_text())
     assert refreshed["torch_dtype"] == "float32"
-    assert refreshed["quantization_config"]["format"] == "int-quantized"
+    assert QUANTIZATION_CONFIG not in refreshed
 
 
 # ---- _run_tensorwise int/mxfp quant branch (diff coverage) ---------------

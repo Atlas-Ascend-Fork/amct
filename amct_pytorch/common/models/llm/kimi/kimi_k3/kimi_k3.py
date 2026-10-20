@@ -10,20 +10,17 @@ from pathlib import Path
 
 import torch
 from safetensors import safe_open
-from safetensors.torch import load_file, save_file
+from safetensors.torch import load_file
 
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm.common.deploy_export import (
     generate_quant_config,
-    quant_payload,
 )
 from amct_pytorch.common.models.llm.common.weight_path_validation import (
     collect_safetensors_files,
     resolve_safetensors_path,
-    validate_weight_map,
 )
 from amct_pytorch.quantization.dtypes.fp_impl import weight_dequant
-from amct_pytorch.quantization.dtypes.mxfp import QuantDequantMx
 
 
 @MODEL_REGISTRY.register(
@@ -195,84 +192,48 @@ class KimiK3:
     def cache_scheme():
         return {"kv_cache_scheme": None}
 
-    def convert_tensorwise_shard(
-        self, source_file, model_dir, original_weight_map, quant_layers, loaded_files
-    ):
-        files = collect_safetensors_files(model_dir)
-        validate_weight_map(model_dir, original_weight_map, files)
-        def load(name):
-            if name not in original_weight_map:
-                raise ValueError(f"Missing Kimi weight/scale in index: {name}")
-            shard = original_weight_map[name]
-            with safe_open(
-                str(resolve_safetensors_path(model_dir, shard, files)),
-                framework="pt",
-                device="cpu",
-            ) as handle:
-                if name not in handle.keys():  # noqa: SIM118 (safe_open is not a dict)
-                    raise ValueError(f"Missing Kimi weight/scale in shard: {name}")
-                return handle.get_tensor(name)
+    @staticmethod
+    def get_scale_name(weight_name):
+        module = weight_name.rsplit(".", 1)[0]
+        return ".weight_scale", module + ".weight_scale"
 
-        result = {}
-        for name, shard in original_weight_map.items():
-            if shard != source_file:
-                continue
-            if name.endswith(".weight_scale"):
-                owner = name.removesuffix(".weight_scale")
-                if (
-                    owner + ".weight" in original_weight_map
-                    or owner + ".weight_packed" in original_weight_map
-                ):
-                    continue
-            weight = load(name)
-            if not name.endswith((".weight", ".weight_packed")):
-                result[name] = weight
-                continue
-            module = name.rsplit(".", 1)[0]
-            scale_name = module + ".weight_scale"
-            packed = name.endswith(".weight_packed")
-            lowbit = packed or weight.element_size() == 1
-            scale = None
-            if lowbit:
-                scale = load(scale_name)
-            if (
-                self.quant_dtype == "mxfp"
-                and module in quant_layers
-                and packed
-                and self._MOE_WEIGHT_RE.match(name)
-            ):
-                result[name] = weight
-                result[scale_name] = scale
-                continue
-            if lowbit:
-                weight = weight_dequant(
-                    weight, scale, block_size=32, is_mx=True, is_packed=packed
-                )
-            output_name = module + ".weight"
-            if self.quant_dtype == "mxfp" and module in quant_layers:
-                payload = quant_payload(
-                    QuantDequantMx, output_name, weight, quant_layers[module]
-                )
-                result.update(payload)
-            else:
-                result[output_name] = (
-                    weight.to(torch.bfloat16)
-                    if lowbit
-                    or self.quant_dtype != "mxfp"
-                    and weight.is_floating_point()
-                    else weight
-                )
-        output = Path(self.args.output_dir).resolve()
-        path = output / source_file
-        if Path(source_file).name != source_file or path.resolve().parent != output:
-            raise ValueError("Kimi output shard must be a local filename")
-        if result:
-            output.mkdir(parents=True, exist_ok=True)
-            temporary = output / f".{source_file}.tmp"
-            save_file({k: v.contiguous() for k, v in result.items()}, str(temporary))
-            os.replace(temporary, path)
-        loaded_files.clear()
-        return dict.fromkeys(result, source_file)
+    @staticmethod
+    def block_size(weight):
+        return 32
+
+    def convert_tensorwise_tensor(
+        self, name, weight, model_dir, original_weight_map, quant_layers
+    ):
+        """Handle packed experts and auxiliaries before common source decoding."""
+        if name.endswith(".weight_scale"):
+            return {}
+        if not name.endswith((".weight", ".weight_packed")):
+            return {name: weight}
+        if not name.endswith(".weight_packed"):
+            return None
+
+        module = name.rsplit(".", 1)[0]
+        scale_name = module + ".weight_scale"
+        if scale_name not in original_weight_map:
+            raise ValueError(f"Missing Kimi weight/scale in index: {scale_name}")
+        files = collect_safetensors_files(model_dir)
+        path = resolve_safetensors_path(
+            model_dir, original_weight_map[scale_name], files
+        )
+        with safe_open(str(path), framework="pt", device="cpu") as handle:
+            if scale_name not in handle.keys():  # noqa: SIM118
+                raise ValueError(f"Missing Kimi weight/scale in shard: {scale_name}")
+            scale = handle.get_tensor(scale_name)
+        if (
+            self.quant_dtype == "mxfp"
+            and module in quant_layers
+            and self._MOE_WEIGHT_RE.match(name)
+        ):
+            return {name: weight, scale_name: scale}
+        dequant_weight = weight_dequant(
+            weight, scale, block_size=32, is_mx=True, is_packed=True
+        )
+        return {module + ".weight": dequant_weight.to(torch.bfloat16)}
 
     def refresh_config(self, ignored):
         path = Path(self.args.output_dir) / "config.json"

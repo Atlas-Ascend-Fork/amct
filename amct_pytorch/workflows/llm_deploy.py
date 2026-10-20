@@ -576,7 +576,17 @@ class LlmDeployWorkflow:
             loaded_files[source_file] = current_state_dict
 
         new_state_dict = {}
+        tensor_handler = getattr(self.pipeline, "convert_tensorwise_tensor", None)
         for weight_name, weight in current_state_dict.items():
+            # Models may handle source-specific tensors without replacing shard I/O.
+            if not is_ascend and callable(tensor_handler):
+                payload = tensor_handler(
+                    weight_name, weight, model_dir, original_weight_map, quant_layers
+                )
+                if payload is not None:
+                    # An empty payload means handled without any output tensor.
+                    new_state_dict.update(payload)
+                    continue
             # Ascend accepts original BF16 weights and preserves auxiliary tensors.
             # Source quantized-format decoding remains specific to legacy export.
             if not is_ascend:
@@ -609,6 +619,9 @@ class LlmDeployWorkflow:
                     if hasattr(self, "_quantized_modules"):
                         self._quantized_modules.add(new_weight_name)
         self._write_safetensor_file(source_file, new_state_dict)
+        if not is_ascend and callable(tensor_handler):
+            # Keep source tensors bounded to one shard conversion for model handlers.
+            loaded_files.clear()
         if is_ascend:
             self._output_tensor_bytes = getattr(self, "_output_tensor_bytes", 0) + sum(
                 tensor.numel() * tensor.element_size()
