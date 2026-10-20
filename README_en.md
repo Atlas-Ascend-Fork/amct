@@ -18,6 +18,7 @@ English | [简体中文](./README.md)
 
 ## 🔥 Latest Updates
 
+- **[2026/10/20]** Added DeepSeek-V4.1 HiFloat8 deployment weight export (`--deploy_platform ascend950 --quant_dtype hifp`); see [DeepSeek V4.1 Deployment Weight Export](./examples/models/deepseekv4.1/README_en.md)
 - **[2026/09/29]** Added DeepSeekV4.1-Flash network quantization, with a [AMCT Low-Precision Quantization Agent Quantization Practice](./examples/models/deepseekv4.1/DeepSeekV4.1-Flash-Quantization-Agent_en.md) sample
 - **[2026/08/07]** Added structured pruning (`amct_pytorch.pruning`) for MoE experts / dense FFN / CNN channels, with a [Qwen3.6-MoE structured pruning](./examples/models/qwen3.6/Qwen3.6-Moe-Pruning_en.md) one-stop single-card sample
 - **[2026/05/28]** Added current mainstream LLM network quantization, PTQ algorithm support, and provided [DeepSeek-V4](./examples/models/deepseekv4/DeepSeekV4-Flash-Walkthrough.md) and [Qwen3.6-MoE](./examples/models/qwen3.6/Qwen3.6-Moe.md) one-stop samples

@@ -1,0 +1,17 @@
+{
+  "quant_layers": [
+    "layers.*.attn.wq_a",
+    "layers.*.attn.wkv",
+    "layers.*.attn.wq_b",
+    "layers.*.attn.wo_a",
+    "layers.*.attn.wo_b",
+    "layers.*.attn.indexer.wq_b",
+    "layers.*.engram.wkv",
+    "mtp.*.attn.wq_a",
+    "mtp.*.attn.wkv",
+    "mtp.*.attn.wq_b",
+    "mtp.*.attn.wo_a",
+    "mtp.*.attn.wo_b"
+  ],
+  "ignore_layers": []
+}
