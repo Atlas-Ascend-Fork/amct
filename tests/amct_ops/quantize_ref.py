@@ -170,7 +170,7 @@ def construct_fp4_from_components(
     if orig_shape[-1] % group_size == 0:
         output_shape = list(orig_shape[:-1]) + [-1]
         return packed_mx4.view(output_shape).view(torch.uint8)
-    # If we cant, return as a flat array.
+    # If we can't, return as a flat array.
     else:
         return packed_mx4.view(-1).view(torch.uint8)
 
