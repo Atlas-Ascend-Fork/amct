@@ -48,7 +48,7 @@
       "id": 2,
       "eval_name": "line-number-accuracy",
       "prompt": "审查 PR #1437 的代码变更，找出 if (it == (itMap->second).end()) 这行代码的准确行号，并说明如何获取的。注意：此用例只定位行号，不要发布评论。",
-      "expected_output": "准确定位到第 844 行，并说明通过 raw 文件验证或 grep -n 获取",
+      "expected_output": "准确定位到第 844 行，并说明通过取文件原始内容（contents API 或本地 git show）+ grep -n 获取",
       "files": [],
       "cleanup": "无需清理（此用例不发布评论）",
       "last_result": {
@@ -73,7 +73,7 @@
         {
           "name": "explains-method",
           "description": "解释行号获取方法",
-          "check": "输出中应说明通过 raw 文件验证或 grep -n 命令获取行号"
+          "check": "输出中应说明通过取文件原始内容（v5 contents API，或本地 git show）再 grep -n 获取行号；不应把 raw.gitcode.com/…/raw/<commit>/<path> 当唯一手段（该形式实测会间歇 403「暂不支持预览」）"
         }
       ]
     },
@@ -83,7 +83,7 @@
       "prompt": "审查 https://gitcode.com/cann/ge/pull/1437，发现问题后发布行内评论到 PR。重要：评论内容必须以 [TEST] 开头，并在测试完成后记录评论 ID 以便清理。",
       "expected_output": "成功发布行内评论到 hcom_graph_optimizer.cc 第 844 行附近，评论以 [TEST] 开头",
       "files": [],
-      "cleanup": "删除已发布的测试评论。使用以下命令获取并删除：\ncurl -s -H \"PRIVATE-TOKEN: $GITCODE_API_TOKEN\" \"https://api.gitcode.com/api/v4/projects/cann%2Fge/merge_requests/1437/discussions\" | jq -r '.[].notes[] | select(.body | startswith(\"[TEST]\")) | .id' | while read id; do curl -s -X DELETE \"https://api.gitcode.com/api/v5/repos/cann/ge/pulls/comments/$id?access_token=$GITCODE_API_TOKEN\"; done",
+      "cleanup": "删除已发布的测试评论：先用 SKILL.md →「获取 PR 讨论列表（包含行内评论）」的翻页循环按唯一标记 [TEST] 收集评论的数字 id（.body 可能为 null，过滤器要写 (.body // \"\")），再用 SKILL.md →「删除 PR 评论」的 DELETE 逐条删——必须用 -w '%{http_code}' 校验（成功为 200），父评论带回复时返回 405，先删回复再删父评论。收集与删除的坑位清单见 references/gitcode_api.md →「删除 PR 评论」→「获取评论 ID」。注意 cann/ge#1437 是真实上游 PR（非占位符），会对它发 DELETE，故本用例默认跳过（见 last_result.reason）；确需实跑请先换成自有仓的测试 PR 并同步改参数。",
       "last_result": {
         "status": "skipped",
         "reason": "跳过以避免向真实 PR 发布测试评论"

@@ -1,15 +1,10 @@
 ---
 description: 审查 GitCode Pull Request 的代码变更
-allowed-tools: Bash(curl), Bash(git diff), Bash(git log), Bash(git show)
 ---
 
 # GitCode PR 代码审查
 
 对指定的 Pull Request 进行代码审查。
-
-**Agent 假设（适用于所有 agent 和子 agent）：**
-- 所有工具都能正常工作，不会出错。不要测试工具或进行探索性调用。确保每个启动的子 agent 都清楚这一点。
-- 只有在完成任务需要时才调用工具。每次工具调用都应有明确目的。
 
 ## 审查流程
 
@@ -35,22 +30,27 @@ allowed-tools: Bash(curl), Bash(git diff), Bash(git log), Bash(git show)
 
 ### 步骤 3: 获取 PR 变更摘要
 
-查看 PR 并返回变更摘要：
+查看 PR 并返回变更摘要。**先按 ../SKILL.md「提取仓库 owner/repo 信息」把 `${owner}`/`${repo}` 设好**，再执行下面的命令：
 
 ```bash
 # 获取 PR 信息
-curl -s "https://gitcode.com/api/v5/repos/{owner}/{repo}/pulls/{pr_number}" \
-  -H "Authorization: Bearer $GITCODE_TOKEN"
+curl -s --connect-timeout 10 --max-time 60 "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>" \
+  -H "Authorization: Bearer $GITCODE_API_TOKEN"
 
-# 获取 PR 变更文件列表
-curl -s "https://gitcode.com/api/v5/repos/{owner}/{repo}/pulls/{pr_number}/files" \
-  -H "Authorization: Bearer $GITCODE_TOKEN"
+# 获取 PR 变更文件列表（每项含 patch.diff）
+curl -s --connect-timeout 10 --max-time 60 "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/files" \
+  -H "Authorization: Bearer $GITCODE_API_TOKEN"
 
-# 获取 PR diff
-curl -s "https://gitcode.com/api/v5/repos/{owner}/{repo}/pulls/{pr_number}" \
-  -H "Authorization: Bearer $GITCODE_TOKEN" \
-  -d "diff=true"
+# 获取 PR diff：v5 没有 diff=true 参数，diff 在 files 的 patch.diff 字段里
+curl -s --connect-timeout 10 --max-time 60 "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/files" \
+  -H "Authorization: Bearer $GITCODE_API_TOKEN" | jq -r '.[] | .patch.diff'
 ```
+
+> ⚠️ 占位符写 `${owner}`/`${repo}`，**别写 `{owner}`**——bash 不展开花括号，会原样拼进 URL；
+> 未赋值时拼成 `…/repos///pulls/<n>`，其 `401`/`404` 鉴别见 `../references/gitcode_api.md`
+> →「认证方式」→「`401` 不一定是 token 的问题」。
+> ⚠️ 上面每条 `curl -s` 对 4xx 的退出码仍是 `0`：必须校验 HTTP 状态码、并校验响应形状符合预期
+> （`GET /pulls/<n>` 顶层是对象、`/files` 顶层是数组），否则错误响应会被当成 PR 信息往下走。
 
 ### 步骤 3.1: 确定问题代码的准确行号
 
@@ -60,7 +60,7 @@ curl -s "https://gitcode.com/api/v5/repos/{owner}/{repo}/pulls/{pr_number}" \
 
 ```bash
 # 获取 PR 变更文件列表（包含 diff 信息）
-curl -s "https://gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/files" \
+curl -s --connect-timeout 10 --max-time 60 "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/files" \
   -H "Authorization: Bearer $GITCODE_API_TOKEN"
 ```
 
@@ -74,28 +74,33 @@ curl -s "https://gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/fil
 
 **注意**：hunk header 只提供了起始行号，需要根据 diff 内容逐行计算实际行号。
 
-#### 方法 2: 从 Raw 文件验证（推荐）
+#### 方法 2: 取文件原始内容验证（推荐）
 
-直接查询 PR 分支的 raw 文件获取准确行号：
+直接读取 PR head commit 上的完整文件，用 `grep -n` 拿准确行号。**首选 v5 contents API**
+（`content` 是 base64，需解码）：
 
 ```bash
-# 获取 PR head commit 的 raw 文件
-curl -s "https://raw.gitcode.com/${owner}/${repo}/raw/<HEAD_SHA>/path/to/file.cc" | grep -n "问题代码模式"
+curl -s --connect-timeout 10 --max-time 60 "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/contents/path/to/file.cc?ref=<HEAD_SHA>&access_token=$GITCODE_API_TOKEN" \
+  | jq -r '.content' | base64 -d | grep -n "问题代码模式"
 ```
 
-**示例**：
+或用同一响应的 `download_url`（`…/blobs/<blob_sha>/<path>` 形式，返回明文，无需解码）：
+
 ```bash
-# 查找 if (it == 的行号
-curl -s "https://raw.gitcode.com/${owner}/${repo}/raw/358192edfc1809f6fe17b0da0b1b8efd9880a52f/hcom_graph_optimizer.cc" \
-  | grep -n "if (it =="
+curl -s --connect-timeout 10 --max-time 60 "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/contents/path/to/file.cc?ref=<HEAD_SHA>&access_token=$GITCODE_API_TOKEN" \
+  | jq -r '.download_url' | xargs -r curl -s --connect-timeout 10 --max-time 60 | grep -n "问题代码模式"
 ```
 
-输出：`844:      if (it == (itMap->second).end()) {`
+> ⚠️ **不要用 `…/raw/<commit_sha>/<path>` 取内容**（`/pulls/<n>/files` 的 `raw_url`、`files.json` 的 `diffs[].head.url` 都是这个形式）：间歇 `403`，改用上面方法 2 的两条路径。
+>
+> **两条硬纪律（与用哪个地址无关；上面的代码示例本身不含这两道防护，得自己加）：**
+> - `ref` **必须传 PR head commit sha**，不要用分支名——分支名指向分支**当前**位置，PR 提交后分支若又推了新 commit，取到的就不是被审查的那一版，`grep -n` 的行号会与 diff 对不上；
+> - 取完**必须校验 HTTP 状态码 / 内容非空**再 `grep`：`curl -s` 对 `403`/`404` 的退出码仍是 `0`，不校验就会把错误页当成文件内容，`grep -n` 静默输出空结果，行号定位随之失败。遇到 `404` 别一口咬定是 ref 写错——「ref 不存在」与「文件在该 ref 上不存在」的响应体完全相同。
 
 #### 最佳实践
 
 1. **先用 diff 定位大致范围**：通过 PR diff 找到变更的代码块
-2. **再用 raw 文件确认精确行号**：避免手动计算出错
+2. **再取文件原始内容确认精确行号**：避免手动计算出错
 3. **发布评论前验证**：确保行号对应的是真正的问题代码
 
 ### 步骤 4: 代码审查
@@ -155,55 +160,34 @@ curl -s "https://raw.gitcode.com/${owner}/${repo}/raw/358192edfc1809f6fe17b0da0b
 
 使用 GitCode API 为每个问题发布行内评论。
 
-#### 创建新的 Discussion（推荐）
+#### 创建行内评论
 
 ```bash
-curl -s -X POST \
-  -H "PRIVATE-TOKEN: $GITCODE_API_TOKEN" \
+curl -s --connect-timeout 10 --max-time 60 -X POST \
   -H "Content-Type: application/json" \
-  "https://api.gitcode.com/api/v4/projects/${encoded_repo}/merge_requests/<PR_NUMBER>/discussions" \
+  "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN" \
   -d '{
-    "repoId": "'"${encoded_repo}"'",
-    "iid": <PR_NUMBER>,
     "body": "评论内容",
-    "line_types": "new",
-    "position": {
-      "base_sha": "<base_commit_sha>",
-      "start_sha": "<start_commit_sha>",
-      "head_sha": "<head_commit_sha>",
-      "position_type": "text",
-      "old_path": "文件路径",
-      "new_path": "文件路径",
-      "old_line": null,
-      "new_line": <结束行号>,
-      "start_old_line": null,
-      "start_new_line": <起始行号>,
-      "ignore_whitespace_change": false
-    },
-    "assignee_id": <用户ID>,
-    "proposer_id": <用户ID>,
-    "severity": "suggestion"
+    "path": "文件相对路径",
+    "position": <结束行号>,
+    "start_position": <起始行号>
   }'
 ```
 
-**多行选择说明**：
-- `start_new_line`: 选中的起始行号（多行选择时设置）
-- `new_line`: 选中的结束行号
-- 单行评论时，`start_new_line` 和 `new_line` 设置为相同值
+> ⚠️ **必须校验 HTTP 状态码，不能只看 `$?`**：成功是 `201`；token 缺失/无效时返回
+> `401 {"message":"401 Unauthorized"}`，而 `curl -s` 的**退出码仍是 `0`**——只看 `$?`
+> 会把「一条都没发出去」当成「发布成功」。用 `-o <文件> -w '%{http_code}'` 取状态码，或用
+> `-D <头文件> -w '__HTTP__%{http_code}'` 标记法；**不要**用 `-w '\n%{http_code}'` +
+> `${var%$'\n'*}` 切分——那是 bash 专有写法，dash 下失效。两种写法的可执行示例与失效原因见
+> `../references/gitcode_api.md` →「获取当前用户（token 对应的账号）」→「请求示例：先探测，再取字段」。
+> 非 `201` 就停下、把状态码与响应体原样上报，**不要继续发后面几条**，也不要重发已成功的。
+> 发完仍建议回读校验（`201` 不代表落点正确，行号错位 / `path` 写错会静默落到别处），
+> 见 `../SKILL.md` →「回读校验」。
 
-**参数说明**：
-
-| 参数 | 说明 | 必需 |
-|------|------|------|
-| `body` | 评论内容 | ✅ |
-| `line_types` | `"new"` 选择新代码（右侧），`"old"` 选择旧代码（左侧） | ✅ |
-| `position.base_sha` | base 提交 SHA | ✅ |
-| `position.start_sha` | start 提交 SHA | ✅ |
-| `position.head_sha` | head 提交 SHA | ✅ |
-| `position.new_path` | 文件相对路径 | ✅ |
-| `position.new_line` | 结束行号 | ✅ |
-| `position.start_new_line` | 起始行号（多行选择） | 多行时 |
-| `severity` | 严重程度：`suggestion`、`warning` | ❌ |
+**参数与多行选择**：`body`（内容）、`path`（文件相对路径）、`position`（**结束**行号）必填；
+多行选择再加 `start_position`（**起始**行号），单行评论只传 `position`（或与 `start_position` 同值）。
+完整参数表（另有 `position_type`、query 里的 `access_token`）与读回结果见
+`../references/gitcode_api.md` →「提交行内评论（支持多行选择）」。
 
 对于每个评论：
 - 提供问题的简要描述
@@ -250,24 +234,30 @@ curl -s -X POST \
 
 ## GitCode API 参考
 
-**重要**：GitCode 使用 GitLab API v4 格式，认证头使用 `PRIVATE-TOKEN`。
+**重要**：读写**统一使用 v5 API**，认证方式为 query 参数
+`?access_token=$GITCODE_API_TOKEN`（或 `Authorization: Bearer $GITCODE_API_TOKEN`）。
+端点清单、参数表与响应字段见 `../SKILL.md` 各节及 `../references/gitcode_api.md`，本文件不重抄。
 
-### 快速参考
+### 取评论：翻页取全（规范实现）
 
-| 操作 | API 端点 |
-|------|---------|
-| 获取 PR 信息 | `GET /projects/${encoded_repo}/merge_requests/<PR_NUMBER>` |
-| 获取 PR 变更 | `GET /projects/${encoded_repo}/merge_requests/<PR_NUMBER>/changes` |
-| 获取 PR 评论 | `GET /projects/${encoded_repo}/merge_requests/<PR_NUMBER>/discussions` |
-| 发布普通评论 | `POST /projects/${encoded_repo}/merge_requests/<PR_NUMBER>/notes` |
-| 发布行内评论 | `POST /projects/${encoded_repo}/merge_requests/<PR_NUMBER>/discussions` |
+**取评论列表的通用翻页循环只有一份**：`../SKILL.md` →「获取 PR 讨论列表（包含行内评论）」。
+判断「本 agent 是否已评论过」直接用它（输出已展开 `reply[]`，回复一起比 `author`），本文件不重抄。
+⚠️ 该接口的 `per_page` 默认 **20**、最大 **100**（超出被服务端**静默夹回**），
+不显式传 100 并从 `page=1` 翻页取完，「本 agent 是否已评论过」就会漏读后面的评论而误判。
+那份循环的投影字段**按用途裁剪**：只比 `author` 时不带 `resolved` / `diff_position`；
+要按「检视意见是否已解决」或行号过滤，把这两个字段加进**两处**投影（父行与 `reply` 行）。
 
-### 基本格式
-
-```bash
-curl -s -H "PRIVATE-TOKEN: $GITCODE_API_TOKEN" \
-  "https://api.gitcode.com/api/v4/projects/${encoded_repo}/merge_requests/<PR_NUMBER>/discussions"
-```
+> **六条硬规则（改写这段循环、或把它嵌进更大脚本时同样适用）**：
+> 1. 终止判据**只用响应头 `total_page`**（它按服务端**生效**页长算），**不要**用「本页条数 < 请求的 `per_page`」——请求值超过上限会被静默夹回，该判据第一页就 `break`、后面评论全丢；`total_page`/`total_count` **缺失时直接 `exit 1`**，同样**不要**退回「本页为空就算翻完」这类猜测判据——那会把「不知道取全没有」伪装成「取全了」；
+> 2. `total_page` 必须**每页重读**、用最新值判终止（它是本次请求时刻的快照，翻页途中新增评论会让它变大，每页重读才能自纠正）；
+> 3. **失败必须显式**：失败分支用 `exit 1`，**不能 `break` 后以 0 退出**——空列表 + `exit 0` 会被读成「取全了且没人评论过」，于是重复发布审查意见。「本页为空但 `page < total_page`」是服务端**自相矛盾**（响应头与体出自同一次响应），同样 `exit 1`，不是「翻完了」。嵌在更大脚本里不能直接退出时，改置 `incomplete=1` 标志后 `break`，调用方**必须**检查该标志并**自行以非 0 退出**（只置标志、不改退出码，就又造出一个「`exit 0` 但不代表成功」的状态，见 `../references/gitcode_api.md` →「应对原则」第 5 条）；调用方无论如何都要检查退出码；
+> 4. 读响应头必须 `-D <文件>`（`curl -s` 会丢掉响应头）、取值前必须 `tr -d '\r'`（头是 CRLF）、匹配头名必须 `tolower($1)` 或 `grep -i`（头名是全小写自定义头，`awk`/`grep` 大小写敏感）；
+> 5. `total_count` 只数**父评论**，回复不计入——核对「是否取全」要拿父评论条数比，别拿展开 `reply[]` 后的输出条数比（已落成循环外那句 Σ 校验）。该校验**只适用于「必须取全」的场景**（判断「是否已评论过」、给 `DELETE` 收集待删 ID）；「命中即停」的回读校验变体**不适用**，照抄会把「找到了」误报成「未取全」。不等时脚本只 `exit 1` 报数、**不自动重跑、不打 WARN 后继续**，由**人**判读；完整判读文案见 `../SKILL.md` 循环外那句 Σ 校验；
+> 6. 该接口**不返回** GitHub 风格的 `Link` header，不要按 `rel="next"` 判断翻页；单条资源接口（如 `GET /pulls/<n>`）也没有这两个分页头，只有列表接口才有。
+>
+> 规则 1/3/4/5 的响应形状样本见 `../references/gitcode_api.md` →「获取 PR 讨论（包含行内评论）」；
+> 规则 2、6 是接口语义（快照 / 无 `Link` 头），没有单一样本，依据见 `../SKILL.md` →「翻页规则」。
+>
+> 自检分页是否生效：把 `per_page` 临时调小（如 `per_page=5`）后分别请求 `page=1` 与 `page=2`，确认第 2 页返回的是剩余的评论而非重复内容，且 `total_page` 等于 `ceil(total_count / 5)`。
 
 **完整 API 格式（包括多行行内评论）详见**：`../references/gitcode_api.md`
-
