@@ -44,9 +44,19 @@ MOE_CALI_BSZ="${MOE_CALI_BSZ:-${CALI_BSZ}}"
 # cosine T_max = epochs * ceil(nsamples / cali_bsz) per factory.py:90
 # ((nsamples + cali_bsz - 1) // cali_bsz); with epochs/nsamples/cali_bsz all
 # >= 1 the T_max is always >= epochs > 0.
+# Non-integer values would fail [ ... -lt 1 ] with only a shell warning and
+# skip the whole guard, so validate the three variables as integers first.
+for _moe_v in "${MOE_NSAMPLES}" "${MOE_EPOCHS}" "${MOE_CALI_BSZ}"; do
+  case "${_moe_v}" in
+    ''|*[!0-9]*)
+      echo "[qwen3.6-35b-a3b-w4a8.autoround] ERROR: MOE_NSAMPLES=${MOE_NSAMPLES}, MOE_EPOCHS=${MOE_EPOCHS}, MOE_CALI_BSZ=${MOE_CALI_BSZ} must all be integers >= 1, got non-integer '${_moe_v}'." >&2
+      exit 1
+      ;;
+  esac
+done
 if [ "${MOE_NSAMPLES}" -lt 1 ] || [ "${MOE_EPOCHS}" -lt 1 ] || [ "${MOE_CALI_BSZ}" -lt 1 ]; then
   echo "[qwen3.6-35b-a3b-w4a8.autoround] ERROR: MOE_NSAMPLES=${MOE_NSAMPLES}, MOE_EPOCHS=${MOE_EPOCHS}, MOE_CALI_BSZ=${MOE_CALI_BSZ} must all be >= 1." >&2
-  echo "  The cosine scheduler's T_max = epochs * (nsamples // cali_bsz) would be 0 and its first step() raises ZeroDivisionError." >&2
+  echo "  The cosine scheduler's T_max = epochs * ((nsamples + cali_bsz - 1) // cali_bsz) (factory.py:90) would be 0 and its first step() raises ZeroDivisionError." >&2
   exit 1
 fi
 

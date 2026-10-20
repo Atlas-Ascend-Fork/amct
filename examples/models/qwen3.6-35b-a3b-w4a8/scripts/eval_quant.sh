@@ -20,6 +20,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/common.sh"
 print_runtime_args "eval_quant"
 
+# Fail-fast: Attention autoround params are required. Missing dir silently falls
+# back to direct quant in the framework and would poison the result table.
+if [ ! -d "${ATTN_PARAM_DIR}" ] || [ -z "$(ls -A "${ATTN_PARAM_DIR}" 2>/dev/null || true)" ]; then
+  echo "ERROR: attn PTQ params missing or empty: ${ATTN_PARAM_DIR}" >&2
+  echo "Run: QUANT_DTYPE=${QUANT_DTYPE} bash ${SCRIPT_DIR}/ptq_attn.sh" >&2
+  exit 1
+fi
+
 # shellcheck disable=SC2086
 "${AMCT_CLI[@]}" amct_pytorch.eval \
   --trust_remote_code \

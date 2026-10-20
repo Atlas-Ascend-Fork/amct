@@ -31,7 +31,8 @@ mkdir -p "${ATTN_DATA_DIR}" "${MOE_DATA_DIR}"
   --device "${DEVICE}" \
   --quant_target attn-linear \
   --nsamples "${NSAMPLES}" \
-  --data_dir "${ATTN_DATA_DIR}"
+  --data_dir "${ATTN_DATA_DIR}" \
+  --output_dir "${OUTPUT_DIR}"
 
 "${AMCT_CLI[@]}" amct_pytorch.extract_ptq_data \
   --trust_remote_code \
@@ -42,4 +43,5 @@ mkdir -p "${ATTN_DATA_DIR}" "${MOE_DATA_DIR}"
   --device "${DEVICE}" \
   --quant_target moe \
   --nsamples "${MOE_NSAMPLES}" \
-  --data_dir "${MOE_DATA_DIR}"
+  --data_dir "${MOE_DATA_DIR}" \
+  --output_dir "${OUTPUT_DIR}"

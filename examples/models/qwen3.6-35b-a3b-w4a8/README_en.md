@@ -18,11 +18,13 @@ The `w4a8.yaml` MoE policy: routed experts w4/a8, shared expert w8/a8.
 
 Environment: start from a single `npu:0` card. Under the default protocol (`MOE_NSAMPLES=128` / `MOE_EPOCHS=10`) MoE PTQ takes days per format; the result table in this sample uses `MOE_NSAMPLES=32` / `MOE_EPOCHS=1`, measured on one card at 243.5 min for the full int run and 303.2 min for the full mxfp run (see Results). To run the default protocol or go faster, use the per-block split shown in [`examples/ptq_multi_npu.sh`](../../../examples/ptq_multi_npu.sh). Configure the environment with the local CANN installation path first, then install `amct_pytorch` (or point `PYTHONPATH` at the repository root).
 One-stop platform example: `source /home/developer/Ascend/cann/set_env.sh`. Set `HF_ENDPOINT` yourself if the calibration/eval datasets must be fetched through a mirror.
+Known non-fatal warnings: autoround runs print `No module named 'triton'` (params are still written correctly); if the environment lacks `flash-linear-attention`, the `linear_attention` path falls back to torch — both are expected and must not be read as failures.
 
 - Model: local Qwen3.6-35B-A3B weights; `--model_name qwen3_6_moe`; `--trust_remote_code`
 - Calibration: Pileval (`mit-han-lab/pile-val-backup`), CLI default `nsamples=128`
 - Evaluation: WikiText2 `wikitext-2-raw-v1` test; `--seq_len 4096`; `--granularity block`
 - BF16 and quantized evaluations share the same weight directory and eval configuration
+- The BF16 baseline PPL 6.3085 differs from the in-repo casebook values (6.2799, re-measured 6.2731) only by weight-version/environment deltas under the same `seq_len=4096`; the casebook has no w4a8 autoround entry yet, and whether to backfill one is up to the maintainers
 - Per format: extract → PTQ(attn) → PTQ(moe) → quantized eval with PTQ params loaded
 - Output directories are relative placeholders; no data/weights are committed
 
@@ -113,6 +115,7 @@ Relative placeholder directories (under this sample directory by default):
 
 Quantization wall time: measured from the first `ptq` of a format (`ptq_attn.sh`) until all attn+moe params are written (model download and environment setup excluded); both `ptq_attn.sh` and `ptq_mlp.sh` print `start:` / `end:` timestamps. The int row is a full end-to-end measurement; the mxfp row's duration is from its first full run — afterwards only the moe segment was re-run with the same script (86.7 min) and the quantized PPL refilled, while the attn segment (script and schedule unchanged) was not re-run; re-run the attn segment if a full mxfp wall-time figure is needed. Offline data size is the combined extract output in GiB.
 
+Extract log: `extract_ptq_data.sh` writes `<OUTPUT_DIR>/logs/extract_ptq_data.log`; the attn and moe runs append to the same file under each format's own `OUTPUT_DIR`.
 Eval logs: `eval_quant.sh` writes `<OUTPUT_DIR>/logs/eval_*.log`, with int and mxfp under their own `OUTPUT_DIR` so the two formats no longer share one file; `eval_bf16.sh` writes `<BF16_OUTPUT_DIR>/logs/` (default `./outputs/qwen3_6_35b_a3b_bf16/logs/`), independent of `QUANT_DTYPE`, so both formats share the same BF16 baseline log. loguru appends.
 
 ## Results
@@ -120,8 +123,8 @@ Eval logs: `eval_quant.sh` writes `<OUTPUT_DIR>/logs/eval_*.log`, with int and m
 BF16 and quantized evaluations share the same `MODEL` and the same `seq_len=4096` / `granularity=block` configuration.
 The eval covers `attn-linear` + `moe`, loading autoround PTQ params for both.
 
-Measured settings behind the result table: Attention uses the default protocol
-(`nsamples=128` / `epochs=10` / `cali_bsz=4`); MoE is overridden with
+Measured settings behind the result table: Attention uses `nsamples=128` / `epochs=10` / `cali_bsz=4`
+(`nsamples` and `cali_bsz` match the CLI defaults; `epochs` is this sample's own value, not the CLI default 15); MoE is overridden with
 `MOE_NSAMPLES=32` / `MOE_EPOCHS=1` / `MOE_CALI_BSZ=8` (single Atlas A3 card, 10240 expert units).
 Use the same settings to reproduce the table; quantization time is wall-clock including unit I/O.
 

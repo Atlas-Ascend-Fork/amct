@@ -114,6 +114,7 @@ MoE 目标在 Attention 命令基础上改 `--quant_target moe`、`--data_dir ..
 
 量化时长口径：从该格式第一次 `ptq`（`ptq_attn.sh`）开始到 attn+moe 参数全部写完（不含模型下载和环境构建），`ptq_attn.sh` 与 `ptq_mlp.sh` 均打印 `start:` / `end:` 时间戳。int 行为全流程实测；mxfp 行时长取其首次全流程实测——之后仅按同脚本重跑过 moe 段（86.7 min）并回填量化 PPL，attn 段脚本与调度未变故未重跑，需要 mxfp 全流程口径时补跑 attn 段即可。离线数据大小为 extract 输出目录合计，GiB。
 
+提取日志：`extract_ptq_data.sh` 写 `<OUTPUT_DIR>/logs/extract_ptq_data.log`，attn 与 moe 两轮在各自格式的 `OUTPUT_DIR` 下追加写同一文件。
 评估日志：`eval_quant.sh` 写 `<OUTPUT_DIR>/logs/eval_*.log`，int 与 mxfp 各自在自己的 `OUTPUT_DIR` 下，不会混进同一个文件；`eval_bf16.sh` 写与 `QUANT_DTYPE` 无关的 `<BF16_OUTPUT_DIR>/logs/`（默认 `./outputs/qwen3_6_35b_a3b_bf16/logs/`），两种格式共用同一份 BF16 基线日志。loguru 为追加写。
 
 ## 结果表
