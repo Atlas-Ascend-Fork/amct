@@ -176,7 +176,7 @@ done
 |---|---|---|
 | 读 PR 详情 `GET /pulls/<n>`、读评论列表（含分页头 `total_page`/`total_count`） | `200`，返回完整数据 | **公开可读**（但匿名共用额度桶，见下面 ⚠️） |
 | 读仓库信息 `GET /repos/<owner>/<repo>`（`SKILL.md`「查询 Fork 的原仓库」那步用它） | `401 {"message":"401 Unauthorized"}` | **需要凭证**：fork 判定这步匿名跑不了。该步的 `jq` 守卫会把这个对象判成「响应异常」，走 ERROR 分支并 `exit 1` |
-| `GET /api/v5/user`（取 `MY_LOGIN`） | `401 {"message":"401 Unauthorized"}` | `commands/review.md` 步骤 1「本 agent 是否已评论过」按既有守卫 `exit 1` |
+| `GET /api/v5/user`（取 `MY_LOGIN`） | `401 {"message":"401 Unauthorized"}` | 「请求示例：先探测，再取字段」的脚本按守卫 `exit 1`，「是否已评论过」无法判断 |
 | `POST` 发评论 / 回复、`DELETE` 删评论 | `401 {"message":"401 Unauthorized"}` | **必须校验 HTTP 状态码**：`curl -s` 退出码仍是 `0`，只看 `$?` 会把「没发出去」当成「发成功了」 |
 
 > ⚠️ **匿名调用共用服务端账号的额度桶**：匿名打只读端点会撞上 `429`，其 `error_message`
@@ -211,22 +211,49 @@ GET https://api.gitcode.com/api/v5/user
 
 > ⚠️ **不要写成 `curl -s … | jq -r '.login // empty'`**（官方文档只给了 `200` 的 Schema，照它写
 > 就会漏掉失败分支，见「官方文档已知缺陷」#3）：本端点可能返回 `401`/`403`，而 `curl -s` 的退出码
-> 恒为 `0`、jq 对错误体取 `.login` 得空串——「权限不够」「token 失效」「变量没导出」三种故障会
-> 退化成同一个空输出。必须把 **HTTP 状态码、响应体、`X-OAuth-Scopes` 响应头**一起留住，
-> 可执行写法见 `commands/review.md` 步骤 1。
+> 恒为 `0`、jq 对错误体取 `.login` 得空串——「权限不够」「token 失效」「变量没导出」「网络不通」
+> 四种故障会退化成同一个空输出。必须把 **HTTP 状态码、响应体、`X-OAuth-Scopes` 响应头**一起留住。
 
 ```bash
-# 一次请求同时拿到：响应体 + HTTP 状态码 + 服务端回显的「本 token 实际持有的 scope」
+# 一次请求同时留住三样：HTTP 状态码 + 响应体 + 服务端回显的「本 token 实际持有的 scope」
+# ⚠️ -w 用字面量标记 `__HTTP__` 分隔 body 与状态码，`${var%…}`/`${var##…}` 是 POSIX 参数展开，
+#    bash 与 dash 下都能跑；换到别的 shell 前自己验一次。
+#    若改用 `-w '\n%{http_code}'` + `${var%$'\n'*}` 切分则是 **bash 专有**（`$'…'` 为 ANSI-C quoting）：
+#    dash 下 `$'\n'` 被当字面量、切分失效，`${resp%$'\n'*}` 原样返回「响应体+状态码」整串，
+#    jq 报 `Cannot index number with string "login"`，状态码变量里是整个响应体。
+# ⚠️ --connect-timeout/--max-time 必带：不带的话网络挂起会无限等待；超时后状态码是 000，走失败分支。
 hdr=$(mktemp) || exit 1
 trap 'rm -f "$hdr"' EXIT   # 嵌进更大脚本时，把这个 rm 合并进已有的 trap，别覆盖它
-# --connect-timeout/--max-time 必带：不带的话网络挂起会无限等待（超时后状态码为 000，走失败分支）
+# -D 把响应头落到文件：curl -s 会丢掉响应头，X-OAuth-Scopes 就读不到了
 resp=$(curl -s --connect-timeout 10 --max-time 30 -D "$hdr" -w '__HTTP__%{http_code}' \
   "https://api.gitcode.com/api/v5/user?access_token=$GITCODE_API_TOKEN")
-body=${resp%__HTTP__*}; status=${resp##*__HTTP__}
+body=${resp%__HTTP__*}      # HTTP 响应体
+status=${resp##*__HTTP__}   # HTTP 状态码
 # 响应头是 CRLF 结尾，必须 tr -d '\r'
 scopes=$(tr -d '\r' < "$hdr" | awk -F': *' 'tolower($1)=="x-oauth-scopes"{print $2}')
-echo "HTTP $status"; echo "scopes: ${scopes:-<无此响应头>}"; echo "body: $body"
+MY_LOGIN=$(printf '%s' "$body" | jq -r '.login // empty')
+# 失败判据要覆盖两种「没拿到 login」：非 200，以及 **200 但 .login 为空**。只按状态码分支会漏掉后者。
+if [ "$status" != "200" ] || [ -z "$MY_LOGIN" ]; then
+  echo "WARN: GET /api/v5/user 未取到 login（HTTP ${status}）" >&2
+  # 响应体自带换行，直接 echo 会多打一个空行，故先 tr 掉（POSIX 安全，bash/dash 均可）
+  echo "      响应体：$(printf '%s' "$body" | tr -d '\r\n')" >&2
+  echo "      本 token 的 X-OAuth-Scopes：${scopes:-<无此响应头>}" >&2
+  # 各状态码的含义与处置**不在此重抄**：拿这三件套去查下面「scope 前提与失败分支」的判别表。
+fi
+[ -n "$MY_LOGIN" ] || { echo "ERROR: 取不到当前账号 login，无法判断是否已评论过（HTTP ${status}）" >&2; exit 1; }
+echo "MY_LOGIN=$MY_LOGIN"
+echo "token scopes: ${scopes:-<无此响应头>}"
 ```
+
+> **`MY_LOGIN` 的取法全仓只此一份**，`SKILL.md` 回读校验的「作者 + 唯一标记」备选判据照抄这段。
+> 拿到后与评论列表的 `author` 比对即可判断「本 agent 是否已评论过」（含回复）：
+> `<翻页脚本输出> | jq -c --arg me "$MY_LOGIN" 'select(.author == $me) | {id, reply_to, body}'`
+> ——有输出 = 已评论过，无输出 = 未评论过。
+> ⚠️ 过滤器别带 `.[]`：翻页脚本输出的是**逐行对象流**，带 `.[]` 是对每个对象的**值**再迭代，
+> 会报 `Cannot index number with string "author"`（要先聚成数组再 `.[]` 得加 `-s`）。
+> ⚠️ 「无输出」只有在评论列表**翻页取全并展开 `reply[]`** 后才可信，取不全时不得判断「未评论过」：
+> 见 `commands/review.md` →「取评论：翻页取全（规范实现）」。取不到 login 时按上面 `exit 1`
+> 原样上报三件套，**不要绕过**。
 
 > **`X-OAuth-Scopes` 是服务端回显，比任何文档都权威**，凭证被认下来时实测过的 v5 端点都返回它
 > （零成本诊断）；**匿名 / 凭证不被认时不返回**（`401`、`429`），故「没这个头」= 服务端没认你的
@@ -288,9 +315,10 @@ echo "HTTP $status"; echo "scopes: ${scopes:-<无此响应头>}"; echo "body: $b
 > 网络失败三种情形都退化成「取不到 login」，无法区分是权限不够还是 token 失效，
 > 下游会带着空 login 继续跑（正是「官方文档已知缺陷」#3 的直接后果）。
 >
-> **补不上权限怎么办**：原样上报状态码 + 响应体 + `X-OAuth-Scopes`，然后**停止步骤 1**，
-> 不得据空 login 判断「未评论过」。本 skill **不提供绕过开关**——理由见「应对原则」第 3、5 条
-> （旁路开关会引入「`exit 0` 但不代表成功」的语义冲突，且自身在离线场景仍会卡在网络请求上）。
+> **补不上权限怎么办**：原样上报状态码 + 响应体 + `X-OAuth-Scopes`，然后**停止依赖 login 的判断**
+> （如「是否已评论过」），不得据空 login 判断「未评论过」。本 skill **不提供绕过开关**——理由见
+> 「应对原则」第 3、5 条（旁路开关会引入「`exit 0` 但不代表成功」的语义冲突，且自身在离线场景
+> 仍会卡在网络请求上）。
 
 ---
 
