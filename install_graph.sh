@@ -48,6 +48,7 @@ mkdir -p "$BUNDLE_DIR"
 if find "${AMCT_GRAPH_PATH}" -name "${OUTPUT_FILE}" | grep -q '.'; then
     echo "${OUTPUT_FILE} exist, copy ${OUTPUT_FILE} to ${AMCT_GRAPH_FILE}."
     cp ${AMCT_GRAPH_PATH}/${OUTPUT_FILE} ${AMCT_GRAPH_FILE}
+    echo "Using local package, skip sha256 verification for locally built package."
 # Download package
 else
     echo "Downloading Ascend CANN Toolkit..."
@@ -57,15 +58,15 @@ else
         [ -n "${BUNDLE_DIR}" ] && rm -rf "$BUNDLE_DIR"
         exit 1
     fi
-fi
-
-# Verify sha256 before extraction for both downloaded and reused packages
-echo "Verifying sha256 of ${AMCT_GRAPH_FILE}..."
-if ! echo "${AMCT_GRAPH_SHA256}  ${AMCT_GRAPH_FILE}" | sha256sum -c -; then
-    echo "Error: sha256 verification failed for ${AMCT_GRAPH_FILE}"
-    rm -f "${AMCT_GRAPH_FILE}"
-    [ -n "${BUNDLE_DIR}" ] && rm -rf "$BUNDLE_DIR"
-    exit 1
+    # Only verify the downloaded package: locally built packages under
+    # ${AMCT_GRAPH_PATH} never match the pinned official checksum.
+    echo "Verifying sha256 of ${AMCT_GRAPH_FILE}..."
+    if ! echo "${AMCT_GRAPH_SHA256}  ${AMCT_GRAPH_FILE}" | sha256sum -c -; then
+        echo "Error: sha256 verification failed for ${AMCT_GRAPH_FILE}"
+        rm -f "${AMCT_GRAPH_FILE}"
+        [ -n "${BUNDLE_DIR}" ] && rm -rf "$BUNDLE_DIR"
+        exit 1
+    fi
 fi
 
 echo "tar -zxvf ${AMCT_GRAPH_FILE} -C $BUNDLE_DIR"
