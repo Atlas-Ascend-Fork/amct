@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Adapted from https://github.com/pytorch/ao/blob/main/torchao/prototype/mx_formats/kernels.py
+# Adapted from https://github.com/pytorch/FBGEMM/blob/main/fbgemm_gpu/fbgemm_gpu/triton/quantize_ref.py
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
 #
