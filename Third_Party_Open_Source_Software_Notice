@@ -420,13 +420,13 @@ Copyright Notice:
 Copyright (c) 2016 Facebook, Inc. (Adam Paszke) and affiliates (full contributor list below)
 License: BSD 3-Clause License
 
-Software: FBGEMM
-Official Repository: https://github.com/pytorch/FBGEMM/blob/main/fbgemm_gpu/fbgemm_gpu/triton/quantize_ref.py
+Software: TritonBench
+Official Repository: https://github.com/meta-pytorch/tritonbench/tree/44b0a40
 Usage: "
 tests/amct_ops/quantize_ref.py
 "
 Copyright Notice:
-Copyright (c) Meta Platforms, Inc. and affiliates
+Copyright (c) 2019, pytorch
 License: BSD 3-Clause License
 
 Software: torchao

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Adapted from https://github.com/pytorch/FBGEMM/blob/main/fbgemm_gpu/fbgemm_gpu/triton/quantize_ref.py
+# Adapted from https://github.com/meta-pytorch/tritonbench/blob/44b0a40/tritonbench/utils/fbgemm_utils.py
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
 #
