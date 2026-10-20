@@ -112,12 +112,13 @@ python3 -c "import amct_pytorch as amct; print(f'successfully installed AMCT ')"
 <details>
 <summary>Building in an offline environment</summary>
 
-If the build environment has no network access, download all third-party packages in advance on a networked machine, then copy them to the offline environment:
+If the build environment has no network access, download the third-party packages required by the amct_pytorch build in advance on a networked machine (saved to `third_party` under the repository root by default), copy them to the offline environment, then:
 
 ```bash
-bash download_3rd_party.sh
 bash build.sh --torch --cann_3rd_lib_path=third_party
 ```
+
+See the [Build Guide](docs/zh/build.md) for details (including the scope of `--pkg` full-package builds).
 
 </details>
 

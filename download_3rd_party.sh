@@ -14,24 +14,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-# 一键离线三方件下载脚本
-# 用法: bash download_3rd_party.sh [--3rd_party <目录>]
-# 说明:
-#   - 默认下载到仓库根目录 third_party, 压缩包直接存放于该目录,
-#     patch 存放于其 patch 子目录 (即编译时 CANN_3RD_LIB_PATH 的布局要求);
-#   - 已存在的同名文件先做 SHA256 校验: 一致则复用缓存不重复下载,
-#     不一致则删除后重新下载, 下载完成后再复核完整性;
-#   - 下载完成后, 编译时请将 build.sh 的 --cann_3rd_lib_path 指向相同目录:
+# One-click offline third-party packages download script.
+# Usage: bash download_3rd_party.sh [--3rd_party <directory>]
+# Notes:
+#   - Default target is <repo root>/third_party: archives are placed directly
+#     in that directory and patches in its patch/ subdirectory, matching the
+#     CANN_3RD_LIB_PATH layout expected by the build;
+#   - Existing files are verified by SHA256 first: matching ones are reused
+#     (no re-download), mismatching ones are deleted and downloaded again,
+#     and every download is verified again after completion;
+#   - After downloading, build offline with the same directory:
 #       bash build.sh --torch --cann_3rd_lib_path=third_party
 
 set -euo pipefail
 
-WORK_DIR="./third_party"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORK_DIR="${SCRIPT_DIR}/third_party"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --3rd_party)
             if [[ $# -lt 2 || -z "$2" || "$2" == --* ]]; then
-                echo "错误: --3rd_party 需要指定一个目录。" >&2
+                echo "Error: --3rd_party requires a directory." >&2
                 exit 1
             fi
             WORK_DIR="$2"
@@ -40,28 +43,29 @@ while [[ $# -gt 0 ]]; do
         --3rd_party=*)
             WORK_DIR="${1#*=}"
             if [[ -z "${WORK_DIR}" ]]; then
-                echo "错误: --3rd_party 需要指定一个目录。" >&2
+                echo "Error: --3rd_party requires a directory." >&2
                 exit 1
             fi
             shift
             ;;
         -h|--help)
-            echo "用法: bash download_3rd_party.sh [--3rd_party <目录>]"
-            echo "默认: ./third_party; 所有 patch 保存于 <目录>/patch 子目录。"
+            echo "Usage: bash download_3rd_party.sh [--3rd_party <directory>]"
+            echo "Default: <repo root>/third_party; all patches are saved in <directory>/patch."
             exit 0
             ;;
         *)
-            echo "错误: 未知参数: $1" >&2
+            echo "Error: unknown argument: $1" >&2
             exit 1
             ;;
     esac
 done
 
 OBS_URL="https://cann-3rd.obs.cn-north-4.myhuaweicloud.com"
-# 下载列表与 cann/cmake master-059 的 third_party 定义保持一致:
+# Download list kept in sync with cann/cmake master-059 third_party definitions:
 #   https://gitcode.com/cann/cmake/tree/master-059/third_party (commit 3c4a9da4)
-# amct 构建仅依赖 protobuf 及其传递依赖 abseil-cpp, 另需 cann-cmake 构建框架。
-# 格式: "URL SHA256 相对 third_party 的存放路径"
+# amct builds only depend on protobuf and its transitive dependency abseil-cpp,
+# plus the cann-cmake build framework.
+# Format: "URL SHA256 Path relative to third_party"
 DOWNLOAD_LIST=(
     "https://raw.gitcode.com/cann/cmake/archive/refs/heads/master-059.tar.gz 9e59939b5c97c9498293969df22ab2dd40e450700c51f84f117d065880f40d25 cmake-master-059.tar.gz"
     "${OBS_URL}/abseil-cpp/abseil-cpp-20230802.1.tar.gz 987ce98f02eefbaf930d6e38ab16aa05737234d7afbab2d5c4ea7adbe50c28ed abseil-cpp-20230802.1.tar.gz"
@@ -76,7 +80,7 @@ trap 'exit 143' TERM
 
 for TOOL in wget sha256sum; do
     if ! command -v "${TOOL}" >/dev/null 2>&1; then
-        echo "错误: 缺少必要工具 ${TOOL}。" >&2
+        echo "Error: ${TOOL} is required." >&2
         exit 1
     fi
 done
@@ -91,28 +95,28 @@ for ITEM in "${DOWNLOAD_LIST[@]}"; do
 
     if [[ -f "${FILE_PATH}" ]]; then
         if check_sha256 "${SHA256}" "${FILE_PATH}"; then
-            echo "缓存校验通过, 跳过下载: ${FILE_NAME}"
+            echo "Verified cache, skipping: ${FILE_NAME}"
             continue
         fi
-        echo "缓存 SHA256 不一致, 重新下载: ${FILE_NAME}"
+        echo "Cached SHA256 mismatch, downloading again: ${FILE_NAME}"
         rm -f -- "${FILE_PATH}"
     fi
 
     mkdir -p -- "$(dirname "${FILE_PATH}")"
     TEMP_FILE=$(mktemp -- "${FILE_PATH}.part.XXXXXX")
-    echo "下载 ${URL} -> ${FILE_PATH}"
+    echo "Download from ${URL} to ${FILE_PATH}"
     if ! wget -q --show-progress --timeout=60 --tries=3 -O "${TEMP_FILE}" "${URL}"; then
-        echo "错误: 下载失败: ${FILE_NAME}" >&2
+        echo "Error: download failed: ${FILE_NAME}" >&2
         exit 1
     fi
     if ! check_sha256 "${SHA256}" "${TEMP_FILE}"; then
-        echo "错误: SHA256 校验失败: ${FILE_NAME}" >&2
+        echo "Error: SHA256 mismatch: ${FILE_NAME}" >&2
         exit 1
     fi
     mv -f -- "${TEMP_FILE}" "${FILE_PATH}"
     TEMP_FILE=""
-    echo "下载并校验完成: ${FILE_NAME}"
+    echo "Downloaded and verified: ${FILE_NAME}"
 done
 
-echo "全部三方件下载完成, 存放于 '${WORK_DIR}'。"
-echo "离线编译示例: bash build.sh --torch --cann_3rd_lib_path=${WORK_DIR}"
+echo "All third-party packages verified. Files are saved in '${WORK_DIR}'."
+echo "Offline build example: bash build.sh --torch --cann_3rd_lib_path=${WORK_DIR}"

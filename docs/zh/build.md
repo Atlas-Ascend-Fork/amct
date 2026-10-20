@@ -32,7 +32,7 @@ bash build.sh --torch
 
 ### 离线编译
 
-若您的编译环境无法访问网络，可以先在有网环境执行脚本一键下载所有三方件，再将整个目录拷贝到离线环境：
+若您的编译环境无法访问网络，可以先在有网环境执行脚本一键下载 amct_pytorch 编译所需的全部三方件，再将整个目录拷贝到离线环境：
 
 ```bash
 bash download_3rd_party.sh
@@ -42,9 +42,10 @@ bash download_3rd_party.sh --3rd_party third_party
 
 说明：
 
-- 未指定参数时，默认下载到仓库根目录的 `third_party` 目录；三方件压缩包直接存放于该目录，所有 patch 存放于其 `patch` 子目录。
+- 未指定参数时，无论在哪个目录执行，默认下载到仓库根目录的 `third_party`；三方件压缩包直接存放于该目录，所有 patch 存放于其 `patch` 子目录。
 - 每个文件均通过 SHA256 校验；已存在的缓存会先校验，一致则跳过下载，不一致则重新下载；下载或校验失败时脚本返回非零退出码。
 - 下载列表与 [cann/cmake master-059](https://gitcode.com/cann/cmake/tree/master-059/third_party) 的三方件定义保持一致，下载地址和 SHA256 固定在 `download_3rd_party.sh` 中。若从其他地址下载，请确保版本号和 SHA256 一致。
+- 本节离线流程适用于 `--torch`（amct_pytorch 包）和 `-u`（单元测试）编译。`--pkg`（完整包）会额外执行 `install_graph.sh` 联网下载 amct-graph 二进制包，暂不在离线下载范围内，如需离线完整包构建，请预先手动准备该包。
 
 下载完成后，编译时将 `--cann_3rd_lib_path` 指向相同目录即可：
 
