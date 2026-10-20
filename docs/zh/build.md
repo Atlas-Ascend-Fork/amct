@@ -4,6 +4,11 @@
  
 在源码编译前，请先完成基础环境搭建，具体操作请参见[快速安装](quick_install.md)。
 
+源码编译还需要满足以下工具链要求（由所依赖的 cann/cmake master-059 构建框架检查）：
+
+- gcc 版本不低于 7.3.0；
+- `patch` 与 `python3` 需在 PATH 中可执行。
+
 ## 源码编译
 
 ### 下载源码
@@ -45,7 +50,7 @@ bash download_3rd_party.sh --3rd_party third_party
 - 未指定参数时，无论在哪个目录执行，默认下载到仓库根目录的 `third_party`；三方件压缩包直接存放于该目录，所有 patch 存放于其 `patch` 子目录。
 - 每个文件均通过 SHA256 校验；已存在的缓存会先校验，一致则跳过下载，不一致则重新下载；下载或校验失败时脚本返回非零退出码。
 - 下载列表与 [cann/cmake master-059](https://gitcode.com/cann/cmake/tree/master-059/third_party) 的三方件定义保持一致，下载地址和 SHA256 固定在 `download_3rd_party.sh` 中。若从其他地址下载，请确保版本号和 SHA256 一致。
-- 本节离线流程适用于 `--torch`（amct_pytorch 包）和 `-u`（单元测试）编译。`--pkg`（完整包）会额外执行 `install_graph.sh` 联网下载 amct-graph 二进制包，暂不在离线下载范围内，如需离线完整包构建，请预先手动准备该包。
+- 本节离线流程适用于 `--torch`（amct_pytorch 包）和 `-u`（单元测试）编译。`--pkg`（完整包）会额外执行 `install_graph.sh` 联网下载 amct-graph 二进制包，暂不在离线下载范围内；如需离线执行 `--pkg`，请在有网环境预先下载该包，并按 `install_graph.sh` 的查找规则放置到 `<仓库根>/build/cann-amct-graph_9.2.0_linux-<arch>.tar.gz`（`<arch>` 为 CPU 架构，如 x86_64、aarch64），构建时会优先复用该文件而不再联网。
 
 下载完成后，编译时将 `--cann_3rd_lib_path` 指向相同目录即可：
 

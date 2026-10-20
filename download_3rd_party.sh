@@ -60,6 +60,14 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Normalize WORK_DIR to an absolute path: build.sh resolves --cann_3rd_lib_path
+# from the repo root (it does "cd ${BASEPATH}" first), so a relative path here
+# would otherwise land next to the caller's cwd and silently fall back to a
+# git clone during the offline build. Also makes the final hint always a
+# copy-paste-ready absolute path.
+mkdir -p -- "${WORK_DIR}"
+WORK_DIR="$(cd -- "${WORK_DIR}" && pwd)"
+
 OBS_URL="https://cann-3rd.obs.cn-north-4.myhuaweicloud.com"
 # Download list kept in sync with cann/cmake master-059 third_party definitions:
 #   https://gitcode.com/cann/cmake/tree/master-059/third_party (commit 3c4a9da4)

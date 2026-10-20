@@ -110,7 +110,7 @@ python3 -c "import amct_pytorch as amct; print(f'successfully installed AMCT ')"
 <details>
 <summary>离线环境编译</summary>
 
-若编译环境无法访问网络，可先在有网环境一键下载 amct_pytorch 编译所需的三方件（默认存放于仓库根目录 `third_party`），拷贝至离线环境后：
+若编译环境无法访问网络，可先在有网环境执行 `bash download_3rd_party.sh` 一键下载 amct_pytorch 编译所需的三方件（默认存放于仓库根目录 `third_party`），拷贝至离线环境后：
 
 ```bash
 bash build.sh --torch --cann_3rd_lib_path=third_party
