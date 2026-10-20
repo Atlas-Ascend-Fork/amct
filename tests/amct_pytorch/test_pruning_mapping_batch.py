@@ -33,10 +33,12 @@ import os
 import sys
 import unittest
 import warnings
-from collections import OrderedDict
+from collections import OrderedDict, UserDict
+from collections.abc import Mapping
 
 import torch
 from torch import nn
+from torch.utils.data import DataLoader, TensorDataset
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -55,17 +57,71 @@ from amct_pytorch.pruning.accuracy_based_auto_prune import (
     _prepare_search_inputs,
 )
 from amct_pytorch.pruning.allocation import measure_layer_sensitivity
-from amct_pytorch.pruning.context import PruneContext, as_batch_sequence
+from amct_pytorch.pruning.context import (
+    PruneContext,
+    as_batch_sequence,
+    default_batch_adapter,
+)
+
+try:
+    from transformers.tokenization_utils_base import BatchEncoding
+
+    _HAS_TF = True
+except Exception:  # pragma: no cover - transformers is an optional test dependency
+    _HAS_TF = False
 
 
 def _params(model):
     return sum(p.numel() for p in model.parameters())
 
 
+def _fresh_mlp():
+    """A freshly seeded, unpruned mini MLP -- used as the parameter-count baseline."""
+    torch.manual_seed(0)
+    model, _ = create_mini_mlp()
+    model.eval()
+    return model
+
+
 def _token_batch(seed=0, n_batch=4, n_seq=20):
     """One deterministic integer token batch, wrapped in a mapping."""
     torch.manual_seed(seed)
     return {"input_ids": torch.randint(0, 1000, (n_batch, n_seq))}
+
+
+class _PlainMapping(Mapping):
+    """A Mapping that is *not* a dict subclass -- the shape UserDict/BatchEncoding have."""
+
+    def __init__(self, payload):
+        self._payload = dict(payload)
+
+    def __getitem__(self, key):
+        return self._payload[key]
+
+    def __iter__(self):
+        return iter(self._payload)
+
+    def __len__(self):
+        return len(self._payload)
+
+
+def _mapping_variants(batch):
+    """Same batch in every Mapping flavour a user can realistically hand over.
+
+    ``UserDict`` is the base class of HF ``BatchEncoding``, i.e. what ``tokenizer(...)``
+    returns, so it is the case issue #245 is actually about -- none of these are
+    ``dict`` subclasses except the first two.
+    """
+    payload = dict(batch)
+    variants = {
+        "dict": dict(payload),
+        "OrderedDict": OrderedDict(payload),
+        "UserDict": UserDict(dict(payload)),
+        "plain Mapping": _PlainMapping(payload),
+    }
+    if _HAS_TF:
+        variants["BatchEncoding"] = BatchEncoding(dict(payload))
+    return variants
 
 
 class _ToyDenseClassifier(nn.Module):
@@ -346,6 +402,184 @@ class TestDiagnoseMapping(unittest.TestCase):
         self.assertAlmostEqual(
             from_mapping.prune_reduction, from_list.prune_reduction, places=9
         )
+
+
+class TestMappingSubclassBatching(unittest.TestCase):
+    """Every Mapping is one batch -- and the adapter must agree, or it dies one layer down.
+
+    Regression guard: ``as_batch_sequence`` widens to ``Mapping`` while
+    ``default_batch_adapter`` used to gate on ``isinstance(batch, dict)``, so a
+    ``UserDict`` / HF ``BatchEncoding`` was normalised into one batch and then rejected
+    with the very same misleading ``TypeError`` the fix was meant to remove.
+    """
+
+    def test_every_mapping_flavour_is_a_single_batch(self):
+        for name, batch in _mapping_variants(_token_batch()).items():
+            with self.subTest(mapping=name):
+                out = list(as_batch_sequence(batch))
+                self.assertEqual(len(out), 1)
+                self.assertIs(out[0], batch)
+
+    def test_default_adapter_unwraps_every_mapping_flavour(self):
+        for name, batch in _mapping_variants(_token_batch()).items():
+            with self.subTest(mapping=name):
+                args, kwargs = default_batch_adapter(batch)
+                self.assertEqual(args, ())
+                self.assertEqual(list(kwargs), ["input_ids"])
+                self.assertIsInstance(kwargs, dict)
+
+    def test_prune_context_yields_one_unwrapped_batch_per_flavour(self):
+        batch = _token_batch()
+        for name, variant in _mapping_variants(batch).items():
+            with self.subTest(mapping=name):
+                out = list(PruneContext(data=variant).iter_model_inputs())
+                self.assertEqual(len(out), 1)
+                args, kwargs = out[0]
+                self.assertEqual(args, ())
+                self.assertTrue(torch.equal(kwargs["input_ids"], batch["input_ids"]))
+
+
+class TestMappingSubclassEndToEnd(unittest.TestCase):
+    """The public entry points must accept a non-dict Mapping, not just a plain dict."""
+
+    def _fixed_prune(self, data):
+        torch.manual_seed(0)
+        model, _ = create_mini_mlp()
+        model.eval()
+        report = PruneReport()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            prune(model, DENSE_LOWVAR_PRUNE_CFG, data=data, report=report)
+        return _params(model), report.params_after
+
+    def test_fixed_prune_accepts_every_mapping_flavour(self):
+        reference = self._fixed_prune(_token_batch())
+        for name, variant in _mapping_variants(_token_batch()).items():
+            with self.subTest(mapping=name):
+                self.assertEqual(self._fixed_prune(variant), reference)
+
+    def test_fixed_prune_mapping_equals_single_element_list_per_flavour(self):
+        for name, variant in _mapping_variants(_token_batch()).items():
+            with self.subTest(mapping=name):
+                direct = self._fixed_prune(variant)
+                wrapped = self._fixed_prune([copy.deepcopy(variant)])
+                self.assertEqual(direct, wrapped)
+                self.assertLess(direct[0], _params(_fresh_mlp()))
+
+    def test_finetune_accepts_every_mapping_flavour(self):
+        def loss_fn(model, batch):
+            return model(**batch).float().pow(2).mean()
+
+        reference = None
+        for name, variant in _mapping_variants(_token_batch()).items():
+            with self.subTest(mapping=name):
+                torch.manual_seed(0)
+                model, _ = create_mini_mlp()
+                history = prune_finetune(
+                    model, variant, loss_fn=loss_fn, steps=2, lr=1e-4
+                )
+                self.assertEqual(history["steps"], 2)
+                if reference is None:
+                    reference = history["loss_history"]
+                else:
+                    self.assertEqual(history["loss_history"], reference)
+
+    def test_diagnose_reports_pruning_as_available_per_flavour(self):
+        """Regression guard: a Mapping must not be silently degraded into "cannot prune".
+
+        Before the adapter gate was widened, ``prune_diagnose`` swallowed the
+        ``TypeError`` and returned ``prune_works=False`` / ``prune_forward_ok=None``,
+        i.e. it diagnosed a working configuration as unprunable.
+        """
+        for name, variant in _mapping_variants(_token_batch()).items():
+            with self.subTest(mapping=name):
+                torch.manual_seed(0)
+                model, _ = create_mini_mlp()
+                model.eval()
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    report = prune_diagnose(model, data=variant)
+                self.assertTrue(report.prune_works)
+                self.assertTrue(report.prune_forward_ok)
+                self.assertTrue(report.search_works)
+                self.assertNotIn("Unsupported batch type", " ".join(report.notes))
+
+
+class TestDataLoaderStaysMultiBatch(unittest.TestCase):
+    """docs/zh/api/prune.md promises DataLoader stays a batch *sequence*."""
+
+    def _loader(self, n_samples=8, n_feat=20, batch_size=2):
+        torch.manual_seed(0)
+        feats = torch.randint(0, 1000, (n_samples, n_feat))
+        return DataLoader(TensorDataset(feats), batch_size=batch_size)
+
+    def test_dataloader_is_not_collapsed_into_one_batch(self):
+        loader = self._loader()
+        seq = as_batch_sequence(loader)
+        self.assertEqual(len(list(seq)), 4)
+
+    def test_dataloader_and_equivalent_list_agree(self):
+        loader = self._loader()
+        materialised = list(loader)
+
+        def run(data):
+            torch.manual_seed(0)
+            model, _ = create_mini_mlp()
+            model.eval()
+            report = PruneReport()
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                prune(model, DENSE_LOWVAR_PRUNE_CFG, data=data, report=report)
+            return _params(model), report.params_after
+
+        self.assertEqual(run(loader), run(materialised))
+
+    def test_diagnose_does_not_consume_the_loader_while_probing(self):
+        loader = self._loader()
+        torch.manual_seed(0)
+        model, _ = create_mini_mlp()
+        model.eval()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            prune_diagnose(model, data=loader)
+        self.assertEqual(len(list(loader)), 4)
+
+
+class TestUnsupportedContainerFailsFast(unittest.TestCase):
+    """An unusable container must raise, not be reported as "pruning unavailable"."""
+
+    def test_diagnose_raises_on_unsupported_batch_object(self):
+        torch.manual_seed(0)
+        model, _ = create_mini_mlp()
+        model.eval()
+        with self.assertRaises(TypeError) as ctx:
+            prune_diagnose(model, data=[object()])
+        self.assertIn("Unsupported batch type", str(ctx.exception))
+
+    def test_diagnose_raises_on_set_of_batches(self):
+        torch.manual_seed(0)
+        model, _ = create_mini_mlp()
+        model.eval()
+        with self.assertRaises(TypeError):
+            prune_diagnose(model, data={object()})
+
+    def test_generator_is_not_probed_eagerly(self):
+        """A one-shot iterator cannot be inspected without eating a batch."""
+        seen = []
+
+        def gen():
+            for i in range(3):
+                batch = _token_batch(seed=i)
+                seen.append(i)
+                yield batch
+
+        torch.manual_seed(0)
+        model, _ = create_mini_mlp()
+        model.eval()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            prune_diagnose(model, data=gen())
+        self.assertEqual(seen[:1], [0])
 
 
 if __name__ == "__main__":

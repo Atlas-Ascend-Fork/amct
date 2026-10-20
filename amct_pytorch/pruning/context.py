@@ -56,7 +56,7 @@ class PruneContext:
 
 
 def default_batch_adapter(batch: Any) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
-    if isinstance(batch, dict):
+    if isinstance(batch, Mapping):
         return (), dict(batch)
     if torch.is_tensor(batch):
         return (batch,), {}
@@ -66,5 +66,6 @@ def default_batch_adapter(batch: Any) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
         return tuple(batch), {}
     raise TypeError(
         "Unsupported batch type for pruning data collection. "
-        "Provide torch.Tensor / tuple / list / dict or pass a custom batch_adapter."
+        "Provide torch.Tensor / tuple / list / Mapping (dict, OrderedDict, "
+        "UserDict, HF BatchEncoding) or pass a custom batch_adapter."
     )

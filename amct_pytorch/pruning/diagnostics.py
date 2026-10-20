@@ -16,6 +16,7 @@
 # ----------------------------------------------------------------------------
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -24,7 +25,7 @@ from torch import nn
 from ..common.utils.log import LOGGER
 from .calib import _unwrap_logits
 from .config import PruneConfig
-from .context import BatchAdapter, as_batch_sequence
+from .context import BatchAdapter, as_batch_sequence, default_batch_adapter
 from .domains.cnn import CNNPruningDomain
 from .domains.dense import DensePruningDomain
 from .domains.moe import MoEPruningDomain
@@ -74,15 +75,11 @@ def _forward_ok(
 ) -> bool:
     import torch
 
+    # Unwrap through the same adapter the prune dry-run uses, so a container the
+    # adapter rejects stays an input error instead of being reported as a failed
+    # forward (which prune_diagnose would render as "pruning unavailable").
+    args, kwargs = (batch_adapter or default_batch_adapter)(batch)
     try:
-        if batch_adapter is not None:
-            args, kwargs = batch_adapter(batch)
-        elif isinstance(batch, dict):
-            args, kwargs = (), dict(batch)
-        elif isinstance(batch, (tuple, list)):
-            args, kwargs = tuple(batch), {}
-        else:
-            args, kwargs = (batch,), {}
         model.eval()
         with torch.no_grad():
             out = model(*args, **kwargs)
@@ -94,6 +91,26 @@ def _forward_ok(
             "amct_prune",
         )
         return False
+
+
+def _check_data_contract(data: Any) -> None:
+    """Fail fast when ``data`` holds a batch container the default adapter cannot unwrap.
+
+    Only re-iterable containers are probed (Mapping / list / tuple / set): a generator
+    or DataLoader is left untouched so probing cannot consume a batch. A genuine
+    forward or prune failure stays a dry-run finding, not an input error.
+    """
+    import torch
+
+    if data is None or torch.is_tensor(data):
+        return
+    if isinstance(data, Mapping):
+        default_batch_adapter(data)
+    elif isinstance(data, (list, tuple, set, frozenset)) and data:
+        # Re-iterable containers can be probed without losing a batch; sets are
+        # not subscriptable, so take the first item through the iterator.
+        first = data[0] if isinstance(data, (list, tuple)) else next(iter(data))
+        default_batch_adapter(first)
 
 
 def _diag_fixed_ratio(model, base_cfg, prune_ratio, *, data, batch_adapter, notes):
@@ -167,6 +184,7 @@ def prune_diagnose(
     tolerance: float = 0.05,
 ) -> DiagnosisReport:
     """Check whether pruning works on the model (dry-run on a copy; original untouched)."""
+    _check_data_contract(data)
     cfg_obj = (
         config
         if isinstance(config, PruneConfig)
