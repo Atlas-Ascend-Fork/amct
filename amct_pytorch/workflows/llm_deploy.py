@@ -274,7 +274,7 @@ class LlmDeployWorkflow:
         config_file = os.path.join(self.output_dir, 'config.json')
         with open(config_file, "r") as f:
             config = json.load(f)
-        if self.quant_dtype is not None:
+        if self.quant_dtype in ['int', 'mxfp', 'hifp', 'fp']:
             cache_scheme_fn = getattr(self.pipeline, "cache_scheme", None)
             cache_scheme = cache_scheme_fn() if callable(cache_scheme_fn) else None
             if tensor_plan is not None:
@@ -296,16 +296,6 @@ class LlmDeployWorkflow:
 
         new_config_file = os.path.join(self.output_dir, "config.json")
         with open(new_config_file, "w") as f:
-            json.dump(config, f, indent=2)
-
-    def _refresh_config_tensor(self):
-        config_file = os.path.join(self.output_dir, 'config.json')
-        with open(config_file, "r") as f:
-            config = json.load(f)
-        if self.quant_dtype == "bf16":
-            config["torch_dtype"] = "bfloat16"
-            config.pop('quantization_config', None)
-        with open(config_file, "w") as f:
             json.dump(config, f, indent=2)
 
     def _refresh_weight_index(
@@ -475,9 +465,12 @@ class LlmDeployWorkflow:
         updated_weight_map = {}
         model_dir = Path(self.model_path)
         loaded_files = {}
+        convert_shard = getattr(self.pipeline, "convert_tensorwise_shard", None)
+        if not callable(convert_shard):
+            convert_shard = self._convert_tensorwise_shard
         for source_file in tqdm(sorted(weights_by_file), desc="Tensor convert..."):
             updated_weight_map.update(
-                self._convert_tensorwise_shard(
+                convert_shard(
                     source_file,
                     model_dir,
                     original_weight_map,
@@ -486,7 +479,10 @@ class LlmDeployWorkflow:
                 )
             )
         index_path = self._refresh_weight_index(original_index, updated_weight_map)
-        self._refresh_config(quant_ignore_layers)
+        refresh = getattr(self.pipeline, "refresh_config", None)
+        if not callable(refresh):
+            refresh = self._refresh_config
+        refresh(quant_ignore_layers)
         logger.info("Exported tensor-converted model to {}", self.output_dir)
         logger.info("Refreshed weight index at {}", index_path)
         return {
@@ -580,7 +576,17 @@ class LlmDeployWorkflow:
             loaded_files[source_file] = current_state_dict
 
         new_state_dict = {}
+        tensor_handler = getattr(self.pipeline, "convert_tensorwise_tensor", None)
         for weight_name, weight in current_state_dict.items():
+            # Models may handle source-specific tensors without replacing shard I/O.
+            if not is_ascend and callable(tensor_handler):
+                payload = tensor_handler(
+                    weight_name, weight, model_dir, original_weight_map, quant_layers
+                )
+                if payload is not None:
+                    # An empty payload means handled without any output tensor.
+                    new_state_dict.update(payload)
+                    continue
             # Ascend accepts original BF16 weights and preserves auxiliary tensors.
             # Source quantized-format decoding remains specific to legacy export.
             if not is_ascend:
@@ -613,6 +619,9 @@ class LlmDeployWorkflow:
                     if hasattr(self, "_quantized_modules"):
                         self._quantized_modules.add(new_weight_name)
         self._write_safetensor_file(source_file, new_state_dict)
+        if not is_ascend and callable(tensor_handler):
+            # Keep source tensors bounded to one shard conversion for model handlers.
+            loaded_files.clear()
         if is_ascend:
             self._output_tensor_bytes = getattr(self, "_output_tensor_bytes", 0) + sum(
                 tensor.numel() * tensor.element_size()
