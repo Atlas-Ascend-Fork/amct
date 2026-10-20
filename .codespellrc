@@ -1,7 +1,0 @@
-# codespell 配置：CANN 领域专有名词与仓内标识符白名单，pre-commit 的 codespell hook 自动读取本文件。
-# tbe  : Tensor Boost Engine（见 op_impl/ai_core/tbe 安装路径）
-# alog : Ascend 日志库（见 amct_ops/cmake/modules/Findalog.cmake 的 find_package(alog)）
-# CANN : 本仓产品名（cann/ops 等路径与注释中大量出现，较新 codespell 词典误报 cann->can）
-# nd   : 仓内变量名（svd_quant.cpp 中表示维度个数，较新 codespell 词典误报 nd->and/2nd）
-[codespell]
-ignore-words-list = tbe,alog,cann,nd
