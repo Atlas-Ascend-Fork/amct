@@ -25,6 +25,9 @@ __all__ = [
 ]
 
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
+from amct_pytorch.classic.quantize_op.quant_result_mixin import (  # noqa: F401
+    QuantResultSupportMixin as _QuantResultSupportMixin,
+)
 from amct_pytorch.classic.quantize_op.gptq_module import GPTQuant
 from amct_pytorch.classic.quantize_op.linear_awq_module import LinearAWQuant
 from amct_pytorch.classic.quantize_op.smooth_quant_module import SmoothQuant
