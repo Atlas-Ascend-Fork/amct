@@ -15,16 +15,189 @@
 # ----------------------------------------------------------------------------
 
 
+Software: DeepSeek-V3.2
+Official Repository: https://huggingface.co/deepseek-ai/DeepSeek-V3.2
+Usage: "
+amct_pytorch/common/models/llm/deepseek/deepseek_v3_2/modeling/modeling_deepseek_v3_2.py,
+amct_pytorch/common/models/llm/deepseek/deepseek_v3_2/quant_module.py
+"
+Copyright Notice:
+Copyright (c) 2023 DeepSeek
+License: MIT License
+
+Software: DeepSeek-V4
+Official Repository: https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash
+Usage: "
+amct_pytorch/common/models/llm/deepseek/deepseek_v4/modeling/modeling_deepseek_v4.py
+"
+Copyright Notice:
+Copyright (c) 2023 DeepSeek
+License: MIT License
+
 Software: DeepSeek-V3.2-Exp
 Official Repository: https://huggingface.co/deepseek-ai/DeepSeek-V3.2-Exp/tree/main
 Usage: "
-experimental/quantization/DeepSeekV3.2/cores/models/indexer.py,
-experimental/quantization/DeepSeekV3.2/cores/models/modeling_deepseek_v3_2.py,
-experimental/quantization/DeepSeekV3.2/cores/models/configuration_deepseek.py
+amct_pytorch/experimental/quantization/DeepSeekV3.2/cores/models/deepseek_v3_2/configuration_deepseek.py,
+amct_pytorch/experimental/quantization/DeepSeekV3.2/cores/models/deepseek_v3_2/modeling_deepseek_v3_2.py,
+amct_pytorch/experimental/quantization/DeepSeekV3.2/cores/models/deepseek_v3_2/indexer.py,
+amct_pytorch/experimental/quantization/DeepSeekV3.2/pp/forward/custom.py
 "
 Copyright Notice:
 Copyright 2023 DeepSeek-AI and The HuggingFace Inc. team
 License: Apache License V2.0
+
+Software: FlatQuant
+Official Repository: https://github.com/ruikangliu/FlatQuant
+Usage: "
+amct_pytorch/algorithms/quant/flatquant.py,
+amct_pytorch/cli/llm/args.py,
+amct_pytorch/quantization/modules/quant_base.py,
+amct_pytorch/quantization/modules/quant_linear.py,
+amct_pytorch/experimental/quantization/DeepSeekV3.2/cores/calibrator/dsv3_calib.py,
+amct_pytorch/experimental/quantization/DeepSeekV3.2/cores/calibrator/function_utils.py,
+amct_pytorch/experimental/quantization/DeepSeekV3.2/cores/quantization/linear.py,
+amct_pytorch/experimental/quantization/DeepSeekV3.2/cores/quantization/node.py,
+amct_pytorch/experimental/quantization/DeepSeekV3.2/cores/utils/args_utils.py,
+amct_pytorch/experimental/quantization/DeepSeekV3.2/cores/utils/utils.py
+"
+Copyright Notice:
+Copyright (c) 2024 ruikangliu
+License: MIT License
+
+Software: Microsoft microxcaling
+Official Repository: https://github.com/microsoft/microxcaling
+Usage: "
+amct_pytorch/experimental/deepseek-v4/mx_quantize.py,
+amct_pytorch/quantization/dtypes/fp_impl.py
+"
+Copyright Notice:
+Copyright (c) Microsoft Corporation
+License: MIT License
+
+Software: AMD MiniMax MXFP4 exporter
+Official Repository: https://github.com/amd/Quark
+Usage: "
+amct_pytorch/experimental/quantization/MiniMax-M2.7/src/common.py,
+amct_pytorch/experimental/quantization/MiniMax-M2.7/src/export_rtn_mxfp4.py
+"
+Copyright Notice:
+Copyright (c) 2025 Advanced Micro Devices, Inc.
+License: MIT License
+
+                                 MIT License
+
+                         Copyright (c) 2024 ruikangliu
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+                                 MIT License
+
+                         Copyright (c) Microsoft Corporation
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+                                 MIT License
+
+                  Copyright (c) 2025 Advanced Micro Devices, Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Software: Qwen model implementations
+Official Repository: https://github.com/huggingface/transformers
+Usage: "
+amct_pytorch/common/models/llm/qwen/moe_common.py,
+amct_pytorch/common/models/llm/qwen/qwen3_5/quant_module.py,
+amct_pytorch/common/models/llm/qwen/qwen3_next/quant_module.py
+"
+Copyright Notice:
+Copyright 2025 The Qwen Team, Alibaba Group and The HuggingFace Inc. team
+License: Apache License V2.0
+
+Software: LongCat model implementations
+Official Repository: https://github.com/huggingface/transformers
+Usage: "
+amct_pytorch/common/models/llm/longcat/longcat_lite/quant_module.py,
+amct_pytorch/common/models/llm/longcat/moe_common.py
+"
+Copyright Notice:
+Copyright 2025 Meituan and the HuggingFace Inc. team
+License: Apache License V2.0
+
+Software: Hunyuan model implementations
+Official Repository: https://github.com/huggingface/transformers
+Usage: "
+amct_pytorch/common/models/llm/hyv3/quant_module.py
+"
+Copyright Notice:
+Copyright 2025 The Tencent Hunyuan Team and The HuggingFace Inc. team
+License: Apache License V2.0
+
+Software: GLM model implementations
+Official Repository: https://github.com/huggingface/transformers
+Usage: "
+amct_pytorch/common/models/llm/glm/glm5_2/quant_module.py
+"
+Copyright Notice:
+Copyright 2026 the HuggingFace Team
+License: Apache License V2.0
+
+Software: ModelTC LightCompress
+Official Repository: https://github.com/ModelTC/LightCompress
+Usage: "
+amct_pytorch/common/datasets/preproc.py
+"
+Copyright Notice:
+Copyright (c) ModelTC/LightCompress
+License: Apache License V2.0
+
                                  Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/
@@ -226,21 +399,6 @@ License: Apache License V2.0
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
-
-
-Software: DeepSeek-V3
-Official Repository: https://huggingface.co/deepseek-ai/DeepSeek-V3/tree/main/modeling_deepseek.py
-Usage: "
-experimental/quantization/DeepSeekV3.2/cores/models/indexer.py,
-experimental/quantization/DeepSeekV3.2/cores/models/modeling_deepseek_v3_2.py,
-experimental/quantization/DeepSeekV3.2/cores/models/configuration_deepseek.py
-"
-Copyright Notice:
-Copyright 2023 DeepSeek-AI and The HuggingFace Inc. team
-License: Apache License V2.0
-Please see above
-
-
 Software: Intel auto-round
 Official Repository: https://github.com/intel/auto-round/tree/v0.13.1
 Usage: "
@@ -255,12 +413,33 @@ Please see above
 Software: PyTorch
 Official Repository: https://github.com/pytorch/pytorch
 Usage: "
+amct_pytorch/common/models/llm/common/attention_forward.py,
 amct_pytorch/common/optimization/sign_sgd.py
 "
 Copyright Notice:
 Copyright (c) 2016 Facebook, Inc. (Adam Paszke) and affiliates (full contributor list below)
 License: BSD 3-Clause License
-From PyTorch:
+
+Software: TritonBench
+Official Repository: https://github.com/meta-pytorch/tritonbench/tree/44b0a40
+Usage: "
+tests/amct_ops/quantize_ref.py
+"
+Copyright Notice:
+Copyright (c) 2019, pytorch
+License: BSD 3-Clause License
+
+Software: torchao
+Official Repository: https://github.com/pytorch/ao
+Usage: "
+amct_pytorch/experimental/deepseek-v4/mx_quantize.py,
+amct_pytorch/quantization/dtypes/fp_impl.py
+"
+Copyright Notice:
+Copyright (c) 2023 Meta
+Copyright (c) 2024-2026 Arm Limited and/or its affiliates
+License: BSD 3-Clause License
+From torchao:
 
 Copyright (c) 2016-     Facebook, Inc            (Adam Paszke)
 Copyright (c) 2014-     Facebook, Inc            (Soumith Chintala)
