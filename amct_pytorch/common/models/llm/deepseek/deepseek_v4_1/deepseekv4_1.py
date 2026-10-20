@@ -38,6 +38,7 @@ from amct_pytorch.common.models.llm.common.weight_path_validation import (
     resolve_safetensors_path,
 )
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY, register_dtype
+from amct_pytorch.quantization.dtypes.hifp_impl import hif8_pack
 
 BLOCK = 32
 # Source scales are read one tensor at a time. Handles of the shards holding
@@ -45,6 +46,7 @@ BLOCK = 32
 # only protects the file-descriptor count for exotic layouts that spread scales
 # over many shards.
 MAX_OPEN_SCALE_FILES = 8
+GROUPED_SUFFIX = "attn.wo_a"
 
 
 @MODEL_REGISTRY.register(
@@ -77,14 +79,18 @@ class DeepseekV41:
     @staticmethod
     def _validate_platform(args):
         platform = getattr(args, "deploy_platform", None)
-        expected = {"A3": "int", "ascend950": "mxfp"}
+        expected = {"A3": ("int",), "ascend950": ("mxfp", "hifp")}
         if platform not in expected:
             raise ValueError("DeepSeek V4.1 requires --deploy_platform A3 or ascend950")
-        if getattr(args, "quant_dtype", None) != expected[platform]:
+        if getattr(args, "quant_dtype", None) not in expected[platform]:
             raise ValueError(
-                f"DeepSeek V4.1 {platform} requires --quant_dtype {expected[platform]}"
+                f"DeepSeek V4.1 {platform} requires --quant_dtype "
+                + " or ".join(expected[platform])
             )
         return platform
+
+    def _is_hif8(self):
+        return getattr(self.args, "quant_dtype", None) == "hifp"
 
     @classmethod
     def validate_ascend_source(cls, args):
@@ -132,7 +138,7 @@ class DeepseekV41:
             raise ValueError("DeepSeek V4.1 ascend950 requires --deploy_format legacy")
         if platform == "ascend950" and getattr(args, "bit_config", None):
             raise ValueError(
-                "DeepSeek V4.1 950 preserves source bits; --bit_config is not supported"
+                "DeepSeek V4.1 ascend950 (mxfp/hifp) does not support --bit_config"
             )
         for key in (
             "algos",
@@ -224,13 +230,18 @@ class DeepseekV41:
         # are not selected are decoded to BF16 and described as FLOAT. The 950
         # legacy converter, however, only expands scales for explicitly
         # selected FP8 modules and must retain its all-candidates guard.
-        if platform == "ascend950" and (missing := candidates - selected):
+        hif8 = self._is_hif8()
+        if platform == "ascend950" and not hif8 and (missing := candidates - selected):
             raise ValueError(
                 f"FP8 32x32 modules not selected by JSON: {sorted(missing)}"
             )
-        planned = selected if platform == "A3" else candidates
+        if hif8 and (missing := selected - candidates):
+            raise ValueError(
+                f"Selected HiFloat8 modules are not 32x32 block FP8: {sorted(missing)}"
+            )
+        planned = candidates if platform == "ascend950" and not hif8 else selected
         # Fail on invalid config before any checkpoint output is created.
-        if platform == "ascend950":
+        if platform == "ascend950" and not hif8:
             self._make_legacy_quant_config()
         self.processed_modules.clear()
         ignored = frozenset(
@@ -262,11 +273,12 @@ class DeepseekV41:
     ):
         """Same arguments and {tensor_name: shard_name} return as the workflow."""
         platform = self._validate_platform(self.args)
-        convert = (
-            self._convert_tensorwise_shard_a3
-            if platform == "A3"
-            else self._convert_tensorwise_shard_950
-        )
+        if platform == "A3":
+            convert = self._convert_tensorwise_shard_a3
+        elif self._is_hif8():
+            convert = self._convert_tensorwise_shard_hif8
+        else:
+            convert = self._convert_tensorwise_shard_950
         return convert(
             source_file, model_dir, original_weight_map, quant_layers, loaded_files
         )
@@ -399,6 +411,95 @@ class DeepseekV41:
             scale = scale.repeat_interleave(BLOCK, dim=0)
         return scale
 
+    def _convert_tensorwise_shard_hif8(
+        self, source_file, model_dir, original_weight_map, quant_layers, loaded_files
+    ):
+        path = resolve_safetensors_path(model_dir, source_file, self.safetensors_files)
+        tensors = load_file(str(path), device="cpu")
+        scale_files = {}
+        processed = set()
+        for module_name in sorted(quant_layers):
+            weight_name = module_name + ".weight"
+            scale_name = module_name + ".scale"
+            if weight_name not in tensors:
+                # The new scale is written next to its weight.
+                tensors.pop(scale_name, None)
+                continue
+            if scale_name in tensors:
+                scale = tensors[scale_name]
+            elif scale_name in original_weight_map:
+                scale = self._read_source_scale(
+                    model_dir, original_weight_map[scale_name], scale_name, scale_files
+                )
+            else:
+                raise ValueError(f"Missing source scale tensor: {scale_name}")
+            weight = self._dequantize_block_fp8(tensors[weight_name], scale)
+            tensors.update(self._export_hif8_payload(weight_name, weight))
+            processed.add(module_name)
+        destination = self.output_dir / source_file
+        temporary = destination.with_name(f".{destination.name}.tmp")
+        save_file(tensors, str(temporary), metadata={"format": "pt"})
+        os.replace(temporary, destination)
+        self.processed_modules.update(processed)
+        return {name: source_file for name in tensors}
+
+    @staticmethod
+    def _dequantize_block_fp8(weight, scale):
+        rows, columns = weight.shape
+        dense = scale.to(torch.float32)
+        dense = dense.repeat_interleave(BLOCK, dim=0)[:rows]
+        dense = dense.repeat_interleave(BLOCK, dim=1)[:, :columns]
+        return weight.to(torch.float32) * dense
+
+    def _export_hif8_payload(self, weight_name, weight):
+        module_name = weight_name.removesuffix(".weight")
+        scale_name = module_name + ".scale"
+        text_config = self.config.get("text_config", self.config)
+        grouped = module_name.endswith(GROUPED_SUFFIX)
+        if grouped:
+            # npu_transpose_quant_batchmatmul needs wo_a groups to share one scale.
+            groups = self._required_int(text_config, "o_groups")
+            rank = self._required_int(text_config, "o_lora_rank")
+            rows, columns = weight.shape
+            if rows != groups * rank:
+                raise ValueError(
+                    f"{module_name}: {rows} rows, expected o_groups * o_lora_rank"
+                    f" = {groups} * {rank}"
+                )
+            weight = (
+                weight.view(groups, rank, columns)
+                .transpose(0, 1)
+                .reshape(rank, groups * columns)
+            )
+        codes, scale = hif8_pack(weight)
+        payload = {weight_name: codes, scale_name: scale}
+        if grouped:
+            payload[weight_name] = (
+                payload[weight_name]
+                .view(rank, groups, columns)
+                .transpose(0, 1)
+                .reshape(rows, columns)
+                .contiguous()
+            )
+            payload[scale_name] = (
+                payload[scale_name]
+                .view(1, rank)
+                .expand(groups, rank)
+                .reshape(rows, 1)
+                .contiguous()
+            )
+        return payload
+
+    @staticmethod
+    def _required_int(text_config, key):
+        value = text_config.get(key)
+        if type(value) is not int:
+            raise ValueError(
+                f"config.json text_config requires integer '{key}' for HiFloat8 "
+                f"export, got {value!r}"
+            )
+        return value
+
     def _convert_tensorwise_shard_950(
         self, source_file, model_dir, original_weight_map, quant_layers, loaded_files
     ):
@@ -517,9 +618,12 @@ class DeepseekV41:
 
     def refresh_config(self, quant_ignore_layers, *, tensor_plan=None):
         platform = self._validate_platform(self.args)
-        refresh = (
-            self._refresh_config_a3 if platform == "A3" else self._refresh_config_950
-        )
+        if platform == "A3":
+            refresh = self._refresh_config_a3
+        elif self._is_hif8():
+            refresh = self._refresh_config_hif8
+        else:
+            refresh = self._refresh_config_950
         return refresh(quant_ignore_layers, tensor_plan=tensor_plan)
 
     def _refresh_config_a3(self, quant_ignore_layers, *, tensor_plan=None):
@@ -530,6 +634,15 @@ class DeepseekV41:
             "quant_method": "ascend",
             "model_quant_type": "W8A8_DYNAMIC",
         }
+        temporary = self.output_dir / ".config.json.tmp"
+        temporary.write_text(json.dumps(config, indent=2), encoding="utf-8")
+        os.replace(temporary, self.output_dir / "config.json")
+
+    def _refresh_config_hif8(self, quant_ignore_layers, *, tensor_plan=None):
+        # Written unchanged: vLLM-Ascend picks its FP8 config from quant_method
+        # "fp8" and finds the HiFloat8 Linears by their uint8 weights, so no
+        # ignore list is needed either.
+        config = copy.deepcopy(self.config)
         temporary = self.output_dir / ".config.json.tmp"
         temporary.write_text(json.dumps(config, indent=2), encoding="utf-8")
         os.replace(temporary, self.output_dir / "config.json")

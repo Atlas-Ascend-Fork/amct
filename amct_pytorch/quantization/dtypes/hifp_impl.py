@@ -523,3 +523,33 @@ def _hifx_three_level_quantize(x, qdim, *, prims, k=None, v=None):
 def _hif4_reference_quantize(x, qdim):
     """Bit-exact quant_hifx three-level block quantization on padded fp32 input."""
     return _hifx_three_level_quantize(x, qdim, prims=_EXACT_PRIMS)
+
+
+# ---- HiF8 pack ---------------------------------------------------------
+HIF8_WEIGHT_SCOPE = 16.0
+
+
+@torch.no_grad()
+def hif8_pack(x, weight_range=HIF8_WEIGHT_SCOPE):
+    """Pack a 2-D weight to HiFloat8 uint8 codes and one float32 scale per row."""
+    if x.dim() != 2:
+        raise RuntimeError(
+            "hif8_pack: input must be 2-D [n_rows, n_cols], got {} dims".format(x.dim())
+        )
+    if not is_native_hifloat8_cast_available():
+        raise RuntimeError(
+            "hif8_pack requires native HiFloat8 cast support in torch_npu."
+        )
+    import torch_npu
+
+    values = x.detach().npu().to(torch.float32)
+    scale = values.abs().amax(dim=1, keepdim=True).clamp_min(1e-12) / weight_range
+    scaled = (values / scale).to(torch.bfloat16)
+    codes = torch_npu.npu_dtype_cast(scaled, torch_npu.hifloat8)
+    if codes.dtype != torch.uint8:
+        raise RuntimeError(
+            "hif8_pack expects uint8 HiFloat8 codes from npu_dtype_cast, got {}".format(
+                codes.dtype
+            )
+        )
+    return codes.cpu(), scale.cpu()

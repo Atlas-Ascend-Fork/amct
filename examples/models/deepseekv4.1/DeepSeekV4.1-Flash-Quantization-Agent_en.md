@@ -76,6 +76,8 @@ AisBench accuracy evaluation
 
 During offline conversion, weight files are read one by one. Only weights requiring quantization are converted; the remaining weights are written back unchanged. The core logic covers model conversion, HiFloat8 quantization, configuration conversion, and end-to-end self-testing. The workflow can be automated through the following input template based on the AMCT Agent workflow.
 
+The conversion now ships as one mode of the deployment command; see [DeepSeek V4.1 Deployment Weight Export](./README_en.md).
+
 <img src="assets/inp_template.png" alt="Agent workflow user input template" width="50%">
 
 ### 4.2 Deployment Adaptation
