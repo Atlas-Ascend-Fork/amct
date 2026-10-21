@@ -4,6 +4,11 @@
  
 在源码编译前，请先完成基础环境搭建，具体操作请参见[快速安装](quick_install.md)。
 
+源码编译还需要满足以下工具链要求（由所依赖的 cann/cmake master-059 构建框架检查）：
+
+- gcc 版本不低于 7.3.0；
+- `patch` 与 `python3` 需在 PATH 中可执行。
+
 ## 源码编译
 
 ### 下载源码
@@ -30,6 +35,29 @@ bash build.sh --torch
 
 更多特性请参考：https://hiascend.com/document/redirect/CannCommunityToolAmct
 
+### 离线编译
+
+若您的编译环境无法访问网络，可以先在有网环境执行脚本一键下载 amct_pytorch 编译所需的全部三方件，再将整个目录拷贝到离线环境：
+
+```bash
+bash download_3rd_party.sh
+# 或指定下载目录
+bash download_3rd_party.sh --3rd_party third_party
+```
+
+说明：
+
+- 未指定参数时，无论在哪个目录执行，默认下载到仓库根目录的 `third_party`；三方件压缩包直接存放于该目录，所有 patch 存放于其 `patch` 子目录。
+- 每个文件均通过 SHA256 校验；已存在的缓存会先校验，一致则跳过下载，不一致则重新下载；下载或校验失败时脚本返回非零退出码。
+- 下载地址与 SHA256 与 [cann/cmake master-059](https://gitcode.com/cann/cmake/tree/master-059/third_party) 中对应定义一致，仅覆盖 amct 构建实际引用的三方件（cann-cmake 本体、protobuf、abseil-cpp 及其 CVE 补丁）；其余补丁随 `cmake-master-059.tar.gz` 一并获取，下载地址和 SHA256 固定在 `download_3rd_party.sh` 中。若从其他地址下载，请确保版本号和 SHA256 一致。
+- 本节离线流程适用于 `--torch`（amct_pytorch 包）和 `-u`（单元测试）编译。`--pkg`（完整包）会额外执行 `install_graph.sh` 联网下载 amct-graph 二进制包，暂不在离线下载范围内；如需离线执行 `--pkg`，请在有网环境预先下载该包，并按 `install_graph.sh` 的查找规则放置到 `<仓库根>/build/cann-amct-graph_9.2.0_linux-<arch>.tar.gz`（`<arch>` 为 CPU 架构，如 x86_64、aarch64），构建时会优先复用该文件而不再联网。
+
+下载完成后，编译时将 `--cann_3rd_lib_path` 指向相同目录即可：
+
+```bash
+bash build.sh --torch --cann_3rd_lib_path=third_party
+```
+
 ### 本地验证
 
 利用tests路径下的测试用例进行本地验证：
@@ -52,6 +80,20 @@ bash build.sh --torch
   ```bash
   bash build.sh -h
   ```
+
+### 依赖的开源第三方软件
+
+amct 在编译时，依赖的第三方开源软件列表如下：
+
+| 开源软件 | 版本 | 下载地址 |
+|---|---|---|
+| protobuf | 25.1 | [protobuf-25.1.tar.gz](https://cann-3rd.obs.cn-north-4.myhuaweicloud.com/protobuf/protobuf-25.1.tar.gz) |
+| abseil-cpp | 20230802.1 | [abseil-cpp-20230802.1.tar.gz](https://cann-3rd.obs.cn-north-4.myhuaweicloud.com/abseil-cpp/abseil-cpp-20230802.1.tar.gz) |
+| abseil-cpp 补丁 | 20230802.1-h0 | [patch/backport-CVE-2025-0838.patch](https://gitcode.com/cann-src-third-party/abseil-cpp/releases/download/20230802.1-h0/backport-CVE-2025-0838.patch) |
+| cann-cmake | master-059 | [cmake-master-059.tar.gz](https://raw.gitcode.com/cann/cmake/archive/refs/heads/master-059.tar.gz) |
+
+> [!NOTE]说明
+> protobuf 编译所需的 `protobuf_25.1_change_version.patch`、`protobuf-hide_absl_symbols.patch`、`fix-gcc15-gcc16-container-memory-cstdint.patch` 等其余补丁已收录于 cann-cmake 的 `third_party/patch` 目录，随 `cmake-master-059.tar.gz` 一并获取，无须单独下载。
 
 ### 安装与卸载
 

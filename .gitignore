@@ -13,6 +13,9 @@ build_out/
 dist/
 *_pb2.py
 
+# Offline third-party packages (download_3rd_party.sh)
+/third_party/
+
 # IDE
 .idea/
 .vscode/

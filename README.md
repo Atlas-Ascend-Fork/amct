@@ -108,6 +108,19 @@ python3 -c "import torch; assert '+cpu' in torch.__version__, 'must use CPU torc
 python3 -c "import amct_pytorch as amct; print(f'successfully installed AMCT ')"
 ```
 
+<details>
+<summary>离线环境编译</summary>
+
+若编译环境无法访问网络，可先在有网环境执行 `bash download_3rd_party.sh` 一键下载 amct_pytorch 编译所需的三方件（默认存放于仓库根目录 `third_party`），拷贝至离线环境后：
+
+```bash
+bash build.sh --torch --cann_3rd_lib_path=third_party
+```
+
+更多说明（含 `--pkg` 完整包的适用范围）参见 [构建指南](docs/zh/build.md)。
+
+</details>
+
 更多构建选项与本地验证请参见 [构建指南](docs/zh/build.md)。
 
 ### 🏃 一站式平台快速体验
