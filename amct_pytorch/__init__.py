@@ -32,7 +32,11 @@ __all__ = [
     'HIFP8_SMOOTHQUANT_CFG',
 ]
 
-from amct_pytorch.classic import quantize, convert, algorithm_register
+from amct_pytorch.classic import (
+    quantize,
+    convert,
+    algorithm_register,
+)
 from amct_pytorch.common.config import (
     INT4_AWQ_WEIGHT_QUANT_CFG,
     INT4_GPTQ_WEIGHT_QUANT_CFG,
