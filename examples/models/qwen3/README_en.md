@@ -1,8 +1,9 @@
-# Qwen3-0.6B W4A8 `lwc` + `lac` and Qwen3-0.6B W4A4 `autoround` Quantization Example
+# Qwen3-0.6B W4A8 `lwc` + `lac` and `flatquant`, and Qwen3-0.6B W4A4 `autoround` Quantization Example
 
-This example corresponds to Task 1 and Task 8 in Issue [#182](https://gitcode.com/cann/amct/issues/182):
+This example corresponds to Task 1, Task 2 and Task 8 in Issue [#182](https://gitcode.com/cann/amct/issues/182):
 
 * Perform `w4a8` + `lwc`/`lac` quantization on Qwen3-0.6B, running both **int4/int8 and mxfp4/mxfp8**.
+* Perform `w4a8` + `flatquant` quantization on Qwen3-0.6B, running both **int4/int8 and mxfp4/mxfp8**.
 * Perform `w4a4` + `autoround` quantization on Qwen3-0.6B, running both **int4/int4 and mxfp4/mxfp4**.
 
 This directory is located alongside `qwen3.6` and `deepseekv4`. The Qwen3.6 documentation is not modified.
@@ -202,6 +203,7 @@ python3 -m amct_pytorch.eval \
 
 # 7) mxfp4/mxfp8: Replace the command --quant_dtype int in steps 3 and 5 with mxfp, and change the --output_dir / parameter directory to outputs/lwc_lac/qwen3_0_6b_w4a8_mxfp. Run each of them separately.
 # 8) mxfp4/mxfp4: Replace the command --quant_dtype int in steps 4 and 6 with mxfp, and change the --output_dir / parameter directory to outputs/autoround/qwen3_0_6b_w4a4_mxfp. Run each of them separately.
+# 9) flatquant (w4a8): Replace --algos lwc lac in steps 3 and 5 with --algos flatquant, and change the --output_dir / parameter directory to outputs/flatquant/qwen3_0_6b_w4a8_{int,mxfp}. Run each of them separately. Replace --quant_dtype int with mxfp for the mxfp4/mxfp8 format.
 ```
 
 ## Qwen3-0.6B W4A8 `lwc` + `lac`
@@ -251,6 +253,36 @@ QUANT_DTYPE=int QUANT_TYPE=w4a4 ALGOS=autoround bash scripts/eval_quant.sh
 # Switch QUANT_DTYPE to mxfp to test quantization results under the mxfp data type.
 ```
 
+## Qwen3-0.6B W4A8 `flatquant`
+
+Main parameters:
+
+| Parameter / Environment Variable | Description                                                                                         |
+| :------------------------------- | :-------------------------------------------------------------------------------------------------- |
+| `MODEL`                          | Local weight directory (placeholder path)                                                           |
+| `--model_name qwen3`             | Dense Qwen3 execution path                                                                          |
+| `--seq_len 4096`                 | Sequence length used for calibration and evaluation                                                 |
+| `--granularity block`            | Block-level granularity                                                                             |
+| `--quant_dtype int\|mxfp`        | int4/int8 or mxfp4/mxfp8                                                                            |
+| `--algos flatquant`              | Quantization algorithm (a structure algorithm; only one algorithm is allowed per `structure` target) |
+| `--bit_config`                   | Repository configuration `amct_pytorch/configs/w4a8.yaml`                                           |
+| `--quant_target`                 | One target per extract/PTQ run: `attn-linear` or `mlp`; both are loaded during quantized evaluation |
+| `--nsamples`                     | Number of Pileval calibration samples, default 128                                                  |
+| `--end_block_idx`                | Qwen3-0.6B contains 28 blocks by default                                                            |
+
+**Note:** No additional script is required. `common.sh` already exposes the algorithm as `ALGOS`, so it can be overridden directly to run `flatquant` (`bit_config` remains `w4a8.yaml`).
+
+Example:
+
+```bash
+export MODEL=/path/to/Qwen3-0.6B
+cd examples/models/qwen3
+QUANT_DTYPE=int ALGOS=flatquant bash scripts/ptq_attn.sh
+QUANT_DTYPE=int ALGOS=flatquant bash scripts/ptq_mlp.sh
+QUANT_DTYPE=int ALGOS=flatquant bash scripts/eval_quant.sh
+# Switch QUANT_DTYPE to mxfp to test quantization results under the mxfp data type.
+```
+
 ## Output Artifacts
 
 Qwen3-0.6B W4A8 `lwc` + `lac`
@@ -281,6 +313,22 @@ Relative placeholder directories (located under this example directory by defaul
 | MXFP PTQ parameters — Attention | `./outputs/autoround/qwen3_0_6b_w4a4_mxfp/ptq_params/qwen3/attn-linear` | 715 MiB    |
 | MXFP PTQ parameters — MLP       | `./outputs/autoround/qwen3_0_6b_w4a4_mxfp/ptq_params/qwen3/mlp`         | 1072 MiB   |
 
+Qwen3-0.6B W4A8 `flatquant`
+
+Relative placeholder directories (located under this example directory by default):
+
+| Artifact                        | Path                                                                    | Size       |
+| :------------------------------ | :---------------------------------------------------------------------- | :--------- |
+| PTQ offline data — Attention    | `./outputs/qwen3_0_6b/ptq_data/attn-linear`                             | 28.002 GiB |
+| PTQ offline data — MLP          | `./outputs/qwen3_0_6b/ptq_data/mlp`                                     | 28.002 GiB |
+| Total offline data (attn + mlp) | Sum of the two directories above                                        | 56.004 GiB |
+| INT PTQ parameters — Attention  | `./outputs/flatquant/qwen3_0_6b_w4a8_int/ptq_params/qwen3/attn-linear`  | 3.95 MiB   |
+| INT PTQ parameters — MLP        | `./outputs/flatquant/qwen3_0_6b_w4a8_int/ptq_params/qwen3/mlp`          | 4.09 MiB   |
+| MXFP PTQ parameters — Attention | `./outputs/flatquant/qwen3_0_6b_w4a8_mxfp/ptq_params/qwen3/attn-linear` | 3.95 MiB   |
+| MXFP PTQ parameters — MLP       | `./outputs/flatquant/qwen3_0_6b_w4a8_mxfp/ptq_params/qwen3/mlp`         | 4.09 MiB   |
+
+The FlatQuant PTQ parameters are structure transformation matrices (`diag_scale` and the decomposed matrices), independent of the quantization bit width; therefore the int and mxfp parameter sizes are identical.
+
 Quantization duration is measured from the start of the first `ptq` run for the corresponding format until all Attention and MLP parameters have been written. Model downloading and environment setup are not included.
 
 The offline data size is the total size of the extract output directories, measured in GiB.
@@ -295,3 +343,5 @@ BF16 and quantized evaluation use the same `MODEL`, as well as the same `seq_len
 | Qwen3-0.6B | `w4a8`    | `lwc` + `lac` | `mxfp4/mxfp8`       | 19.157549 |     23.898159 |       4.740610 |                   48.88 |                  56.004 |
 | Qwen3-0.6B | `w4a4`    | `autoround`   | `int4/int4`         | 19.157549 |     97.062500 |      77.904951 |                   87.68 |                  56.004 |
 | Qwen3-0.6B | `w4a4`    | `autoround`   | `mxfp4/mxfp4`       | 19.157549 |     31.795736 |      12.638187 |                   88.51 |                  56.004 |
+| Qwen3-0.6B | `w4a8`    | `flatquant`   | `int4/int8`         | 19.157549 |     25.472147 |       6.314598 |                   35.95 |                  56.004 |
+| Qwen3-0.6B | `w4a8`    | `flatquant`   | `mxfp4/mxfp8`       | 19.157549 |     24.000681 |       4.843132 |                   52.77 |                  56.004 |
