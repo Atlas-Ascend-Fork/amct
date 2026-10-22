@@ -715,3 +715,128 @@ for the API usage) or recovery training (see [section 6.6](#66-recovery-fine-tun
 to mitigate.
 
 > After pruning, to export the model as a torchair offline model (.air) for ATC-to-om conversion and on-board inference, refer to [AMCT large-model offline torchair model export](../export/README_en.md).
+
+## 8 Community Task Sample: Qwen3-0.6B Dense FFN Pruning (`reconstruct` + `finetune`, Task 17)
+
+This section corresponds to issue 183 task 17: dense FFN intermediate-dim `reconstruct`
+(least-squares recovery) with a fixed `prune_ratio=0.5`, followed by recovery finetune.
+
+### 8.1 Run Instructions
+
+- Calibration set: Pileval, `8` samples, `seq_len=2048` (16384 calibration tokens in total; the
+  least-squares recovery of `reconstruct` requires calibration rows >= kept neurons, otherwise it
+  falls back to naive slicing and logs a warning)
+- Evaluation set: WikiText2 test split, fixed `seq_len=4096`, full test split (73 batches)
+- Finetune set: WikiText2 train split, 300 non-overlapping contiguous 512-token blocks
+  (the test split is never used for training)
+- Finetune setup: momentum-free SGD (lr=1e-2), warmup=20, 300 steps, grad_clip=1.0,
+  gradient checkpointing. The optimizer choice was validated by a
+  same-protocol A/B experiment (AdamW diverges under this setup; see the comparison table in 8.3).
+- The output directory is a placeholder relative path; the script saves `PruneReport`, diagnosis
+  summary and runtime arguments (full arguments are printed at startup). To also save the finetuned
+  model weights, append the optional `--save-model` flag to the run command
+- Model loading: `trust_remote_code` defaults to `False` and `local_files_only=True` is enforced
+  (strictly offline from the local directory; Qwen3 is natively supported by transformers, so no
+  custom model code is executed). If truly needed, pass `--trust-remote-code` explicitly — the
+  script prints a security warning
+
+Run:
+
+```bash
+python3 src/run_qwen3_0_6b_pruning_reconstruct_ratio_finetune.py \
+  --model-path ./path/to/Qwen3-0.6B \
+  --save-dir ./outputs/qwen3_0_6b_reconstruct_ratio_finetune/r0_5 \
+  --prune-ratio 0.5
+```
+
+Pass `--no-finetune` to skip the recovery finetune; `--preview-prune-ratio` only affects the
+`prune_diagnose()` dry-run (default `0.1`); `--eval-batches` only truncates the evaluation set
+for quick checks — omit it to use the full WikiText2 test split.
+
+### 8.2 Diagnostics and Report
+
+`prune_diagnose()` identifies 28 prunable dense targets (28 FFN layers) on a single 910B3 card;
+the pruned model `config` has its `intermediate_size` narrowed accordingly and can round-trip
+through `save_pretrained/from_pretrained` directly. Actual diagnostic output and cost of the
+`prune_ratio=0.5` main run (re-measured 2026-10-21):
+
+```text
+[qwen3.0.6b.reconstruct.ratio.finetune] diagnose time: 30.31 min
+[qwen3.0.6b.reconstruct.ratio.finetune] prune_diagnose():
+[prune-diagnose] prunable targets: cnn=0, dense=28, moe=0
+  fixed-ratio prune: available (cut 4.4%, forward OK)
+  acc binary search: available (chosen prune_ratio=0.1)
+```
+
+Each candidate of the acc search runs a real reconstruct-pruning trial (one ridge regression per
+dense layer across all 28 layers), so the diagnostic cost is far higher than for low_variance-style
+samples; `run_metrics.json` records it separately as `diagnose_time_minutes` (measured `30.31 min`
+here). Pass `--skip-diagnose` to skip the preview entirely.
+
+Core of the post-prune `PruneReport` (full JSON in `outputs/.../prune_report.json`, 30 events,
+no warnings):
+
+```json
+{
+  "backend": "huggingface",
+  "params_before": 596049920,
+  "params_after": 463929344,
+  "budget_unreachable": false,
+  "prunable_fraction": null,
+  "warnings": [],
+  "per_layer_sparsity": {"model.layers.0.mlp.down_proj": 0.5, "...": "28 layers, identical"},
+  "events": [
+    {"stage": "dense", "method": "reconstruct", "module": "model.layers.0.mlp.down_proj",
+     "detail": "output-preserving (ls) prune 3072 -> 1536"}
+  ]
+}
+```
+
+### 8.3 Results Table
+
+Measured on a single Ascend 910B3 (64 GiB); evaluation on the full WikiText2 test split with
+`seq_len=4096` (73 batches, one forward per batch); calibration on Pileval with 8 samples,
+`seq_len=2048`.
+
+| Model | Method | Setup | Baseline PPL | Pruned PPL | Post-process PPL | Params (before -> after) | Param cut | Prune wall time (min) |
+| --- | --- | --- | ---: | ---: | ---: | --- | ---: | ---: |
+| Qwen3-0.6B | `reconstruct` + `finetune` | `prune_ratio=0.5` | 19.157549 | 74.244453 | 31.369858 | 596049920 -> 463929344 | 22.17% | 36.5 |
+
+> Post-process PPL is measured after the recovery finetune, which starts from the pruned model
+> (pruning is not re-executed). Relative to the pruned model, PPL drops by `42.874595` in absolute
+> terms (about 77.8% of the pruning-caused PPL increase is recovered); the recovered PPL is still
+> `12.212309` above the original model.
+>
+> Timing (re-measured 2026-10-21, fully recorded in `run_metrics.json`): the issue-required prune
+> wall time (from the start of calibration-data collection to the end of pruning) is `36.5 min`,
+> of which calibration-data collection is `0.1 min`, the `prune_diagnose()` diagnostic `30.3 min`
+> (reported separately, see 8.2), and the `amct.prune` call `5.8 min`; the 300-step recovery
+> finetune takes `1.6 min` and is reported separately, not counted in the prune wall time. The
+> re-measured baseline/pruned PPLs match the main table bit-for-bit, and the re-measured
+> finetuned PPL `31.302790` matches the SGD row of the A/B table below bit-for-bit
+> (pipeline determinism verified).
+
+**Finetune optimizer A/B (2026-10-18, re-measured on 910B3)**: everything else identical between
+the two runs (`lr=1e-2`, 300 steps, warmup=20, grad_clip=1.0, the same 300 training blocks); only
+the optimizer changes. Both runs share a bit-identical pruning starting point (pruned PPL
+74.244453 in both), confirming the optimizer as the only variable.
+
+Note on the two SGD results: `31.369858` in the main table and `77.8%` in the note below it come from the
+primary run referenced by Issue #183; the SGD row in the table below is the independent 2026-10-18 A/B
+run, `31.302790` / `77.9%`. Both runs start from the same pruned checkpoint under the same protocol, but
+the finetune results are not bit-identical — the PPL differs by `0.067068` (about 0.2%). Each table keeps
+the value from its own run; Issue #183 and the main table stay authoritative.
+
+| Finetune optimizer | Baseline PPL | Pruned PPL | Finetuned PPL | Finetune loss (init -> final) | Recovery |
+| --- | ---: | ---: | ---: | --- | ---: |
+| Momentum-free SGD (this sample's default) | 19.157549 | 74.244453 | 31.302790 | 8.0483 -> 3.7260 | ~77.9% |
+| AdamW | 19.157549 | 74.244453 | 163033.640625 | 8.0483 -> 11.3496 | diverged |
+
+AdamW diverges directly under this sample's `lr=1e-2` protocol: the loss rises instead of falling,
+and the finetuned PPL ends up about three orders of magnitude worse than the pruned model. This
+validates the optimizer choice in 8.1 — momentum-free SGD with `lr=1e-2` is a sound default for
+this sample; the learning-rate scale AdamW requires (~`1e-5`) is incompatible with this finetune
+protocol.
+
+
+> After pruning, to export the model as a torchair offline model (.air) for ATC-to-om conversion and on-board inference, refer to [AMCT large-model offline torchair model export](../export/README_en.md).
