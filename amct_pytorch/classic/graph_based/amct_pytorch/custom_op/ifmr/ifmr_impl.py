@@ -141,7 +141,7 @@ def ifmr_forward_pytorch(
         search_step (float, optional): Step size for searching optimal clip_max and clip_min
     Returns:
         scale (torch.Tensor): Quant factor to do scaling
-        offset (torch.Tensor): Quant factor to do offseting
+        offset (torch.Tensor): Quant factor to do offsetting
         clip_max (torch.Tensor): Max limit to clip input data
         clip_min (torch.Tensor): Min limit to clip input data
     """

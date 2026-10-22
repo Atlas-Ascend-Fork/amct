@@ -65,7 +65,7 @@ def arq_real_pytorch(data, scale, offset, num_bits):
         data (torch.Tensor): The input tensor to be quantized.
         scale (torch.Tensor): scale in quant factors
         offset (torch.Tensor): offset in quant factors
-        data_type (str): destination data type
+        num_bits (int): The number of bits used for quantization.
 
     Returns:
         quantized_input (torch.Tensor): The quantized output tensor.

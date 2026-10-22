@@ -163,7 +163,7 @@ def hfmg_calculate_loss(data_bins, dst_num_bins, search_range):
 
     Args:
         data_bins (list): the list of DataBin
-        dst_num_of_bins (int): destination num of bins
+        dst_num_bins (int): destination num of bins
         search_range (list): the list of search range
 
     Returns:
@@ -258,7 +258,7 @@ def hfmg_compute(data_bins, num_bits, with_offset):
 
     Returns:
         scale (torch.Tensor): Quant factor to do scaling
-        offset (torch.Tensor): Quant factor to do offseting
+        offset (torch.Tensor): Quant factor to do offsetting
     """
     search_range = hfmg_get_search_range(data_bins)
 
@@ -324,7 +324,7 @@ def hfmg_arq_pytorch(min_tensor, max_tensor, num_bits, with_offset):
 
     Returns:
         scale (torch.Tensor): Quant factor to do scaling
-        offset (torch.Tensor): Quant factor to do offseting
+        offset (torch.Tensor): Quant factor to do offsetting
     """
     scale, offset = calculate_scale_offset(
         max_tensor, min_tensor, with_offset, "INT" + str(num_bits)
@@ -387,7 +387,7 @@ def hfmg_forward_pytorch(hist, hist_range, num_bits=8, with_offset=False, nbins=
 
     Returns:
         scale (torch.Tensor): Quant factor to do scaling
-        offset (torch.Tensor): Quant factor to do offseting
+        offset (torch.Tensor): Quant factor to do offsetting
     """
     data_bins = transform_hist(hist, hist_range, nbins)
 

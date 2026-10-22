@@ -87,7 +87,6 @@ class AutoChannelPruneConfigHelper:
 
         Args:
             config_file (string): file to read and parse.
-            proto_init_func (function): function to initialize proto.
 
         Raises:
             RuntimeError: content in file doesn't match proto.
@@ -129,7 +128,6 @@ class AutoChannelPruneConfigHelper:
         """create auto prune channel result config.
 
         Args:
-            config_file (string): user file to read.
             search_prune_config (dict): prune config <layer_name: >.
             output_config (string): output config file
 
@@ -238,13 +236,12 @@ class AutoChannelPruneConfigHelper:
                 self.search_layers.append(layer)
         if not self.search_layers:
             raise ValueError(
-                "no layer to be searched, please make sure not all layers are overrided or skipped."
+                "no layer to be searched, please make sure not all layers are overridden or skipped."
             )
 
     def _parser_prune_config(self, search_prune_config):
         """parser prune config
         Args:
-            config_file: user file to read.
             search_prune_config: prune config <layer_name: prune_config list (0-prune, 1-remain)>.
 
         Returns:
