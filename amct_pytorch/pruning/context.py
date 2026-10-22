@@ -16,6 +16,7 @@
 # ----------------------------------------------------------------------------
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterable, Iterator, Optional, Tuple
 
@@ -25,25 +26,37 @@ import torch
 BatchAdapter = Callable[[Any], Tuple[Tuple[Any, ...], Dict[str, Any]]]
 
 
+def as_batch_sequence(data: Any) -> Iterable[Any]:
+    """Interpret ``data`` as a sequence of batches without materialising it.
+
+    A Mapping (dict / BatchEncoding / OrderedDict) is one batch and must not be iterated
+    into its keys; ``None`` carries no batches; every other iterable (list / tuple /
+    DataLoader / generator / Tensor) already is a sequence of batches.
+    """
+    if data is None:
+        return ()
+    if isinstance(data, Mapping):
+        return (data,)
+    return data
+
+
 @dataclass
 class PruneContext:
-    data: Optional[Iterable[Any]] = None
+    data: Optional[Any] = None
     batch_adapter: Optional[BatchAdapter] = None
 
     def iter_model_inputs(self) -> Iterator[Tuple[Tuple[Any, ...], Dict[str, Any]]]:
-        if self.data is None:
-            return iter(())
         adapter = self.batch_adapter or default_batch_adapter
 
         def generator() -> Iterator[Tuple[Tuple[Any, ...], Dict[str, Any]]]:
-            for batch in self.data:
+            for batch in as_batch_sequence(self.data):
                 yield adapter(batch)
 
         return generator()
 
 
 def default_batch_adapter(batch: Any) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
-    if isinstance(batch, dict):
+    if isinstance(batch, Mapping):
         return (), dict(batch)
     if torch.is_tensor(batch):
         return (batch,), {}
@@ -53,5 +66,6 @@ def default_batch_adapter(batch: Any) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
         return tuple(batch), {}
     raise TypeError(
         "Unsupported batch type for pruning data collection. "
-        "Provide torch.Tensor / tuple / list / dict or pass a custom batch_adapter."
+        "Provide torch.Tensor / tuple / list / Mapping (dict, OrderedDict, "
+        "UserDict, HF BatchEncoding) or pass a custom batch_adapter."
     )

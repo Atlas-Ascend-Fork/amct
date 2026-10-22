@@ -29,7 +29,7 @@ from torch import nn
 from ..common.utils.log import LOGGER
 
 from .config import MethodSpec, PruneConfig, _normalize_method_spec
-from .context import BatchAdapter
+from .context import BatchAdapter, as_batch_sequence
 from .pruner import AutoPruner
 from . import simulate
 from .report import PruneReport
@@ -676,10 +676,7 @@ def _prepare_search_inputs(
     base_cfg = _config_to_dict(config)
     if safe_skip_attention:
         base_cfg = _merge_attention_skips(base_cfg)
-    if eval_data is not None:
-        eval_batches = list(eval_data)
-    else:
-        eval_batches = list(data) if data is not None else []
+    eval_batches = list(as_batch_sequence(eval_data if eval_data is not None else data))
     return grid, base_cfg, count_parameters(model), eval_batches
 
 
@@ -1501,10 +1498,8 @@ def _accuracy_based_auto_prune(
     if safe_skip_attention:
         menu_cfg = _merge_attention_skips(menu_cfg)
     if _find_menu_domain(menu_cfg) is not None:
-        eval_batches = (
-            list(eval_data)
-            if eval_data is not None
-            else (list(data) if data is not None else [])
+        eval_batches = list(
+            as_batch_sequence(eval_data if eval_data is not None else data)
         )
         return _run_menu_mode(
             model,

@@ -22,7 +22,7 @@ from torch import nn
 from amct_pytorch.common.utils.check_params import check_params
 
 from .config import PruneConfig
-from .context import BatchAdapter
+from .context import BatchAdapter, as_batch_sequence
 from .pruner import AutoPruner
 from .report import PruneReport
 
@@ -127,11 +127,7 @@ def _run_menu_mode(
     """Guarded menu search: try each variant, keep the one that measures best. Returns the report."""
     from .accuracy_based_auto_prune import _run_menu_mode as _menu_mode
 
-    eval_batches = (
-        list(eval_data)
-        if eval_data is not None
-        else (list(data) if data is not None else [])
-    )
+    eval_batches = list(as_batch_sequence(eval_data if eval_data is not None else data))
     result = _menu_mode(
         model,
         config,

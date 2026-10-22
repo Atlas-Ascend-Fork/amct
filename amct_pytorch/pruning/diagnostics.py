@@ -16,6 +16,7 @@
 # ----------------------------------------------------------------------------
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -24,7 +25,7 @@ from torch import nn
 from ..common.utils.log import LOGGER
 from .calib import _unwrap_logits
 from .config import PruneConfig
-from .context import BatchAdapter
+from .context import BatchAdapter, as_batch_sequence, default_batch_adapter
 from .domains.cnn import CNNPruningDomain
 from .domains.dense import DensePruningDomain
 from .domains.moe import MoEPruningDomain
@@ -74,15 +75,11 @@ def _forward_ok(
 ) -> bool:
     import torch
 
+    # Unwrap through the same adapter the prune dry-run uses, so a container the
+    # adapter rejects stays an input error instead of being reported as a failed
+    # forward (which prune_diagnose would render as "pruning unavailable").
+    args, kwargs = (batch_adapter or default_batch_adapter)(batch)
     try:
-        if batch_adapter is not None:
-            args, kwargs = batch_adapter(batch)
-        elif isinstance(batch, dict):
-            args, kwargs = (), dict(batch)
-        elif isinstance(batch, (tuple, list)):
-            args, kwargs = tuple(batch), {}
-        else:
-            args, kwargs = (batch,), {}
         model.eval()
         with torch.no_grad():
             out = model(*args, **kwargs)
@@ -94,6 +91,60 @@ def _forward_ok(
             "amct_prune",
         )
         return False
+
+
+def _brief(value: Any, limit: int = 60) -> str:
+    """repr() truncated for error text, so a large payload cannot swamp the message."""
+    text = repr(value)
+    return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
+def _probe_batch(batch: Any, where: str) -> None:
+    """Unpack one candidate batch through the default adapter, or fail with diagnose advice.
+
+    The adapter's own message ends with "or pass a custom batch_adapter", but
+    ``prune_diagnose`` exposes no such parameter, so repeating it here would point users at
+    an escape hatch this entry point does not have. Name the offending argument and the
+    accepted shapes instead.
+    """
+    try:
+        default_batch_adapter(batch)
+    except TypeError as exc:
+        raise TypeError(
+            f"prune_diagnose({where}) got unsupported batch type {type(batch).__name__} "
+            f"{_brief(batch)}: it cannot be unpacked into model inputs. Expected "
+            "torch.Tensor / tuple / list / Mapping (dict, OrderedDict, UserDict, HF "
+            "BatchEncoding). prune_diagnose has no batch_adapter= parameter, so unwrap a "
+            "custom container before calling it; prune(..., batch_adapter=...) is the entry "
+            "point that accepts one."
+        ) from exc
+
+
+def _check_data_contract(data: Any) -> None:
+    """Fail fast when ``data`` holds something the default adapter cannot unwrap.
+
+    Only re-iterable containers are probed, but *every* element of them: a Mapping is one
+    batch, and a list / tuple / set can be walked without losing a batch, so a bad element
+    behind the first one cannot slip through. A generator or DataLoader is left untouched,
+    because probing it would consume a batch -- a bad element there stays a dry-run finding.
+    ``str`` / ``bytes`` are rejected outright: iterating them yields characters, never
+    batches. A genuine forward or prune failure also stays a dry-run finding.
+    """
+    import torch
+
+    if data is None or torch.is_tensor(data):
+        return
+    if isinstance(data, (str, bytes, bytearray)):
+        raise TypeError(
+            f"prune_diagnose(data=...) got {type(data).__name__} {_brief(data)}, which "
+            "iterates into characters rather than batches. Pass a Mapping as one batch, or "
+            "a list / tuple / DataLoader / generator of batches."
+        )
+    if isinstance(data, Mapping):
+        _probe_batch(data, "data")
+    elif isinstance(data, (list, tuple, set, frozenset)):
+        for index, item in enumerate(data):
+            _probe_batch(item, f"data[{index}]")
 
 
 def _diag_fixed_ratio(model, base_cfg, prune_ratio, *, data, batch_adapter, notes):
@@ -111,7 +162,11 @@ def _diag_fixed_ratio(model, base_cfg, prune_ratio, *, data, batch_adapter, note
         reduction = 1.0 - after / before if before else 0.0
         sample = None
         if data is not None:
-            sample = data if torch.is_tensor(data) else next(iter(data), None)
+            sample = (
+                data
+                if torch.is_tensor(data)
+                else next(iter(as_batch_sequence(data)), None)
+            )
         forward_ok = (
             _forward_ok(pruned, sample, batch_adapter) if sample is not None else None
         )
@@ -163,6 +218,7 @@ def prune_diagnose(
     tolerance: float = 0.05,
 ) -> DiagnosisReport:
     """Check whether pruning works on the model (dry-run on a copy; original untouched)."""
+    _check_data_contract(data)
     cfg_obj = (
         config
         if isinstance(config, PruneConfig)

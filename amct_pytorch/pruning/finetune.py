@@ -17,13 +17,13 @@
 from __future__ import annotations
 
 from itertools import cycle, islice
-from typing import Any, Callable, List, Mapping, Optional, Sequence
+from typing import Any, Callable, List, Mapping, Optional
 
 import torch
 import torch.nn.functional as F
 from torch import nn
 
-from .context import BatchAdapter
+from .context import BatchAdapter, as_batch_sequence
 from .utils import infer_model_device, move_batch_to_device
 
 LossFn = Callable[[nn.Module, Any], torch.Tensor]
@@ -89,7 +89,7 @@ def _set_warmup_lr(opt, lr, step, warmup):
 
 def prune_finetune(
     model: nn.Module,
-    data: Sequence[Any],
+    data: Any,
     loss_fn: Optional[LossFn] = None,
     steps: int = 200,
     lr: float = 1e-4,
@@ -109,9 +109,20 @@ def prune_finetune(
             "final_loss": None,
             "loss_history": [],
         }
-    batches: List[Any] = list(data)
+    # None is a wrong-type error, not an empty-sequence one: as_batch_sequence(None)
+    # carries no batch, so without this guard the message below would blame an empty
+    # data= for what is really data=None.
+    if data is None:
+        raise TypeError(
+            "prune_finetune(data=...) is required and must not be None. Pass a Mapping as "
+            "one batch, or a list / tuple / DataLoader / generator of batches."
+        )
+    batches: List[Any] = list(as_batch_sequence(data))
     if not batches:
-        raise ValueError("finetune needs at least one training batch.")
+        raise ValueError(
+            "prune_finetune(data=...) must carry at least one training batch, got an empty "
+            f"{type(data).__name__}."
+        )
 
     dev = device if device is not None else infer_model_device(model)
     params = [p for p in model.parameters() if p.requires_grad]
