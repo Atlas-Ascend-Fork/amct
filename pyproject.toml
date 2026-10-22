@@ -48,4 +48,6 @@ quote-style = "preserve"
 [tool.codespell]
 # CANN/cann: Huawei product name / org in URLs; nd: tensor dim count variable;
 # CopyIn/vor: AscendC intrinsic names.
-ignore-words-list = "cann,nd,copyin,vor,fro"
+# fro: torch.norm(p="fro") Frobenius-norm literal (ada_round_optimize.py).
+# tbe: Tensor Boost Engine (op_impl/ai_core/tbe paths); alog: Ascend log library (find_package(alog)).
+ignore-words-list = "cann,nd,copyin,vor,fro,tbe,alog"
