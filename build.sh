@@ -25,8 +25,8 @@ TMP_PATH="${BASEPATH}/tmp/"
 # print usage message
 usage() {
   echo "Usage:"
-  echo "  sh build.sh [-h | --help] [-v | --verbose] [-j<N>]"
-  echo "              [--cann_3rd_lib_path=<PATH>] [--output_path=<PATH>]"
+  echo "  bash build.sh [-h | --help] [-v | --verbose] [-j<N>]"
+  echo "                [--cann_3rd_lib_path=<PATH>] [--output_path=<PATH>]"
   echo ""
   echo "Options:"
   echo "    -h, --help        Print usage"
