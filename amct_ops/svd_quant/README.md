@@ -147,7 +147,7 @@ pip install ./amct_ops/dist/amct_*.whl --force-reinstall --no-deps
 import torch
 import torch_npu
 import numpy as np
-from amct_ops import svd_quant
+from amct_ops.svd_quant import svd_quant
 
 # Select NPU Device
 device = torch.device('npu:0')
@@ -169,7 +169,7 @@ up = torch.tensor(np.random.uniform(-10, 10, up_shape), dtype=torch.bfloat16).np
 w_quant, scale = torch_npu.npu_dynamic_mx_quant(w, block_size=32, round_mode="round")
 
 # SVDQuant Execution
-svd_quant_out = torch.ops.amct.svd_quant(x, w_quant, scale,  dp, up)
+svd_quant_out = svd_quant(x, w_quant, scale, dp, up)
 ```
 
 ## 性能验证

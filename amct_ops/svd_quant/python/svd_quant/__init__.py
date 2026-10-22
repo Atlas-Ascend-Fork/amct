@@ -30,3 +30,7 @@ _lib_path = (
 if not os.path.isfile(_lib_path):
     raise ImportError("Unable to locate the libsvd_quant extension")
 torch.ops.load_library(_lib_path)
+
+# Bind the name advertised in __all__ to the registered operator, so that
+# `from amct_ops.svd_quant import svd_quant` and `import *` resolve to it.
+svd_quant = torch.ops.amct.svd_quant

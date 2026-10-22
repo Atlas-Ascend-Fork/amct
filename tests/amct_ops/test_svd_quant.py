@@ -131,6 +131,15 @@ class GoldenSubGraph(torch.nn.Module):
 
 
 class TestSvdQuant(unittest.TestCase):
+    def test_all_exports_bound(self):
+        # Every name advertised in __all__ must be bound on the module,
+        # otherwise `from amct_ops.svd_quant import svd_quant` / `import *`
+        # raise ImportError/AttributeError (#299).
+        import amct_ops.svd_quant as svd_pkg
+
+        for name in svd_pkg.__all__:
+            self.assertTrue(hasattr(svd_pkg, name), name)
+
     def test_svd_quant(self):
         for shape in SVD_QUANT_TEST_CASES:
             test_name = f"{shape}"
