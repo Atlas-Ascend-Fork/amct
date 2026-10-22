@@ -33,10 +33,10 @@
 ARQ （Adaptive Range Quantization）算法是对权重直接量化的算法。该算法提供了两种方式，channel\_wise（是否对每个channel采用不同的量化因子，参数解释请参见[训练后量化配置参数](./context/ptq_config_param.md)量化和非channel\_wise量化，量化原理图如下所示：
 
 **图 1**  非channel\_wise量化<a name="fig7600113961719"></a>  
-![](./figures/nonchannel_wise_quant.png "非channel_wise量化")
+![非channel_wise量化](./figures/nonchannel_wise_quant.png "非channel_wise量化")
 
 **图 2**  channel\_wise量化<a name="fig6351104815177"></a>  
-![](./figures/channel_wise_quant.png "channel_wise量化")
+![channel_wise量化](./figures/channel_wise_quant.png "channel_wise量化")
 
 量化配置中ARQuantize（以PyTorch框架为例，参数解释请参见[表1](./context/ptq_config.md#zh-cn_topic_0240188735_table1225503375617)）提供的参数channel\_wise用来选择量化方式：
 
@@ -54,7 +54,7 @@ ARQ （Adaptive Range Quantization）算法是对权重直接量化的算法。�
 ADA权重量化算法用于PTQ流程，由于量化后的权重舍入模式会影响模型精度，ADA主要是对舍入模式进行微调，针对每个量化数据自适应向上或向下舍入模式，需要未标记的数据进行训练调优以确定不同的舍入模式。整体流程如下图所示，先将权重用KL散度算法计算weight初始量化因子scale和offset，然后使用无标签的数据进行训练，调整weight的舍入模式。
 
 **图 1**  ADA权重量化算法<a name="fig432315576612"></a>  
-![](./figures/adaquant.png "ADA权重量化算法")
+![ADA权重量化算法](./figures/adaquant.png "ADA权重量化算法")
 
 量化后的weight计算公式如下：
 
@@ -134,7 +134,7 @@ LAC（Learnable Activation Clipping，可学习激活裁剪范围），是面向
 
 DMQ（Diagonal Matrix Quantization Balancer）在计算量化因子之前对数据进行均衡处理，将数据的量化难度转移一部分至权重。如下图所示，X为数据，W为权重。
 
-![](./figures/dmq.png)
+![dmq](./figures/dmq.png)
 
 均衡原理为：
 
@@ -157,10 +157,10 @@ HFMG（Histogram Feature Map Glutton）算法通过直方图的方式来记录�
 create\_quant\_config接口量化默认使用的为IFMR数据量化算法，如果想使用HFMG数据量化算法，则只能通过create\_quant\_config接口config\_defination参数配置简易配置文件方式实现。
 
 **图 1**  直方图合并过程<a name="fig1126323519407"></a>  
-![](./figures/histogram_merg_process.png "直方图合并过程")
+![直方图合并过程](./figures/histogram_merg_process.png "直方图合并过程")
 
 **图 2**  搜索得到最优的左右截断位置<a name="fig1419882412"></a>  
-![](./figures/clip_min_max_search.png "搜索得到最优的左右截断位置")
+![搜索得到最优的左右截断位置](./figures/clip_min_max_search.png "搜索得到最优的左右截断位置")
 
 如果未获得最优的量化效果，则可以改变直方图的bin个数（直方图中的一个最小单位直方图形），选择量化误差更小的一组参数作为最终的量化结果。HFMG算法中，num\_of\_bins配置参数用来调整直方图的bin的数目，参数说明请参见**训练后量化简易配置文件\>HFMGQuantize**的配置参数。通常情况下，num\_of\_bins数值越大，直方图拟合原始数据分布的能力越强，可能获得更佳的量化效果，但训练后量化过程的耗时也会更长。
 
@@ -169,7 +169,7 @@ create\_quant\_config接口量化默认使用的为IFMR数据量化算法，如�
 IFMR（Input Feature Map Reconstruction）算法在某个数据分布下，通过搜索的方式确定最佳量化方式。该算法用于训练后量化场景，量化原理图如下所示：
 
 **图 1**  IFMR数据量化算法<a name="fig11850413154412"></a>  
-![](./figures/ifmrquant.png "IFMR数据量化算法")
+![IFMR数据量化算法](./figures/ifmrquant.png "IFMR数据量化算法")
 
 上图中序号\[1,3\]代表\[clip\_min\_start, clip\_min\_end\]、2代表clip\_min、 \[4,6\]代表\[clip\_max\_start, clip\_max\_end\]、5代表clip\_max。
 
@@ -226,7 +226,7 @@ OFMR（Output FeatureMap Reconstruct）算法在某个数据分布下，通过�
 3. 比较量化输出与原始输出的误差，选取误差最小的量化因子。
 
 **图 1**  OFMR算法原理<a name="fig1393075517419"></a>  
-![](./figures/ofmrquant.png "OFMR算法原理")
+![OFMR算法原理](./figures/ofmrquant.png "OFMR算法原理")
 
 ### OmniQuant
 
@@ -296,7 +296,7 @@ $$
 AMCT使用的通道稀疏算法为BalancedL2Norm，该算法通过计算权重各个filter（输出维度通道）的L2范数（各元素的平方和然后求平方根），对输出通道进行重要性排序并裁剪重要性较低的通道，即重要性低的通道优先被稀疏，原理下图所示：
 
 **图 1**  通道稀疏算法原理<a name="fig856211635614"></a>  
-![](./figures/channel_sparsity_algorithm.png "通道稀疏算法原理")
+![通道稀疏算法原理](./figures/channel_sparsity_algorithm.png "通道稀疏算法原理")
 
 稀疏配置文件中通过BalancedL2NormFilterPruner字段（以PyTorch框架为例，参数解释请参见[量化感知训练简易配置文件](./context/qat_config.md)）来控制BalancedL2Norm算法。
 
@@ -330,4 +330,4 @@ AMCT使用的4选2结构化稀疏算法为L1SelectivePrune，通过比较权重�
 4. 完成所有的模块蒸馏，得到精度更优的量化模型。
 
    **图 1**  蒸馏示意图<a name="fig275521214542"></a>  
-   ![](./figures/distill_algorithm.png "蒸馏示意图")
+   ![蒸馏示意图](./figures/distill_algorithm.png "蒸馏示意图")

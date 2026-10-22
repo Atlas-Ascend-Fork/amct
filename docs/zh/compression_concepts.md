@@ -143,7 +143,7 @@ FP4_E2M1能够表达的数值有16个，分别为`{±0，±0.5，±1，±1.5，�
 
 通常，训练后的模型权重已经确定，因此可以根据权重的数值离线计算得到权重的量化参数。而通常数据是在线输入的，因此无法准确获取数据的数值范围，通常需要一个较小的有代表性的数据集来模拟在线数据的分布，利用该数据集执行前向推理，得到对应的中间浮点结果，并根据这些浮点结果离线计算出数据的量化参数。其原理如下图所示。    
 
- ![](./figures/ptq_principles.png "训练后量化原理")
+ ![训练后量化原理](./figures/ptq_principles.png "训练后量化原理")
 
 ### 量化感知训练
 
@@ -152,7 +152,7 @@ FP4_E2M1能够表达的数值有16个，分别为`{±0，±0.5，±1，±1.5，�
 通常，量化感知训练相比训练后量化，精度损失会更小，但主要缺点是整体量化的耗时会更长；此外，量化过程需要的数据会更多，通常是完整训练数据集。
 其运行原理如下图所示。
 
-​    ![](./figures/qat_principles.png "量化感知训练原理")
+​    ![量化感知训练原理](./figures/qat_principles.png "量化感知训练原理")
 
 量化过程中的其他概念解释如下：
 
@@ -196,7 +196,7 @@ $$
 
 简称C量化，量化对象是右矩阵，每个channel分别使用独立的量化参数。假设右矩阵shape为(k, n)，k为reduce轴，生成量化参数的shape为(n, )。
 
-![](figures/perchannel.png)
+![perchannel](figures/perchannel.png)
 
 #### per-group量化
 
@@ -204,7 +204,7 @@ $$
 
 假设右矩阵shape为(k, n)，k为reduce轴，在k轴上分组，group size为gs，生成量化参数的shape为(k/gs, n)。
 
-![](figures/pergroup.png)
+![pergroup](figures/pergroup.png)
 
 #### per-tensor量化
 
@@ -212,7 +212,7 @@ $$
 
 假设左矩阵shape为(m, k)，右矩阵shape为(k, n)，k为reduce轴，生成量化参数的shape为(1, )。
 
-![](figures/pertensor.png)
+![pertensor](figures/pertensor.png)
 
 #### per-token量化
 
@@ -220,7 +220,7 @@ $$
 
 假设左矩阵shape为(m, k)，k为reduce轴，生成量化参数的shape为(m, )。
 
-![](figures/pertoken.png)
+![pertoken](figures/pertoken.png)
 
 ## 稀疏
 
@@ -258,7 +258,7 @@ $$
 - 相比训练后量化，知识蒸馏的量化可以取得更好的精度结果。
 - 相比量化感知训练，知识蒸馏的量化不需要有标签的数据集，且可以在更短的量化时间内获得不错的量化结果。
 
-![](./figures/distill.png "逐层蒸馏示意图")
+![逐层蒸馏示意图](./figures/distill.png "逐层蒸馏示意图")
 
 ## 张量分解
 
@@ -266,7 +266,7 @@ $$
 
 以1个64\*64\*3\*3的卷积分解为32\*64\*3\*1和64\*32\*1\*3的级联卷积为例，可以减少1 - \(32\*64\*3\*1 + 64\*32\*1\*3\) / 64\*64\*3\*3 = 66.7%的计算量，在计算结果近似的情况下带来更具性价比的性能收益。张量分解运行原理如下图所示（以PyTorch框架为例）。
 
-![](./figures/decomposition.png "张量分解运行原理")
+![张量分解运行原理](./figures/decomposition.png "张量分解运行原理")
 
 ## 模型部署优化
 
@@ -274,4 +274,4 @@ $$
 
 其运行原理如下图所示（以PyTorch框架为例）。
 
-![](./figures/model_deploy_optimize.png "模型部署优化原理")
+![模型部署优化原理](./figures/model_deploy_optimize.png "模型部署优化原理")

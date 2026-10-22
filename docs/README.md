@@ -12,7 +12,7 @@ AMCT工具还提供了面向大语言模型（LLM）的量化功能，详情请�
 
 量化流程如下图所示：
 
-![](./zh/figures/quant.png "调用流程")
+![调用流程](./zh/figures/quant.png "调用流程")
 
 蓝色部分为用户实现，灰色部分为用户调用AMCT提供的API实现，简要流程如下：
 
@@ -73,7 +73,7 @@ AMCT提供了基于图的torch模型量化方式，这种量化方式通过将to
 ##### 量化流程
 
 接口调用流程如下图所示，蓝色部分为用户实现，灰色部分为用户调用AMCT提供的API实现：
-![](./zh/figures/autocalibration.png "接口调用流程")
+![接口调用流程](./zh/figures/autocalibration.png "接口调用流程")
 
 主要流程如下：
 
@@ -95,7 +95,7 @@ AMCT提供了基于图的torch模型量化方式，这种量化方式通过将to
 
 [accuracy\_based\_auto\_calibration](./zh/api/accuracy_based_auto_calibration.md)接口内部基于精度的自动量化流程如下图所示。
 
-![](./zh/figures/auto_quant.png "自动量化流程")
+![自动量化流程](./zh/figures/auto_quant.png "自动量化流程")
 
 ##### 调用示例
 
@@ -183,7 +183,7 @@ amct.accuracy_based_auto_calibration(
 
 训练后量化接口调用流程如下图所示：
 
-![](./zh/figures/ptq_interface.png "训练后量化接口调用流程")
+![训练后量化接口调用流程](./zh/figures/ptq_interface.png "训练后量化接口调用流程")
 
 蓝色部分为用户实现，灰色部分为用户调用AMCT提供的API实现，工具使用分为如下场景：
 
@@ -196,14 +196,14 @@ amct.accuracy_based_auto_calibration(
      fake\_quant模型主要用于验证量化后模型的精度，可以在ONNX Runtime环境下运行。进行前向推理的计算过程中，在fake\_quant模型中对卷积层等的输入数据和权重进行了量化反量化的操作，来模拟量化后的计算结果，从而快速验证量化后模型的精度。如下图所示，以INT8量化为例，Quant层、Conv2d卷积层和DeQuant层之间的数据都是float32数据类型的，其中Quant层将数据量化到INT8又反量化为float32，权重也是量化到INT8又反量化为float32，实际卷积层的计算是基于float32数据类型的，该模型用于在ONNX Runtime环境验证量化后模型的精度，不能够用于ATC工具转换成om模型。
 
      **图 2**  fake\_quant模型<a name="fig830317361367"></a>  
-     ![](./zh/figures/fake_quant_module.png "fake_quant模型")
+     ![fake_quant模型](./zh/figures/fake_quant_module.png "fake_quant模型")
 
    - 部署模型文件：ONNX格式的模型文件，模型名中包含deploy，经过ATC转换工具转换后可部署到AI处理器。
 
      以INT8量化为例，deploy模型由于已经将权重等转换为INT8，INT32类型，因此不能在ONNX Runtime环境上执行推理计算。如下图所示，deploy模型的AscendQuant层将float32的输入数据量化为INT8，作为卷积层的输入，权重也是使用INT8数据类型作为计算，在deploy模型中的卷积层的计算是基于INT8，INT32数据类型的，输出为INT32数据类型经过AscendDeQuant层转换成float32数据类型传输给下一个网络层。
 
      **图 3**  deploy模型<a name="fig32095209306"></a>  
-     ![](./zh/figures/deploy_module.png "deploy模型")
+     ![deploy模型](./zh/figures/deploy_module.png "deploy模型")
 
 ##### 调用示例
 
@@ -325,7 +325,7 @@ amct.accuracy_based_auto_calibration(
 7. 若按照[6](#li6823133201119)中的量化配置进行量化后，精度满足要求，则调参结束，否则表明量化对精度影响很大，不能进行量化，去除量化配置。
 
 **图 4**  调参流程<a name="zh-cn_topic_0240188709_fig10376759162410"></a>  
-![](./zh/figures/adjustprocess.png "调参流程")
+![调参流程](./zh/figures/adjustprocess.png "调参流程")
 
 ### 量化感知训练
 
@@ -333,7 +333,7 @@ amct.accuracy_based_auto_calibration(
 
 量化感知训练接口调用流程如下图所示，如下流程中的训练环境借助PyTorch框架的CPU环境或者NPU环境，在该开源框架的推理脚本基础上，调用AMCT  API完成模型压缩，压缩后的部署模型需要使用ATC工具转换成适配AI处理器的离线模型后，然后才能在AI处理器上实现推理。量化感知训练使用的量化算法请参见[算法介绍](./zh/algorithm_brief.md)。
 
-![](./zh/figures/qat_interface.png "接口调用流程-0")
+![接口调用流程-0](./zh/figures/qat_interface.png "接口调用流程-0")
 
 蓝色部分为用户实现，灰色部分为用户调用AMCT提供的API实现：
 
@@ -566,7 +566,7 @@ amct.accuracy_based_auto_calibration(
 
 单算子模式的量化感知训练功能，提供由Pytorch原生算子转换生成的自定义QAT算子，基于该算子进行量化因子的重训练，量化因子作为算子参数保存在QAT单算子中，**无需导出ONNX模型**，可以避免上述量化感知训练方案中的算子导出异常问题。训练完成后，通过**torch.onnx.export**机制，建立QAT算子与ONNX原生算子的映射关系，将Pytorch模型中QAT算子计算获得的参数传递给ONNX原生量化算子，完成模型导出。简易示意图如下图所示。
 
-![](./zh/figures/singleop_qat.png "单算子模式量化感知训练")
+![单算子模式量化感知训练](./zh/figures/singleop_qat.png "单算子模式量化感知训练")
 
 实现原理如下图所示（以torch.nn.Conv2d算子为例进行说明）：
 
@@ -574,7 +574,7 @@ amct.accuracy_based_auto_calibration(
 
 QDQ ONNX模型不能直接通过ATC工具转成适配AI处理器的离线模型，需要通过[QAT模型适配CANN模型](<https://hiascend.com/document/redirect/CannCommunityToolAmct_ConvertQAT_Model>)特性，将该模型适配成CANN模型后，然后才能使用ATC工具进行下一步的转换。
 
-![](./zh/figures/pytorch_singleop_v1.png)
+![pytorch_singleop_v1](./zh/figures/pytorch_singleop_v1.png)
 
 该功能支持Training from scratch和Fine-tune两种使用方法：
 
@@ -751,7 +751,7 @@ validate_onnx('./outputs/resnet101_fake_quant_model.onnx', val_data)
 
 均衡预处理接口调用流程如下图所示。
 
-![](./zh/figures/dmq_balancer.png "均衡预处理接口调用流程")
+![均衡预处理接口调用流程](./zh/figures/dmq_balancer.png "均衡预处理接口调用流程")
 
 蓝色部分为用户实现，灰色部分为用户调用AMCT提供的API实现，工具使用分为如下场景：
 
@@ -876,7 +876,7 @@ KV Cache（Key-Value Cache）是一种缓存技术，通过存储键值对的形
 
 KV Cache量化接口调用流程如下图所示。
 
-![](./zh/figures/kv_cache_quant.png "KV-Cache量化调用流程")
+![KV-Cache量化调用流程](./zh/figures/kv_cache_quant.png "KV-Cache量化调用流程")
 
 蓝色部分为用户实现，灰色部分为用户调用AMCT提供的API实现，简要流程如下：
 
@@ -978,7 +978,7 @@ AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模
 
 自动通道稀疏搜索流程如下图所示，支持稀疏的层以及规格请参见[通道稀疏支持的层以及约束](./zh/api/create_prune_retrain_model.md#通道稀疏支持的层及约束)。
 
-![](./zh/figures/autochannelprune.png "自动通道稀疏搜索流程")
+![自动通道稀疏搜索流程](./zh/figures/autochannelprune.png "自动通道稀疏搜索流程")
 
 各流程简要说明如下：
 
@@ -1005,7 +1005,7 @@ AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模
 - sensitivity模块实现计算各通道的稀疏敏感度。
 - search\_alg模块实现了基于通道敏感度与通道稀疏收益进行稀疏通道搜索的过程。
 
-![](./zh/figures/autoprune.png "调用流程-1")
+![调用流程-1](./zh/figures/autoprune.png "调用流程-1")
 
 ##### 调用示例
 
@@ -1098,7 +1098,7 @@ AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模
 
 通道稀疏功能接口调用流程如下图所示，如下流程中的训练环境借助PyTorch框架的CPU环境或者NPU环境，在该开源框架的推理脚本基础上，调用AMCT  API完成模型压缩，压缩后的部署模型需要使用ATC工具转换成适配AI处理器的离线模型后，然后才能在AI处理器上实现推理：
 
-![](./zh/figures/channel_sparse_interface.png "通道稀疏接口调用流程")
+![通道稀疏接口调用流程](./zh/figures/channel_sparse_interface.png "通道稀疏接口调用流程")
 
 蓝色部分为用户实现，灰色部分为用户调用AMCT提供的API实现：
 
@@ -1279,7 +1279,7 @@ prune_retrain_model = amct.save_prune_retrain_model(
 
 4选2结构化稀疏功能接口调用流程如下图所示，如下流程中的训练环境借助PyTorch框架的CPU环境或者NPU环境，在该开源框架的推理脚本基础上，调用AMCT  API完成模型压缩，压缩后的部署模型需要使用ATC工具转换成适配AI处理器的离线模型后，然后才能在AI处理器上实现推理：
 
-![](./zh/figures/m4n2_interface.png "4选2结构化稀疏接口调用流程")
+![4选2结构化稀疏接口调用流程](./zh/figures/m4n2_interface.png "4选2结构化稀疏接口调用流程")
 
 蓝色部分为用户实现，灰色部分为用户调用AMCT提供的API实现：
 
@@ -1446,7 +1446,7 @@ prune_retrain_model = amct.save_prune_retrain_model(
 
 支持组合压缩的层以及约束请分别参见[手工稀疏](#手工稀疏)、[4选2结构化稀疏](#4选2结构化稀疏)和[量化感知训练](#量化感知训练)。
 
-![](./zh/figures/combined_compress.png "组合压缩简要流程")
+![组合压缩简要流程](./zh/figures/combined_compress.png "组合压缩简要流程")
 
 #### 组合压缩场景介绍
 
@@ -1545,7 +1545,7 @@ prune_retrain_model = amct.save_prune_retrain_model(
 
 组合压缩接口调用流程如下图所示，如下流程中的训练环境借助PyTorch框架的CPU环境或者NPU环境，在该开源框架的推理脚本基础上，调用AMCT  API完成模型压缩，压缩后的部署模型需要使用ATC工具转换成适配AI处理器的离线模型后，然后才能在AI处理器上实现推理：
 
-![](./zh/figures/combined_compress_interface.png "组合压缩接口调用流程")
+![组合压缩接口调用流程](./zh/figures/combined_compress_interface.png "组合压缩接口调用流程")
 
 蓝色部分为用户实现，灰色部分为用户调用AMCT提供的API实现：
 
@@ -1717,7 +1717,7 @@ AMCT提供eager模式的结构化剪枝特性`amct_pytorch.pruning`：无需先�
 
 结构化剪枝接口调用流程如下图所示，整个流程在PyTorch的CPU或NPU环境下完成，无需模型转换步骤：
 
-![](./zh/figures/pruning_interface.png "结构化剪枝接口调用流程")
+![结构化剪枝接口调用流程](./zh/figures/pruning_interface.png "结构化剪枝接口调用流程")
 
 蓝色部分为用户实现，灰色部分为用户调用AMCT提供的API实现：
 
@@ -1803,7 +1803,7 @@ AMCT提供了基于图的torch模型量化蒸馏方法，这种方法通过将to
 
 调用流程如下图所示。
 
-![](./zh/figures/distill_interface.png "蒸馏接口调用流程")
+![蒸馏接口调用流程](./zh/figures/distill_interface.png "蒸馏接口调用流程")
 
 蓝色部分为用户实现，灰色部分为用户调用AMCT提供的API实现，逐层蒸馏特性主要分为4个部分，创建蒸馏配置、创建蒸馏模型、蒸馏量化模型和保存量化模型，详情如下：
 
@@ -1956,7 +1956,7 @@ AMCT提供了基于图的torch模型量化蒸馏方法，这种方法通过将to
 
 接口调用流程如下图所示。
 
-![](./zh/figures/decomposition_interface.png "张量分解接口调用流程")
+![张量分解接口调用流程](./zh/figures/decomposition_interface.png "张量分解接口调用流程")
 
 1. **在线分解流程**
 
@@ -1973,7 +1973,7 @@ AMCT提供了基于图的torch模型量化蒸馏方法，这种方法通过将to
 
 张量分解后会将1个卷积分解为2个串联的卷积，模型的其中一层卷积分解前后情况如下图所示。
 
-![](./zh/figures/conv_decompose.png "卷积分解前后示意图")
+![卷积分解前后示意图](./zh/figures/conv_decompose.png "卷积分解前后示意图")
 
 ### 调用示例
 
