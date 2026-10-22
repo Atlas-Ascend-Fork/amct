@@ -86,7 +86,7 @@
 - `BaseModel.iter_ptq_units()`
 - `BaseModel.ptq_param_handler`
 - `BaseModel.ptq_param_store`
-- `BaseModel.do_block_forward()` 已支持 per-sample state:除已有 `position_ids / position_embeddings / attention_mask`(整批共用)外,新增 `self.input_ids`(per-sample list,默认 None);adapter 在 `do_embedding_forward` 末尾设 `self.input_ids = list(samples)`,`do_block_forward` 的 forward loop 会在每次迭代把对应 entry 注入 kwargs(用于 v4 这类 MoE hash routing 需要 token-id 路由的场景)。其它 adapter 不设 `self.input_ids` 时行为完全不变
+- `BaseModel.do_block_forward()` 已支持 per-sample state:除已有 `position_ids / position_embeddings / attention_mask`(整批共用)外，新增 `self.input_ids`(per-sample list,默认 None);adapter 在 `do_embedding_forward` 末尾设 `self.input_ids = list(samples)`,`do_block_forward` 的 forward loop 会在每次迭代把对应 entry 注入 kwargs(用于 v4 这类 MoE hash routing 需要 token-id 路由的场景)。其它 adapter 不设 `self.input_ids` 时行为完全不变
 - `QuantGatedMLP`（实际定义在 `amct_pytorch/common/models/llm/common/quant_apply.py`）
 
 ### 3. 当前 quant wrapper 形态
