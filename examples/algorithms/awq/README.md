@@ -27,7 +27,7 @@ awq算法仅支持权重量化，支持的量化类型以及量化配置：
 | 字段 | 类型 | 说明 | 取值范围 | 注意事项 |
 |:--| :-: | :-- | :-: | :-- |
 |batch_num|uint32|量化使用的batch数量 |1|/|
-|skip_layers|str|跳过量化的层 |/|跳过量化层支持模糊匹配，当配置字符串为层名字串，或与层名一致时，跳过该层量化，不生成量化配置。字符串必须包含数字或字母|
+|skip_layers|list[str] / set[str]|跳过量化的层 |/|对配置列表或集合中的每个字符串做模糊匹配；当层名包含任一配置字符串时，跳过该层量化，不生成量化配置。例如：{"lm_head"}。|
 |weights.type|str|量化后权重类型|'int4'/'int8'/'float4_e2m1'/'mxfp4_e2m1'|/|
 |weights.symmetric|bool|对称量化|TRUE/FALSE|float4_e2m1和mxfp4_e2m1只支持配置对称量化|
 |weights.strategy|str|量化粒度|'tensor'/'channel'/'group'|float4_e2m1和mxfp4_e2m1只支持配置group策略|
