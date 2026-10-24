@@ -208,7 +208,7 @@ def tensor_decomposition(tensor, stride=1, group=1, dilation=1):  # pylint: disa
     if len(tensor.shape) != 4:
         raise ValueError('weight tensor must have shape (Cout, Cin, KH, KW)')
 
-    if np.isinf(np.sum(tensor)) or np.isnan(np.sum(tensor)):
+    if not np.isfinite(tensor).all():
         raise ValueError('weight tensor contains invalid number(inf or nan)')
 
     in_channel = tensor.shape[1] * group
