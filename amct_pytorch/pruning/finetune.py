@@ -134,7 +134,7 @@ def prune_finetune(
         else torch.optim.AdamW(params, lr=lr, weight_decay=weight_decay)
     )
 
-    was_training = model.training
+    training_modes = {module: module.training for module in model.modules()}
     model.train()
     history: List[float] = []
     try:
@@ -147,7 +147,8 @@ def prune_finetune(
                 )
             )
     finally:
-        model.train(was_training)
+        for module, training in training_modes.items():
+            module.training = training
         model.zero_grad(set_to_none=True)
     step = len(history)
 

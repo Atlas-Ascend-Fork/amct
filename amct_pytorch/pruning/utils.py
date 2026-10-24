@@ -406,7 +406,7 @@ def run_calibration_epoch(model: nn.Module, context, device=None) -> int:
     """Run one calibration forward pass (eval + no_grad) to drive hooks/stats; returns batch count."""
     if device is None:
         device = infer_model_device(model)
-    was_training = model.training
+    training_modes = {module: module.training for module in model.modules()}
     model.eval()
     num_batches = 0
     try:
@@ -415,7 +415,8 @@ def run_calibration_epoch(model: nn.Module, context, device=None) -> int:
             model(*moved_args, **moved_kwargs)
             num_batches += 1
     finally:
-        model.train(was_training)
+        for module, training in training_modes.items():
+            module.training = training
     return num_batches
 
 
