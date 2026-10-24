@@ -57,7 +57,7 @@ class ConvBnFusionPass(BaseModuleFusionPass):
         Parameters:
         conv_module: conv module
         conv_name: name of the module
-        Return: bool value which specifies wether the module can be fused
+        Return: bool value which specifies whether the module can be fused
         """
         if type(conv_module).__name__ not in ('Conv2d', 'Conv3d', 'Conv1d'):
             return False
@@ -164,7 +164,7 @@ class ConvBnFusionPass(BaseModuleFusionPass):
         peer_out_anchor = bn_node.get_input_anchor(0).get_peer_output_anchor()
         conv_node = peer_out_anchor.node
 
-        # return false if moudle is in training mode
+        # return false if module is in training mode
         if module.training:
             LOGGER.logw(
                 'Cannot do conv:\'{}\' + bn:\'{}\' fusion because training must be False! '

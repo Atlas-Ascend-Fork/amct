@@ -52,7 +52,7 @@ def create_distill_config(config_file, model, input_data, config_defination=None
         tool
     Parameter: config_file: file path of quantize configuration json file
                model: user mode instance of Torch.nn.Module
-               input_data: used to compile model, can be ramdom data
+               input_data: used to compile model, can be random data
                config_defination: simple config file from user to set
     Return: None
     """
@@ -89,7 +89,7 @@ def create_distill_model(config_file, model, input_data):
     Function: Modify user's model for compressed in train process.
     Parameter: config_file: compressed quantize configuration json file
                model: user pytorch model's model file
-               input_data: used to compile model, can be ramdom data
+               input_data: used to compile model, can be random data
     Return: model: modified pytorch model for distill.
     """
     config_file = DistillHelper.get_config_file(config_file)
@@ -272,7 +272,7 @@ def save_distill_model(
     Parameter:
         model: compressed model
         save_path: a string, the path where to store model and model's name.
-        input_data: used to compile model, can be ramdom data
+        input_data: used to compile model, can be random data
         record_file: temporary file to store scale and offset
         input_names: list of strings, names to assign to the input nodes of
             the graph, in order
@@ -342,7 +342,7 @@ def _preprocess_distill_model(model, input_data, record_helper):
             2. fuse bn
     Inputs:
         model: distill model
-        input_data: used to compile model, can be ramdom data
+        input_data: used to compile model, can be random data
         record_helper: ScaleOffsetRecordHelper class to record quant factor
     Returns:
         model_copy: a model processed

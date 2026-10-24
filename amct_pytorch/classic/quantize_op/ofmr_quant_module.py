@@ -84,7 +84,7 @@ class OfmrQuant(BaseQuantizeModule):
 
     def forward(self, inputs):
         """
-        Function: OFMRQuant foward funtion.
+        Function: OFMRQuant forward function.
         Args:
         inputs: data used for calibration in torch.tensor.
         """

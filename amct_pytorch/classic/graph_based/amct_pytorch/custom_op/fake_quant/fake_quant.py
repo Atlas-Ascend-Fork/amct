@@ -46,7 +46,7 @@ class FakeQuant(nn.Module):  # pylint: disable=R0903, R0902
         """
         Function: fake quant forward function.
         Inputs:
-            inputs: intput data in torch.tensor.
+            inputs: input data in torch.tensor.
         """
         device = inputs.device
         temp_data = torch.add(

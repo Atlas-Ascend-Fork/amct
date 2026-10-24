@@ -34,7 +34,7 @@ DATA_DUMP_OUTPUT_PREFIX = 'data_dump_output_'
 
 class DistillDataManager:
     '''
-    Function: mange the distill data.
+    Function: manage the distill data.
     APIs: cache_input_data_hooker, get_norm_min_data,
           get_output_data_by_inferring, get_input_data_by_inferring
           dump_data, release
@@ -264,7 +264,7 @@ class DistillDataManager:
         '''dump group's input data to file'''
         hooks = []
         module_helper = ModuleHelper(model)
-        # regist hook function, for each epoch & step
+        # register hook function, for each epoch & step
         for group in groups:
             input_layer = module_helper.get_module(group[0])
             hook_in = input_layer.register_forward_hook(

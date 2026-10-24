@@ -29,7 +29,7 @@ from .insert_retrain_pass import REPLACE_DICT, get_node_onnx_type
 
 class InsertRetrainPrunePass(BaseFusionPass):
     """
-    Function: Insert some mudule about retrain quantization.
+    Function: Insert some module about retrain quantization.
     APIs: match_pattern, do_pass
     """
 
@@ -58,11 +58,11 @@ class InsertRetrainPrunePass(BaseFusionPass):
 
     def do_pass(self, graph, object_node, model=None):
         """
-        Function: Insert some mudule about retrain quantization.
+        Function: Insert some module about retrain quantization.
         Parameters: graph: graph structure
                     object_node: node to process
                     model: torch.nn.Module, the model to be modified. if it's
-                        None, the gaph will be modified.
+                        None, the graph will be modified.
         Return: None
         """
         # Step1: find module and its parent

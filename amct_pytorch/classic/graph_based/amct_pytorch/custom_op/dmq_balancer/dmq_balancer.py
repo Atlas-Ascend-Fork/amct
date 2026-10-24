@@ -49,7 +49,7 @@ class DMQBalancer(nn.Module):
 
     def forward(self, inputs):
         """
-        Function: DMQBalancer foward.
+        Function: DMQBalancer forward.
         """
         weights = self.replaced_module.weight
         sub_out = self.replaced_module(inputs)

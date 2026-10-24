@@ -65,7 +65,7 @@ class BiasFakequantModulePass(BaseModuleFusionPass):
             graph: graph structure
             object_node: node to process
             model: torch.nn.Module, the model to be modified. if it's
-                None, the gaph will be modified.
+                None, the graph will be modified.
         Return: None
         """
         bias_np = object_module.sub_module.bias.cpu().detach().numpy()

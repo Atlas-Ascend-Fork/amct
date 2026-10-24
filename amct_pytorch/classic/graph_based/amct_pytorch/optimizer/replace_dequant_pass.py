@@ -71,7 +71,7 @@ class ReplaceDequantPass(BaseFusionPass):
         Parameters: graph: graph structure
                     object_node: node to process
                     model: torch.nn.Module, the model to be modified. if it's
-                        None, the gaph will be modified.
+                        None, the graph will be modified.
         Return: None
         """
         input_anchor = object_node.get_input_anchor(0)

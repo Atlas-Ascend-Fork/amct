@@ -59,7 +59,7 @@ class ReplaceWeightQuantPass(BaseFusionPass):
             graph: graph structure
             object_node: node to process
             model: torch.nn.Module, the model to be modified. if it's
-                None, the gaph will be modified.
+                None, the graph will be modified.
         Return: None
         """
         # remove input links

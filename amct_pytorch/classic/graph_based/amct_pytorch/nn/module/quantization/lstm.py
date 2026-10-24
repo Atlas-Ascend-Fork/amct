@@ -281,6 +281,6 @@ class LSTMMiddleWare(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_x, grad_h, grad_c):
-        """backward funtion required by torch torch.autograd"""
+        """backward function required by torch.autograd"""
         ret = (None,) * 12
         return ret

@@ -251,7 +251,7 @@ class TestCompModuleBase(unittest.TestCase):
     def test_ulq_config_single_batch_success(self):
         comp_module = CompModuleBase(**self.comp_args)
         in_data = self.gaussian_tensor
-        # base class has no attribute 'cur_batch', call IFMR sucess
+        # base class has no attribute 'cur_batch', call IFMR success
         with self.assertRaises(AttributeError):
             comp_module.forward(in_data)
 
@@ -259,6 +259,6 @@ class TestCompModuleBase(unittest.TestCase):
         self.common_config['batch_num'] = 2
         comp_module = CompModuleBase(**self.comp_args)
         in_data = self.gaussian_tensor
-        # base class has no attribute 'cur_batch', call IFMR sucess
+        # base class has no attribute 'cur_batch', call IFMR success
         with self.assertRaises(AttributeError):
             comp_module.forward(in_data)

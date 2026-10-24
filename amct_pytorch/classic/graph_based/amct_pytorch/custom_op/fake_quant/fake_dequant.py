@@ -46,7 +46,7 @@ class FakeDeQuant(nn.Module):  # pylint: disable=R0903, R0902
         """
         Function: fake dequant forward function.
         Inputs:
-            inputs: intput data in torch.tensor.
+            inputs: input data in torch.tensor.
         """
         device = inputs.device
         deq_scale = self.deq_scale.reshape(self.deq_shape)

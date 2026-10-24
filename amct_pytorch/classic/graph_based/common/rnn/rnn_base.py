@@ -45,7 +45,7 @@ class RnnQuantOpBase:
         """
         Function: construct rnn quantized op node in onnx
         Parameters:
-            ori_proto: proto of orignal RNN node
+            ori_proto: proto of original RNN node
             records: dict including quant factors
         Return:
             node_proto: proto of rnn quantized op

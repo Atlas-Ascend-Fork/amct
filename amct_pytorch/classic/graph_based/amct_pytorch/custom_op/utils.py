@@ -82,7 +82,7 @@ def copy_tensor(target, source):
     """
     Function: copy tensor data
     Inputs:
-        target: torch.Tensor, taget tensor
+        target: torch.Tensor, target tensor
         source: torch.Tensor, source tensor
     """
     if isinstance(target, torch.Tensor):
@@ -179,7 +179,7 @@ def check_group_param(inputs, channel_wise_flag, group, axis):
     Inputs:
     inputs: torch.Tensor, data to ops
     channel_wise_flag: bool, whether do channel wise
-    group: int, group num fot wts quant
+    group: int, group num for wts quant
     axis: int, out channel axis for weight
     """
     if channel_wise_flag:

@@ -50,10 +50,10 @@ class AutoCalibrationEvaluatorBase:
         Function:
                 evaluate the input models, get the eval metric of model
         Parameter:
-                if framwork is caffe:
+                if framework is caffe:
                     model: the prototxt model define file of caffe model
                     weights: the binary caffemodel file of caffe model
-                if framwork is tensorflow:
+                if framework is tensorflow:
                     model: the graph of model
                     outputs (list): a list of output nodes.
         Return:

@@ -220,7 +220,7 @@ class TaylorLossSensitivity(SensitivityBase):
 
     def get_backward_grad(self, input_data, test_iteration, batch_num=1):
         """
-        Function: feed data, foward and backward, get backward grad
+        Function: feed data, forward and backward, get backward grad
         Param: input_data, test_iteration, batch_num
         Return: grads, weights
         """

@@ -110,7 +110,7 @@ class NodeBase:
     @property
     def is_isolated(self):
         """
-        Function: whether the node is isolated. Node is isolated is it has no any producer and consuemr
+        Function: whether the node is isolated. Node is isolated if it has no producer or consumer
         Parameter: None
         Return: True or False
         """

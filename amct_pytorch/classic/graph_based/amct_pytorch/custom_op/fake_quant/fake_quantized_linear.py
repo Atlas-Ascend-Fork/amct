@@ -57,7 +57,7 @@ class FakeQuantizedLinear(nn.Module):  # pylint: disable=R0903, R0902
         """
         Function: fake quantized linear forward function.
         Inputs:
-            inputs: intput data in torch.tensor.
+            inputs: input data in torch.tensor.
         """
         int8_out = self.fake_quant(inputs)
         int32_out = self.sub_module(int8_out)

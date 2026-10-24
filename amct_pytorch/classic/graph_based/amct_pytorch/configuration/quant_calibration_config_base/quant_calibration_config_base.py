@@ -52,7 +52,7 @@ class QuantCalibrationConfigBase:
 
     @staticmethod
     def check_quant_layers(model, quant_layers):
-        '''check wheter user's quant_layers input is valid'''
+        '''check whether user's quant_layers input is valid'''
         for quant_method, layer_names in quant_layers.items():
             QuantCalibrationConfigBase.check_quant_layer_info_legality(
                 model, quant_method, layer_names
@@ -178,7 +178,7 @@ class QuantCalibrationConfigBase:
         Return:
             config, a dict
             quant_layers: layers to be quantized
-            override_layers: quantized layer overrided
+            override_layers: quantized layer overridden
         """
         quant_layers = dict()
         layer_key, common_config_key, config_key = QUANT_METHOD_INFO_MAP.get(

@@ -73,9 +73,9 @@ class RetrainProtoConfig:
     @staticmethod
     def __check_proto_override_types_enable(override_layer_types):
         """
-        Funtion:
+        Function:
         check proto override layer types enable.
-        Paramters:
+        Parameters:
         override_layer_types: proto, proto's override_layer_types.
         Return: (layer_retrain, layer_prune)
         layer_retrain: bool, T / F.
@@ -105,9 +105,9 @@ class RetrainProtoConfig:
     @staticmethod
     def __check_proto_override_configs_enable(override_layer_configs):
         """
-        Funtion:
+        Function:
         check proto override layer configs enable.
-        Paramters:
+        Parameters:
         override_layer_configs: proto, proto's override_layer_configs.
         Return: (layer_retrain, layer_prune)
         layer_retrain: bool, T / F.
@@ -137,8 +137,8 @@ class RetrainProtoConfig:
     @staticmethod
     def _parse_data_type(data_type_proto):
         """
-        Funtion: parse DataType in retrain.proto trans to str
-        Paramters:
+        Function: parse DataType in retrain.proto trans to str
+        Parameters:
             data_type_proto: DataType in retrain.proto
                 0: INT4, 1: INT8, 2: INT16
         Return: data_type: str
@@ -211,9 +211,9 @@ class RetrainProtoConfig:
     def parse_proto_enable(self):
         """
         Function:
-        get proto enable from config defination. Both, either, neither.
-        Retrain with empty config defination will get config.
-        Compressed with empty config defination will get error.
+        get proto enable from config definition. Both, either, neither.
+        Retrain with empty config definition will get config.
+        Compressed with empty config definition will get error.
         So can not add attr in proto.has_retrain.
         """
         proto_enable_quant = True
@@ -232,7 +232,7 @@ class RetrainProtoConfig:
     def parse_prune_type(self):
         """
         Function:
-        get prune type from config defination.
+        get prune type from config definition.
         """
         if not self.proto_config.HasField('prune_config'):
             return NO_PRUNE
@@ -328,7 +328,7 @@ class RetrainProtoConfig:
         Params:
         None.
         Return:
-        a list, contain the gloabl skip types and its own skip types.
+        a list, contain the global skip types and its own skip types.
         """
         # quant's own skip types.
         quant_skip_types = list(self.proto_config.quant_skip_types)
