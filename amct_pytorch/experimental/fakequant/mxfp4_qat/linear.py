@@ -120,26 +120,76 @@ def convert_to_mxfp4_qat(
             skips that submodule and everything below it, which is the usual way
             to keep sensitive layers (``"lm_head"``, ``"embed"``) in float.
 
+    Raises:
+        RuntimeError: If one ``nn.Linear`` object is registered under more than
+            one module path. ``skip_names`` is matched per path, so a shared
+            layer that only some of its paths match would be left in float on
+            one path and quantised on another; the aliasing is reported instead
+            of silently splitting the layer.
+
     Returns:
         The same *module*, with its linear layers replaced.
     """
-    return _convert(module, config, skip_names, prefix="")
+    plan = _Plan()
+    _scan(module, skip_names, "", plan)
+    for parent, name, child, path in plan.places:
+        # Decided only after the whole tree has been walked, so that the outcome
+        # does not depend on the order the paths happen to be visited in.
+        if plan.hits[id(child)] > 1:
+            raise RuntimeError(
+                "convert_to_mxfp4_qat found one linear registered under more "
+                f"than one path ({path}); skip_names is matched per path, so a "
+                "shared nn.Linear would be quantised on one path and left in "
+                "float on another. Register it under a single path"
+            )
+        setattr(parent, name, MXFP4QATLinear.from_linear(child, config))
+    return module
 
 
-def _convert(
+class _Plan:
+    """Bookkeeping for one ``convert_to_mxfp4_qat`` call.
+
+    ``hits`` counts how many registration paths reach each linear, and is keyed
+    by ``id()`` rather than by the module itself so subclasses that define
+    ``__eq__`` with ``__hash__ = None`` never need hashing.
+    """
+
+    def __init__(self) -> None:
+        self.hits: dict[int, int] = {}
+        self.places: list[tuple[nn.Module, str, nn.Linear, str]] = []
+        self.scanned: set[int] = set()
+
+
+def _scan(
     module: nn.Module,
-    config: MXFP4QATConfig | None,
     skip_names: tuple[str, ...],
     prefix: str,
-) -> nn.Module:
-    for name, child in list(module.named_children()):
-        path = f"{prefix}{name}"
-        if any(pattern in path for pattern in skip_names):
+    plan: _Plan,
+) -> None:
+    """Collect the linears of *module* without replacing any of them.
+
+    ``_modules`` is walked instead of ``named_children()`` because the latter
+    drops repeated modules. Every linear is counted, including the ones on a
+    path that ``skip_names`` matches: replacing a layer before knowing that
+    another path keeps it in float would split the shared object, so the
+    decision is deferred until the whole tree is known.
+    """
+    if id(module) in plan.scanned:
+        return
+    plan.scanned.add(id(module))
+    for name, child in list(module._modules.items()):
+        if child is None:
             continue
+        path = f"{prefix}{name}"
         if isinstance(child, MXFP4QATLinear):
             continue
         if isinstance(child, nn.Linear):
-            setattr(module, name, MXFP4QATLinear.from_linear(child, config))
-        else:
-            _convert(child, config, skip_names, prefix=f"{path}.")
-    return module
+            plan.hits[id(child)] = plan.hits.get(id(child), 0) + 1
+            if any(pattern in path for pattern in skip_names):
+                continue
+            plan.places.append((module, name, child, path))
+            continue
+        if any(pattern in path for pattern in skip_names):
+            continue
+        _scan(child, skip_names, f"{path}.", plan)
+    return
