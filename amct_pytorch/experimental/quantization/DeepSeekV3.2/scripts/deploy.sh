@@ -1,3 +1,4 @@
+#!/bin/bash
 # -*- coding: UTF-8 -*-
 # ----------------------------------------------------------------------------
 # Copyright (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
@@ -16,7 +17,6 @@
 # ----------------------------------------------------------------------------
 
 
-#!/bin/bash
 INPUT_WEIGHT_PATH=""
 OUTPUT_WEIGHT_PATH=""
 QUANT_MODE=""
@@ -60,7 +60,7 @@ case "${QUANT_MODE,,}" in
             --moe_param_path "$MOE_PARAM_PATH" \
         ;;
     *)
-        echo "Error: Unsupport Quant_mode: $QUANT_MODE"
+        echo "Error: Unsupported Quant_mode: $QUANT_MODE"
         echo "Supported Mode: bfloat16, w8a8c16, w8a8c8, w4a8c8"
         exit 1
         ;;

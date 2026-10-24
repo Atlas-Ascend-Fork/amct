@@ -1,3 +1,4 @@
+#!/bin/bash
 # -*- coding: UTF-8 -*-
 # ----------------------------------------------------------------------------
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
@@ -15,7 +16,6 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-#!/bin/bash
 python -m amct_pytorch.ptq \
   --trust_remote_code \
   --model /path/to/model \
