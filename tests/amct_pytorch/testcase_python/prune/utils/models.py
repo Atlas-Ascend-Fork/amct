@@ -27,7 +27,7 @@ class SingleLinear(nn.Module):
     """args_shape: [(1, 16, 28, 28)]"""
 
     def __init__(self):
-        super(SingleConv, self).__init__()
+        super(SingleLinear, self).__init__()
         self.layer1 = nn.Sequential(
             nn.Linear(in_features=16, out_features=64, bias=True), nn.BatchNorm2d(64)
         )
@@ -427,7 +427,7 @@ class NetTrainBranch(nn.Module):
     conv + bn
     conv(with bias) + bn
     depthwise_conv + bn
-    depthwise_conv(with bais) + bn
+    depthwise_conv(with bias) + bn
     group_conv + bn
     group_conv(bias) + bn
     fc + bn
