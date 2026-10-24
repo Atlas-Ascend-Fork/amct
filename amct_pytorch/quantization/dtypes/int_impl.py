@@ -72,6 +72,9 @@ def pack_4bit(x: torch.Tensor):
 
 def weight_quant(tensor: torch.Tensor, bits=8, real_quant=False, v: torch.Tensor = 0.0):
     assert tensor.dim() == 2
+    dtype = tensor.dtype
+    if dtype == torch.float16:
+        tensor = tensor.float()
     qmax = 2 ** (bits - 1) - 1
     abs_max = torch.abs(tensor).max(dim=1, keepdim=True)[0]
     scale = (abs_max / qmax).clamp_min(1e-9)
@@ -91,7 +94,7 @@ def weight_quant(tensor: torch.Tensor, bits=8, real_quant=False, v: torch.Tensor
         else:
             return quantized.to(torch.int8), scale.to(torch.float32), None
     else:
-        return quantized * scale
+        return (quantized * scale).to(dtype)
 
 
 def int4_assistance_bias(weight, weight_scale):

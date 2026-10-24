@@ -60,7 +60,7 @@ class QuantDequantMx(torch.nn.Module):
         e8m0, ex_mx = self.quant(x, qdim, v=v)
         dx = (2**e8m0) * ex_mx
         dx = dx.flatten(qdim - 1, qdim)
-        return dx
+        return dx.to(x.dtype)
 
     def forward(self, x: Tensor, v: Tensor = 0.0) -> Tensor:
         if self.is_observe or self.bits == 16:
@@ -68,6 +68,8 @@ class QuantDequantMx(torch.nn.Module):
         return self.fake_quant(x, v=v)
 
     def quant(self, x: Tensor, qdim: int = -1, v: Tensor = 0.0):
+        if x.dtype == torch.float16:
+            x = x.float()
         x = x.unflatten(qdim, (-1, self.block_size))
         if isinstance(v, torch.Tensor):
             v = v.to(device=x.device, dtype=x.dtype).unflatten(

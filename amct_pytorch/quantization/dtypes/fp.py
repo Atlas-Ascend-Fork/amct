@@ -82,7 +82,7 @@ class QuantDequantFP(torch.nn.Module):
         amax = torch.amax(torch.abs(W_blocks), dim=(-1, -2), keepdim=True)
 
         if self.scale_dtype == "e8m0":
-            scale = round_to_decimal(amax) - self.emax
+            scale = round_to_decimal(amax.detach()) - self.emax
             scale = scale.clamp(min=-127, max=1e10)
             # e8m0 scale is exported as the float32 multiplier 2**e, not the
             # OCP E8M0 uint8 exponent bytes; deploy/runtime must read it as
@@ -147,6 +147,8 @@ class QuantDequantFP(torch.nn.Module):
         return self.fake_quant(x, v=v)
 
     def quant(self, x: Tensor, qdim: int = -1, v: Tensor = 0.0):
+        if x.dtype == torch.float16:
+            x = x.float()
         if isinstance(v, torch.Tensor):
             v = v.to(device=x.device, dtype=x.dtype)
         x_scaled, scale = self.quantize_fp_block(x)
