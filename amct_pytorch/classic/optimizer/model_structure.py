@@ -16,6 +16,7 @@
 # ----------------------------------------------------------------------------
 '''Explicit whitelist for pre-op calibration and local deployment adapters.'''
 
+from typing import Union
 from dataclasses import dataclass
 
 from amct_pytorch.classic.quantize_op import MinMaxQuant, SmoothQuant
@@ -54,7 +55,7 @@ class PreOpRelation:
     '''
 
     pre_op: str
-    scaling_layers: tuple[str | tuple[str, ...], ...]
+    scaling_layers: tuple[Union[str, tuple[str, ...]], ...]
     adapter: str
 
 

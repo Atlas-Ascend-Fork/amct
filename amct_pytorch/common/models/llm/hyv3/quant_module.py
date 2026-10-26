@@ -19,6 +19,8 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+from typing import Optional
+
 import torch
 import torch.nn as nn
 
@@ -121,7 +123,7 @@ class QuantHYV3Attn(HYV3Attention):
         self,
         hidden_states: torch.Tensor,
         position_embeddings: tuple[torch.Tensor, torch.Tensor],
-        attention_mask: torch.Tensor | None = None,
+        attention_mask: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         input_shape = hidden_states.shape[:-1]

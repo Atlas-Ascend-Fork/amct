@@ -15,6 +15,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+from typing import Optional
 import re
 
 from amct_pytorch.common.models import MODEL_REGISTRY
@@ -41,7 +42,7 @@ class Qwen3_6Moe(Qwen3_5Moe):
     def get_ascend_deploy_mtp_modules(self, module_names: set[str]) -> set[str]:
         return {name for name in module_names if name.startswith("mtp.layers.")}
 
-    def _ascend_deploy_role(self, name: str) -> str | None:
+    def _ascend_deploy_role(self, name: str) -> Optional[str]:
         match = self._LAYER_RE.fullmatch(name)
         if match is None:
             return None

@@ -15,6 +15,8 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+from typing import Optional
+
 import torch.nn as nn
 
 
@@ -24,8 +26,8 @@ class ExpertLinearView(nn.Module):
         experts_module,
         expert_idx: int,
         weight_name: str,
-        start: int | None = None,
-        end: int | None = None,
+        start: Optional[int] = None,
+        end: Optional[int] = None,
         materialize: bool = False,
     ):
         super().__init__()

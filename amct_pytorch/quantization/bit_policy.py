@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Optional
 from collections import namedtuple
 import yaml
 
@@ -46,7 +47,7 @@ class _GroupBits:
 
 
 class BitPolicy:
-    def __init__(self, cfg: dict | None = None):
+    def __init__(self, cfg: Optional[dict] = None):
         self.cfg = cfg or {}
         if ("w_bits" in self.cfg) != ("a_bits" in self.cfg):
             present = [k for k in _BIT_KEYS if k in self.cfg]
@@ -90,7 +91,7 @@ class BitPolicy:
         return False
 
     def linear_bits(
-        self, name: str | None = None, group: str | None = None
+        self, name: Optional[str] = None, group: Optional[str] = None
     ) -> tuple[int, int]:
         """Resolve (w_bits, a_bits) along ``group`` (dotted) / ``name``.
 

@@ -37,7 +37,11 @@ class PtqUnit:
 
 
 def make_ptq_unit(
-    kind: str, name: str, layer_idx: int | None, module, metadata: Optional[dict] = None
+    kind: str,
+    name: str,
+    layer_idx: Optional[int],
+    module,
+    metadata: Optional[dict] = None,
 ) -> PtqUnit:
     return PtqUnit(
         kind=kind,
@@ -51,7 +55,7 @@ def make_ptq_unit(
 def iter_indexed_units(
     kind: str,
     name_prefix: str,
-    layer_idx: int | None,
+    layer_idx: Optional[int],
     items: Iterable[T],
     module_fn: Optional[Callable[[int, T], object]] = None,
     metadata_fn: Optional[Callable[[int, T], Optional[dict]]] = None,

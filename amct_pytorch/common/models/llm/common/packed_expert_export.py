@@ -17,6 +17,7 @@
 
 """Checkpoint-side expansion for packed gated MoE experts."""
 
+from typing import Optional, Union
 import re
 from dataclasses import dataclass
 
@@ -45,7 +46,7 @@ class PackedGatedExpertLayout:
     """Describe the standard [experts, rows, columns] gated-MoE layout."""
 
     num_experts: int
-    moe_intermediate_size: int | None = None
+    moe_intermediate_size: Optional[int] = None
 
     @staticmethod
     def _match(name: str):
@@ -107,7 +108,7 @@ class PackedGatedExpertLayout:
     def expand_tensors(
         self,
         state_dict: dict[str, torch.Tensor],
-        selected_weight_keys: set[str] | frozenset[str] | None = None,
+        selected_weight_keys: Optional[Union[set[str], frozenset[str]]] = None,
     ) -> dict[str, torch.Tensor]:
         """Expand packed tensors and clone slices that will remain floating point."""
         expanded = {}
@@ -143,7 +144,7 @@ class PackedGatedExpertLayout:
 
 def detect_packed_gated_expert_layout(
     weight_map: dict[str, str], config
-) -> PackedGatedExpertLayout | None:
+) -> Optional[PackedGatedExpertLayout]:
     """Detect the standard packed gated-expert checkpoint contract."""
     projections_by_prefix = {}
     for name in weight_map:

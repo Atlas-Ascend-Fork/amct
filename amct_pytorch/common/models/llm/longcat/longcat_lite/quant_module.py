@@ -48,8 +48,8 @@ class LongcatPackedExpertLinearView:
         experts_module,
         expert_idx: int,
         weight_name: str,
-        start: int | None = None,
-        end: int | None = None,
+        start: Optional[int] = None,
+        end: Optional[int] = None,
     ):
         super().__init__()
         self.experts_module = experts_module

@@ -13,6 +13,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from typing import Optional
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -97,8 +99,8 @@ class QuantQwen35LinearAttn(Qwen3_5GatedDeltaNet):
         self,
         hidden_states: torch.Tensor,
         cache_params=None,
-        cache_position: torch.LongTensor | None = None,
-        attention_mask: torch.Tensor | None = None,
+        cache_position: Optional[torch.LongTensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
         **kwargs,
     ):
         batch_size, seq_len, _ = hidden_states.shape
@@ -245,9 +247,9 @@ class QuantQwen35Attn(Qwen3_5Attention):
         self,
         hidden_states: torch.Tensor,
         position_embeddings: tuple[torch.Tensor, torch.Tensor],
-        attention_mask: torch.Tensor | None = None,
+        attention_mask: Optional[torch.Tensor] = None,
         **kwargs,
-    ) -> tuple[torch.Tensor, torch.Tensor | None]:
+    ) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
         input_shape = hidden_states.shape[:-1]
         hidden_shape = (*input_shape, -1, self.head_dim)
         if self.input_transform is not None:

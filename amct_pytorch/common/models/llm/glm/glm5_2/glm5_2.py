@@ -15,6 +15,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+from typing import Optional
 import functools
 import re
 
@@ -94,7 +95,7 @@ class GLM5_2(BaseModel):
         prefixes = tuple(f"model.layers.{idx}." for idx in range(start, end))
         return {name for name in module_names if name.startswith(prefixes)}
 
-    def _ascend_deploy_role(self, name: str) -> tuple[str, str] | None:
+    def _ascend_deploy_role(self, name: str) -> Optional[tuple[str, str]]:
         """Map supported checkpoint modules to BitPolicy group/projection."""
         match = re.fullmatch(r"model\.layers\.(\d+)\.(.+)", name)
         if match is None:
