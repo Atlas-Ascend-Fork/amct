@@ -93,7 +93,7 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
 <td class="cellrowborder" valign="top" headers="mcps1.2.6.1.4 "><p id="p938816282543"><a name="p938816282543"></a><a name="p938816282543"></a>量化使用的batch数量。</p>
 </td>
 </tr>
-<tr id="row23612610447"><td class="cellrowborder" valign="top" headers="mcps1.2.6.1.1 "><p id="p193621662444"><a name="p193621662444"></a><a name="p193621662444"></a>required</p>
+<tr id="row23612610447"><td class="cellrowborder" valign="top" headers="mcps1.2.6.1.1 "><p id="p193621662444"><a name="p193621662444"></a><a name="p193621662444"></a>optional</p>
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.2.6.1.2 "><p id="p23621968447"><a name="p23621968447"></a><a name="p23621968447"></a>RetrainDataQuantConfig</p>
 </td>
@@ -103,7 +103,7 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
 <p id="p1468523716344"><a name="p1468523716344"></a><a name="p1468523716344"></a>参数优先级为：override_layer_configs&gt;override_layer_types&gt;retrain_data_quant_config/retrain_weight_quant_config</p>
 </td>
 </tr>
-<tr id="row468062044418"><td class="cellrowborder" valign="top" headers="mcps1.2.6.1.1 "><p id="p96801020114415"><a name="p96801020114415"></a><a name="p96801020114415"></a>required</p>
+<tr id="row468062044418"><td class="cellrowborder" valign="top" headers="mcps1.2.6.1.1 "><p id="p96801020114415"><a name="p96801020114415"></a><a name="p96801020114415"></a>optional</p>
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.2.6.1.2 "><p id="p168032016441"><a name="p168032016441"></a><a name="p168032016441"></a>RetrainWeightQuantConfig</p>
 </td>
@@ -359,7 +359,7 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
 <td class="cellrowborder" valign="top" headers="mcps1.2.6.1.4 "><p id="p467965710535"><a name="p467965710535"></a><a name="p467965710535"></a>层名。</p>
 </td>
 </tr>
-<tr id="row47391115411"><td class="cellrowborder" valign="top" headers="mcps1.2.6.1.1 "><p id="p8517230115410"><a name="p8517230115410"></a><a name="p8517230115410"></a>required</p>
+<tr id="row47391115411"><td class="cellrowborder" valign="top" headers="mcps1.2.6.1.1 "><p id="p8517230115410"><a name="p8517230115410"></a><a name="p8517230115410"></a>optional</p>
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.2.6.1.2 "><p id="p2073711115412"><a name="p2073711115412"></a><a name="p2073711115412"></a>RetrainDataQuantConfig</p>
 </td>
@@ -368,7 +368,7 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
 <td class="cellrowborder" valign="top" headers="mcps1.2.6.1.4 "><p id="p147371155412"><a name="p147371155412"></a><a name="p147371155412"></a>重写的数据层量化参数。</p>
 </td>
 </tr>
-<tr id="row1334152175418"><td class="cellrowborder" valign="top" headers="mcps1.2.6.1.1 "><p id="p156753125418"><a name="p156753125418"></a><a name="p156753125418"></a>required</p>
+<tr id="row1334152175418"><td class="cellrowborder" valign="top" headers="mcps1.2.6.1.1 "><p id="p156753125418"><a name="p156753125418"></a><a name="p156753125418"></a>optional</p>
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.2.6.1.2 "><p id="p23418211544"><a name="p23418211544"></a><a name="p23418211544"></a>RetrainWeightQuantConfig</p>
 </td>
@@ -406,7 +406,7 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
 <td class="cellrowborder" valign="top" headers="mcps1.2.6.1.4 "><p id="p137260825513"><a name="p137260825513"></a><a name="p137260825513"></a>层类型。</p>
 </td>
 </tr>
-<tr id="row884420120551"><td class="cellrowborder" valign="top" headers="mcps1.2.6.1.1 "><p id="p27371325115514"><a name="p27371325115514"></a><a name="p27371325115514"></a>required</p>
+<tr id="row884420120551"><td class="cellrowborder" valign="top" headers="mcps1.2.6.1.1 "><p id="p27371325115514"><a name="p27371325115514"></a><a name="p27371325115514"></a>optional</p>
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.2.6.1.2 "><p id="p28451012155515"><a name="p28451012155515"></a><a name="p28451012155515"></a>RetrainDataQuantConfig</p>
 </td>
@@ -415,7 +415,7 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
 <td class="cellrowborder" valign="top" headers="mcps1.2.6.1.4 "><p id="p1845112145511"><a name="p1845112145511"></a><a name="p1845112145511"></a>重写的数据层量化参数。</p>
 </td>
 </tr>
-<tr id="row969710176559"><td class="cellrowborder" valign="top" headers="mcps1.2.6.1.1 "><p id="p873718256558"><a name="p873718256558"></a><a name="p873718256558"></a>required</p>
+<tr id="row969710176559"><td class="cellrowborder" valign="top" headers="mcps1.2.6.1.1 "><p id="p873718256558"><a name="p873718256558"></a><a name="p873718256558"></a>optional</p>
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.2.6.1.2 "><p id="p1770061710558"><a name="p1770061710558"></a><a name="p1770061710558"></a>RetrainWeightQuantConfig</p>
 </td>
