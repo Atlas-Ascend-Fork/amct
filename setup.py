@@ -29,7 +29,19 @@ import setuptools
 tarfile.TarFile.format = tarfile.GNU_FORMAT
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
-os.environ['SOURCE_DATE_EPOCH'] = str(int(os.path.getctime(os.path.realpath(__file__))))
+source_date_epoch = os.environ.get('SOURCE_DATE_EPOCH', '').strip()
+try:
+    # ZIP timestamps support years through 2107 (4354819199 in UTC).
+    valid_epoch = (
+        source_date_epoch.isascii()
+        and source_date_epoch.isdecimal()
+        and int(source_date_epoch) <= 4354819199
+    )
+except ValueError:
+    valid_epoch = False
+if not valid_epoch:
+    source_date_epoch = str(int(os.path.getctime(os.path.realpath(__file__))))
+os.environ['SOURCE_DATE_EPOCH'] = source_date_epoch
 
 
 class SetupTool:  # pylint: disable=R0903
