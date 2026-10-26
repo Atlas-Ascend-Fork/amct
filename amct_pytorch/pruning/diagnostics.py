@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -189,7 +190,7 @@ def _diag_acc_search(model, config, *, data, tolerance, batch_adapter, notes):
         from .accuracy_based_auto_prune import _accuracy_based_auto_prune
 
         res = _accuracy_based_auto_prune(
-            model,
+            deepcopy(model),
             config,
             data=data,
             tolerance=tolerance,
