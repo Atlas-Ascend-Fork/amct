@@ -45,9 +45,22 @@ echo "Creating directories..."
 rm -rf "$BUNDLE_DIR"
 mkdir -p "$BUNDLE_DIR"
 
-if find "${AMCT_GRAPH_PATH}" -name "${OUTPUT_FILE}" | grep -q '.'; then
-    echo "${OUTPUT_FILE} exist, copy ${OUTPUT_FILE} to ${AMCT_GRAPH_FILE}."
-    cp ${AMCT_GRAPH_PATH}/${OUTPUT_FILE} ${AMCT_GRAPH_FILE}
+local_packages=()
+if [ -d "${AMCT_GRAPH_PATH}" ]; then
+    while IFS= read -r -d '' package; do
+        if [ -f "$package" ]; then
+            local_packages+=("$package")
+        fi
+    done < <(find -H "${AMCT_GRAPH_PATH}" -name "${OUTPUT_FILE}" -print0)
+fi
+
+if [ "${#local_packages[@]}" -gt 1 ]; then
+    echo "Error: Multiple local graph packages found; keep only the intended package."
+    printf '  %s\n' "${local_packages[@]}"
+    exit 1
+elif [ "${#local_packages[@]}" -eq 1 ]; then
+    echo "${local_packages[0]} exist, copy to ${AMCT_GRAPH_FILE}."
+    cp -- "${local_packages[0]}" "${AMCT_GRAPH_FILE}"
     echo "Using local package, skip sha256 verification for locally built package."
 # Download package
 else
