@@ -51,12 +51,13 @@ repos:
         additional_dependencies:
           - tomli
 
-  # 开源合规检查（华为 OAT）
-  - repo: local
+  # 开源合规检查（华为 OAT）— compliance 远程 Python hook：
+  # pre-commit 自动克隆 compliance 仓并在 hook venv 中安装 OAT 执行 oat-precommit，
+  # 依赖与版本由 rev 统一管控，业务仓无需维护脚本（旧 repo: local + oat_check.sh 方式已废弃）
+  - repo: https://gitcode.com/HiAgent/compliance
+    rev: v1.0.6
     hooks:
       - id: oat-check
-        name: oat-check (open-source compliance)
-        entry: ./scripts/oat_check.sh
-        language: system
-        pass_filenames: false
+        pass_filenames: true
         stages: [pre-commit]
+        verbose: true
