@@ -25,6 +25,7 @@
 #   --device              运行设备（默认 npu:0）
 #   --cases               逗号分隔的用例列表，可选 cast/minmax/smoothquant/awq
 #                         （默认 cast,minmax,smoothquant,awq，即全部运行）
+#                         显式传入时至少选择一个用例，空列表将返回非零状态
 #   --model_source        模型下载来源：huggingface（默认）或 modelscope
 #   --hf_endpoint         HuggingFace 镜像地址（可选，如 https://hf-mirror.com）
 #
@@ -85,6 +86,11 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+if [[ -z "${CASES//[[:space:],]/}" ]]; then
+    echo "No smoke cases selected. Specify at least one case with --cases." >&2
+    exit 1
+fi
 
 echo "=========================================="
 echo "AMCT 快速验证"

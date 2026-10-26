@@ -49,7 +49,7 @@ def _parse_args():
     p.add_argument(
         "--cases",
         default=",".join(_ALL_CASES),
-        help=f"逗号分隔的用例列表，可选 {_ALL_CASES}（默认全部）",
+        help=f"非空的逗号分隔用例列表，可选 {_ALL_CASES}（默认全部）",
     )
     return p.parse_args()
 
@@ -233,6 +233,9 @@ def main():
     args = _parse_args()
 
     requested = [c.strip() for c in args.cases.split(",") if c.strip()]
+    if not requested:
+        logger.error("No smoke cases selected. Specify at least one case with --cases.")
+        sys.exit(1)
     unknown = [c for c in requested if c not in _ALL_CASES]
     if unknown:
         logger.error("Unknown cases: %s. Available cases: %s.", unknown, _ALL_CASES)
