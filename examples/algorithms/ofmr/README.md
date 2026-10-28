@@ -26,12 +26,12 @@ ofmr算法支持仅权重量化和全量化，支持的量化类型以及量化�
 | 字段 | 类型 | 说明 | 取值范围 | 注意事项 |
 |:--| :-: | :-- | :-: | :-- |
 |batch_num|uint32|量化使用的batch数量|1|/|
-|skip_layers|str|跳过量化的层|/|跳过量化层支持模糊匹配，当配置字符串为层名字串，或与层名一致时，跳过该层量化，不生成量化配置。字符串必须包含数字或字母|
+|skip_layers|list[str] / set[str]|跳过量化的层|/|对配置列表或集合中的每个字符串做模糊匹配；当层名包含任一配置字符串时，跳过该层量化，不生成量化配置。例如：{"lm_head"}。|
 |weights.type|str|量化后权重类型|'float8_e4m3fn'/'hifloat8'|/|
-|weights.symmtric|bool|对称量化|TRUE|/|
+|weights.symmetric|bool|对称量化|TRUE|/|
 |weights.strategy|str|量化粒度|'tensor'/'channel'|/|
 |inputs.type|str|量化后激活值类型|'float8_e4m3fn'/'hifloat8'|/|
-|inputs.symmtric|bool|对称量化|TRUE|/|
+|inputs.symmetric|bool|对称量化|TRUE|/|
 |inputs.strategy|str|量化粒度|'tensor'|/|
 |algorithm|dict|量化使用的算法配置|{'ofmr'}|/|
 

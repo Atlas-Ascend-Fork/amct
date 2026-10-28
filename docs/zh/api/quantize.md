@@ -364,7 +364,7 @@ quantize(model, cfg)
 </td>
 <td class="cellrowborder" valign="top" width="11.07%" headers="mcps1.1.5.1.3 "><p id="p1260435581811"><a name="p1260435581811"></a><a name="p1260435581811"></a>-</p>
 </td>
-<td class="cellrowborder" valign="top" width="69.85%" headers="mcps1.1.5.1.4 "><p id="p10604355191815"><a name="p10604355191815"></a><a name="p10604355191815"></a>string类型，按层名跳过哪些层不做量化，全局配置参数。指定层名后，只要层名包括用户设置的字符串，就跳过该层不做量化。</p>
+<td class="cellrowborder" valign="top" width="69.85%" headers="mcps1.1.5.1.4 "><p id="p10604355191815"><a name="p10604355191815"></a><a name="p10604355191815"></a>list类型（也支持set），列表元素类型为string，按层名跳过哪些层不做量化，全局配置参数。对列表或集合中的每个字符串做模糊匹配，只要层名包含其中任一字符串，就跳过该层不做量化。</p>
 </td>
 </tr>
 </tbody>

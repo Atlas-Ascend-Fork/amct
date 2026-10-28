@@ -52,7 +52,7 @@ The MINMAX algorithm supports weight-only quantization and full quantization. Th
 | Field | Type | Description | Value Range | Notes |
 |:--| :-: | :-- | :-: | :-- |
 |batch_num|uint32|Number of batches used for quantization |1|/|
-|skip_layers|str|Layers to skip quantization |/|Skip quantization layers support fuzzy matching. When the configured string is a layer name substring or matches the layer name, skip quantization for that layer and do not generate quantization configuration. The string must contain numbers or letters|
+|skip_layers|list[str] / set[str]|Layers to skip quantization |/|Fuzzy matching is applied to each string in the list or set. A layer is skipped when its name contains any configured string and no quantization configuration is generated. For example: {"lm_head"}.|
 |weights.type|str|Quantized weight type|'int4'/'int8'/'float4_e2m1'|/|
 |weights.symmetric|bool|Symmetric quantization|TRUE/FALSE|When quantization data type is float4_e2m1, only symmetric quantization is supported|
 |weights.strategy|str|Quantization granularity|'tensor'/'channel'/'group'|When quantization strategy is group, only quantization data type float4_e2m1 is supported, and float4_e2m1 only supports group|

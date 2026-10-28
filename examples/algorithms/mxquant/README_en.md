@@ -44,7 +44,7 @@ The MXQUANT algorithm supports weight-only quantization and full quantization. T
 | Field | Type | Description | Value Range | Notes |
 |:--| :-: | :-- | :-: | :-- |
 |batch_num|uint32|Number of batches used for quantization |1|/|
-|skip_layers|str|Layers to skip quantization |/|Skip quantization layers support fuzzy matching. When the configured string is a layer name substring or matches the layer name, skip quantization for that layer and do not generate quantization configuration. The string must contain numbers or letters|
+|skip_layers|list[str] / set[str]|Layers to skip quantization |/|Fuzzy matching is applied to each string in the list or set. A layer is skipped when its name contains any configured string and no quantization configuration is generated. For example: {"lm_head"}.|
 |weights.type|str|Quantized weight type|'mxfp8_e4m3fn'/'mxfp4_e2m1'|/|
 |weights.symmetric|bool|Symmetric quantization|TRUE|Only supports symmetric quantization|
 |weights.strategy|str|Quantization granularity|'group'|/|
