@@ -52,7 +52,11 @@ for op in "${ops[@]}"; do
   mode="eager"
   [ "$op" = "crop_and_resize" ] && mode="graph"
   source /usr/local/Ascend/cann/set_env.sh
-  pip3 install onnx modelscope
+  # 冒烟直接从源码 import amct_pytorch，按 requirements.txt 补齐纯 Python 依赖。
+  # 排除 torch/torch_npu/torchao：由 NPU 镜像预装且版本耦合，避免 pip 重装 torch 破坏 NPU 环境。
+  grep -Ev '^(torch|torch_npu|torchao)==|^--find-links' requirements.txt \
+    > /tmp/amct_smoke_requirements.txt
+  pip3 install -r /tmp/amct_smoke_requirements.txt onnx modelscope
   echo "bash tests/smoke/run_smoke.sh --model_source modelscope"
   bash tests/smoke/run_smoke.sh --model_source modelscope 2>&1 | tee -a "${WORKSPACE}/run_test.log" || smoke_status=$?
 done

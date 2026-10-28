@@ -210,11 +210,60 @@ stages:
               access-key: ${{ secrets.AK }}
               secret-key: ${{ secrets.SK }}
               artifact-path: "${{ steps.process_checkout.outputs.path }}/slog*.tar.gz"
-              object-prefix: ${{ env.obs_smoke_path }}/plog/
+              object-prefix: ${{ env.obs_smoke_path }}/plog/A2/
         if: env.TARGET_BRANCH == 'master'
         runs-on: ['self-hosted','npu=1','smoke=204']
         container:
           image: swr.cn-south-1.myhuaweicloud.com/pre_smoke/${{ jobs.JOB_image.outputs.PreSmoke_A900 }}
+      A5_smoke:
+        name: PreSmoke_A5
+        timeout-minutes: 30
+        steps:
+          -
+            name: Checkout
+            identifier: process_checkout
+            uses: checkout
+            with:
+              ref: ${{ atomgit.event.pull_request.merge_commit_sha }}
+              allow-unsafe-pr-checkout: true
+              path: "./runner"
+          -
+            name: download
+            uses: obs-download
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              access-key: ${{ secrets.AK }}
+              secret-key: ${{ secrets.SK }}
+              key: |
+                ${{ env.obs_path }}/pr_filelist.txt
+                ${{ env.obs_path }}/pr_filelist_mod.txt
+                ${{ env.obs_path }}/update_file_detail.txt
+                ${{ env.obs_path }}/pre_smoke.sh
+              path: ${{ steps.process_checkout.outputs.path }}
+          -
+            name: smoke executor
+            run: |
+              export obs_smoke_path=${{env.obs_smoke_path}}
+              export repo_name=${{env.repo_name}}
+              export pr_id=${{ env.MERGE_ID }}
+              export AK=${{secrets.AK}}
+              export SK=${{secrets.SK}}
+              export WORKSPACE=${{ steps.process_checkout.outputs.path }}
+              bash ${{ steps.process_checkout.outputs.path }}/pre_smoke.sh
+          - name: upload
+            uses: obs-upload
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              access-key: ${{ secrets.AK }}
+              secret-key: ${{ secrets.SK }}
+              artifact-path: "${{ steps.process_checkout.outputs.path }}/slog*.tar.gz"
+              object-prefix: ${{ env.obs_smoke_path }}/plog/A5/
+        if: env.TARGET_BRANCH == 'master'
+        runs-on: ['self-hosted','npu=1','smoke=501']
+        container:
+          image: swr.cn-north-4.myhuaweicloud.com/pre_smoke/ubuntu24.04_x86:pre_mindspore_A5_conda_v1.1001
     pre:
     - type: auto
     fail-fast: true
