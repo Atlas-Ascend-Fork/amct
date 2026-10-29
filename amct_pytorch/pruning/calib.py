@@ -35,9 +35,30 @@ def _unwrap_logits(out: Any) -> torch.Tensor:
     raise TypeError(f"cannot extract logits from model output of type {type(out)!r}")
 
 
-def nll_from_logits(logits: torch.Tensor, ids: torch.Tensor) -> tuple[float, int]:
-    """Next-token cross-entropy sum and token count for one batch (logits[:, :-1] vs ids[:, 1:])."""
-    target = ids[:, 1:].reshape(-1).to(torch.long)
+def _batch_attention_mask(
+    args: tuple, kwargs: dict, ids: torch.Tensor
+) -> Optional[torch.Tensor]:
+    """Read keyword masks first, then shape-matched positional token masks."""
+    if "attention_mask" in kwargs:
+        return kwargs["attention_mask"]
+    if len(args) > 1 and torch.is_tensor(args[1]) and args[1].shape == ids.shape:
+        return args[1]
+    return None
+
+
+def nll_from_logits(
+    logits: torch.Tensor,
+    ids: torch.Tensor,
+    attention_mask: Optional[torch.Tensor] = None,
+) -> tuple[float, int]:
+    """Next-token NLL sum and count, excluding transitions involving masked tokens."""
+    target = ids[:, 1:].to(torch.long)
+    if attention_mask is not None:
+        if attention_mask.shape != ids.shape:
+            raise ValueError("calib_nll attention_mask must match input_ids shape.")
+        valid = attention_mask[:, 1:].bool() & attention_mask[:, :-1].bool()
+        target = target.masked_fill(~valid.to(target.device), -100)
+    target = target.reshape(-1)
     low_precision = logits.dtype in (torch.float16, torch.bfloat16)
     nll_sum = F.cross_entropy(
         logits[:, :-1].reshape(-1, logits.shape[-1]),
@@ -46,7 +67,7 @@ def nll_from_logits(logits: torch.Tensor, ids: torch.Tensor) -> tuple[float, int
     )
     if low_precision:
         nll_sum = nll_sum.sum(dtype=torch.float32)
-    return float(nll_sum), int(target.numel())
+    return float(nll_sum), int((target != -100).sum())
 
 
 def calib_nll(
@@ -72,7 +93,11 @@ def calib_nll(
                     "as input_ids or the first positional model argument."
                 )
             logits = _unwrap_logits(model(*moved_args, **moved_kwargs))
-            nll_sum, n = nll_from_logits(logits, ids)
+            nll_sum, n = nll_from_logits(
+                logits,
+                ids,
+                attention_mask=_batch_attention_mask(moved_args, moved_kwargs, ids),
+            )
             tot += nll_sum
             n_tokens += n
     if n_tokens == 0:

@@ -40,7 +40,7 @@ from ..utils import (
     replace_submodule,
 )
 from .base import BasePruningMethod
-from ..calib import _unwrap_logits, nll_from_logits
+from ..calib import _batch_attention_mask, _unwrap_logits, nll_from_logits
 from .moe_mass_pruning import MassMoEPruningMethod
 
 _TOKEN_CAP = 4096
@@ -323,7 +323,11 @@ def _calib_nll(model: nn.Module, context: PruneContext) -> Optional[float]:
         if ids is None or ids.shape[1] < 2:
             return None
         logits = _unwrap_logits(model(*moved_args, **moved_kwargs))
-        nll_sum, n = nll_from_logits(logits, ids)
+        nll_sum, n = nll_from_logits(
+            logits,
+            ids,
+            attention_mask=_batch_attention_mask(moved_args, moved_kwargs, ids),
+        )
         total += nll_sum
         n_tokens += n
     return total / n_tokens if n_tokens else None
