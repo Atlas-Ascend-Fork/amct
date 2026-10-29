@@ -45,10 +45,10 @@ class OutputShape(object):
                     if module is op_type or isinstance(module, op_type):
                         self._func = func
                 except TypeError as error:
-                    error_info = str(error.args[0]) + str(module) + 'is unknow type'
+                    error_info = str(error.args[0]) + str(module) + ' is unknown type'
                     raise TypeError(error_info) from None
             if self._func is None:
-                error_info = str(module) + 'is unknow type'
+                error_info = str(module) + ' is unknown type'
                 raise TypeError(error_info) from None
 
     def __call__(self, *args, **kwargs):

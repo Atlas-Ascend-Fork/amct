@@ -392,5 +392,5 @@ class TensorProtoHelper:
         if length == -1:
             length = len(np_value.flatten()) * item_size
         if int(np.prod(self.tensor.dims)) != len(np_value.flatten()):
-            raise ValueError('The external_data is not consistant with the shape')
+            raise ValueError('The external_data is not consistent with the shape')
         return np_value.reshape(self.tensor.dims), length

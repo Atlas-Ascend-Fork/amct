@@ -41,7 +41,7 @@ def weight_cali_tensor(weight_tensor, wts_param):
     if wts_param.get('wts_algo') == 'arq_quantize':
         return weight_arq(weight_tensor, wts_param)
 
-    raise RuntimeError("Unsupport wts_algo %s " % (wts_param.get('wts_algo')))
+    raise RuntimeError("Unsupported wts_algo %s " % (wts_param.get('wts_algo')))
 
 
 def weight_arq(weight_tensor, wts_param):

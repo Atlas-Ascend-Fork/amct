@@ -53,7 +53,7 @@ class Node(NodeBase):  # pylint: disable=no-member
         self._trans_type()
         self._init()
 
-        # clear intput and outputs
+        # clear input and outputs
         if isinstance(self._node_proto, onnx_pb.NodeProto):
             self._node_proto.ClearField('input')
             self._node_proto.ClearField('output')
@@ -100,7 +100,7 @@ class Node(NodeBase):  # pylint: disable=no-member
         index = len(self._input_anchors)
         if index > 0 and self._basic_info.get(TYPE) == 'graph_anchor':
             raise RuntimeError(
-                'Can only add one anchor to graph inout: {}'.format(
+                'Can only add one anchor to graph input: {}'.format(
                     self._basic_info.get('name')
                 )
             )

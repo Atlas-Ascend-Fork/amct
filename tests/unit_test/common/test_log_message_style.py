@@ -23,10 +23,11 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 FORBIDDEN_FAILURE_WORDS = re.compile(
-    r"\b(fail(?:ed|ure|s|ing)?|error(?:s)?|exception(?:s)?|abnormal)\b", re.I
+    r"\b(fail(?:ed|ure|s|ing)?|error(?:s)?|exception(?:s)?|abnormal)\b",  # codespell:ignore
+    re.I,
 )
 KNOWN_LOG_TYPOS = re.compile(
-    r"\b(fot|fuison|pune|paramaters|otputs|reesult|unknow)\b"
+    r"\b(fot|fuison|pune|paramaters|otputs|reesult|unknow)\b"  # codespell:ignore
     r"|\bnot find self_attn\.rotary_emb\.inv_freq\b"
     r"|\bhas not clip_factor_[aw]_max\b"
     r"|`use_cache=False`transformers\b"
@@ -125,7 +126,10 @@ def test_log_message_format_calls_are_spelled_correctly():
     violations = []
     for file_path, node in _iter_calls():
         func = node.func
-        if isinstance(func, ast.Attribute) and func.attr == "foramt":
+        if (
+            isinstance(func, ast.Attribute)
+            and func.attr == "foramt"  # codespell:ignore
+        ):
             violations.append(
                 _format_violation(file_path, node, "use .format(...) instead")
             )

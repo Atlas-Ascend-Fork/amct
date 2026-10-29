@@ -155,7 +155,7 @@ class RNNRetrainQuant(nn.Module):
         tensor_sequence = RNN_TENSOR_SEQUENCE.get(module_type)
         if length % len(tensor_sequence) != 0:
             raise RuntimeError(
-                'Layer\'s quant factor length {} is not suitable mutiple of {}'.format(
+                'Layer\'s quant factor length {} is not suitable multiple of {}'.format(
                     length, module_name
                 )
             )

@@ -45,7 +45,7 @@ RNN_TENSOR_SEQUENCE = {"LSTM": [0, 3, 1, 2], "GRU": [1, 0, 2]}
 
 class WeightsCalibrationPass(BaseModuleFusionPass):
     """
-    Function: Do caliration for weight, sacle and offset for weight will
+    Function: Do calibration for weight, scale and offset for weight will
         be found and weight is fake_quantized.
     APIs: set_up, tear_down, match_pattern, do_pass
     """
@@ -157,7 +157,7 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
         tensor_sequence = RNN_TENSOR_SEQUENCE.get(module_type)
         if length % len(tensor_sequence) != 0:
             raise RuntimeError(
-                "Layer's quant factor length {} is not suitable mutiple of {}".format(
+                "Layer's quant factor length {} is not suitable multiple of {}".format(
                     length, module_name
                 )
             )

@@ -118,7 +118,7 @@ class Recorder(nn.Module):  # pylint: disable=R0902
         Returns: None
         """
         if factors_type not in self.__add_record_factors_map.keys():
-            raise ValueError("unsupport factors_type %s!" % (factors_type))
+            raise ValueError("unsupported factors_type %s!" % (factors_type))
 
         # enable lock
         SingletonScaleOffsetRecord().lock.acquire()
