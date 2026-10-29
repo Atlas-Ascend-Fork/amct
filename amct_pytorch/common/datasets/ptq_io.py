@@ -16,20 +16,27 @@
 # ----------------------------------------------------------------------------
 
 import os
+
 import torch
 from loguru import logger
 
 
 def save_ptq_kwargs(position_ids, position_embeddings, attention_mask, data_dir):
     os.makedirs(data_dir, exist_ok=True)
-    if position_ids is not None:
-        torch.save(position_ids, os.path.join(data_dir, "position_ids.pkl"))
-    if position_embeddings is not None:
-        torch.save(
-            position_embeddings, os.path.join(data_dir, "position_embeddings.pkl")
-        )
-    if attention_mask is not None:
-        torch.save(attention_mask, os.path.join(data_dir, "attention_mask.pkl"))
+
+    def save_or_remove(value, file_name):
+        file_path = os.path.join(data_dir, file_name)
+        if value is None:
+            try:
+                os.remove(file_path)
+            except FileNotFoundError:
+                pass
+            return
+        torch.save(value, file_path)
+
+    save_or_remove(position_ids, "position_ids.pkl")
+    save_or_remove(position_embeddings, "position_embeddings.pkl")
+    save_or_remove(attention_mask, "attention_mask.pkl")
 
 
 def save_ptq_inps(act_stat, hook_name, quant_target, layer_idx, data_dir):

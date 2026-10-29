@@ -55,6 +55,51 @@ def test_save_ptq_kwargs_writes_only_non_none(tmp_path):
     assert (tmp_path / "attention_mask.pkl").exists()
 
 
+def test_save_ptq_kwargs_removes_stale_files_when_reusing_data_dir(tmp_path):
+    stale_position_ids = torch.tensor([[0, 1, 2]])
+    stale_position_embeddings = (
+        torch.ones(1, 3, 4),
+        torch.zeros(1, 3, 4),
+    )
+    stale_attention_mask = torch.ones(1, 3)
+    current_position_ids = torch.tensor([[0, 1]])
+    block_inputs = torch.arange(8, dtype=torch.float32).reshape(2, 4)
+
+    ptq_io.save_ptq_kwargs(
+        stale_position_ids,
+        stale_position_embeddings,
+        stale_attention_mask,
+        str(tmp_path),
+    )
+    torch.save(block_inputs, tmp_path / "block_0_attn_in.pkl")
+
+    ptq_io.save_ptq_kwargs(current_position_ids, None, None, str(tmp_path))
+
+    cached, kwargs = ptq_io.load_ptq_inps(str(tmp_path), "attn", layer_idx=0)
+    assert torch.equal(cached, block_inputs)
+    assert torch.equal(kwargs["position_ids"], current_position_ids)
+    assert "position_embeddings" not in kwargs
+    assert "attention_mask" not in kwargs
+
+
+def test_save_ptq_kwargs_removes_all_stale_files_when_all_kwargs_none(tmp_path):
+    position_ids = torch.tensor([[0, 1]])
+    position_embeddings = (torch.ones(1, 2), torch.zeros(1, 2))
+    attention_mask = torch.ones(1, 2)
+
+    ptq_io.save_ptq_kwargs(
+        position_ids,
+        position_embeddings,
+        attention_mask,
+        str(tmp_path),
+    )
+    ptq_io.save_ptq_kwargs(None, None, None, str(tmp_path))
+
+    assert not (tmp_path / "position_ids.pkl").exists()
+    assert not (tmp_path / "position_embeddings.pkl").exists()
+    assert not (tmp_path / "attention_mask.pkl").exists()
+
+
 # ---- save_ptq_inps --------------------------------------------------------
 
 
