@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
+# Adapted from https://github.com/meta-pytorch/tritonbench/blob/44b0a40/tritonbench/utils/fbgemm_utils.py
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
 #
-# This source code is licensed under the BSD-style license found in the
-# LICENSE file in the root directory of this source tree.
+# SPDX-License-Identifier: BSD-3-Clause
+# The full license text is provided in Third_Party_Open_Source_Software_Notice.
 
 from typing import Union
 from enum import IntEnum
@@ -169,7 +170,7 @@ def construct_fp4_from_components(
     if orig_shape[-1] % group_size == 0:
         output_shape = list(orig_shape[:-1]) + [-1]
         return packed_mx4.view(output_shape).view(torch.uint8)
-    # If we cant, return as a flat array.
+    # If we can't, return as a flat array.
     else:
         return packed_mx4.view(-1).view(torch.uint8)
 

@@ -18,9 +18,8 @@
 #
 # Copyright (c) 2023 DeepSeek.
 #
-# This file is part of [OtherProject], which is released under the MIT License.
-# See the LICENSE file in the root directory of this source tree
-# or at https://opensource.org/licenses/MIT for details.
+# This file is derived from DeepSeek-V3.2 and is released under the MIT License.
+# See Third_Party_Open_Source_Software_Notice at the repository root.
 from typing import Optional
 import torch
 import torch.nn as nn
