@@ -840,3 +840,111 @@ protocol.
 
 
 > After pruning, to export the model as a torchair offline model (.air) for ATC-to-om conversion and on-board inference, refer to [AMCT large-model offline torchair model export](../export/README_en.md).
+
+## 9 Community Task Sample: Qwen3-0.6B Dense FFN `reconstruct` + `ratio` (Task 6)
+
+This sample covers task 6 of issue [#183](https://gitcode.com/cann/amct/issues/183): prune the dense FFN intermediate dimension with `reconstruct`, its default least-squares recovery `ls`, and independent fixed ratios 0.1 / 0.2 / 0.5. Script: [src/run_qwen3_0_6b_pruning_reconstruct_ratio.py](src/run_qwen3_0_6b_pruning_reconstruct_ratio.py).
+
+### 9.1 Preparation and Commands
+
+Verified environment: Linux aarch64; Python 3.12.13; CANN 9.1.0; torch 2.7.1+cpu; torch_npu 2.7.1.post4; transformers 5.12.1; datasets 4.8.4; huggingface-hub 1.33.0; AMCT 1.1.0. One visible NPU, runtime name `Ascend910_9382`, approximately 61.27 GiB total memory. This records the measured combination, rather than compatibility across all versions. The torch `+cpu` suffix does not prevent NPU execution through torch_npu.
+
+Download [Qwen/Qwen3-0.6B](https://huggingface.co/Qwen/Qwen3-0.6B) into a local directory containing weights, config and tokenizer. Install matching torch/torch_npu and AMCT, and source the actual CANN environment script. Datasets are downloaded and cached on the first run. From `examples/algorithms/pruning`, with placeholder model paths:
+
+```bash
+source /usr/local/Ascend/cann-9.1.0/set_env.sh
+# Only for running from repository source; skip for installed AMCT:
+# export PYTHONPATH=../../..
+
+python3 src/run_qwen3_0_6b_pruning_reconstruct_ratio.py \
+  --model-path ./path/to/Qwen3-0.6B \
+  --prune-ratio 0.1 --calib-samples 32 --calib-seq-len 512 \
+  --seq-len 4096 --device npu:0 --save-model \
+  --save-dir ./outputs/qwen3_0_6b_reconstruct_ratio/r0_1
+
+python3 src/run_qwen3_0_6b_pruning_reconstruct_ratio.py \
+  --model-path ./path/to/Qwen3-0.6B \
+  --prune-ratio 0.2 --calib-samples 32 --calib-seq-len 512 \
+  --seq-len 4096 --device npu:0 --save-model \
+  --save-dir ./outputs/qwen3_0_6b_reconstruct_ratio/r0_2
+
+python3 src/run_qwen3_0_6b_pruning_reconstruct_ratio.py \
+  --model-path ./path/to/Qwen3-0.6B \
+  --prune-ratio 0.5 --calib-samples 32 --calib-seq-len 512 \
+  --seq-len 4096 --device npu:0 --save-model \
+  --save-dir ./outputs/qwen3_0_6b_reconstruct_ratio/r0_5
+```
+
+Each command starts a fresh process and reloads the same original model. Never use a previous ratio's pruned model as input. Output directories must be empty. A single NPU was sufficient; A2/A5 were not tested in this run.
+
+| Argument | Default | Meaning |
+| --- | --- | --- |
+| `--model-path` | required | Original local Qwen3-0.6B directory |
+| `--prune-ratio` | required | One of 0.1 / 0.2 / 0.5 |
+| `--calib-samples` / `--calib-seq-len` | 32 / 512 | Pileval block count and length |
+| `--seq-len` | 4096 | Required evaluation length; other values are rejected |
+| `--eval-batches` | full split | Positive cap for quick checks; omit for formal results |
+| `--device` | npu:0 | Model and calibration device |
+| `--save-dir` | ./outputs/qwen3_0_6b_reconstruct_ratio | Fresh result directory, protected against overwrite |
+| `--save-model` | off | Save under model/ and automatically validate reloading |
+| `--skip-diagnose` | off | Skip preview; still produce the real pruning report |
+
+### 9.2 Data and Timing Protocol
+
+The script reuses existing `src/utils.py` helpers without changing shared code. Calibration uses `mit-han-lab/pile-val-backup`, validation split, through shared `get_pileval/pileval_awq`: shuffle with seed 42, strip and encode rows, skip rows longer than 512 tokens, concatenate and take the first 32 full blocks (16,384 tokens). Calibration tensors and model are on npu:0.
+
+Evaluation uses `Salesforce/wikitext`, `wikitext-2-raw-v1`, test split, through shared `get_wiki_inputs`: join all rows with a double newline, tokenize once, split into nonoverlapping 4096-token blocks and drop the remainder. The measured full split contains 73 blocks (299,008 input tokens). The shared PPL helper scores next-token predictions inside each block, without predictions across block boundaries. Original model file hashes and calibration/evaluation token hashes agree across all three runs.
+
+Prune time is calibration loading/preprocessing/device transfer plus the real `amct.prune()` execution, including activation collection and LS solving, measured with device synchronization. It excludes model loading, hashing, evaluation-data preparation, baseline/pruned evaluation, diagnosis, saving and reload checks. Diagnosis is reported separately. Cache/device state affects runtime; these are not inference-performance measurements. No extra fine-tuning or quantization was performed, so post-process PPL is N/A. LS is part of reconstruct pruning itself.
+
+The earlier standalone starter's 72-block evaluation protocol is obsolete. Its results are not committed and must not be mixed with this 73-block protocol.
+
+### 9.3 Diagnosis and Report Highlights
+
+All three previews identify `cnn=0, dense=28, moe=0`; the fixed-ratio forward check passes. `acc binary search: unavailable` means no candidate met the preview's default tolerance. Formal fixed-ratio pruning does not depend on that search. The diagnostic ratio equals the requested ratio.
+
+Each real PruneReport contains 28 distinct dense reconstruct events with `output-preserving (ls)` and no warnings. CNN/MoE `<none>` events are expected because those targets do not exist in this model. All 28 FFN widths change from 3072 to 2765 / 2458 / 1536. Gate/up output dimensions, down input dimensions and config.intermediate_size agree.
+
+The full raw records (diagnosis output, `prune_report.json`, `run_metrics.json`, data/model/source hashes, environment and the actual command) stay in each run's `--save-dir` output directory. The example's `outputs/` directory is excluded by `.gitignore` and is not committed; the verifiable key fields are in the excerpts here and the 9.4 results table.
+
+Measured diagnosis and pruning-report excerpts for `prune_ratio=0.1` (other layers and fields omitted; complete records stay in the output directory):
+
+```text
+[prune-diagnose] prunable targets: cnn=0, dense=28, moe=0
+  fixed-ratio prune: available (cut 4.4%, forward OK)
+  acc binary search: unavailable
+  - acc search found no acceptable prune ratio at this tolerance (relax the tolerance).
+```
+
+```json
+{
+  "backend": "huggingface",
+  "params_before": 596049920,
+  "params_after": 569643008,
+  "warnings": [],
+  "events": [
+    {
+      "stage": "dense",
+      "method": "reconstruct",
+      "module": "model.layers.0.mlp.down_proj",
+      "detail": "output-preserving (ls) prune 3072 -> 2765"
+    }
+  ]
+}
+```
+
+### 9.4 Full Evaluation Results
+
+| Model | Method | Setting | Baseline PPL | Pruned PPL | Post-process PPL | Params (before → after) | Param cut | Prune time (min) | Diagnose time (min) |
+| --- | --- | --- | ---: | ---: | --- | --- | ---: | ---: | ---: |
+| Qwen3-0.6B | reconstruct (ls) | prune_ratio=0.1 | 19.157549 | 24.783754 | N/A | 596049920 → 569643008 | 4.4303% | 0.4071 | 1.0841 |
+| Qwen3-0.6B | reconstruct (ls) | prune_ratio=0.2 | 19.157549 | 28.937954 | N/A | 596049920 → 543236096 | 8.8606% | 0.4632 | 1.4742 |
+| Qwen3-0.6B | reconstruct (ls) | prune_ratio=0.5 | 19.157549 | 59.402245 | N/A | 596049920 → 463929344 | 22.1660% | 0.2663 | 0.9786 |
+
+The table was measured with installed AMCT 1.1.0. When running from source, the imported AMCT and shared helper may vary with the checkout; use `amct_import_path`, `source_hashes` and `helper_sha256` in that run's `run_environment.json` as the reference. The table does not claim a rerun against every master revision. Environment metadata also records CANN Toolkit and NPU driver versions on a best-effort basis, using `null` when unavailable.
+
+All three saved models passed reload validation: all 311 state tensors are exactly equal; parameter counts, all 28 FFN dimensions, config and a tokenizer encoding sample agree. In these measured runs, the first 4096-token block gives identical PPL before and after reloading (21.380943 / 24.609314 / 87.247597); the script accepts `rel_tol=1e-4` and `abs_tol=1e-4`. This verifies persistence; the 73-block results in the table remain the full evaluation metric.
+
+The requested ratio applies to FFN intermediate dimensions, whereas parameter reduction uses the whole model. A ratio of 0.5 therefore does not remove half of total parameters. Lower PPL is better. All three ratios degrade PPL, particularly 0.5; this sample demonstrates the required workflow and measured outcome, without establishing deployment quality or directly comparing other tasks with different calibration/environment settings.
+
+Outputs include `run_config.json`, `run_command.txt`, `run_environment.json`, `model_input_sha256.json`, `data_protocol.json`, `baseline_metrics.json`, `prune_config.json`, `diagnose_summary.txt` (unless skipped), `prune_report.json`, `run_metrics.json`, `run_status.json`, plus optional `model/` and `reload_validation.json`. Model weights and datasets are not committed.
