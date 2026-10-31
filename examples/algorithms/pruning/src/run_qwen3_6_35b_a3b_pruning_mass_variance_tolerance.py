@@ -61,6 +61,12 @@ from utils import (  # noqa: E402
     eval_wikitext2_ppl,
 )
 
+import logging
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+logging.getLogger("Log").propagate = False
+
 try:
     import torch_npu
 except ImportError:  # pragma: no cover
@@ -232,22 +238,21 @@ def resolve_local_model_dir(model: str) -> Path:
 
 def model_load_kwargs(trust_remote_code: bool) -> dict:
     if trust_remote_code:
-        print(
+        logger.info(
             "WARNING: --trust-remote-code is enabled. Custom Python from the "
             "model directory may execute under the current user. Use only with "
             "checkpoints you trust.",
-            flush=True,
         )
         return {"trust_remote_code": True}
     return {"trust_remote_code": False}
 
 
 def print_run_config(args: argparse.Namespace) -> None:
-    print("=" * 72)
-    print("Full run parameters:")
+    logger.info("=" * 72)
+    logger.info("Full run parameters:")
     for key, value in sorted(vars(args).items()):
-        print(f"  {key}={value!r}")
-    print("=" * 72)
+        logger.info(f"  {key}={value!r}")
+    logger.info("=" * 72)
 
 
 def count_params(model: torch.nn.Module) -> int:
@@ -296,10 +301,10 @@ def run_amct_ppl(
     ]
     if trust_remote_code:
         cmd.append("--trust_remote_code")
-    print("Running:", " ".join(cmd), flush=True)
+    logger.info("Running: %s", " ".join(cmd))
     proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
     combined = (proc.stdout or "") + "\n" + (proc.stderr or "")
-    print(combined)
+    logger.info(combined)
     if proc.returncode != 0:
         raise RuntimeError(
             f"amct_pytorch.eval failed with exit={proc.returncode}. "
@@ -413,7 +418,7 @@ def restore_vl_config(
             f"text_config.num_experts={num_experts}, got {written_experts!r} "
             f"in {dst}"
         )
-    print(f"Restored VL config.json with text_config.num_experts={num_experts}")
+    logger.info(f"Restored VL config.json with text_config.num_experts={num_experts}")
 
 
 class ProxyNegPplEvaluator:
@@ -447,10 +452,9 @@ class ProxyNegPplEvaluator:
         if was_training:
             model.train()
         ppl = torch.exp(torch.tensor(nll_sum / max(tokens, 1))).item()
-        print(
+        logger.info(
             f"[evaluator] call={self._call} proxy_ppl={ppl:.6f} "
             f"score={-ppl:.6f} elapsed={time.time() - t0:.1f}s",
-            flush=True,
         )
         return -ppl
 
@@ -487,21 +491,21 @@ def load_model_for_prune(args: argparse.Namespace, load_kwargs: dict):
         **load_kwargs,
     )
     if args.device_map == "cpu":
-        print("[2/5] Load model on CPU for pruning...", flush=True)
+        logger.info("[2/5] Load model on CPU for pruning...")
         model = AutoModelForCausalLM.from_pretrained(args.model, **common).eval()
         runtime_device = "cpu"
     elif args.device_map == "auto":
-        print("[2/5] Load model with device_map=auto on NPU...", flush=True)
+        logger.info("[2/5] Load model with device_map=auto on NPU...")
         model = AutoModelForCausalLM.from_pretrained(
             args.model, device_map="auto", **common
         ).eval()
         runtime_device = str(next(model.parameters()).device)
     else:
-        print(f"[2/5] Load model on single device {args.device}...", flush=True)
+        logger.info(f"[2/5] Load model on single device {args.device}...")
         model = AutoModelForCausalLM.from_pretrained(args.model, **common).eval()
         model = model.to(args.device)
         runtime_device = args.device
-    print(f"runtime_device={runtime_device} device_map={args.device_map}", flush=True)
+    logger.info(f"runtime_device={runtime_device} device_map={args.device_map}")
     return tokenizer, model, runtime_device
 
 
@@ -524,9 +528,9 @@ def main() -> None:
     tokenizer, model, runtime_device = load_model_for_prune(args, load_kwargs)
     search_device = args.search_device or runtime_device
     params_loaded = count_params(model)
-    print(f"loaded_params={params_loaded}", flush=True)
+    logger.info(f"loaded_params={params_loaded}")
 
-    print("[3/5] Prepare Pileval calibration + diagnose...", flush=True)
+    logger.info("[3/5] Prepare Pileval calibration + diagnose...")
     calib = get_pileval(tokenizer, args.calib_nsamples, seq_len=args.calib_seq_len)
     eval_batches = build_wikitext2_batches(tokenizer, seq_len=args.eval_seq_len)
     if args.eval_batches is not None:
@@ -536,12 +540,11 @@ def main() -> None:
         if args.baseline_ppl is None:
             raise ValueError("--skip-baseline-eval requires --baseline-ppl")
         baseline_ppl = args.baseline_ppl
-        print(f"[1/5] Reuse baseline_ppl={baseline_ppl}", flush=True)
+        logger.info(f"[1/5] Reuse baseline_ppl={baseline_ppl}")
     else:
-        print(
+        logger.info(
             f"[1/5] Baseline WikiText2 PPL on {runtime_device} "
             f"(batches={len(eval_batches)})...",
-            flush=True,
         )
         baseline_ppl = eval_wikitext2_ppl(
             model,
@@ -549,7 +552,7 @@ def main() -> None:
             seq_len=args.eval_seq_len,
             device=runtime_device,
         )
-    print(f"baseline_ppl={baseline_ppl}", flush=True)
+    logger.info(f"baseline_ppl={baseline_ppl}")
 
     cfg = build_config()
     ratio_grid = parse_ratio_grid(args.ratio_grid)
@@ -559,43 +562,39 @@ def main() -> None:
         config=cfg,
         tolerance=args.tolerance,
     )
-    print("prune_diagnose():", flush=True)
-    print(diagnose, flush=True)
+    logger.info("prune_diagnose():")
+    logger.info("%s", diagnose)
     _npu_empty_cache()
 
     if args.search_evaluator == "wikitext2_ppl":
         evaluator = NegativePplEvaluator(
             eval_batches, seq_len=args.eval_seq_len, device=search_device
         )
-        print(
+        logger.info(
             f"Using WikiText2 PPL search evaluator "
             f"(batches={len(eval_batches)}, seq_len={args.eval_seq_len}, "
             f"device={search_device}).",
-            flush=True,
         )
     elif args.search_evaluator == "proxy_ppl":
         proxy_batches = get_wiki_inputs(tokenizer, seq_len=args.proxy_seq_len)[
             : args.proxy_batches
         ]
         evaluator = ProxyNegPplEvaluator(proxy_batches)
-        print(
-            "Using short-seq proxy_ppl search evaluator (not for README table).",
-            flush=True,
+        logger.info(
+            "Using short-seq proxy_ppl search evaluator (not for README table)."
         )
     else:
         evaluator = "fidelity"
-        print(
+        logger.info(
             "Using AMCT built-in fidelity evaluator for tolerance search "
             "(not aligned with final WikiText2 PPL; not for README table).",
-            flush=True,
         )
 
-    print(
+    logger.info(
         f"[4/5] Tolerance search prune: tolerance={args.tolerance} "
         f"search_evaluator={args.search_evaluator} "
         f"device_map={args.device_map} search_device={search_device} "
         f"ratio_grid={ratio_grid} ...",
-        flush=True,
     )
     t0 = time.time()
     report = PruneReport()
@@ -610,30 +609,28 @@ def main() -> None:
     )
     prune_minutes = (time.time() - t0) / 60.0
     report_dict = report.as_dict()
-    print("PruneReport:", flush=True)
-    print(json.dumps(report_dict, indent=2, default=str), flush=True)
+    logger.info("PruneReport:")
+    logger.info("%s", json.dumps(report_dict, indent=2, default=str))
 
     params_before = report.params_before or params_loaded
     params_after = report.params_after or count_params(model)
     cut_rate = 1.0 - (params_after / params_before) if params_before else 0.0
     unchanged = cut_rate < 1e-6
     if unchanged:
-        print(
+        logger.info(
             "NOTE: no ratio met this tolerance on the configured ratio_grid; "
             "model left unchanged. This can be expected for tight tolerances.",
-            flush=True,
         )
 
     pruned_dir = out_root / "pruned_model"
     if unchanged:
-        print(
-            "Skip save_pretrained (model unchanged) to avoid duplicating ~67G weights.",
-            flush=True,
+        logger.info(
+            "Skip save_pretrained (model unchanged) to avoid duplicating ~67G weights."
         )
         pruned_dir_str = args.model
     else:
         pruned_dir.mkdir(parents=True, exist_ok=True)
-        print(f"Saving pruned model to {pruned_dir} ...", flush=True)
+        logger.info(f"Saving pruned model to {pruned_dir} ...")
         model.save_pretrained(str(pruned_dir))
         tokenizer.save_pretrained(str(pruned_dir))
         restore_vl_config(args.model, pruned_dir, model)
@@ -665,19 +662,18 @@ def main() -> None:
     }
     result_path = out_root / "result.json"
     result_path.write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")
-    print("Saved prune metrics:", result_path, flush=True)
+    logger.info("Saved prune metrics: %s", result_path)
 
     if args.skip_post_eval:
         pruned_ppl = None
     elif unchanged:
-        print(
+        logger.info(
             "[5/5] Model unchanged -> reuse baseline WikiText2 PPL "
             "(skip redundant eval).",
-            flush=True,
         )
         pruned_ppl = baseline_ppl
     elif args.device_map == "cpu":
-        print("[5/5] Post-prune WikiText2 PPL (AMCT blockwise on NPU)...", flush=True)
+        logger.info("[5/5] Post-prune WikiText2 PPL (AMCT blockwise on NPU)...")
         pruned_ppl = run_amct_ppl(
             pruned_dir_str,
             seq_len=args.eval_seq_len,
@@ -685,10 +681,9 @@ def main() -> None:
             trust_remote_code=args.trust_remote_code,
         )
     else:
-        print(
+        logger.info(
             f"[5/5] Post-prune WikiText2 PPL on {runtime_device} "
             f"(in-process, same path as search)...",
-            flush=True,
         )
         pruned_ppl = eval_wikitext2_ppl(
             model,
@@ -699,12 +694,11 @@ def main() -> None:
 
     result["pruned_ppl"] = pruned_ppl
     result_path.write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")
-    print("Saved:", result_path, flush=True)
-    print(
+    logger.info("Saved: %s", result_path)
+    logger.info(
         f"RESULT_ROW\tQwen3.6-35B-A3B\tmass_variance\ttolerance={args.tolerance}\t"
         f"{baseline_ppl}\t{pruned_ppl}\tN/A\t"
         f"{params_before} -> {params_after}\t{cut_rate:.4f}\t{prune_minutes:.2f}",
-        flush=True,
     )
 
 

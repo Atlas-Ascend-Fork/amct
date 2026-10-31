@@ -322,7 +322,7 @@ class DistillConfigBase:
 
         save_to_json(config_file, ordered_config)
         LOGGER.logi(
-            "Create distill config file {} success!".format(config_file),
+            "Create distill config file {} by default success!".format(config_file),
             module_name='DistillConfig',
         )
 
@@ -374,7 +374,7 @@ class DistillConfigBase:
 
         save_to_json(config_file, ordered_config)
         LOGGER.logi(
-            "Create distill config file {} success!".format(config_file),
+            "Create distill config file {} from proto success!".format(config_file),
             module_name='DistillConfig',
         )
 

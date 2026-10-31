@@ -45,6 +45,7 @@ deploy modules (e.g. NpuQuantizationLinear) are AMCT custom modules that
 """
 
 import argparse
+import logging
 import os
 
 # NPU / torchair env knobs (users may override them before running)
@@ -58,6 +59,10 @@ import torchair as tng  # noqa: E402
 from torchair.configs.compiler_config import CompilerConfig  # noqa: E402
 
 from transformers import AutoProcessor, AutoTokenizer  # noqa: E402
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+logging.getLogger("Log").propagate = False
 
 # Fallback text used to build the LLM export input when --input_file is not
 # given; only its token length matters, not its content.
@@ -76,7 +81,7 @@ def load_llm(model_path, trust_remote_code=False):
         tokenizer_path = model_path
     else:
         tokenizer_path = os.path.dirname(os.path.abspath(model_path))
-    print(f"Loading quantized LLM from {pth_path}")
+    logger.info("Loading quantized LLM from %s", pth_path)
     model = torch.load(pth_path, map_location="cpu", weights_only=False)
     # eager attention avoids sdpa, which torch_npu redispatches to
     # npu_fusion_attention_v3 (no AscendIR converter in torchair yet)
@@ -103,7 +108,7 @@ def load_vlm(model_path, trust_remote_code=False):
         processor_path = model_path
     else:
         processor_path = os.path.dirname(os.path.abspath(model_path))
-    print(f"Loading quantized VLM from {pth_path}")
+    logger.info("Loading quantized VLM from %s", pth_path)
     model = torch.load(pth_path, map_location="cpu", weights_only=False)
     # eager attention avoids sdpa, which torch_npu redispatches to
     # npu_fusion_attention_v3 (no AscendIR converter in torchair yet);
@@ -156,7 +161,8 @@ def build_llm_input(enc, input_file, seqlen):
     """Tokenize real text into the export input [1, seqlen] int64."""
     if seqlen <= 0:
         raise ValueError(
-            f"--seqlen 必须为正整数，当前值为 {seqlen}，请检查 --seqlen 参数"
+            f"--seqlen must be a positive integer, got {seqlen}; "
+            "check the --seqlen argument"
         )
     if input_file is not None:
         with open(input_file, encoding="utf-8") as f:
@@ -166,17 +172,18 @@ def build_llm_input(enc, input_file, seqlen):
     token_ids = enc(text, return_tensors="pt").input_ids
     if token_ids.shape[1] == 0:
         raise ValueError(
-            "--input_file 指向的文件 token 数为 0（可能为空文件），"
-            "请检查 --input_file 指向的文件内容"
+            "--input_file produced 0 tokens (possibly an empty file); "
+            "check the file content pointed to by --input_file"
         )
     if token_ids.shape[1] < seqlen:
         # repeat the text until it covers seqlen tokens
         repeats = seqlen // token_ids.shape[1] + 1
         token_ids = token_ids.repeat(1, repeats)
     export_input = token_ids[:, :seqlen].npu()
-    print(
-        f"LLM export input shape: {tuple(export_input.shape)}, "
-        f"dtype: {export_input.dtype}"
+    logger.info(
+        "LLM export input shape: %s, dtype: %s",
+        tuple(export_input.shape),
+        export_input.dtype,
     )
     return (export_input,)
 
@@ -194,9 +201,9 @@ def _detect_vlm_kind(model):
     if "clip" in model_type and "vision" not in model_type:
         return "clip"
     raise NotImplementedError(
-        "当前脚本仅支持纯图输入的VLM模型（如CLIP/CLIPModel）。"
-        f"检测到不支持的模型类型: {type(model).__name__ or model_type or 'unknown'}，"
-        "图文混合输入的多模态VLM（Qwen2-VL/LLaVA等）暂不支持。"
+        "This script only supports image-only VLM models (e.g. CLIP/CLIPModel). "
+        f"Detected an unsupported model type: {type(model).__name__ or model_type or 'unknown'}. "
+        "Text+image multimodal VLMs (Qwen2-VL/LLaVA etc.) are not supported yet."
     )
 
 
@@ -214,8 +221,8 @@ def _load_images(image_path, max_count=None):
     if os.path.isfile(image_path):
         if max_count is not None and max_count > 1:
             raise ValueError(
-                f"batch_size ({max_count}) 大于图片数量 (1)，"
-                "请提供足够多的图片或减小 batch_size"
+                f"batch_size ({max_count}) is greater than the number of "
+                "images (1); provide more images or reduce batch_size"
             )
         return [Image.open(image_path).convert("RGB")]
     elif os.path.isdir(image_path):
@@ -226,24 +233,24 @@ def _load_images(image_path, max_count=None):
             if os.path.splitext(f)[1].lower() in image_extensions
         )
         if not filenames:
-            raise ValueError(f"目录中未找到图片文件: {image_path}")
+            raise ValueError(f"No image files found in directory: {image_path}")
         if max_count is not None and max_count > len(filenames):
             raise ValueError(
-                f"batch_size ({max_count}) 大于图片数量 ({len(filenames)})，"
-                "请提供足够多的图片或减小 batch_size"
+                f"batch_size ({max_count}) is greater than the number of "
+                f"images ({len(filenames)}); provide more images or reduce batch_size"
             )
         images = [
             Image.open(os.path.join(image_path, f)).convert("RGB")
             for f in filenames[:max_count]
         ]
-        print(f"从目录 {image_path} 解码了 {len(images)} 张图片")
+        logger.info("Decoded %d images from directory %s", len(images), image_path)
         return images
     else:
-        raise ValueError(f"image_path 必须是文件或目录: {image_path}")
+        raise ValueError(f"image_path must be a file or directory: {image_path}")
 
 
 def _default_vlm_input_size(processor):
-    """从 processor 推断默认输入尺寸，供未提供图片时的占位输入使用。"""
+    """Infer the default input size from the processor for placeholder inputs."""
     size = getattr(processor, "crop_size", None) or getattr(processor, "size", None)
     if isinstance(size, dict):
         size = size.get("height") or size.get("shortest_edge") or size.get("width")
@@ -255,18 +262,20 @@ def _default_vlm_input_size(processor):
 
 
 def _validate_model_dtype(model, input_dtype):
-    """检查模型浮点参数 dtype 与输入 --dtype 是否一致。
+    """Check the model's float-parameter dtype matches the input --dtype.
 
-    仅校验浮点参数（跳过 int8/int64 等量化权重）；不一致时给出指向
-    --dtype 的报错，避免导出时算子报 dtype 不匹配。
+    Only float parameters are validated (int8/int64 quantized weights are
+    skipped); on mismatch a --dtype-oriented error is raised to avoid dtype
+    mismatch failures from operators during export.
     """
     for param in model.parameters():
         if param.dtype in (torch.float16, torch.bfloat16, torch.float32):
             if param.dtype != input_dtype:
                 raise ValueError(
-                    f"--dtype 指定的输入精度为 {input_dtype}，但模型浮点权重为 "
-                    f"{param.dtype}，两者不一致会导致算子报 dtype 不匹配错误；"
-                    "请将 --dtype 调整为与模型权重一致的精度，或先将模型转为目标精度"
+                    f"--dtype specifies input precision {input_dtype}, but the "
+                    f"model's float weights are {param.dtype}; the mismatch would "
+                    "cause operator dtype mismatch errors. Align --dtype with the "
+                    "model weight precision, or cast the model to the target precision first."
                 )
             return
 
@@ -285,7 +294,8 @@ def build_vlm_input(model, processor, image_path, batch_size, dtype, device):
     """
     if batch_size <= 0:
         raise ValueError(
-            f"--batch_size 必须为正整数，当前值为 {batch_size}，请检查 --batch_size 参数"
+            f"--batch_size must be a positive integer, got {batch_size}; "
+            "check the --batch_size argument"
         )
     _validate_model_dtype(model, dtype)
     _detect_vlm_kind(model)
@@ -309,9 +319,9 @@ def build_vlm_input(model, processor, image_path, batch_size, dtype, device):
             pixel_values = torch.cat(pixel_values_list, dim=0)
 
     export_input = (pixel_values.to(dtype).to(device),)
-    print(
-        f"VLM(clip image tower) export input: "
-        f"{[(tuple(t.shape), str(t.dtype)) for t in export_input]}"
+    logger.info(
+        "VLM(clip image tower) export input: %s",
+        [(tuple(t.shape), str(t.dtype)) for t in export_input],
     )
     return model, export_input
 
@@ -347,8 +357,9 @@ def _patch_weight_subdir():
 
         mod._get_subpath = patched
         mod._weight_subdir_patched = True
-        print(
-            f"weight files will be dumped to <export_dir>/weights (patched {mod_name})"
+        logger.info(
+            "weight files will be dumped to <export_dir>/weights (patched %s)",
+            mod_name,
         )
         return
 
@@ -379,14 +390,14 @@ def export_torchair_air(model, export_inputs, output_dir, export_name):
         suffix = f"_{i}" if len(export_inputs) > 1 else ""
         input_bin = os.path.join(output_dir, f"input{suffix}.bin")
         if tensor.dtype == torch.bfloat16:
-            # bfloat16 无法直接转 numpy（numpy 无对应类型），按 uint16
-            # 保持原始位模式落盘，避免出现不支持 ScalarType 的报错
+            # bfloat16 has no direct numpy dtype; dump the raw bit pattern
+            # as uint16 to avoid unsupported-ScalarType errors.
             tensor.cpu().contiguous().view(torch.uint16).numpy().tofile(input_bin)
         else:
             tensor.cpu().numpy().tofile(input_bin)
-        print(f"input{suffix}.bin written ({os.path.getsize(input_bin)} B)")
+        logger.info("input%s.bin written (%d B)", suffix, os.path.getsize(input_bin))
 
-    print(f"=== Exporting {export_name} to {output_dir} ===")
+    logger.info("=== Exporting %s to %s ===", export_name, output_dir)
     tng.dynamo_export(
         *export_inputs,
         model=model,
@@ -404,7 +415,7 @@ def export_torchair_air(model, export_inputs, output_dir, export_name):
         artifacts.append("weights/dynamo.pbtxt + weight files")
     else:
         artifacts.append("dynamo.pbtxt")
-    print(f"=== Export DONE: {artifacts} ===")
+    logger.info("=== Export DONE: %s ===", artifacts)
 
 
 def main():
@@ -487,32 +498,34 @@ def main():
     args = parser.parse_args()
 
     if args.trust_remote_code:
-        print(
-            "WARNING: --trust_remote_code is enabled. Custom Python from the "
+        logger.warning(
+            "--trust_remote_code is enabled. Custom Python from the "
             "model directory may execute under the current user. Use only "
-            "with checkpoints you trust.",
-            flush=True,
+            "with checkpoints you trust."
         )
 
     if args.model_type == "llm" and args.image_path is not None:
-        print(
-            f"Warning: --image_path ({args.image_path}) 仅适用于vlm场景，"
-            "llm场景下该参数未生效。"
+        logger.warning(
+            "--image_path (%s) only applies to the vlm scenario; "
+            "it has no effect for llm.",
+            args.image_path,
         )
     if args.model_type == "llm" and args.batch_size != 1:
-        print(
-            f"Warning: --batch_size ({args.batch_size}) 仅适用于vlm场景，"
-            "llm场景下该参数未生效。"
+        logger.warning(
+            "--batch_size (%s) only applies to the vlm scenario; "
+            "it has no effect for llm.",
+            args.batch_size,
         )
     if args.model_type == "vlm" and args.seqlen != 2048:
-        print(
-            f"Warning: --seqlen ({args.seqlen}) 仅适用于llm场景，"
-            "vlm场景下该参数未生效。"
+        logger.warning(
+            "--seqlen (%s) only applies to the llm scenario; it has no effect for vlm.",
+            args.seqlen,
         )
     if args.model_type == "vlm" and args.input_file is not None:
-        print(
-            f"Warning: --input_file ({args.input_file}) 仅适用于llm场景，"
-            "vlm场景下该参数未生效。"
+        logger.warning(
+            "--input_file (%s) only applies to the llm scenario; "
+            "it has no effect for vlm.",
+            args.input_file,
         )
     if (
         args.model_type == "vlm"
@@ -523,10 +536,10 @@ def main():
 
     export_name = args.export_name or os.path.basename(args.model_path.rstrip("/"))
     if args.export_name is None and os.path.isfile(args.model_path):
-        # model_path 指向文件时去掉 .pth 后缀，避免导出名变成 model.pth.air
+        # strip the .pth suffix so the export name is not model.pth.air
         export_name = os.path.splitext(export_name)[0]
-    # 将 output_dir 归一化为绝对路径，避免 air 中 FileConstant 外置权重
-    # 使用相对路径，导致 ATC 转 om 时因基准目录不一致而找不到权重
+    # normalize output_dir to an absolute path so external weights in the
+    # air (FileConstant) do not use relative paths ATC cannot resolve.
     args.output_dir = os.path.abspath(args.output_dir)
 
     if args.model_type == "llm":

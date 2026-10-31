@@ -64,8 +64,8 @@ python3 src/run_qwen_samples.py --model_path=/data/Qwen2-7b/
 若出现如下信息，则说明量化成功：
 
 ```none
-Test time taken:  1.0 min  59.24865388870239 s
-Score:  5.477707
+INFO Test time taken: 1 min 59 s
+INFO Score: 5.477707
 ```
 
 **step 2.**  推荐使用以下配置

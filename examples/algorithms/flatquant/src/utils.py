@@ -44,6 +44,9 @@ def create_logger(dist_rank=0, name=''):
     return logger
 
 
+logger = logging.getLogger(__name__)
+
+
 def build_enc(model_path):
     enc = AutoTokenizer.from_pretrained(
         model_path, use_fast=False, trust_remote_code=True
@@ -63,7 +66,7 @@ def get_llama(model_path, hf_token=None):
         low_cpu_mem_usage=True,
     )
     model.seqlen = 2048
-    print(f'---> Loading {model_path} Model with seq_len: {model.seqlen}')
+    logger.info('---> Loading %s Model with seq_len: %s', model_path, model.seqlen)
     return model
 
 
@@ -79,7 +82,7 @@ def get_qwen(model_path, hf_token=None):
         low_cpu_mem_usage=True,
     )
     model.seqlen = 2048
-    print(f'---> Loading {model_path} Model with seq_len: {model.seqlen}')
+    logger.info('---> Loading %s Model with seq_len: %s', model_path, model.seqlen)
     return model
 
 
@@ -128,7 +131,7 @@ def test_acc(model, tokenizer, tasks, batch_size, logger):
 
 @torch.no_grad()
 def test_ppl(model, testenc, dataset_name):
-    print(f'Evaluating ppl for {dataset_name}')
+    logger.info('Evaluating ppl for %s', dataset_name)
     model.eval()
 
     max_length = 2048

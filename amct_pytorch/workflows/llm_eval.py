@@ -81,9 +81,14 @@ class LlmEvalWorkflow:
             ppl = self._run_modelwise()
         else:
             raise ValueError(f"Unsupported granularity '{self.granularity}' for eval.")
+        policy_line = " ".join(
+            line.strip()
+            for line in self.bit_policy.summary().splitlines()
+            if line.strip()
+        )
         logger.info(
-            f"Model: {self.model_name}; Quant target: {self.quant_target}; Quant dtype: {self.quant_dtype}; "
-            f"PPL: {ppl}\n{self.bit_policy.summary()}"
+            f"Model: {self.model_name}; Quant target: {self.quant_target}; "
+            f"Quant dtype: {self.quant_dtype}; PPL: {ppl}; {policy_line}"
         )
         logger.remove(sink_id)
 

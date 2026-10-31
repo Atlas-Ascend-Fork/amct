@@ -157,7 +157,7 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
         tensor_sequence = RNN_TENSOR_SEQUENCE.get(module_type)
         if length % len(tensor_sequence) != 0:
             raise RuntimeError(
-                "Layer's quant factor length {} is not suitable multiple of {}".format(
+                "Layer's quant factor length {} is not a suitable multiple of {}".format(
                     length, module_name
                 )
             )
@@ -273,7 +273,9 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
         offset = [0]
         record_weights_scale_offset(self.records, object_name, scale, offset)
         LOGGER.logd(
-            "Do layer:'{}' weights calibration success!".format(object_name),
+            "Do layer:'{}' AveragePool weights calibration success!".format(
+                object_name
+            ),
             "WeightsCalibrationPass",
         )
 
@@ -346,7 +348,7 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
         recurrence_weight_helper.set_data(calied_weight_r_raw, set_data_type)
 
         LOGGER.logd(
-            "Do layer:'{}' weights calibration success!".format(object_name),
+            "Do layer:'{}' rnn weights calibration success!".format(object_name),
             "WeightsCalibrationPass",
         )
 

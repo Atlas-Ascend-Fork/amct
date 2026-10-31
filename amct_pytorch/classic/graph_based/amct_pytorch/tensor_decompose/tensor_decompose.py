@@ -66,7 +66,7 @@ def auto_decomposition(model, decompose_info_path=None):
     for layer_name, layer in model.named_modules():
         if not _check_type(layer, nn.Conv2d):
             continue
-        LOGGER.logi('Processing: \'{}\''.format(layer_name))
+        LOGGER.logd('Processing: \'{}\''.format(layer_name))
         new_layer_packs, decom_info = _decompose_one_layer(
             layer_name, layer, param_dict
         )

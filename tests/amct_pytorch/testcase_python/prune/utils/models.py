@@ -304,9 +304,9 @@ class SplitConv(nn.Module):
 
     def forward(self, x):
         x1 = self.layer1(x)
-        logger.info('%s', x1.shape)
+        logger.info('SplitConv layer1 out shape: %s', x1.shape)
         x1 = torch.split(x1, 80, dim=1)
-        logger.info('%s %s', x1[0].shape, x1[0].shape)
+        logger.info('SplitConv split[0] shape: %s', x1[0].shape)
         x2_1 = self.layer2_1(x1[0])
         x2_2 = self.layer2_2(x1[1])
 
@@ -345,9 +345,9 @@ class SplitConcatGroupConv(nn.Module):
 
     def forward(self, x):
         x1 = self.layer1(x)
-        logger.info('%s', x1.shape)
+        logger.info('SplitConcatGroupConv layer1 out shape: %s', x1.shape)
         x1 = torch.split(x1, 80, dim=1)
-        logger.info('%s %s', x1[0].shape, x1[0].shape)
+        logger.info('SplitConcatGroupConv split[0] shape: %s', x1[0].shape)
         x2_1 = self.layer2_1(x1[0])
         x2_2 = self.layer2_2(x1[1])
         x2 = torch.cat([x2_1, x2_2], 1)
@@ -388,9 +388,9 @@ class SplitConcatConv(nn.Module):
 
     def forward(self, x):
         x1 = self.layer1(x)
-        logger.info('%s', x1.shape)
+        logger.info('SplitConcatConv layer1 out shape: %s', x1.shape)
         x1 = torch.split(x1, 80, dim=1)
-        logger.info('%s %s', x1[0].shape, x1[0].shape)
+        logger.info('SplitConcatConv split[0] shape: %s', x1[0].shape)
         x2_1 = self.layer2_1(x1[0])
         x2_2 = self.layer2_2(x1[1])
         x2 = torch.cat([x2_1, x2_2], 1)

@@ -37,7 +37,7 @@ def get_n_set_parameters_byname(model, required_names):
 
 def check_params_grad(model):
     for name, param in model.named_parameters():
-        logger.info(f"{name} : {param.requires_grad}")
+        logger.debug(f"{name} : {param.requires_grad}")
     return
 
 

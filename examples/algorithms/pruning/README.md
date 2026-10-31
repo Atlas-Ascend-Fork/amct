@@ -113,8 +113,8 @@ python3 src/run_qwen3_6_35b_a3b_pruning_activation_count_tolerance.py \
 `ratio_grid` 上进行，依次评估 0.4 / 0.2 / 0.1 三档候选，均不满足容差，模型保持原样：
 
 ```text
-[prune-diagnose]
-[prune-diagnose] prunable targets: cnn=0, dense=40, moe=40
+INFO [prune-diagnose]
+INFO [prune-diagnose] prunable targets: cnn=0, dense=40, moe=40
   fixed-ratio prune: ineffective (0 cut) (cut 0.0%)
   acc binary search: available (chosen prune_ratio=0.7)
   - fixed-ratio prune dry-run error: OutOfMemoryError: NPU out of memory. Tried to allocate
@@ -634,12 +634,12 @@ torch_npu / transformers / CANN toolkit / NPU 驱动版本号（不可得时记�
 `PruneReport` → 剪枝后 PPL 与参数量变化。`prune_ratio=0.1` 档实测输出（单卡 npu:0）：
 
 ```text
-[qwen3_0_6b.low_variance.ratio] baseline ppl: 19.153452
-[prune-diagnose] prunable targets: cnn=0, dense=28, moe=0
+INFO [qwen3_0_6b.low_variance.ratio] baseline ppl: 19.153452
+INFO [prune-diagnose] prunable targets: cnn=0, dense=28, moe=0
   fixed-ratio prune: available (cut 4.4%, forward OK)
   acc binary search: unavailable
   - acc search found no acceptable prune ratio at this tolerance (relax the tolerance).
-[qwen3_0_6b.low_variance.ratio] diagnose time: 0.11 min
+INFO [qwen3_0_6b.low_variance.ratio] diagnose time: 0.11 min
 ```
 
 说明：诊断的 fixed-ratio 前向校验要求校准数据与模型同设备，脚本已把校准 batch 对齐到
@@ -729,9 +729,9 @@ dry-run，默认 `0.1`；`--eval-batches` 仅用于快速截断评测批次，�
 `prune_ratio=0.5` 主运行（2026-10-21 复测）的诊断实际输出与耗时：
 
 ```text
-[qwen3.0.6b.reconstruct.ratio.finetune] diagnose time: 30.31 min
-[qwen3.0.6b.reconstruct.ratio.finetune] prune_diagnose():
-[prune-diagnose] prunable targets: cnn=0, dense=28, moe=0
+INFO [qwen3.0.6b.reconstruct.ratio.finetune] diagnose time: 30.31 min
+INFO [qwen3.0.6b.reconstruct.ratio.finetune] prune_diagnose():
+INFO [prune-diagnose] prunable targets: cnn=0, dense=28, moe=0
   fixed-ratio prune: available (cut 4.4%, forward OK)
   acc binary search: available (chosen prune_ratio=0.1)
 ```

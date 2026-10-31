@@ -118,8 +118,8 @@ runs as a binary search over `ratio_grid`, evaluating candidates 0.4 / 0.2 / 0.1
 the tolerance, so the model was left unchanged:
 
 ```text
-[prune-diagnose]
-[prune-diagnose] prunable targets: cnn=0, dense=40, moe=40
+INFO [prune-diagnose]
+INFO [prune-diagnose] prunable targets: cnn=0, dense=40, moe=40
   fixed-ratio prune: ineffective (0 cut) (cut 0.0%)
   acc binary search: available (chosen prune_ratio=0.7)
   - fixed-ratio prune dry-run error: OutOfMemoryError: NPU out of memory. Tried to allocate
@@ -653,12 +653,12 @@ summary -> the `PruneReport` of the real prune -> pruned PPL and parameter chang
 output of the `prune_ratio=0.1` run (single npu:0):
 
 ```text
-[qwen3_0_6b.low_variance.ratio] baseline ppl: 19.153452
-[prune-diagnose] prunable targets: cnn=0, dense=28, moe=0
+INFO [qwen3_0_6b.low_variance.ratio] baseline ppl: 19.153452
+INFO [prune-diagnose] prunable targets: cnn=0, dense=28, moe=0
   fixed-ratio prune: available (cut 4.4%, forward OK)
   acc binary search: unavailable
   - acc search found no acceptable prune ratio at this tolerance (relax the tolerance).
-[qwen3_0_6b.low_variance.ratio] diagnose time: 0.11 min
+INFO [qwen3_0_6b.low_variance.ratio] diagnose time: 0.11 min
 ```
 
 Note: the diagnostic fixed-ratio forward check requires calibration data and model on the
@@ -761,9 +761,9 @@ through `save_pretrained/from_pretrained` directly. Actual diagnostic output and
 `prune_ratio=0.5` main run (re-measured 2026-10-21):
 
 ```text
-[qwen3.0.6b.reconstruct.ratio.finetune] diagnose time: 30.31 min
-[qwen3.0.6b.reconstruct.ratio.finetune] prune_diagnose():
-[prune-diagnose] prunable targets: cnn=0, dense=28, moe=0
+INFO [qwen3.0.6b.reconstruct.ratio.finetune] diagnose time: 30.31 min
+INFO [qwen3.0.6b.reconstruct.ratio.finetune] prune_diagnose():
+INFO [prune-diagnose] prunable targets: cnn=0, dense=28, moe=0
   fixed-ratio prune: available (cut 4.4%, forward OK)
   acc binary search: available (chosen prune_ratio=0.1)
 ```

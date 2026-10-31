@@ -11,12 +11,16 @@
 # http://www.apache.org/licenses/LICENSE-2.0
 # ----------------------------------------------------------------------------
 
+import logging
 import argparse
 import torch
 import torch_npu
 
 from utils import get_test_dataset, get_qwen, get_calib_dataset, infer_model, test_ppl
 import amct_pytorch as amct
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+logging.getLogger("Log").propagate = False
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='example')

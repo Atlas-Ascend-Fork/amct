@@ -93,7 +93,7 @@ def train_experts_layer(args, data_dir, layer_idx, dev=0, cls=QuantDSA):
                     prefix = "mlp.shared_experts."
                     quant_params.update(refactor_quant_params(part_params, prefix))
 
-                logger.info(quant_params.keys())
+                logger.info("experts quant_params keys: {}", quant_params.keys())
                 torch.save(
                     quant_params,
                     os.path.join(args.exp_dir, f"quant_parameters_{layer_idx}.pth"),
@@ -108,7 +108,7 @@ def train_experts_layer(args, data_dir, layer_idx, dev=0, cls=QuantDSA):
                 part_params = cali_quant(args, layer.mlp, layer_idx, inps, dev)
                 prefix = "mlp."
                 quant_params.update(refactor_quant_params(part_params, prefix))
-                logger.info(quant_params.keys())
+                logger.info("mlp quant_params keys: {}", quant_params.keys())
                 torch.save(
                     quant_params,
                     os.path.join(args.exp_dir, f"quant_parameters_{layer_idx}.pth"),

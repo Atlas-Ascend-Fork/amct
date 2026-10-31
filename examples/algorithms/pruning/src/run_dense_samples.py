@@ -25,16 +25,22 @@ Run: python3 src/run_dense_samples.py
 """
 
 import copy
+import logging
 
 import torch
 
 from utils import make_mlp, mlp_data, count_params
 import amct_pytorch as amct
+
 from amct_pytorch.pruning import (
     DENSE_RECOVERY_MENU_CFG,
     PruneReport,
     prune_diagnose,
 )
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+logging.getLogger("Log").propagate = False
 
 HAS_QUANT = hasattr(amct, "quantize") and hasattr(amct, "convert")
 
@@ -49,11 +55,11 @@ def fixed_ratio_prune():
     report = PruneReport()
     amct.prune(model, cfg, data=calib, report=report)
     after = count_params(model)
-    print(
+    logger.info(
         f"[dense.fixed] FFN fixed ratio 0.5: params {before:,} -> {after:,} "
         f"(-{100 * (1 - after / before):.1f}%)"
     )
-    print("[dense.fixed] report:", report.as_dict())
+    logger.info("[dense.fixed] report: %s", report.as_dict())
     _ = model(calib[0])
 
 
@@ -67,7 +73,7 @@ def tolerance_auto_prune():
         )
         cut = 1 - report.params_after / report.params_before
         note = report.warnings[0] if report.warnings else "met the tolerance"
-        print(
+        logger.info(
             f"[dense.tolerance={tol}] weights {report.params_before:,} -> "
             f"{report.params_after:,} (cut {100 * cut:.1f}%), {note}"
         )
@@ -84,7 +90,7 @@ def recovery_menu_prune():
     _ = model(val[0])
     chosen = next((e.detail for e in report.events if e.stage == "menu-select"), None)
     cut = 1 - report.params_after / report.params_before
-    print(
+    logger.info(
         f"[dense.recovery_menu] weights {report.params_before:,} -> "
         f"{report.params_after:,} (cut {100 * cut:.1f}%), {chosen}"
     )
@@ -104,16 +110,16 @@ def prune_then_quantize():
         },
         data=calib,
     )
-    print(
+    logger.info(
         f"[dense.prune+quant] params after pruning {before:,} -> {count_params(model):,}"
     )
     if HAS_QUANT:
         amct.quantize(model)
         amct.convert(model)
         _ = model(calib[0])
-        print("[dense.prune+quant] quantize->convert done, forward OK")
+        logger.info("[dense.prune+quant] quantize->convert done, forward OK")
     else:
-        print(
+        logger.info(
             "[dense.prune+quant] amct.quantize/convert unavailable in this env, "
             "skipping quantization (pruning part already verified)"
         )
@@ -134,13 +140,13 @@ def evaluator_and_diagnose():
     amct.prune(model, data=calib, tolerance=0.05, evaluator=acc_fn, report=report)
     cut = 1 - report.params_after / report.params_before
     note = report.warnings[0] if report.warnings else "met the tolerance"
-    print(
+    logger.info(
         f"[dense.evaluator] weights {report.params_before:,} -> {report.params_after:,} "
         f"(cut {100 * cut:.1f}%), {note}"
     )
 
     rep = prune_diagnose(make_mlp(), data=calib)
-    print("[dense.diagnose]", rep.summary())
+    logger.info("[dense.diagnose] %s", rep.summary())
 
 
 def main():

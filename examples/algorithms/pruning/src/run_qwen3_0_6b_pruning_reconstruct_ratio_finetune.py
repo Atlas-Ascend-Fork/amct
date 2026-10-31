@@ -37,6 +37,8 @@ Run:
 
 from __future__ import annotations
 
+import logging
+
 import argparse
 import copy
 import gc
@@ -65,6 +67,10 @@ disable_torchaudio()  # must run before transformers imports torchaudio
 
 import amct_pytorch as amct  # noqa: E402  (must import after the torchaudio patch)
 from amct_pytorch.pruning import PruneReport, prune_diagnose, prune_finetune  # noqa: E402
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+logging.getLogger("Log").propagate = False
 
 
 def build_wikitext2_train_batches(tokenizer, n_batches=300, seq_len=512):
@@ -289,17 +295,16 @@ def parse_args():
 
 def main():
     args = parse_args()
-    print("[qwen3.0.6b.reconstruct.ratio.finetune] runtime args:")
-    print(json.dumps(_runtime_args(args), ensure_ascii=False, indent=2))
+    logger.info("[qwen3.0.6b.reconstruct.ratio.finetune] runtime args:")
+    logger.info(json.dumps(_runtime_args(args), ensure_ascii=False, indent=2))
     save_dir = Path(args.save_dir)
     dump_repro_metadata(save_dir)
 
     if args.trust_remote_code:
-        print(
+        logger.info(
             "WARNING: --trust-remote-code is enabled. Custom Python from the "
             "model directory may execute under the current user. Use only "
             "with checkpoints you trust.",
-            flush=True,
         )
     model, tokenizer = load_model(
         args.model_path,
@@ -323,14 +328,16 @@ def main():
     eval_batches = build_wikitext2_batches(tokenizer, seq_len=args.seq_len)
     eval_batches = eval_batches[: args.eval_batches]
 
-    print(
+    logger.info(
         f"[qwen3.0.6b.reconstruct.ratio.finetune] parameters before: "
         f"{count_params(model):,}"
     )
     baseline_ppl = eval_wikitext2_ppl(
         model, eval_batches, seq_len=args.seq_len, device=runtime_device
     )
-    print(f"[qwen3.0.6b.reconstruct.ratio.finetune] baseline ppl: {baseline_ppl:.6f}")
+    logger.info(
+        f"[qwen3.0.6b.reconstruct.ratio.finetune] baseline ppl: {baseline_ppl:.6f}"
+    )
 
     cfg = _prune_cfg(args)
     diagnose_t0 = time.perf_counter()
@@ -341,12 +348,12 @@ def main():
         prune_ratio=args.preview_prune_ratio,
     )
     diagnose_seconds = time.perf_counter() - diagnose_t0
-    print(
+    logger.info(
         f"[qwen3.0.6b.reconstruct.ratio.finetune] diagnose time: {diagnose_seconds / 60:.2f} min"
     )
-    print("[qwen3.0.6b.reconstruct.ratio.finetune] prune_diagnose():")
+    logger.info("[qwen3.0.6b.reconstruct.ratio.finetune] prune_diagnose():")
     diagnose_summary = diagnose.summary()
-    print(diagnose_summary)
+    logger.info(diagnose_summary)
 
     # Release leftovers of the diagnose dry-run before the real pruning.
     gc.collect()
@@ -362,17 +369,17 @@ def main():
     pruned_ppl = eval_wikitext2_ppl(
         model, eval_batches, seq_len=args.seq_len, device=runtime_device
     )
-    print("[qwen3.0.6b.reconstruct.ratio.finetune] PruneReport:")
-    print(json.dumps(report.as_dict(), ensure_ascii=False, indent=2))
-    print(
+    logger.info("[qwen3.0.6b.reconstruct.ratio.finetune] PruneReport:")
+    logger.info(json.dumps(report.as_dict(), ensure_ascii=False, indent=2))
+    logger.info(
         f"[qwen3.0.6b.reconstruct.ratio.finetune] params {report.params_before:,} -> "
         f"{report.params_after:,}, cut {100 * (1 - report.params_after / report.params_before):.2f}%"
     )
-    print(
+    logger.info(
         f"[qwen3.0.6b.reconstruct.ratio.finetune] ppl {baseline_ppl:.6f} -> "
         f"{pruned_ppl:.6f}"
     )
-    print(
+    logger.info(
         f"[qwen3.0.6b.reconstruct.ratio.finetune] prune time: {prune_seconds / 60:.2f} min"
     )
 
@@ -410,12 +417,12 @@ def main():
         finetuned_ppl = eval_wikitext2_ppl(
             model, eval_batches, seq_len=args.seq_len, device=runtime_device
         )
-        print(
+        logger.info(
             f"[qwen3.0.6b.reconstruct.ratio.finetune] finetune loss "
             f"{finetune_stats['initial_loss']:.6f} -> {finetune_stats['final_loss']:.6f}, "
             f"{finetune_seconds / 60:.2f} min"
         )
-        print(
+        logger.info(
             f"[qwen3.0.6b.reconstruct.ratio.finetune] finetuned ppl: {finetuned_ppl:.6f}"
         )
 
@@ -427,7 +434,7 @@ def main():
             save_model_status = "saved"
         except Exception as exc:  # NPU OOM raises RuntimeError, not OSError
             save_model_status = f"failed: {type(exc).__name__}: {exc}"
-            print(
+            logger.info(
                 f"[qwen3.0.6b.reconstruct.ratio.finetune] save_pretrained skipped: {save_model_status}"
             )
     dump_json(save_dir / "prune_report.json", report.as_dict())
@@ -465,9 +472,9 @@ def main():
         },
     )
     if save_model_status == "saved":
-        print(f"[qwen3.0.6b.reconstruct.ratio.finetune] saved to {save_dir}")
+        logger.info(f"[qwen3.0.6b.reconstruct.ratio.finetune] saved to {save_dir}")
     else:
-        print(
+        logger.info(
             f"[qwen3.0.6b.reconstruct.ratio.finetune] model weights not saved "
             f"({save_model_status}); metrics still written to {save_dir}"
         )

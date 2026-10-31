@@ -325,7 +325,9 @@ class AccuracyBasedAutoCalibrationBase:  # pylint: disable=R0902
             # copy quant config when node is anonymous
             if key not in quant_config:
                 LOGGER.logi(
-                    "Node {} is an anonymous node, its quant config is copied on its type"
+                    "Node {} is an anonymous node, its quant config is copied on its type".format(
+                        key
+                    )
                 )
                 anonymous_node_name = (
                     self.original_graph.get_node_by_name(key).type + '::common'

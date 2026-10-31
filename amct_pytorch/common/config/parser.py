@@ -367,8 +367,8 @@ def check_quant_op_constraint(
     if quant_data_comb in support_quant_dtype_comb and mod.weight.shape[1] % 64 != 0:
         LOGGER.logw(
             "layer:{} cannot be quantized, act_dtype and wts dtype {} has a shape requirement: "
-            "the cin length should be an integer multiple of 64".format(
-                layer_name, quant_data_comb
+            "the cin length {} is not an integer multiple of 64".format(
+                layer_name, quant_data_comb, mod.weight.shape[1]
             )
         )
         return False
@@ -387,8 +387,11 @@ def check_quant_op_constraint(
     ):
         LOGGER.logw(
             "layer:{} cannot be quantized, act_dtype and wts dtype {} has a shape requirement: "
-            "ceildiv(cin, 32) must be an even number".format(
-                layer_name, quant_data_comb
+            "ceildiv(cin={}, 32)={} is not an even number".format(
+                layer_name,
+                quant_data_comb,
+                mod.weight.shape[1],
+                (mod.weight.shape[1] + 31) // 32,
             )
         )
         return False
@@ -398,8 +401,11 @@ def check_quant_op_constraint(
         if mod.weight.shape[1] % 64 != 0 or mod.weight.shape[0] % 64 != 0:
             LOGGER.logw(
                 "layer:{} cannot be quantized, act_dtype and wts dtype {} has shape requirement "
-                "cin and cout length should be integer multiple of 64".format(
-                    layer_name, quant_data_comb
+                "cin {} and cout {} are not integer multiples of 64".format(
+                    layer_name,
+                    quant_data_comb,
+                    mod.weight.shape[1],
+                    mod.weight.shape[0],
                 )
             )
             return False
@@ -408,8 +414,11 @@ def check_quant_op_constraint(
         if mod.weight.shape[0] % 8 != 0 or mod.weight.shape[1] % 8 != 0:
             LOGGER.logw(
                 "layer:{} cannot be quantized, act_dtype and wts dtype {} has a shape requirement:"
-                " cin and cout lengths should be integer multiples of 8".format(
-                    layer_name, quant_data_comb
+                " cin {} and cout {} are not integer multiples of 8".format(
+                    layer_name,
+                    quant_data_comb,
+                    mod.weight.shape[1],
+                    mod.weight.shape[0],
                 )
             )
             return False

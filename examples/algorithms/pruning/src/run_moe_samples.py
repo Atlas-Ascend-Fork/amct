@@ -26,17 +26,25 @@ Run: python3 src/run_moe_samples.py
 """
 
 import copy
+import logging
 
 from utils import make_moe, moe_data, count_params, num_experts
 import amct_pytorch as amct
+
 from amct_pytorch.pruning import MOE_VARIANCE_MENU_CFG, PruneReport
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+logging.getLogger("Log").propagate = False
 
 
 def fixed_ratio_expert_prune():
     base = make_moe()
     calib = moe_data()
     before = count_params(base)
-    print(f"[moe] original: params {before:,}, experts per layer {num_experts(base)}")
+    logger.info(
+        f"[moe] original: params {before:,}, experts per layer {num_experts(base)}"
+    )
     for method in ("activation_count", "mass_variance"):
         model = copy.deepcopy(base)
         kwargs = {"prune_ratio": 0.5}
@@ -45,7 +53,7 @@ def fixed_ratio_expert_prune():
         cfg = {"methods": {"moe": {"name": method, "kwargs": kwargs}}}
         amct.prune(model, cfg, data=calib)
         _ = model(calib[0])
-        print(
+        logger.info(
             f"[moe.{method:16s}] pruned 50% of experts: params -> {count_params(model):,}, "
             f"experts per layer {num_experts(model)} forward OK"
         )
@@ -62,12 +70,12 @@ def variance_menu_expert_prune():
     amct.prune(model, cfg, data=calib, eval_data=val, report=report)
     _ = model(val[0])
     cut = 1 - report.params_after / report.params_before
-    print(
+    logger.info(
         f"[moe.variance_menu] weights {report.params_before:,} -> {report.params_after:,} "
         f"(cut {100 * cut:.1f}%)"
     )
     chosen = next((e.detail for e in report.events if e.stage == "menu-select"), None)
-    print(
+    logger.info(
         f"[moe.variance_menu] {chosen}, experts per layer {num_experts(model)} forward OK"
     )
     assert count_params(model) < before

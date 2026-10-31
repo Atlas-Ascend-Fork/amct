@@ -30,6 +30,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+import logging
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+logging.getLogger("Log").propagate = False
+
 
 ROOT = Path(__file__).resolve().parents[4]
 PRUNE_SCRIPT = Path(__file__).with_name(
@@ -106,7 +112,7 @@ def _run_pruning(args: argparse.Namespace, prune_output: Path) -> tuple[Path, st
         command += ["--ratio-grid", args.ratio_grid]
     if args.eval_batches is not None:
         command += ["--eval-batches", str(args.eval_batches)]
-    print("[prune-command]", " ".join(command), flush=True)
+    logger.info("[prune-command] %s", " ".join(command))
     process = subprocess.Popen(
         command,
         cwd=ROOT,
@@ -118,7 +124,7 @@ def _run_pruning(args: argparse.Namespace, prune_output: Path) -> tuple[Path, st
     lines = []
     assert process.stdout is not None
     for line in process.stdout:
-        print(line, end="", flush=True)
+        logger.info("%s", line.rstrip())
         lines.append(line)
     process.wait()
     output = "".join(lines)
@@ -168,7 +174,7 @@ def _run_quant_eval(
         command += ["--algos", *args.quant_algos]
     if args.attn_linear_param_dir:
         command += ["--attn_linear_param_dir", args.attn_linear_param_dir]
-    print("[quant-command]", " ".join(command), flush=True)
+    logger.info("[quant-command] %s", " ".join(command))
     process = subprocess.Popen(
         command,
         cwd=ROOT,
@@ -180,7 +186,7 @@ def _run_quant_eval(
     lines = []
     assert process.stdout is not None
     for line in process.stdout:
-        print(line, end="", flush=True)
+        logger.info("%s", line.rstrip())
         lines.append(line)
     process.wait()
     output = "".join(lines)
@@ -190,10 +196,8 @@ def _run_quant_eval(
 
 def main() -> None:
     args = parse_args()
-    print(
-        "[run-config]",
-        json.dumps(vars(args), ensure_ascii=True, sort_keys=True),
-        flush=True,
+    logger.info(
+        "[run-config] %s", json.dumps(vars(args), ensure_ascii=True, sort_keys=True)
     )
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -239,7 +243,7 @@ def main() -> None:
     result_path.write_text(
         json.dumps(result, indent=2, ensure_ascii=True), encoding="utf-8"
     )
-    print("Saved:", result_path, flush=True)
+    logger.info("Saved: %s", result_path)
     if quant_returncode:
         raise RuntimeError(
             f"quantization evaluation failed with exit code {quant_returncode}"

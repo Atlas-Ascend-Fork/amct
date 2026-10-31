@@ -384,7 +384,7 @@ class LlmDeployWorkflow:
         log_mtp_selection(plan.mtp, module_bits=plan.module_bits)
         if plan.unmatched_ignore_patterns:
             logger.warning(
-                "ignore_layers patterns matched no modules: {}",
+                "deploy: ignore_layers patterns matched no modules: {}",
                 sorted(plan.unmatched_ignore_patterns),
             )
         self._copy_support_files()
@@ -487,7 +487,9 @@ class LlmDeployWorkflow:
             )
         index_path = self._refresh_weight_index(original_index, updated_weight_map)
         self._refresh_config(quant_ignore_layers)
-        logger.info("Exported tensor-converted model to {}", self.output_dir)
+        logger.info(
+            "Exported tensor-converted model (legacy tensorwise) to {}", self.output_dir
+        )
         logger.info("Refreshed weight index at {}", index_path)
         return {
             "index_path": index_path,

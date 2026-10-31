@@ -646,7 +646,7 @@ class GraphChecker:
         ):
             LOGGER.logw(
                 f'This module {node.name} is not supported for quantization '
-                'because its input data is dimensionality reduced.'
+                'because its input data is dimensionality reduced (quant check).'
             )
             return False
 
@@ -765,7 +765,7 @@ class GraphChecker:
         ):
             LOGGER.logw(
                 f'This module {node.name} is not supported for quantization '
-                'because its input data is dimensionality reduced.'
+                'because its input data is dimensionality reduced (prune check).'
             )
             return False
         return True
@@ -963,7 +963,7 @@ def _check_rnn_weight_limit(node):
     if weight_shape[0] != 1:
         LOGGER.logd(
             'Node {} cannot be quantized '
-            'for its num_directions is not equal to 1'.format(node.name)
+            'for its weight num_directions is not equal to 1'.format(node.name)
         )
         return False
 
@@ -973,7 +973,9 @@ def _check_rnn_weight_limit(node):
     if recurrence_weight_shape[0] != 1:
         LOGGER.logd(
             'Node {} cannot be quantized '
-            'for its num_directions is not equal to 1'.format(node.name)
+            'for its recurrence_weight num_directions is not equal to 1'.format(
+                node.name
+            )
         )
         return False
     return True

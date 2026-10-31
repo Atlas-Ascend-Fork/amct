@@ -51,8 +51,8 @@ python3 src/run_qwen_samples.py --model_path=/data/Qwen2-7b/
 If the following information appears, it indicates that quantization is successful:
 
 ```none
-Test time taken:  1.0 min  59.24865388870239 s
-Score:  5.477707
+INFO Test time taken: 1 min 59 s
+INFO Score: 5.477707
 ```
 
 Where Score is the quantized model PPL. For specific values, refer to the following table:

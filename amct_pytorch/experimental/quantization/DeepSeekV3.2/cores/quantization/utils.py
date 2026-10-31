@@ -24,7 +24,7 @@ def load_quant_params(layer, quant_params):
     for name, mod in layer.named_modules():
         if isinstance(mod, ActivationQuantizer):
             if mod.is_per_tensor:
-                logger.info(name, "load param")
+                logger.info("{} load param", name)
                 mod.scale = quant_params[f"{name}.scale"]
                 mod.zero = quant_params[f"{name}.zero"]
                 mod.maxval.data = quant_params[f"{name}.maxval"]

@@ -219,7 +219,8 @@ class Recorder(nn.Module):  # pylint: disable=R0902
             )
             self.__counts['act_cali_num'] += 1
         LOGGER.logd(
-            "Record layer '{}' data's quant factors!".format(layers_name), 'Recorder'
+            "Record layer '{}' act data's quant factors!".format(layers_name),
+            'Recorder',
         )
 
     def _add_wts_factors(self, layers_name, quant_factors):
@@ -272,5 +273,6 @@ class Recorder(nn.Module):  # pylint: disable=R0902
             record_kv_cache_scale_offset(self.records, layer_name, scale, offset)
             self.__counts['kv_cache_quant_num'] += 1
         LOGGER.logd(
-            "Record layer '{}' data's quant factors!".format(layers_name), 'Recorder'
+            "Record layer '{}' kv_cache data's quant factors!".format(layers_name),
+            'Recorder',
         )

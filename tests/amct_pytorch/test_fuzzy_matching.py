@@ -92,11 +92,11 @@ class TestCast(unittest.TestCase):
         cls.test_model = TestModel().to(torch.bfloat16)
         cls.inputs = torch.randn(64, 64).to(torch.bfloat16)
         cls.ori_out = cls.test_model(cls.inputs)
-        logger.info('TestCast START!')
+        logger.info('%s START!', cls.__name__)
 
     @classmethod
     def tearDownClass(cls):
-        logger.info('TestCast END!')
+        logger.info('%s END!', cls.__name__)
 
     def setUp(self):
         mock_torch_npu = MagicMock()

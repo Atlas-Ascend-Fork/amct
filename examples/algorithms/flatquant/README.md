@@ -45,21 +45,21 @@ python3 src/run_llama2_samples.py --model_path <llama2 model path>
 
 若出现如下信息，则说明量化成功：
 ```none
-All done!
+INFO All done!
 ```
 
 其中日志里如下信息为评测任务结果（百分比准确率）：
 ```
-ACC: {'arc_challenge': 42.83, 'arc_easy': 70.88, 'hellaswag': 73.63, 'lambada_openai': 72.0, 'piqa': 77.48, 'winogrande': 67.88, 'acc_avg': 67.45}
+INFO ACC: {'arc_challenge': 42.83, 'arc_easy': 70.88, 'hellaswag': 73.63, 'lambada_openai': 72.0, 'piqa': 77.48, 'winogrande': 67.88, 'acc_avg': 67.45}
 ```
 如下信息为perplexity（wikitext, max length 512）：
 ```
-PPL score: 5.870388984680176
+INFO PPL score: 5.870388984680176
 ```
 如下信息为原始模型及真量化模型的推理速度（ms）:
 ```
-Time diff orig: 929.0580000000001
-Time diff after real quant: 139.707
+INFO Time diff orig: 929.0580000000001 ms
+INFO Time diff after real quant: 139.707 ms
 ```
 
 脚本运行结束后，在当前目录会生成并保存校准后参数`./outputs/llama2_7b/flat_matrices.pth`及量化日志文件`./amct_log/amct_pytorch.log`。如果想直接加载校准参数则使用如下设定：
@@ -76,7 +76,7 @@ python3 src/run_qwen_samples.py --model_path <qwen3-8b model path>
 
 若出现如下信息，则说明量化成功：
 ```none
-All done!
+INFO All done!
 ```
 
 示例展示的是模型量化前后根据prompt生成的不同结果：

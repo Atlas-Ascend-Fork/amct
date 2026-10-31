@@ -12,11 +12,11 @@
 # ----------------------------------------------------------------------------
 
 import argparse
+import logging
 import os
 
 from utils import get_qwen, build_enc, seed_everything, get_wikitext2
 import amct_pytorch as amct
-
 from amct_pytorch.experimental.flatquant.flat_quant_module.flat_utils import (
     save_flat_matrices,
     load_flat_matrices,
@@ -24,6 +24,10 @@ from amct_pytorch.experimental.flatquant.flat_quant_module.flat_utils import (
 from amct_pytorch.experimental.flatquant.flat_quant_module.train_utils import (
     cali_flat_quant,
 )
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+logging.getLogger("Log").propagate = False
 
 INT4_FLAT_QUANT_CFG = {
     'quant_cfg': {
@@ -118,10 +122,10 @@ if __name__ == '__main__':
 
     model.to(args.device)
     amct.convert(model)
-    print('quantize model to W4A4 with FlatQuant success.')
+    logger.info('quantize model to W4A4 with FlatQuant success.')
 
     # test quantize model
-    print(f'original model content: \n{ori_content}\n')
+    logger.info('original model content: %s', ori_content)
     # quatized model content generate
     quant_content = content_generate(model, tokenizer)
-    print(f'quantized model content: \n{quant_content}\n')
+    logger.info('quantized model content: %s', quant_content)

@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 import argparse
 import importlib.machinery
 import json
@@ -36,6 +37,10 @@ from datasets import load_dataset  # noqa: E402
 from modelscope import MsDataset  # noqa: E402
 from transformers import AutoModelForCausalLM, AutoTokenizer  # noqa: E402
 from amct_pytorch.pruning import PruneReport, prune_diagnose  # noqa: E402
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+logging.getLogger("Log").propagate = False
 
 
 def load_pileval(tokenizer, seq_len, sample_count, source):
@@ -96,11 +101,10 @@ def save_pruned_model(model, tokenizer, model_path, output_dir):
 
 def model_load_kwargs(trust_remote_code):
     if trust_remote_code:
-        print(
+        logger.info(
             "WARNING: --trust_remote_code is enabled. Custom Python from the "
             "model directory may execute under the current user. Use only with "
             "checkpoints you trust.",
-            flush=True,
         )
         return {"trust_remote_code": True}
     return {"trust_remote_code": False}
@@ -201,14 +205,13 @@ def main():
         "save_model_dir": args.save_model_dir,
     }
 
-    print("=== run parameters ===")
-    print(
+    logger.info("=== run parameters ===")
+    logger.info(
         json.dumps(
             run_parameters,
             ensure_ascii=False,
             indent=2,
         ),
-        flush=True,
     )
 
     tokenizer = AutoTokenizer.from_pretrained(
@@ -242,15 +245,14 @@ def main():
         tolerance=0.1,
     )
 
-    print("[prune-diagnose]")
-    print(
+    logger.info("[prune-diagnose]")
+    logger.info(
         json.dumps(
             asdict(diagnosis),
             ensure_ascii=False,
             indent=2,
             default=str,
         ),
-        flush=True,
     )
 
     report = PruneReport()
@@ -269,15 +271,15 @@ def main():
     with torch.no_grad():
         logits = model(calibration[0]).logits
 
-    print(f"size_budget={args.size_budget}")
-    print(f"experts: {experts_before[0]} -> {count_experts(model)[0]}")
-    print(f"parameters: {before} -> {after}")
-    print(f"parameter_reduction: {1.0 - after / before:.6f}")
-    print(f"budget_unreachable: {report.budget_unreachable}")
-    print(
+    logger.info(f"size_budget={args.size_budget}")
+    logger.info(f"experts: {experts_before[0]} -> {count_experts(model)[0]}")
+    logger.info(f"parameters: {before} -> {after}")
+    logger.info(f"parameter_reduction: {1.0 - after / before:.6f}")
+    logger.info(f"budget_unreachable: {report.budget_unreachable}")
+    logger.info(
         f"forward: shape={tuple(logits.shape)}, finite={bool(torch.isfinite(logits).all())}"
     )
-    print(f"calibration_to_prune_seconds: {prune_finish - workflow_start:.2f}")
+    logger.info(f"calibration_to_prune_seconds: {prune_finish - workflow_start:.2f}")
 
     report_dir = Path(args.report_dir)
     report_dir.mkdir(parents=True, exist_ok=True)
@@ -305,7 +307,7 @@ def main():
             indent=2,
             default=str,
         )
-    print(f"report: {report_path}")
+    logger.info(f"report: {report_path}")
 
     if args.save_model_dir:
         save_pruned_model(
@@ -314,7 +316,7 @@ def main():
             args.model_path,
             args.save_model_dir,
         )
-        print(f"model: {args.save_model_dir}")
+        logger.info(f"model: {args.save_model_dir}")
 
 
 if __name__ == "__main__":

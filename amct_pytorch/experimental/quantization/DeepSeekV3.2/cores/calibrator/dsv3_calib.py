@@ -207,7 +207,7 @@ def cali_quant(args, layer, layer_idx, inps, dev, param_prefix=None):
                     mod.clip_factor_w_min
                 )
 
-    logger.info(quant_parameters.keys())
+    logger.info("cali_quant quant_parameters keys: {}", quant_parameters.keys())
     if args.train_mode == "mla":
         torch.save(
             quant_parameters,

@@ -12,6 +12,7 @@
 # ----------------------------------------------------------------------------
 
 import argparse
+import logging
 import os
 
 from datetime import datetime
@@ -33,9 +34,13 @@ from amct_pytorch.experimental.flatquant.flat_quant_module.flat_utils import (
     save_flat_matrices,
     load_flat_matrices,
 )
+
 from amct_pytorch.experimental.flatquant.flat_quant_module.train_utils import (
     cali_flat_quant,
 )
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+logging.getLogger("Log").propagate = False
 
 
 if __name__ == '__main__':
@@ -85,12 +90,12 @@ if __name__ == '__main__':
 
     # Phase1: quantize model
     amct.quantize(model, INT4_FLAT_QUANT_CFG)
-    logger.info(f"Model after quantization: \n{model}")
+    logger.info("Model after quantization: %s", model)
 
     # Phase2: inference calibration model to cal quantized factors
     if args.load_matrix:
         model = load_flat_matrices(model, args.flat_matrix_path)
-        logger.info(f"Model after loading matrices: \n{model}")
+        logger.info("Model after loading matrices: %s", model)
     else:
         cali_flat_quant(model, calib_dataset, args.device)
         save_flat_matrices(model, args.flat_matrix_path)
@@ -104,7 +109,7 @@ if __name__ == '__main__':
     # Phase3: convert deploy model
     amct.convert(model)
     torch_npu.npu.empty_cache()
-    logger.info(f"Model converted: \n{model}")
+    logger.info("Model converted: %s", model)
 
     # Inference speed of (real) quantized model
     t1_real_quant = datetime.now()

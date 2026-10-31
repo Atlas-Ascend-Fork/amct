@@ -28,6 +28,8 @@ applies fixed-ratio pruning and reports baseline/pruned PPL and PruneReport.
 
 from __future__ import annotations
 
+import logging
+
 import argparse
 import copy
 import json
@@ -54,6 +56,10 @@ import amct_pytorch as amct  # noqa: E402
 from amct_pytorch.pruning import PruneReport, prune_diagnose  # noqa: E402
 
 import torch  # noqa: E402
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+logging.getLogger("Log").propagate = False
 
 
 def _runtime_args(args):
@@ -257,8 +263,8 @@ def parse_args():
 
 def main():
     args = parse_args()
-    print("[qwen3_0_6b.low_variance.ratio] runtime args:")
-    print(json.dumps(_runtime_args(args), ensure_ascii=False, indent=2))
+    logger.info("[qwen3_0_6b.low_variance.ratio] runtime args:")
+    logger.info(json.dumps(_runtime_args(args), ensure_ascii=False, indent=2))
     save_dir = Path(args.save_dir)
     dump_repro_metadata(save_dir)
 
@@ -275,17 +281,19 @@ def main():
     eval_batches = build_wikitext2_batches(tokenizer, seq_len=args.seq_len)
     eval_batches = eval_batches[: args.eval_batches]
 
-    print(f"[qwen3_0_6b.low_variance.ratio] parameters before: {count_params(model):,}")
+    logger.info(
+        f"[qwen3_0_6b.low_variance.ratio] parameters before: {count_params(model):,}"
+    )
     baseline_ppl = eval_wikitext2_ppl(
         model, eval_batches, seq_len=args.seq_len, device=args.device
     )
-    print(f"[qwen3_0_6b.low_variance.ratio] baseline ppl: {baseline_ppl:.6f}")
+    logger.info(f"[qwen3_0_6b.low_variance.ratio] baseline ppl: {baseline_ppl:.6f}")
 
     cfg = _prune_cfg(args.prune_ratio)
     diagnose_summary = None
     diagnose_seconds = None
     if args.skip_diagnose:
-        print(
+        logger.info(
             "[qwen3_0_6b.low_variance.ratio] prune_diagnose(): skipped (--skip-diagnose)"
         )
     else:
@@ -297,10 +305,10 @@ def main():
             prune_ratio=args.preview_prune_ratio,
         )
         diagnose_seconds = time.perf_counter() - diagnose_t0
-        print("[qwen3_0_6b.low_variance.ratio] prune_diagnose():")
+        logger.info("[qwen3_0_6b.low_variance.ratio] prune_diagnose():")
         diagnose_summary = diagnose.summary()
-        print(diagnose_summary)
-        print(
+        logger.info(diagnose_summary)
+        logger.info(
             f"[qwen3_0_6b.low_variance.ratio] diagnose time: {diagnose_seconds / 60:.2f} min"
         )
 
@@ -312,14 +320,18 @@ def main():
     pruned_ppl = eval_wikitext2_ppl(
         model, eval_batches, seq_len=args.seq_len, device=args.device
     )
-    print("[qwen3_0_6b.low_variance.ratio] PruneReport:")
-    print(json.dumps(report.as_dict(), ensure_ascii=False, indent=2))
-    print(
+    logger.info("[qwen3_0_6b.low_variance.ratio] PruneReport:")
+    logger.info(json.dumps(report.as_dict(), ensure_ascii=False, indent=2))
+    logger.info(
         f"[qwen3_0_6b.low_variance.ratio] params {report.params_before:,} -> "
         f"{report.params_after:,}, cut {100 * (1 - report.params_after / report.params_before):.2f}%"
     )
-    print(f"[qwen3_0_6b.low_variance.ratio] ppl {baseline_ppl:.6f} -> {pruned_ppl:.6f}")
-    print(f"[qwen3_0_6b.low_variance.ratio] prune time: {prune_seconds / 60:.2f} min")
+    logger.info(
+        f"[qwen3_0_6b.low_variance.ratio] ppl {baseline_ppl:.6f} -> {pruned_ppl:.6f}"
+    )
+    logger.info(
+        f"[qwen3_0_6b.low_variance.ratio] prune time: {prune_seconds / 60:.2f} min"
+    )
 
     save_model_status = "not_requested"
     if args.save_model:
@@ -329,7 +341,7 @@ def main():
             save_model_status = "saved"
         except Exception as exc:  # NPU OOM raises RuntimeError, not OSError
             save_model_status = f"failed: {type(exc).__name__}: {exc}"
-            print(
+            logger.info(
                 f"[qwen3_0_6b.low_variance.ratio] save_pretrained skipped: {save_model_status}"
             )
     dump_json(save_dir / "prune_report.json", report.as_dict())
@@ -363,7 +375,7 @@ def main():
             "seq_len": args.seq_len,
         },
     )
-    print(f"[qwen3_0_6b.low_variance.ratio] saved to {save_dir}")
+    logger.info(f"[qwen3_0_6b.low_variance.ratio] saved to {save_dir}")
 
 
 if __name__ == "__main__":

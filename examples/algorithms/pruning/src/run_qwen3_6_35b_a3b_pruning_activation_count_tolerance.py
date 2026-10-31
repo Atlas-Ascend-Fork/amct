@@ -28,6 +28,8 @@ applies tolerance-driven pruning and saves the pruned model/report if requested.
 
 from __future__ import annotations
 
+import logging
+
 import argparse
 import copy
 import gc
@@ -55,6 +57,10 @@ _disable_torchaudio_for_transformers()
 
 import amct_pytorch as amct  # noqa: E402  (must import after the torchaudio patch)
 from amct_pytorch.pruning import PruneReport, prune_diagnose  # noqa: E402
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+logging.getLogger("Log").propagate = False
 
 
 def _parse_ratio(text):
@@ -204,8 +210,8 @@ def parse_args():
 
 def main():
     args = parse_args()
-    print("[qwen3.6.activation_count.tolerance] runtime args:")
-    print(json.dumps(_runtime_args(args), ensure_ascii=False, indent=2))
+    logger.info("[qwen3.6.activation_count.tolerance] runtime args:")
+    logger.info(json.dumps(_runtime_args(args), ensure_ascii=False, indent=2))
     save_dir = Path(args.save_dir)
     dump_repro_metadata(save_dir)
 
@@ -222,13 +228,15 @@ def main():
     eval_batches = build_wikitext2_batches(tokenizer, seq_len=args.seq_len)
     eval_batches = eval_batches[: args.eval_batches]
 
-    print(
+    logger.info(
         f"[qwen3.6.activation_count.tolerance] parameters before: {count_params(model):,}"
     )
     baseline_ppl = eval_wikitext2_ppl(
         model, eval_batches, seq_len=args.seq_len, device=runtime_device
     )
-    print(f"[qwen3.6.activation_count.tolerance] baseline ppl: {baseline_ppl:.6f}")
+    logger.info(
+        f"[qwen3.6.activation_count.tolerance] baseline ppl: {baseline_ppl:.6f}"
+    )
 
     cfg = _prune_cfg()
     diagnose = prune_diagnose(
@@ -238,9 +246,9 @@ def main():
         prune_ratio=args.preview_prune_ratio,
         tolerance=args.tolerance,
     )
-    print("[qwen3.6.activation_count.tolerance] prune_diagnose():")
+    logger.info("[qwen3.6.activation_count.tolerance] prune_diagnose():")
     diagnose_summary = diagnose.summary()
-    print(diagnose_summary)
+    logger.info(diagnose_summary)
 
     # Release leftovers of the diagnose dry-run (a failed full-model copy can
     # leave cyclic garbage alive on a 2-card 35B deployment) before searching.
@@ -267,17 +275,17 @@ def main():
     pruned_ppl = eval_wikitext2_ppl(
         model, eval_batches, seq_len=args.seq_len, device=runtime_device
     )
-    print("[qwen3.6.activation_count.tolerance] PruneReport:")
-    print(json.dumps(report.as_dict(), ensure_ascii=False, indent=2))
-    print(
+    logger.info("[qwen3.6.activation_count.tolerance] PruneReport:")
+    logger.info(json.dumps(report.as_dict(), ensure_ascii=False, indent=2))
+    logger.info(
         f"[qwen3.6.activation_count.tolerance] params {report.params_before:,} -> "
         f"{report.params_after:,}, cut {100 * (1 - report.params_after / report.params_before):.2f}%"
     )
-    print(
+    logger.info(
         f"[qwen3.6.activation_count.tolerance] ppl {baseline_ppl:.6f} -> "
         f"{pruned_ppl:.6f}"
     )
-    print(
+    logger.info(
         f"[qwen3.6.activation_count.tolerance] prune time: {prune_seconds / 60:.2f} min"
     )
 
@@ -287,7 +295,7 @@ def main():
             model.save_pretrained(save_dir)
             tokenizer.save_pretrained(save_dir)
         except OSError as exc:
-            print(
+            logger.info(
                 f"[qwen3.6.activation_count.tolerance] save_pretrained skipped: "
                 f"{type(exc).__name__}: {exc}"
             )
@@ -319,7 +327,7 @@ def main():
             else "builtin_default",
         },
     )
-    print(f"[qwen3.6.activation_count.tolerance] saved to {save_dir}")
+    logger.info(f"[qwen3.6.activation_count.tolerance] saved to {save_dir}")
 
 
 if __name__ == "__main__":

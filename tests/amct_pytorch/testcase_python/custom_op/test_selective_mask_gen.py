@@ -73,7 +73,7 @@ class TestSelectiveMaskGen(unittest.TestCase):
             PRUNE_AXIS_KEY: prune_axis,
         }
         logger.info('ori_data: %s', tensor_input.type())
-        logger.info(tensor_input[0])
+        logger.info('test_algo_001 tensor_input[0]: %s', tensor_input[0])
         # call seletive_mask_gen_op
         prune_mask = selective_mask_gen(
             tensor_input,
@@ -81,8 +81,8 @@ class TestSelectiveMaskGen(unittest.TestCase):
             algo_param[GROUP_SIZE_KEY],
             algo_param[PRUNE_SIZE],
         )
-        logger.info(prune_mask[0])
-        logger.info(prune_mask.shape)
+        logger.info('test_algo_001 prune_mask[0]: %s', prune_mask[0])
+        logger.info('test_algo_001 prune_mask shape: %s', prune_mask.shape)
         mask_counter = np.sum(prune_mask.cpu().numpy()).astype(int)
         shape_counter = 1
         for val in tensor_shape:
@@ -101,7 +101,7 @@ class TestSelectiveMaskGen(unittest.TestCase):
             PRUNE_AXIS_KEY: prune_axis,
         }
         logger.info('ori_data: %s', tensor_input.type())
-        logger.info(tensor_input[0])
+        logger.info('test_algo_002 tensor_input[0]: %s', tensor_input[0])
         # call seletive_mask_gen_op
         prune_mask = selective_mask_gen(
             tensor_input,
@@ -109,8 +109,8 @@ class TestSelectiveMaskGen(unittest.TestCase):
             algo_param[GROUP_SIZE_KEY],
             algo_param[PRUNE_SIZE],
         )
-        logger.info(prune_mask[0])
-        logger.info(prune_mask.shape)
+        logger.info('test_algo_002 prune_mask[0]: %s', prune_mask[0])
+        logger.info('test_algo_002 prune_mask shape: %s', prune_mask.shape)
 
         # call numpy seletive_mask_gen_op
         prune_mask_faker = SelectiveMaskFaker(
@@ -119,12 +119,12 @@ class TestSelectiveMaskGen(unittest.TestCase):
             algo_param[PRUNE_SIZE],
             algo_param[PRUNE_AXIS_KEY],
         ).do()
-        logger.info(prune_mask_faker.shape)
-        logger.info(prune_mask_faker[0])
+        logger.info('test_algo_002 prune_mask_faker shape: %s', prune_mask_faker.shape)
+        logger.info('test_algo_002 prune_mask_faker[0]: %s', prune_mask_faker[0])
 
         # compare
         is_equal = (prune_mask_faker.cpu().numpy() == prune_mask.cpu().numpy()).all()
-        logger.info(is_equal)
+        logger.info('test_algo_002 is_equal: %s', is_equal)
         self.assertTrue(is_equal)
 
     def test_algo_003(self):
@@ -139,7 +139,7 @@ class TestSelectiveMaskGen(unittest.TestCase):
             PRUNE_AXIS_KEY: prune_axis,
         }
         logger.info('ori_data: %s', tensor_input.type())
-        logger.info(tensor_input[0])
+        logger.info('test_algo_003 tensor_input[0]: %s', tensor_input[0])
         # call seletive_mask_gen_op
         prune_mask = selective_mask_gen(
             tensor_input,
@@ -147,8 +147,8 @@ class TestSelectiveMaskGen(unittest.TestCase):
             algo_param[GROUP_SIZE_KEY],
             algo_param[PRUNE_SIZE],
         )
-        logger.info(prune_mask[0])
-        logger.info(prune_mask.shape)
+        logger.info('test_algo_003 prune_mask[0]: %s', prune_mask[0])
+        logger.info('test_algo_003 prune_mask shape: %s', prune_mask.shape)
 
         # call numpy seletive_mask_gen_op
         prune_mask_faker = SelectiveMaskFaker(
@@ -157,12 +157,12 @@ class TestSelectiveMaskGen(unittest.TestCase):
             algo_param[PRUNE_SIZE],
             algo_param[PRUNE_AXIS_KEY],
         ).do()
-        logger.info(prune_mask_faker.shape)
-        logger.info(prune_mask_faker[0])
+        logger.info('test_algo_003 prune_mask_faker shape: %s', prune_mask_faker.shape)
+        logger.info('test_algo_003 prune_mask_faker[0]: %s', prune_mask_faker[0])
 
         # compare
         is_equal = (prune_mask_faker.cpu().numpy() == prune_mask.cpu().numpy()).all()
-        logger.info(is_equal)
+        logger.info('test_algo_003 is_equal: %s', is_equal)
         self.assertTrue(is_equal)
 
     def test_algo_004(self):
@@ -177,7 +177,7 @@ class TestSelectiveMaskGen(unittest.TestCase):
             PRUNE_AXIS_KEY: prune_axis,
         }
         logger.info('ori_data: %s', tensor_input.type())
-        logger.info(tensor_input[0])
+        logger.info('test_algo_004 tensor_input[0]: %s', tensor_input[0])
         # call seletive_mask_gen_op
         prune_mask = selective_mask_gen(
             tensor_input,
@@ -185,8 +185,8 @@ class TestSelectiveMaskGen(unittest.TestCase):
             algo_param[GROUP_SIZE_KEY],
             algo_param[PRUNE_SIZE],
         )
-        logger.info(prune_mask[0])
-        logger.info(prune_mask.shape)
+        logger.info('test_algo_004 prune_mask[0]: %s', prune_mask[0])
+        logger.info('test_algo_004 prune_mask shape: %s', prune_mask.shape)
 
         # call numpy seletive_mask_gen_op
         prune_mask_faker = SelectiveMaskFaker(
@@ -195,12 +195,12 @@ class TestSelectiveMaskGen(unittest.TestCase):
             algo_param[PRUNE_SIZE],
             algo_param[PRUNE_AXIS_KEY],
         ).do()
-        logger.info(prune_mask_faker.shape)
-        logger.info(prune_mask_faker[0])
+        logger.info('test_algo_004 prune_mask_faker shape: %s', prune_mask_faker.shape)
+        logger.info('test_algo_004 prune_mask_faker[0]: %s', prune_mask_faker[0])
 
         # compare
         is_equal = (prune_mask_faker.cpu().numpy() == prune_mask.cpu().numpy()).all()
-        logger.info(is_equal)
+        logger.info('test_algo_004 is_equal: %s', is_equal)
         self.assertTrue(is_equal)
 
     def test_algo_005(self):
@@ -215,7 +215,7 @@ class TestSelectiveMaskGen(unittest.TestCase):
             PRUNE_AXIS_KEY: prune_axis,
         }
         logger.info('ori_data: %s', tensor_input.type())
-        logger.info(tensor_input[0])
+        logger.info('test_algo_005 tensor_input[0]: %s', tensor_input[0])
         # call seletive_mask_gen_op
         prune_mask = selective_mask_gen(
             tensor_input,
@@ -223,8 +223,8 @@ class TestSelectiveMaskGen(unittest.TestCase):
             algo_param[GROUP_SIZE_KEY],
             algo_param[PRUNE_SIZE],
         )
-        logger.info(prune_mask[0])
-        logger.info(prune_mask.shape)
+        logger.info('test_algo_005 prune_mask[0]: %s', prune_mask[0])
+        logger.info('test_algo_005 prune_mask shape: %s', prune_mask.shape)
 
         # call numpy seletive_mask_gen_op
         prune_mask_faker = SelectiveMaskFaker(
@@ -233,12 +233,12 @@ class TestSelectiveMaskGen(unittest.TestCase):
             algo_param[PRUNE_SIZE],
             algo_param[PRUNE_AXIS_KEY],
         ).do()
-        logger.info(prune_mask_faker.shape)
-        logger.info(prune_mask_faker[0])
+        logger.info('test_algo_005 prune_mask_faker shape: %s', prune_mask_faker.shape)
+        logger.info('test_algo_005 prune_mask_faker[0]: %s', prune_mask_faker[0])
 
         # compare
         is_equal = (prune_mask_faker.cpu().numpy() == prune_mask.cpu().numpy()).all()
-        logger.info(is_equal)
+        logger.info('test_algo_005 is_equal: %s', is_equal)
         self.assertTrue(is_equal)
 
     def test_algo_006(self):
@@ -254,7 +254,7 @@ class TestSelectiveMaskGen(unittest.TestCase):
             'is_refresh': True,
         }
         logger.info('ori_data: %s', tensor_input.type())
-        logger.info(tensor_input[0])
+        logger.info('test_algo_006 tensor_input[0]: %s', tensor_input[0])
         # call seletive_mask_gen_op
         prune_mask = selective_mask_gen(
             tensor_input,
@@ -262,8 +262,8 @@ class TestSelectiveMaskGen(unittest.TestCase):
             algo_param[GROUP_SIZE_KEY],
             algo_param[PRUNE_SIZE],
         )
-        logger.info(prune_mask[0])
-        logger.info(prune_mask.shape)
+        logger.info('test_algo_006 prune_mask[0]: %s', prune_mask[0])
+        logger.info('test_algo_006 prune_mask shape: %s', prune_mask.shape)
 
         # call numpy seletive_mask_gen_op
         prune_mask_faker = SelectiveMaskFaker(
@@ -272,12 +272,12 @@ class TestSelectiveMaskGen(unittest.TestCase):
             algo_param[PRUNE_SIZE],
             algo_param[PRUNE_AXIS_KEY],
         ).do()
-        logger.info(prune_mask_faker.shape)
-        logger.info(prune_mask_faker[0])
+        logger.info('test_algo_006 prune_mask_faker shape: %s', prune_mask_faker.shape)
+        logger.info('test_algo_006 prune_mask_faker[0]: %s', prune_mask_faker[0])
 
         # compare
         is_equal = (prune_mask_faker.cpu().numpy() == prune_mask.cpu().numpy()).all()
-        logger.info(is_equal)
+        logger.info('test_algo_006 is_equal: %s', is_equal)
         self.assertTrue(is_equal)
 
     # @unittest.skip('*')
@@ -292,7 +292,7 @@ class TestSelectiveMaskGen(unittest.TestCase):
             PRUNE_AXIS_KEY: prune_axis,
         }
         logger.info('ori_data: %s', tensor_input.type())
-        logger.info(tensor_input[0])
+        logger.info('test_algo_007 tensor_input[0]: %s', tensor_input[0])
         # call seletive_mask_gen_op
         prune_mask = selective_mask_gen(
             tensor_input,
@@ -300,8 +300,8 @@ class TestSelectiveMaskGen(unittest.TestCase):
             algo_param[GROUP_SIZE_KEY],
             algo_param[PRUNE_SIZE],
         )
-        logger.info(prune_mask[0])
-        logger.info(prune_mask.shape)
+        logger.info('test_algo_007 prune_mask[0]: %s', prune_mask[0])
+        logger.info('test_algo_007 prune_mask shape: %s', prune_mask.shape)
 
         # call numpy seletive_mask_gen_op
         prune_mask_faker = SelectiveMaskFaker(
@@ -310,12 +310,12 @@ class TestSelectiveMaskGen(unittest.TestCase):
             algo_param[PRUNE_SIZE],
             algo_param[PRUNE_AXIS_KEY],
         ).do()
-        logger.info(prune_mask_faker.shape)
-        logger.info(prune_mask_faker[0])
+        logger.info('test_algo_007 prune_mask_faker shape: %s', prune_mask_faker.shape)
+        logger.info('test_algo_007 prune_mask_faker[0]: %s', prune_mask_faker[0])
 
         # compare
         is_equal = (prune_mask_faker.cpu().numpy() == prune_mask.cpu().numpy()).all()
-        logger.info(is_equal)
+        logger.info('test_algo_007 is_equal: %s', is_equal)
         self.assertTrue(is_equal)
 
 

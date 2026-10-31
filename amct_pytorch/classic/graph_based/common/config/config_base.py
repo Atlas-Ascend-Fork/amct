@@ -273,7 +273,7 @@ class ConfigBase:
             json.dump(ordered_config, fid, indent=4, separators=(',', ':'))
 
         LOGGER.logi(
-            'Generate config file:{} success!'.format(config_file),
+            'Generate config file:{} from proto success!'.format(config_file),
             module_name=_MODULE_NAME,
         )
 
@@ -502,7 +502,7 @@ class ConfigBase:
             with open(config_file, 'w') as fid:
                 json.dump(ordered_config, fid, indent=4, separators=(',', ':'))
             LOGGER.logi(
-                'Generate config file:{} success!'.format(config_file),
+                'Generate quant config file:{} success!'.format(config_file),
                 module_name=_MODULE_NAME,
             )
         elif self.enable_approximate:

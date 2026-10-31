@@ -53,11 +53,11 @@ class TestOFMR(unittest.TestCase):
         cls.test_model = TestModel().to(torch.bfloat16)
         cls.inputs = torch.randn(64, 64).to(torch.bfloat16)
         cls.ori_out = cls.test_model(cls.inputs)
-        logger.info('TestOFMR START!')
+        logger.info('%s START!', cls.__name__)
 
     @classmethod
     def tearDownClass(cls):
-        logger.info('TestOFMR END!')
+        logger.info('%s END!', cls.__name__)
 
     def setUp(self):
         mock_torch_npu = MagicMock()
@@ -368,11 +368,11 @@ class TestOFMRConv2d(unittest.TestCase):
         cls.test_model = TestModelConv2d().to(torch.bfloat16)
         cls.inputs = torch.randn(1, 32, 32, 32).to(torch.bfloat16)
         cls.ori_out = cls.test_model(cls.inputs)
-        logger.info('TestOFMR START!')
+        logger.info('%s START!', cls.__name__)
 
     @classmethod
     def tearDownClass(cls):
-        logger.info('TestOFMR END!')
+        logger.info('%s END!', cls.__name__)
 
     def setUp(self):
         mock_torch_npu = MagicMock()

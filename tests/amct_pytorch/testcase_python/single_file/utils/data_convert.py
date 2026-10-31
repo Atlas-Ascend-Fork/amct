@@ -324,7 +324,11 @@ def cvt_float16_to_hifuint8(x, round_mode="round", over_mode=True):
             fraction_int, fraction_hif8_bits, exponent
         )
     else:
-        logger.info("unknown round type")
+        logger.info(
+            "cvt_float16_to_hifuint8: unknown round type %s (round_mode=%s)",
+            cut_bit_type,
+            round_mode,
+        )
         return 0
     if carry_exp_status:
         exponent += 1
@@ -435,7 +439,11 @@ def cvt_float32_to_hifuint8(x, round_mode="round", over_mode=True):
             fraction_int, fraction_hif8_bits, exponent
         )
     else:
-        logger.info("unknown round type")
+        logger.info(
+            "cvt_float32_to_hifuint8: unknown round type %s (round_mode=%s)",
+            cut_bit_type,
+            round_mode,
+        )
         return 0
     if carry_exp_status:
         exponent += 1
@@ -556,7 +564,11 @@ def cvt_hifuint8_to_float(x, over_mode=True):
             m_value = 1
             exponent_value = (x & 7) - 23  # b00000111 = 7
         else:
-            logger.error("error,dot error")
+            logger.error(
+                "cvt_hifuint8_to_float: unexpected dot value %s in x=%s",
+                dot_4_value,
+                x,
+            )
             m_value = 0.0
             exponent_value = 0
         return sign * pow(2.0, exponent_value) * m_value

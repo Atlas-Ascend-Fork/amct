@@ -45,21 +45,21 @@ python3 src/run_llama2_samples.py --model_path <llama2 model path>
 
 If the following information appears, it indicates that quantization is successful:
 ```none
-All done!
+INFO All done!
 ```
 
 The following information in the log is the evaluation task result (percentage accuracy):
 ```
-ACC: {'arc_challenge': 42.83, 'arc_easy': 70.88, 'hellaswag': 73.63, 'lambada_openai': 72.0, 'piqa': 77.48, 'winogrande': 67.88, 'acc_avg': 67.45}
+INFO ACC: {'arc_challenge': 42.83, 'arc_easy': 70.88, 'hellaswag': 73.63, 'lambada_openai': 72.0, 'piqa': 77.48, 'winogrande': 67.88, 'acc_avg': 67.45}
 ```
 The following information is perplexity (wikitext, max length 512):
 ```
-PPL score: 5.870388984680176
+INFO PPL score: 5.870388984680176
 ```
 The following information is the inference speed (ms) of the original model and the true quantization model:
 ```
-Time diff orig: 929.0580000000001
-Time diff after real quant: 139.707
+INFO Time diff orig: 929.0580000000001 ms
+INFO Time diff after real quant: 139.707 ms
 ```
 
 After the script finishes running, calibration parameters `./outputs/llama2_7b/flat_matrices.pth` and quantization log file `./amct_log/amct_pytorch.log` will be generated and saved in the current directory. If you want to directly load calibration parameters, use the following settings:
@@ -76,7 +76,7 @@ python3 src/run_qwen_samples.py --model_path <qwen3-8b model path>
 
 If the following information appears, it indicates that quantization is successful:
 ```none
-All done!
+INFO All done!
 ```
 
 The example shows different generation results based on prompt before and after model quantization:

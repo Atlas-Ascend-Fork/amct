@@ -77,8 +77,8 @@ class TestDumpForward(unittest.TestCase):
 
         file_path = os.path.join(self.temp_folder, 'test_layer_activation_batch4.bin')
         read_data = files_util.parse_dump_data(file_path, with_type=True)
-        logger.info(data)
-        logger.info(torch.from_numpy(read_data))
+        logger.info('batch4 dump data: %s', data)
+        logger.info('batch4 read back: %s', torch.from_numpy(read_data))
         self.assertEqual((data - torch.from_numpy(read_data)).sum(), 0)
 
     def test_005_data_dump_right_nor_not(self):
@@ -87,8 +87,8 @@ class TestDumpForward(unittest.TestCase):
 
         file_path = os.path.join(self.temp_folder, 'test_layer_activation_batch5.bin')
         read_data = files_util.parse_dump_data(file_path, with_type=True)
-        logger.info(data)
-        logger.info(torch.from_numpy(read_data))
+        logger.info('batch5 dump data: %s', data)
+        logger.info('batch5 read back: %s', torch.from_numpy(read_data))
         self.assertEqual((data - torch.from_numpy(read_data)).sum(), 0)
 
     def test_006_int(self):
@@ -102,6 +102,6 @@ class TestDumpForward(unittest.TestCase):
 
         file_path = os.path.join(self.temp_folder, 'test_layer_activation_batch7.bin')
         read_data = files_util.parse_dump_data(file_path, with_type=True)
-        logger.info(data)
-        logger.info(torch.from_numpy(read_data))
+        logger.info('batch7 dump data: %s', data)
+        logger.info('batch7 read back: %s', torch.from_numpy(read_data))
         self.assertEqual((data - torch.from_numpy(read_data)).sum(), 0)

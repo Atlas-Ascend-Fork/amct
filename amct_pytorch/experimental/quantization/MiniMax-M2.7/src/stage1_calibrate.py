@@ -1,3 +1,18 @@
+# coding=utf-8
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """
 OSPlus SmoothQuant Stage 1：基于 HuggingFace Transformers 在 NPU 上完成校准与
 scale 搜索（MiniMax-M2.7，W4A4 MXFP4 目标）。
@@ -167,7 +182,8 @@ class OSPlusMigrator:
                 break
 
         logger.info(
-            f"  best_loss={best_loss:.4f}, scale range=[{best_scale.min():.3f}, {best_scale.max():.3f}]"
+            f"OSPlusMigrator best_loss={best_loss:.4f}, "
+            f"scale range=[{best_scale.min():.3f}, {best_scale.max():.3f}]"
         )
         return best_scale
 
@@ -228,7 +244,8 @@ class OSPlusMigratorGQA(OSPlusMigrator):
                 break
 
         logger.info(
-            f"  best_loss={best_loss:.4f}, scale range=[{best_scale.min():.3f}, {best_scale.max():.3f}]"
+            f"OSPlusMigratorGQA best_loss={best_loss:.4f}, "
+            f"scale range=[{best_scale.min():.3f}, {best_scale.max():.3f}]"
         )
         return best_scale
 

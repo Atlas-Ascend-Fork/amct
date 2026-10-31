@@ -13,12 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 import time
 import torch
 import tqdm
 import torch.nn as nn
 from datasets import load_dataset
 from transformers import AutoTokenizer, LlamaForCausalLM, AutoModelForCausalLM
+
+logger = logging.getLogger(__name__)
 
 
 def build_enc(model_path):
@@ -29,7 +32,7 @@ def build_enc(model_path):
 
 
 def get_llama2(model_path, seqlen=2048):
-    print(f'Getting official pretrained {model_path}')
+    logger.info('Getting official pretrained %s', model_path)
 
     model = LlamaForCausalLM.from_pretrained(
         model_path, torch_dtype=torch.float16, offload_folder="offload/"
@@ -43,7 +46,7 @@ def get_llama2(model_path, seqlen=2048):
 
 
 def get_qwen(model_path, seqlen=2048):
-    print(f'Getting official pretrained {model_path}')
+    logger.info('Getting official pretrained %s', model_path)
 
     model = AutoModelForCausalLM.from_pretrained(
         model_path, device_map="auto", torch_dtype=torch.float16
@@ -57,7 +60,7 @@ def get_qwen(model_path, seqlen=2048):
 
 
 def get_test_dataset(enc, seqlen):
-    print('Loading dataset: Wikitext2')
+    logger.info('Loading dataset: Wikitext2')
     testenc = load_dataset('Salesforce/wikitext', 'wikitext-2-raw-v1', split='test')
     testenc = enc("\n\n".join(testenc["text"]), return_tensors="pt")
 
@@ -65,7 +68,7 @@ def get_test_dataset(enc, seqlen):
 
 
 def get_calib_dataset(tokenizer=None, n_samples=512, block_size=512):
-    print('Loading dataset: pileval')
+    logger.info('Loading dataset: pileval')
     dataset = load_dataset("mit-han-lab/pile-val-backup")
     dataset = dataset["validation"]
     dataset = dataset.shuffle(seed=42)
@@ -87,7 +90,7 @@ def get_calib_dataset(tokenizer=None, n_samples=512, block_size=512):
     # now concatenate all samples and split according to block size
     cat_samples = torch.cat(samples, dim=1)
     n_split = cat_samples.shape[1] // block_size
-    print(f" * Split into {n_split} blocks")
+    logger.info(" * Split into %d blocks", n_split)
     return [
         cat_samples[:, i * block_size : (i + 1) * block_size] for i in range(n_split)
     ]
@@ -99,7 +102,9 @@ def infer_model(model, testenc):
         model(testenc[:, : model.seqlen].to(next(model.parameters()).device))
     test_end_time = time.time()
     total_time = test_end_time - test_start_time
-    print('Calibration time taken: ', total_time // 60, 'min ', total_time % 60, 's')
+    logger.info(
+        'Calibration time taken: %d min %d s', total_time // 60, total_time % 60
+    )
 
 
 def test_ppl(model, testenc):
@@ -125,5 +130,5 @@ def test_ppl(model, testenc):
     ppl = torch.exp(torch.stack(nlls).sum() / (nsamples * model.seqlen))
 
     total_time = test_end_time - test_start_time
-    print('Test time taken: ', total_time // 60, 'min ', total_time % 60, 's')
-    print('Score: ', ppl.item())
+    logger.info('Test time taken: %d min %d s', total_time // 60, total_time % 60)
+    logger.info('Score: %s', ppl.item())

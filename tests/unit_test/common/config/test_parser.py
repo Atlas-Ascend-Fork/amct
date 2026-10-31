@@ -221,7 +221,8 @@ def test_check_quant_op_constraint_shape_skip_logs_warning(caplog):
         result = check_quant_op_constraint(mod, "wide", "NOT_QUANTIZE float4_e2m1", qc)
     assert result is False
     assert _warning_records(caplog, "layer:wide")
-    assert _warning_records(caplog, "integer multiple of 64")
+    assert _warning_records(caplog, "integer multiples of 64")
+    assert _warning_records(caplog, "cin 96 and cout 64")
 
 
 def test_check_quant_op_constraint_bias_skip_logs_warning(caplog):

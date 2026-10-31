@@ -102,7 +102,7 @@ class RetrainConfig:
         CONFIGURER.set_ability(enable_retrain=True, enable_prune=False)
         CONFIGURER.create_config_from_proto(config_name, graph, config_file)
 
-        LOGGER.logi("Create quant config success!", module_name='RetrainConfig')
+        LOGGER.logi("Create quant retrain config success!", module_name='RetrainConfig')
 
     @staticmethod
     @check_params(file_name=str, graph=Graph)
@@ -128,7 +128,7 @@ class RetrainConfig:
         config_file = os.path.realpath(config_defination)
         CONFIGURER.create_config_from_proto(retrain_config, graph, config_file)
 
-        LOGGER.logi("Create quant config success!", module_name='RetrainConfig')
+        LOGGER.logi("Create prune config success!", module_name='RetrainConfig')
         return retrain_config
 
     @classmethod
