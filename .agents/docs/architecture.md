@@ -27,7 +27,7 @@ flowchart TD
 | 入口 | `AGENTS.md` / `.agents/README.md` | 说明与路由：端到端 → quant-workflow；单点需求 → 对应叶子 |
 | 编排 | `skills/quant-workflow/` | **唯一编排入口**：阶段判断、串联/分流、复用已有结果、deploy 交付边界、文档写回规则——薄，不重写叶子逻辑 |
 | 工作者 | `agents/quant-{analyzer,implementer,reviewer}.md` | 按 **分析 / 实施 / 审查** 隔离：analyzer 只读+设计方案、implementer 跑 CLI（统一 quant-run）+改 adapter、reviewer 只读结果判读·不跑评测/ptq |
-| 叶子 | `skills/quant-tools/*`（含 `model-adapter`）| 最小可执行技能：方案推荐 / 算法推荐 / 统一执行（quant-run）/ 直转判读 / 算法收益判读 / 部署导出、新模型适配 |
+| 叶子 | `skills/quant-tools/*`（含 `model-adapter`）| 最小可执行技能：方案推荐 / 算法推荐 / 统一执行（quant-run）/ 直转判读 / 算法收益判读 / 部署导出、新模型适配、下游 benchmark 评测（quant-benchmark-eval，按需触发） |
 | 知识 | `docs/casebook/`、`docs/repo-map.md` | 模型适配经验（hard bug/陷阱/精度）与仓内导航，供方案推荐复用 |
 | 共享 | `skills/quant-tools/references/skill-input-template.md` | 4 个 skill 共享的用户输入模板 |
 | 协作 | `skills/gitcode-pr`、`gitcode-issue`、`default-skills` | 通用协作（PR/issue/按需装 skill），非量化功能 |
