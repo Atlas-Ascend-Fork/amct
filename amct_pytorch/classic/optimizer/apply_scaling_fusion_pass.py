@@ -85,7 +85,7 @@ class ApplyScalingFusionPass(BaseModuleFusionPass):
             return
 
         for member in members:
-            member.smooth_scale_skipped = object_module.algorithm == 'smoothquant'
+            member.smooth_scale_skipped = object_module.smooth_factor is not None
             member.input_quant_disabled = (
                 object_module.dynamic_per_token or len(members) > 1
             )
@@ -113,14 +113,11 @@ class ApplyScalingFusionPass(BaseModuleFusionPass):
         elif module.activation_scale is None:
             raise ValueError('activation_scale is missing')
 
-        if module.algorithm == 'smoothquant':
-            if module.smooth_factor is None:
-                raise ValueError('smooth_factor is missing')
-            if (
-                not torch.isfinite(module.smooth_factor).all()
-                or (module.smooth_factor <= 0).any()
-            ):
-                raise ValueError('smooth_factor must be finite and positive')
+        if module.smooth_factor is not None and (
+            not torch.isfinite(module.smooth_factor).all()
+            or (module.smooth_factor <= 0).any()
+        ):
+            raise ValueError('smooth_factor must be finite and positive')
 
     def _build_replacement(self, model, module, members):
         if module.dynamic_per_token:
@@ -148,12 +145,9 @@ class ApplyScalingFusionPass(BaseModuleFusionPass):
         return replacement, None
 
     def _build_smooth_updates(self, module, members):
-        if module.algorithm != 'smoothquant':
-            return []
-
         smooth = module.smooth_factor
         if smooth is None:
-            raise ValueError('smooth_factor is missing')
+            return []
         factor = smooth.reshape(-1)
         norm = module.pre_op
         if norm.weight is None or norm.weight.numel() != factor.numel():

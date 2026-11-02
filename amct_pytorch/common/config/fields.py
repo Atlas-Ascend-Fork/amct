@@ -15,6 +15,8 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+import math
+
 from amct_pytorch.common.utils.vars import (
     SUPPORT_WEIGHT_QUANT_DTYPE,
     SUPPORT_INPUT_QUANT_DTYPE,
@@ -383,6 +385,65 @@ class SmoothQuantField:
             )
 
 
+class AutoSmoothField:
+    def __init__(self, attrs):
+        self.attrs = attrs
+        self.grid_num = 9
+        self.smooth_range = [0.1, 0.99]
+        self.check()
+        self.value = self.set_value()
+
+    def set_value(self):
+        return {
+            'auto_smooth': {
+                'grid_num': self.grid_num,
+                'smooth_range': self.smooth_range,
+            }
+        }
+
+    def get_value(self):
+        return self.value
+
+    def check(self):
+        if self.attrs is None:
+            return
+        if self.attrs.get('grid_num') is not None:
+            self.grid_num = self.attrs.get('grid_num')
+            if (
+                isinstance(self.grid_num, bool)
+                or not isinstance(self.grid_num, int)
+                or self.grid_num <= 0
+            ):
+                raise ValueError(
+                    f'Auto_smooth grid_num only support positive int, but got {self.grid_num}'
+                )
+        if self.attrs.get('smooth_range') is not None:
+            smooth_range = self.attrs.get('smooth_range')
+            if not isinstance(smooth_range, (list, tuple)) or len(smooth_range) != 2:
+                raise ValueError(
+                    'Auto_smooth smooth_range should be a [lo, hi] pair, '
+                    f'but got {smooth_range}'
+                )
+            try:
+                lo, hi = float(smooth_range[0]), float(smooth_range[1])
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    'Auto_smooth smooth_range should contain two numbers, '
+                    f'but got {smooth_range}'
+                ) from exc
+            if not (math.isfinite(lo) and math.isfinite(hi)):
+                raise ValueError(
+                    'Auto_smooth smooth_range should be finite numbers, '
+                    f'but got {smooth_range}'
+                )
+            if lo <= 0 or hi >= 1 or lo >= hi:
+                raise ValueError(
+                    'Auto_smooth smooth_range should satisfy 0 < lo < hi < 1, '
+                    f'but got {smooth_range}'
+                )
+            self.smooth_range = [lo, hi]
+
+
 class MinmaxField:
     def __init__(self, attrs):
         self.value = self.set_value()
@@ -443,6 +504,7 @@ class AlgorithmField:
             'awq': AwqField,
             'gptq': GptqField,
             'smoothquant': SmoothQuantField,
+            'auto_smooth': AutoSmoothField,
             'minmax': MinmaxField,
             'mxquant': MxQuant,
             'cast': CastField,

@@ -418,8 +418,8 @@ class TestReloadRejectsBadStructure:
         entry = {
             'layer_name': 'fc1',
             'ori_module_type': 'Linear',
-            'quant_module_type': 'SmoothQuant',
-            'quant_config': {'algorithm': {'smoothquant': {}}},
+            'quant_module_type': 'OfmrQuant',
+            'quant_config': {'algorithm': {'ofmr': {}}},
         }
         with pytest.raises(ValueError, match='does not support quant result reload'):
             _resolve_quant_module_class(entry)

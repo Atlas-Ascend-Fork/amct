@@ -62,6 +62,7 @@ BUILT_IN_ALGORITHM = [
     'awq',
     'gptq',
     'smoothquant',
+    'auto_smooth',
     'mxquant',
     'ofmr',
     'cast',
@@ -71,6 +72,7 @@ BUILT_IN_ALGORITHM = [
 AlgorithmRegistry.register('gptq', 'Linear', GPTQuant, NpuWeightQuantizedLinear)
 AlgorithmRegistry.register('awq', 'Linear', LinearAWQuant, NpuWeightQuantizedLinear)
 AlgorithmRegistry.register('smoothquant', 'Linear', SmoothQuant, NpuQuantizationLinear)
+AlgorithmRegistry.register('auto_smooth', 'Linear', SmoothQuant, NpuQuantizationLinear)
 AlgorithmRegistry.register(
     'minmax', 'Linear', MinMaxQuant, [NpuWeightQuantizedLinear, NpuQuantizationLinear]
 )

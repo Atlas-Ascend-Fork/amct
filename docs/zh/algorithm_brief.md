@@ -20,6 +20,7 @@
 |--------|:----------:|:----------:|:-----------:|:--------:|
 | Min-Max     | ✅ | — | — | — |
 | SmoothQuant | ✅ | — | — | ✅ |
+| AutoSmooth  | ✅ | — | — | ✅ |
 | Cast        | — | — | — | ✅ |
 | Quantile    | — | — | — | ✅ |
 | OFMR        | — | — | — | ✅ |
@@ -239,6 +240,12 @@ OmniQuant是面向LLM的轻量级、可微分训练后量化算法，核心是�
 SmoothQuant是一种同时确保准确率且推理高效的训练后量化 (PTQ) 方法，由于权重很容易量化，而激活则较难量化，SmoothQuant通过引入平滑系数来平滑激活异常值，通过数学上等效的变换将量化难度从激活转移到权重上。一般来说，激活异常值越多，迁移强度越大。
 
 算法详细介绍请参见： [SmoothQuant: Accurate and Efficient Post-Training Quantization for Large Language Models](https://arxiv.org/abs/2211.10438)。
+
+### AutoSmooth
+
+AutoSmooth 是 SmoothQuant 的自动搜索增强版本：平滑强度（smooth_strength）不再由用户固定配置，而是通过逐层校准接口 `sequential_calibrate` 对每个 block 在预设的平滑强度范围 `smooth_range` 内做网格搜索（`grid_num` 个格点），选择使 block 量化输出与原始输出均方误差（MSE）最小的平滑强度与量化参数，并将其写回量化校准模型。
+
+算法详细介绍请参见：[SmoothQuant: Accurate and Efficient Post-Training Quantization for Large Language Models](https://arxiv.org/abs/2211.10438)。
 
 ### FlatQuant
 

@@ -11,6 +11,7 @@
 | -------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
 | 公共接口                   | [ModelEvaluator](./ModelEvaluator.md)                        | 针对某一个模型，根据模型的bin类型输入数据，提供一个Python实例，可对该模型执行校准和推理的评估器。 |
 | 训练后量化接口             | [quantize](quantize.md)                                      | 高精度模型转换为校准模型，得到量化校准模型，推理后计算得到量化参数。 |
+| 训练后量化接口             | [sequential\_calibrate](sequential_calibrate.md)              | 逐层校准接口，将量化校准模型按 block 切分，逐 block 运行校准数据并分派给算法注册的 block calibrator，把搜索/优化得到的量化参数写回模型。 |
 |                            | [convert](convert.md)                                        | 将量化校准模型转换为量化部署模型。                           |
 |                            | [algorithm\_register](algorithm_register.md)                 | 将用户提供的自定义算法注册到AMCT工具。                       |
 |                            | [create\_quant\_config](create_quant_config.md)              | 训练后量化接口，根据图的结构找到所有可量化的层，自动生成量化配置文件，并将可量化层的量化配置信息写入文件。 |

@@ -78,7 +78,7 @@ def test_artifact_support_is_declared_by_the_registered_quant_class():
     assert is_quant_result_supported(MinMaxQuant)
     assert is_quant_result_supported(LinearAWQuant)
     assert is_quant_result_supported(GPTQuant)
-    assert not is_quant_result_supported(SmoothQuant)
+    assert is_quant_result_supported(SmoothQuant)
 
     class _DeclaredWithoutParams(QuantResultSupportMixin, BaseQuantizeModule):
         supports_quant_result = True
@@ -492,6 +492,16 @@ SMOOTHQUANT_CFG = {
 }
 
 
+OFMR_CFG = {
+    'batch_num': 1,
+    'quant_cfg': {
+        'weights': {'type': 'hifloat8', 'symmetric': True, 'strategy': 'tensor'},
+        'inputs': {'type': 'hifloat8', 'symmetric': True, 'strategy': 'tensor'},
+    },
+    'algorithm': {'ofmr'},
+}
+
+
 class _LinearShapedModel(nn.Module):
     def __init__(self):
         super().__init__()
@@ -508,14 +518,14 @@ def test_quantize_rejects_an_algorithm_without_export_support(tmp_path):
     mere isinstance or hasattr check lets an unwired algorithm through.
     quantize() then returned normally, the result directory stayed empty, and the
     manifest was pending forever -- an API that reports success while producing
-    nothing loadable. SmoothQuant stands in for "not wired yet" now that AWQ and
-    GPTQ are.
+    nothing loadable. OFMR stands in for "not wired yet" now that AWQ, GPTQ and
+    SmoothQuant are.
     """
-    out = tmp_path / "smoothquant"
+    out = tmp_path / "ofmr"
     out.mkdir()
     model = _LinearShapedModel().to(torch.bfloat16)
     with pytest.raises(ValueError, match="not supported yet for algorithm") as ctx:
-        quantize(model, SMOOTHQUANT_CFG, quant_result_dir=str(out))
+        quantize(model, OFMR_CFG, quant_result_dir=str(out))
 
     assert "_supports_quant_result_export" not in str(ctx.value)
     assert list(out.iterdir()) == [], "a rejected algorithm must write nothing"

@@ -20,6 +20,7 @@ import pytest
 from amct_pytorch.algorithms import AlgorithmRegistry
 from amct_pytorch.common.config.fields import (
     AlgorithmField,
+    AutoSmoothField,
     AwqField,
     BatchNumField,
     CastField,
@@ -333,6 +334,24 @@ def test_smooth_quant_strength_one_raises():
 def test_smooth_quant_strength_non_float_raises():
     with pytest.raises(ValueError, match=r"\(0, 1\)"):
         SmoothQuantField({"smooth_strength": "0.5"})
+
+
+# ---- AutoSmoothField --------------------------------------------------------
+
+
+def test_auto_smooth_valid():
+    f = AutoSmoothField({"grid_num": 9, "smooth_range": [0.1, 0.9]})
+    assert f.get_value() == {"auto_smooth": {"grid_num": 9, "smooth_range": [0.1, 0.9]}}
+
+
+def test_auto_smooth_grid_num_bool_raises():
+    with pytest.raises(ValueError, match="positive int"):
+        AutoSmoothField({"grid_num": True})
+
+
+def test_auto_smooth_grid_num_non_int_raises():
+    with pytest.raises(ValueError, match="positive int"):
+        AutoSmoothField({"grid_num": "9"})
 
 
 # ---- GptqField -------------------------------------------------------------

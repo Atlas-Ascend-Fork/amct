@@ -65,15 +65,15 @@ GROUP_SIZE_SUPPORTED_MAP = {
 }
 
 ALGORITHM_SUPPORTED_QUANT_TYPE_COMB = {
-    'int8 int8': ['minmax', 'smoothquant'],
-    'int8 int4': ['minmax', 'smoothquant'],
+    'int8 int8': ['minmax', 'smoothquant', 'auto_smooth'],
+    'int8 int4': ['minmax', 'smoothquant', 'auto_smooth'],
     'NOT_QUANTIZE int8': ['minmax', 'awq', 'gptq'],
     'NOT_QUANTIZE int4': ['minmax', 'awq', 'gptq'],
-    'hifloat8 hifloat8': ['ofmr', 'cast', 'quantile', 'smoothquant'],
+    'hifloat8 hifloat8': ['ofmr', 'cast', 'quantile', 'smoothquant', 'auto_smooth'],
     'hifloat4 hifloat4': ['cast'],
     'float8_e4m3fn float8_e4m3fn': ['ofmr'],
     'mxfp8_e4m3fn mxfp8_e4m3fn': ['mxquant'],
-    'float8_e4m3fn float4_e2m1': ['minmax', 'smoothquant'],
+    'float8_e4m3fn float4_e2m1': ['minmax', 'smoothquant', 'auto_smooth'],
     'NOT_QUANTIZE hifloat8': ['ofmr', 'gptq', 'cast', 'quantile'],
     'NOT_QUANTIZE hifloat4': ['cast'],
     'NOT_QUANTIZE float8_e4m3fn': ['ofmr', 'gptq'],

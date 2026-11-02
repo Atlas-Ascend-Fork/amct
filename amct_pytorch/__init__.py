@@ -18,6 +18,7 @@
 __all__ = [
     'quantize',
     'convert',
+    'sequential_calibrate',
     'algorithm_register',
     'INT4_AWQ_WEIGHT_QUANT_CFG',
     'INT4_GPTQ_WEIGHT_QUANT_CFG',
@@ -35,6 +36,7 @@ __all__ = [
 from amct_pytorch.classic import (
     quantize,
     convert,
+    sequential_calibrate,
     algorithm_register,
 )
 from amct_pytorch.common.config import (

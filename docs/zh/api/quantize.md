@@ -88,7 +88,7 @@ quantize(model, config=None, quant_result_dir=None)
 <p id="p6410054727"><a name="p6410054727"></a><a name="p6410054727"></a>act_type: FLOAT8_E4M3FN  wts_type: FLOAT8_E4M3FN</p>
 </td>
 <td class="cellrowborder" valign="top" width="37.269999999999996%" headers="mcps1.2.5.1.4 "><p id="p134301428434"><a name="p134301428434"></a><a name="p134301428434"></a>激活（数据）支持PER_TENSOR/PER_TOKEN量化，权重支持PER_TENSOR/PER_CHANNEL量化</p>
-<p id="p1894815554584"><a name="p1894815554584"></a><a name="p1894815554584"></a>act_type: HIFLOAT8  wts_type: HIFLOAT8时，支持OFMR量化算法、Cast数据直转算法、Quantile分位量化算法、SmoothQuant算法，<a href="#section1536112219183">config详细配置</a>中必须分别配置ofmr、cast、quantile、smoothquant选项</p>
+<p id="p1894815554584"><a name="p1894815554584"></a><a name="p1894815554584"></a>act_type: HIFLOAT8  wts_type: HIFLOAT8时，支持OFMR量化算法、Cast数据直转算法、Quantile分位量化算法、SmoothQuant算法、AutoSmooth算法，<a href="#section1536112219183">config详细配置</a>中必须分别配置ofmr、cast、quantile、smoothquant、auto_smooth选项</p>
 <p id="p1144561153616"><a name="p1144561153616"></a><a name="p1144561153616"></a>act_type: FLOAT8_E4M3FN  wts_type: FLOAT8_E4M3FN时，支持OFMR量化算法，<a href="#section1536112219183">config详细配置</a>中必须配置ofmr选项</p>
 </td>
 </tr>
@@ -108,14 +108,14 @@ quantize(model, config=None, quant_result_dir=None)
 <p id="p103822021171315"><a name="p103822021171315"></a><a name="p103822021171315"></a>激活（数据）支持shape为(m,k)，权重支持shape为(n,k)，其中k是64整数倍</p>
 <p id="p12540182214619"><a name="p12540182214619"></a><a name="p12540182214619"></a>激活（数据）支持PER_TENSOR量化，权重支持PER_GROUP量化</p>
 <p id="p844695365417"><a name="p844695365417"></a><a name="p844695365417"></a>激活和权重都仅支持对称量化</p>
-<p id="p1877817173019"><a name="p1877817173019"></a><a name="p1877817173019"></a>支持MIN-MAX量化算法，SmoothQuant算法，<a href="#section1536112219183">config详细配置</a>中必须分别配置minmax、smoothquant选项</p>
+<p id="p1877817173019"><a name="p1877817173019"></a><a name="p1877817173019"></a>支持MIN-MAX量化算法，SmoothQuant算法，AutoSmooth算法，<a href="#section1536112219183">config详细配置</a>中必须分别配置minmax、smoothquant、auto_smooth选项</p>
 </td>
 </tr>
 <tr id="row9500144213717"><td class="cellrowborder" valign="top" headers="mcps1.2.5.1.1 "><p id="p175010422712"><a name="p175010422712"></a><a name="p175010422712"></a>float16（fp16）、bfloat16（bf16）</p>
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.2.5.1.2 "><p id="p650118423714"><a name="p650118423714"></a><a name="p650118423714"></a>act_type: INT8  wts_type: INT8</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.2.5.1.3 "><a name="ul178665278918"></a><a name="ul178665278918"></a><ul id="ul178665278918"><li>支持2~6维数据输入</li><li>激活（数据）支持PER_TENSOR量化，支持对称非对称量化，bias量化为INT32；权重支持PER_TENSOR/PER_CHANNEL量化，支持对称量化</li><li>激活（数据）支持PER-TOKEN对称量化，bias不量化，k是16的倍数，n是8的倍数；权重支持PER_TENSOR/PER_CHANNEL对称量化</li><li>支持MIN-MAX量化算法、SmoothQuant算法，<a href="#section1536112219183">config详细配置</a>中必须分别配置minmax、smoothquant选项</li></ul>
+<td class="cellrowborder" valign="top" headers="mcps1.2.5.1.3 "><a name="ul178665278918"></a><a name="ul178665278918"></a><ul id="ul178665278918"><li>支持2~6维数据输入</li><li>激活（数据）支持PER_TENSOR量化，支持对称非对称量化，bias量化为INT32；权重支持PER_TENSOR/PER_CHANNEL量化，支持对称量化</li><li>激活（数据）支持PER-TOKEN对称量化，bias不量化，k是16的倍数，n是8的倍数；权重支持PER_TENSOR/PER_CHANNEL对称量化</li><li>支持MIN-MAX量化算法、SmoothQuant算法、AutoSmooth算法，<a href="#section1536112219183">config详细配置</a>中必须分别配置minmax、smoothquant、auto_smooth选项</li></ul>
 </td>
 </tr>
 <tr id="row1521462251317"><td class="cellrowborder" valign="top" width="10.63%" headers="mcps1.2.5.1.1 "><p id="p1021414226138"><a name="p1021414226138"></a><a name="p1021414226138"></a>torch.nn.Conv2d</p>
@@ -353,7 +353,7 @@ quantize(model, cfg)
 <td class="cellrowborder" valign="top" width="11.07%" headers="mcps1.1.5.1.3 "><p id="p1060425541813"><a name="p1060425541813"></a><a name="p1060425541813"></a>-</p>
 </td>
 <td class="cellrowborder" valign="top" width="69.85%" headers="mcps1.1.5.1.4 "><p id="p66040553184"><a name="p66040553184"></a><a name="p66040553184"></a>string类型，量化算法，支持如下配置：</p>
-<a name="ul2808111772013"></a><a name="ul2808111772013"></a><ul id="ul2808111772013"><li>awq：grids_num，uint32类型，搜索格点数量，默认为20。</li><li>gptq。</li><li>minmax。</li><li>smoothquant：smooth_strength，float类型，迁移强度，默认值0.5。</li><li>ofmr。</li><li>mxquant：仅做mx数据类型转换。</li><li>cast：HiFloat8数据直转算法，用于将权重和激活直接转换为HiFloat8类型。</li><li>quantile：HiFloat8分位量化算法，用于根据分位统计计算HiFloat8量化参数。</li></ul>
+<a name="ul2808111772013"></a><a name="ul2808111772013"></a><ul id="ul2808111772013"><li>awq：grids_num，uint32类型，搜索格点数量，默认为20。</li><li>gptq。</li><li>minmax。</li><li>smoothquant：smooth_strength，float类型，迁移强度，默认值0.5。</li><li>auto_smooth：grid_num，正整数类型，网格搜索格点数量，默认为9；smooth_range，list类型，迁移强度搜索范围[lo, hi]，默认为[0.1, 0.99]。配合[sequential_calibrate](./sequential_calibrate.md)接口完成逐层校准。</li><li>ofmr。</li><li>mxquant：仅做mx数据类型转换。</li><li>cast：HiFloat8数据直转算法，用于将权重和激活直接转换为HiFloat8类型。</li><li>quantile：HiFloat8分位量化算法，用于根据分位统计计算HiFloat8量化参数。</li></ul>
 <p id="p66040553185"><a name="p66040553185"></a><a name="p66040553185"></a>支持同时配置多个算法，多个算法按其支持的源算子（src_op）分工，即不同类型的层可由不同算法处理。同一个源算子只允许由一个算法负责，若配置的多个算法声明支持同一源算子，将在配置解析阶段报错。</p>
 <p id="p4604195517184"><a name="p4604195517184"></a><a name="p4604195517184"></a>具体请参见<a href="../algorithm_brief.md" target="_blank" rel="noopener noreferrer">量化算法介绍</a>。</p>
 </td>

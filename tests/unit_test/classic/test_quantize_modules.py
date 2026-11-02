@@ -592,7 +592,7 @@ class TestQuantResultParamDeclaration(unittest.TestCase):
         self.assertIn('scale', LinearAWQuant.quant_param_keys())
 
     def test_algorithms_not_yet_wired_do_not_expose_artifact_methods(self):
-        for quant_cls in (SmoothQuant, OfmrQuant):
+        for quant_cls in (OfmrQuant,):
             self.assertFalse(hasattr(quant_cls, 'quant_param_keys'))
 
 

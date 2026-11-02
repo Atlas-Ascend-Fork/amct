@@ -217,6 +217,77 @@ def test_shared_buffers_follow_deployment_member_device():
     assert model.pre.shared.act_offset.device.type == 'meta'
 
 
+def test_auto_smooth_shared_group_folds_smooth_factor():
+    from amct_pytorch.classic.optimizer.layer_norm_quant import LayerNormQuant
+
+    model = NormModel()
+    for member in (model.m0, model.m1):
+        member.quant_config = {
+            'algorithm': {'auto_smooth': {'grid_num': 9, 'smooth_range': [0.1, 0.99]}}
+        }
+    wrapper = LayerNormQuant(
+        pre_op=model.pre,
+        scaling_layers=(model.m0, model.m1),
+        member_refs=('m0', 'm1'),
+        target_ref='m0',
+        adapter='qwen3_attention',
+        algorithm='auto_smooth',
+        act_granularity='tensor',
+        batch_num=1,
+    )
+    model.pre = wrapper
+    wrapper.status = 'calibrated'
+    wrapper.activation_scale = torch.tensor([0.1])
+    wrapper.activation_offset = None
+    wrapper.smooth_factor = torch.tensor([[0.5, 2.0, 4.0]])
+    for member in (model.m0, model.m1):
+        member.shared_param_mode = 'static'
+
+    norm_weight_before = model.pre.pre_op.weight.detach().clone()
+    m0_weight_before = model.m0.weight.detach().clone()
+
+    ApplyScalingFusionPass().run(model)
+
+    factor = wrapper.smooth_factor.reshape(-1)
+    torch.testing.assert_close(model.pre.pre_op.weight, norm_weight_before / factor)
+    torch.testing.assert_close(
+        model.m0.weight, m0_weight_before * wrapper.smooth_factor
+    )
+    assert model.m0.smooth_scale_skipped is True
+    assert model.m1.smooth_scale_skipped is True
+
+
+def test_minmax_shared_group_skips_smooth_folding():
+    from amct_pytorch.classic.optimizer.layer_norm_quant import LayerNormQuant
+
+    model = NormModel()
+    wrapper = LayerNormQuant(
+        pre_op=model.pre,
+        scaling_layers=(model.m0, model.m1),
+        member_refs=('m0', 'm1'),
+        target_ref='m0',
+        adapter='qwen3_attention',
+        algorithm='minmax',
+        act_granularity='tensor',
+        batch_num=1,
+    )
+    model.pre = wrapper
+    wrapper.status = 'calibrated'
+    wrapper.activation_scale = torch.tensor([0.1])
+    wrapper.activation_offset = None
+    wrapper.smooth_factor = None
+    for member in (model.m0, model.m1):
+        member.shared_param_mode = 'static'
+
+    norm_weight_before = model.pre.pre_op.weight.detach().clone()
+    m0_weight_before = model.m0.weight.detach().clone()
+
+    ApplyScalingFusionPass().run(model)
+
+    torch.testing.assert_close(model.pre.pre_op.weight, norm_weight_before)
+    torch.testing.assert_close(model.m0.weight, m0_weight_before)
+
+
 def test_shared_dynamic_quantize_rejects_unsupported_dtype(monkeypatch):
     import sys
     from types import SimpleNamespace

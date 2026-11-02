@@ -60,6 +60,15 @@ class LayerNormQuant(nn.Module):
         self.act_granularity = act_granularity
         self.batch_num = batch_num
         self.dynamic_per_token = dynamic_per_token
+        self.is_auto_smooth = algorithm == 'auto_smooth'
+        self.layer_name = target_ref
+        # Auto-smooth groups are the only ones grid-searched at block level, so
+        # only they expose a resolved quant_config to the forward calibrator.
+        # Fixed smoothquant / minmax finalize during the calibration forward
+        # and must not be mistaken for searchable modules.
+        self.quant_config = (
+            self.scaling_layers[0].quant_config if self.is_auto_smooth else None
+        )
 
         self.register_buffer('act_max', None, persistent=False)
         self.register_buffer('act_min', None, persistent=False)
@@ -76,13 +85,15 @@ class LayerNormQuant(nn.Module):
         out = self.pre_op(x)
         if self.status == 'pending':
             self.update_activation_stat(out)
-            if self.batch_count == self.batch_num:
+            if self.batch_count == self.batch_num and not self.is_auto_smooth:
                 self.finalize_quant_params()
         return out
 
     @torch.no_grad()
     def update_activation_stat(self, inputs):
         if self.status != 'pending':
+            return
+        if self.batch_count >= self.batch_num:
             return
         inputs = inputs.detach()
         if self.algorithm == 'minmax' and self.dynamic_per_token:
@@ -108,19 +119,36 @@ class LayerNormQuant(nn.Module):
             return True
         if self.batch_count < self.batch_num:
             return False
+        if self.algorithm == 'smoothquant':
+            alpha = self.scaling_layers[0].quant_config['algorithm']['smoothquant'][
+                'smooth_strength'
+            ]
+        elif self.algorithm == 'auto_smooth':
+            # The alpha is not fixed: finalization is deferred to the block
+            # grid search via apply_calib_param(alpha).
+            return False
+        else:
+            alpha = None
+        self._finalize_with_alpha(alpha)
+        self.act_max = self.act_min = None
+        return True
+
+    @torch.no_grad()
+    def _finalize_with_alpha(self, alpha):
         members = self.scaling_layers
         first = members[0]
-        if self.algorithm == 'smoothquant':
+        if alpha is not None:
             act_max = torch.maximum(self.act_max.abs(), self.act_min.abs())
             wts_max = members[0].weight.detach().abs().amax(dim=0, keepdim=True)
             for member in members[1:]:
                 wts_max = torch.maximum(
                     wts_max, member.weight.detach().abs().amax(dim=0, keepdim=True)
                 )
-            alpha = first.quant_config['algorithm']['smoothquant']['smooth_strength']
             self.smooth_factor = _safe_smooth_factor(act_max, wts_max, alpha).to(
                 first.weight.dtype
             )
+        else:
+            self.smooth_factor = None
         if not self.dynamic_per_token:
             maximum, minimum = self.act_max, self.act_min
             if self.smooth_factor is not None:
@@ -139,13 +167,26 @@ class LayerNormQuant(nn.Module):
                 activation_offset=self.activation_offset,
             )
         self.status = 'calibrated'
-        self.act_max = self.act_min = None
         LOGGER.logd(
             f'LayerNormQuant finalized: members={list(self.member_refs)}, '
             f'batch_count={self.batch_count}',
             'LayerNormQuant',
         )
         return True
+
+    def calib_param_grid(self):
+        """Candidate smoothing strengths delegated to the first shared member."""
+        return self.scaling_layers[0].calib_param_grid()
+
+    def apply_calib_param(self, param):
+        """Apply a searched smoothing strength to the shared-input group."""
+        self._finalize_with_alpha(float(param))
+
+    def reset_calib(self):
+        """Switch members and this pre_op back to the un-finalized state."""
+        for member in self.scaling_layers:
+            member.finalized = False
+        self.status = 'pending'
 
 
 def _safe_smooth_factor(act_max, wts_max, alpha):

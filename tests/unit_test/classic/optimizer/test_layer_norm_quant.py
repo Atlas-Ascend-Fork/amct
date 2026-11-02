@@ -31,15 +31,17 @@ def _config(algorithm='smoothquant', strategy='tensor', dynamic=None):
     }
     if dynamic is not None:
         inputs['dynamic'] = dynamic
+    if algorithm == 'smoothquant':
+        algo = {'smoothquant': {'smooth_strength': 0.5}}
+    elif algorithm == 'auto_smooth':
+        algo = {'auto_smooth': {'grid_num': 9, 'smooth_range': [0.1, 0.99]}}
+    else:
+        algo = {'minmax': {}}
     return {
         'batch_num': 1,
         'weights_cfg': {'quant_type': 'int8', 'symmetric': True, 'strategy': 'channel'},
         'inputs_cfg': inputs,
-        'algorithm': (
-            {'smoothquant': {'smooth_strength': 0.5}}
-            if algorithm == 'smoothquant'
-            else {'minmax': {}}
-        ),
+        'algorithm': algo,
     }
 
 
@@ -48,7 +50,7 @@ class TinyLayer(nn.Module):
         super().__init__()
         self.input_layernorm = nn.LayerNorm(4)
         self.self_attn = nn.Module()
-        quant_cls = SmoothQuant if algorithm == 'smoothquant' else MinMaxQuant
+        quant_cls = MinMaxQuant if algorithm == 'minmax' else SmoothQuant
         self.self_attn.q_proj = quant_cls(
             nn.Linear(4, 4), 'self_attn.q_proj', _config(algorithm, strategy, dynamic)
         )
@@ -310,3 +312,55 @@ def test_static_token_layer_norm_quant_is_rejected():
     layer = TinyLayer(strategy='token', dynamic=False)
     with pytest.raises(ValueError, match='static per-token quantization'):
         _layer_norm_quant(layer, strategy='token', dynamic=False)
+
+
+def test_auto_smooth_shared_group_defers_finalize_until_grid_search():
+    layer = TinyLayer(algorithm='auto_smooth')
+    layer.input_layernorm = _layer_norm_quant(layer, algorithm='auto_smooth')
+    wrapper = layer.input_layernorm
+
+    # Calibration forward accumulates stats but must not finalize (alpha is
+    # searched by the block grid search, not fixed in config).
+    layer(torch.randn(2, 4))
+    assert wrapper.status == 'pending'
+    assert wrapper.batch_count == 1
+    assert wrapper.smooth_factor is None
+    assert layer.self_attn.q_proj.finalized is False
+
+    # The forward calibrator only grid-searches auto_smooth shared groups.
+    assert wrapper.quant_config is not None
+    grid = wrapper.calib_param_grid()
+    assert len(grid) == 9
+
+    wrapper.apply_calib_param(grid[4])
+    assert wrapper.status == 'calibrated'
+    assert wrapper.smooth_factor is not None
+    assert layer.self_attn.q_proj.finalized is True
+    assert layer.self_attn.k_proj.scale_w is not None
+
+    wrapper.reset_calib()
+    assert wrapper.status == 'pending'
+    assert layer.self_attn.q_proj.finalized is False
+
+    # Re-apply works: activation stats are preserved across repeated applies.
+    wrapper.apply_calib_param(grid[6])
+    assert wrapper.status == 'calibrated'
+    assert wrapper.smooth_factor is not None
+
+
+def test_fixed_shared_groups_do_not_expose_a_search_contract():
+    from amct_pytorch.algorithms.quant.forward import (
+        _has_search_contract,
+        _is_forward_module,
+    )
+
+    for algorithm in ('smoothquant', 'minmax'):
+        layer = TinyLayer(algorithm=algorithm)
+        layer.input_layernorm = _layer_norm_quant(layer, algorithm=algorithm)
+        assert layer.input_layernorm.quant_config is None
+        assert _is_forward_module(layer.input_layernorm) is False
+
+    layer = TinyLayer(algorithm='auto_smooth')
+    layer.input_layernorm = _layer_norm_quant(layer, algorithm='auto_smooth')
+    assert _is_forward_module(layer.input_layernorm) is True
+    assert _has_search_contract(layer.input_layernorm) is True
