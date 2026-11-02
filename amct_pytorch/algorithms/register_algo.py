@@ -31,14 +31,13 @@ class Algorithm:
         self.algo[name][src_op] = quant_op
 
         if self.quant_to_deploy.get(quant_op) is None:
-            if isinstance(deploy_op, list):
-                self.quant_to_deploy[quant_op] = deploy_op
-            else:
-                self.quant_to_deploy[quant_op] = []
+            self.quant_to_deploy[quant_op] = []
 
         if isinstance(deploy_op, list):
             self.quant_to_deploy[quant_op] += deploy_op
         else:
             self.quant_to_deploy[quant_op].append(deploy_op)
-        self.quant_to_deploy[quant_op] = list(set(self.quant_to_deploy[quant_op]))
+        self.quant_to_deploy[quant_op] = list(
+            dict.fromkeys(self.quant_to_deploy[quant_op])
+        )
         LOGGER.logd(f'register algorithm {name} success.')
