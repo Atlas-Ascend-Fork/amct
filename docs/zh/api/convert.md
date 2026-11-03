@@ -28,7 +28,7 @@ convert(model, quant_result_dir=None)
 
 ## 返回值说明
 
-量化部署模型。
+无（返回 `None`）。接口原地修改传入的 `model`，转换后继续使用该模型对象。
 
 ## 注意事项
 
@@ -38,6 +38,7 @@ convert(..., quant_result_dir=...) 只接受已发布的量化结果目录，即
 ```python
 # 调用前序接口生成量化校准模型
 quantize(model, cfg)
+# 对需要静态激活校准的配置，使用校准数据执行模型前向，直至完成配置项 batch_num 指定的校准批次
 # 调用接口将量化校准模型转换为量化部署模型
 convert(model)
 ```
