@@ -183,6 +183,7 @@ def test_optional_args_stay_optional_for_eval():
 
     assert args.quant_target == []
     assert args.data_dir == ""
+    assert args.dump is False
 
 
 def test_command_specific_args_not_enforced_without_command():
@@ -195,6 +196,14 @@ def test_command_specific_args_not_enforced_without_command():
     assert args.quant_target == []
     assert args.data_dir == ""
     assert args.quant_dtype == ""
+
+
+def test_eval_dump_flag_enables_checkpointing():
+    argv = ["amct", "--model_name", "qwen3_5", "--dump"]
+    with patch.object(sys, "argv", argv):
+        args = parser_gen(command="eval")
+
+    assert args.dump is True
 
 
 def test_deploy_format_defaults_to_legacy(monkeypatch):

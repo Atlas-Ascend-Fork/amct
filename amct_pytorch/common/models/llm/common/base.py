@@ -237,6 +237,14 @@ class BaseModel(metaclass=ABCMeta):
         layers[0] = layers[0].module
         return outs
 
+    def export_eval_state(self):
+        """Return optional CPU state needed to resume blockwise evaluation."""
+        return None
+
+    def restore_eval_state(self, state, completed_block_idx, inter_io):
+        """Restore optional model state; return whether the checkpoint is usable."""
+        return True
+
     def do_head_forward(self, inps):
         self.model.model.norm.to(self.args.device)
         self.model.lm_head.to(self.args.device)

@@ -20,6 +20,7 @@ import functools
 import re
 
 import torch
+from loguru import logger
 from compressed_tensors.utils.safetensors_load import get_weight_mappings
 from transformers.models.glm_moe_dsa.configuration_glm_moe_dsa import GlmMoeDsaConfig
 from transformers.models.glm_moe_dsa.modeling_glm_moe_dsa import GlmMoeDsaDecoderLayer
@@ -66,7 +67,7 @@ class GLM5_2(BaseModel):
         self.num_layers = self.config.num_hidden_layers
         self.cls = GlmMoeDsaDecoderLayer
         self.model = self.empty_weights_model()
-        self._dsa_topk_indices = None
+        self._dsa_topk_indices = []
         self.parse_quant_mode()
 
     @staticmethod
@@ -218,10 +219,32 @@ class GLM5_2(BaseModel):
         )
 
     def get_block_forward_kwargs(self):
-        kwargs = super().get_block_forward_kwargs()
-        if self._dsa_topk_indices is not None:
-            kwargs["prev_topk_indices"] = self._dsa_topk_indices
-        return kwargs
+        # Per-sample IndexShare state is injected by the block forward wrapper.
+        return super().get_block_forward_kwargs()
+
+    def export_eval_state(self):
+        return self._dsa_topk_indices
+
+    def restore_eval_state(self, state, completed_block_idx, inter_io):
+        self._dsa_topk_indices = []
+        next_layer_idx = completed_block_idx + 1
+        if completed_block_idx < 0 or next_layer_idx >= self.num_layers:
+            return True
+        if not isinstance(state, list) or len(state) != len(inter_io):
+            logger.info(
+                f"Missing or mismatched indexer state before block {next_layer_idx}; "
+                f"expected {len(inter_io)} samples."
+            )
+            return False
+        for sample_idx, indices in enumerate(state):
+            if not isinstance(indices, torch.Tensor):
+                logger.info(
+                    f"Invalid indexer state for sample {sample_idx} before "
+                    f"block {next_layer_idx}."
+                )
+                return False
+        self._dsa_topk_indices = [indices.detach().cpu() for indices in state]
+        return True
 
     def do_head_forward(self, inps):
         return super().do_head_forward(inps)
@@ -436,12 +459,29 @@ class GLM5_2(BaseModel):
             layer_idx, use_quant_block=use_quant_block
         )
         _orig = block.forward
+        previous_indices = self._dsa_topk_indices
+        current_indices = []
 
         @functools.wraps(_orig)
         def _capture(*args, **kwargs):
+            sample_idx = len(current_indices)
+            if previous_indices:
+                if sample_idx >= len(previous_indices):
+                    raise ValueError(
+                        f"Missing indexer state for sample {sample_idx} in block {layer_idx}."
+                    )
+                hidden_states = args[0] if args else kwargs["hidden_states"]
+                kwargs["prev_topk_indices"] = previous_indices[sample_idx].to(
+                    hidden_states.device
+                )
             out = _orig(*args, **kwargs)
-            if isinstance(out, (tuple, list)) and len(out) >= 2:
-                self._dsa_topk_indices = out[1]
+            indices = (
+                out[1] if isinstance(out, (tuple, list)) and len(out) >= 2 else None
+            )
+            if not isinstance(indices, torch.Tensor):
+                raise ValueError(f"Block {layer_idx} did not return indexer indices.")
+            current_indices.append(indices.detach().cpu())
+            self._dsa_topk_indices = current_indices
             return out
 
         block.forward = _capture

@@ -60,6 +60,7 @@
 **约束**：
 - 考虑到用户环境的限制，`granularity`请尽量选择block。
 - `bit_config`、`model`请配置本地路径，`bit_config`对应的yaml文件可以参考仓上amct_pytorch/configs内的文件
+- 断点续测 `--dump` 仅支持 `granularity=block`。
 
 #### BF16 基线 PPL 测量
 
@@ -295,6 +296,7 @@ python -m amct_pytorch.deploy \
 | 参数 | 默认值 | 含义 |
 |------|------|------|
 | `--eval_mode` | `bf16` | 评估模式，指定模型在计算困惑度（PPL）时使用的精度格式，支持如下两种格式：<br> `bf16`：半精度浮点数（BF16），常用于加速推理并保持较高精度。<br>`quant`：量化模式，可能指 INT8/INT4 等量化格式，用于降低内存和计算开销，但可能牺牲少量精度。 |
+| `--dump` | 默认关闭 | 仅用于 `granularity=block` 的 PPL 评估。按模型名和类型保存最近一个已完成 block 的输出并自动续测，用户自行保证配置一致；PPL 成功输出后清理对应断点文件。 |
 | `--wikitext_final_out` | 空字符串 | **【预留参数，暂不生效】** WikiText 末端输出路径参数，用于指定 WikiText 数据集处理后最终输出的文件路径。当前版本主链路（`eval` / `extract_ptq_data` / `ptq` / `deploy`）尚未读取该参数，传入的值不会生效，仅打印告警；参数本身予以保留，后续版本按需接通。 |
 
 说明：
