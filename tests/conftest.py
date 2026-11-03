@@ -15,6 +15,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import glob
+import importlib
 import os
 import sys
 from unittest.mock import MagicMock
@@ -24,9 +26,21 @@ os.environ["TORCH_DEVICE_BACKEND_AUTOLOAD"] = "0"
 
 import torch  # noqa: E402
 
-_mock_npu = MagicMock()
-_mock_npu.__spec__ = MagicMock()
-sys.modules.setdefault("torch_npu", _mock_npu)
+# Importing the real torch_npu registers the NPU dispatch backend and other
+# torch integrations, so it must only happen when an Ascend NPU is actually
+# attached; on no-device runners (even with torch_npu installed) those side
+# effects break tests at aclInit (#310). Ascend NPUs are exposed as
+# /dev/davinciN device nodes on hosts and containers.
+if glob.glob("/dev/davinci[0-9]*"):
+    try:
+        importlib.import_module("torch_npu")
+    except Exception:
+        pass
 
-if not hasattr(torch, "npu"):
-    torch.npu = MagicMock()
+if "torch_npu" not in sys.modules:
+    _mock_npu = MagicMock()
+    _mock_npu.__spec__ = MagicMock()
+    sys.modules["torch_npu"] = _mock_npu
+
+    if not hasattr(torch, "npu"):
+        torch.npu = MagicMock()
