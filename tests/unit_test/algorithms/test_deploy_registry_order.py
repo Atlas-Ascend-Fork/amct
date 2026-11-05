@@ -89,22 +89,18 @@ def test_fallback_uses_first_registered_deploy_operator(registry):
         for node in tree.body
         if isinstance(node, ast.ClassDef) and node.name == "ReplaceNpuQuantModulePass"
     )
-    method = next(
-        node
-        for node in cls.body
-        if isinstance(node, ast.FunctionDef) and node.name == "_get_deploy_module"
-    )
-    namespace = {"AlgorithmRegistry": registry}
+    namespace = {"AlgorithmRegistry": registry, "BaseModuleFusionPass": object}
     exec(
         compile(
-            ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])),
+            ast.fix_missing_locations(ast.Module(body=[cls], type_ignores=[])),
             str(path),
             "exec",
         ),
         namespace,
     )
-    selector = types.SimpleNamespace(_should_use_deploy_op=lambda obj, deploy: False)
+    selector = namespace["ReplaceNpuQuantModulePass"]()
+    selector._should_use_deploy_op = lambda obj, deploy: False
     instance = Quantized()
-    result = namespace["_get_deploy_module"](selector, instance, Quantized)
+    result = selector._get_deploy_module(instance, Quantized)
     assert isinstance(result, FirstDeploy)
     assert result.source is instance

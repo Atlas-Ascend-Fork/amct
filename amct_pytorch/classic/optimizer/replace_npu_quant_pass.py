@@ -39,6 +39,23 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
         super().__init__()
 
     @staticmethod
+    def _resolve_deploy_ops(module_type):
+        """查找并归一化部署算子，缺失时给出注册提示。"""
+        deploy_ops = AlgorithmRegistry.quant_to_deploy.get(module_type)
+        if deploy_ops is None:
+            deploy_ops = AlgorithmRegistry.quant_to_deploy.get(module_type.__name__)
+        if isinstance(deploy_ops, list):
+            deploy_ops = [op for op in deploy_ops if op is not None]
+        elif deploy_ops is not None:
+            deploy_ops = [deploy_ops]
+        if not deploy_ops:
+            raise RuntimeError(
+                f"The deploy_op for {module_type.__name__} is None! "
+                "pls invoke algorithm_register to register deploy_op!"
+            )
+        return deploy_ops
+
+    @staticmethod
     def match_pattern(module, name):
         """
         Function:Match layers to replace to npu quantization op
@@ -66,15 +83,7 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
         Return: None
         """
         module_type = type(object_module)
-        deploy_ops = AlgorithmRegistry.quant_to_deploy.get(module_type)
-        if deploy_ops is None:
-            deploy_ops = AlgorithmRegistry.quant_to_deploy.get(module_type.__name__)
-
-        if deploy_ops is None:
-            raise RuntimeError(
-                f"The deploy_op for {module_type.__name__} is None! "
-                "pls invoke algorithm_register to register deploy_op!"
-            )
+        deploy_ops = self._resolve_deploy_ops(module_type)
 
         if isinstance(object_module, deploy_ops[0]):
             LOGGER.logd(f'{module_type.__name__} does not need to invoke convert')
@@ -109,14 +118,11 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
                     module_type: type of object_module
         Return: deploy module
         """
-        deploy_ops = AlgorithmRegistry.quant_to_deploy.get(module_type)
-        if isinstance(deploy_ops, list):
-            for deploy_op in deploy_ops:
-                if self._should_use_deploy_op(object_module, deploy_op):
-                    return deploy_op(object_module)
-            return deploy_ops[0](object_module)
-        else:
-            return deploy_ops(object_module)
+        deploy_ops = self._resolve_deploy_ops(module_type)
+        for deploy_op in deploy_ops:
+            if self._should_use_deploy_op(object_module, deploy_op):
+                return deploy_op(object_module)
+        return deploy_ops[0](object_module)
 
     def _should_use_deploy_op(self, object_module, deploy_op):
         """
