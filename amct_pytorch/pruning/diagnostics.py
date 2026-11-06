@@ -16,7 +16,7 @@
 # ----------------------------------------------------------------------------
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
@@ -240,6 +240,27 @@ def prune_diagnose(
             "no prunable targets identified in any domain: the model structure may not be "
             "supported by the current domain detection."
         )
+
+    if isinstance(data, Iterator):
+        try:
+            data = list(data)
+        except Exception as exc:
+            LOGGER.logw(
+                f"[diagnose] calibration data iteration did not complete: {type(exc).__name__}: {exc}",
+                "amct_prune",
+            )
+            notes.append(
+                f"calibration data iteration error: {type(exc).__name__}: {exc}"
+            )
+            return DiagnosisReport(
+                targets=targets,
+                prune_works=False,
+                prune_reduction=0.0,
+                prune_forward_ok=None,
+                search_works=False,
+                search_chosen_ratio=None,
+                notes=notes,
+            )
 
     from .accuracy_based_auto_prune import _config_to_dict, _merge_attention_skips
 
