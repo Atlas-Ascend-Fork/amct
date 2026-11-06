@@ -336,8 +336,7 @@ def _resolve_calib_kind(module):
 
 
 def _register_block_calibrators():
-    # Import for registration side effects. Each module below decorates its
-    # calibrator with @register_block_calibrator(kind, matcher=...).
+    # Imported for registration side effects (@register_block_calibrator).
     import amct_pytorch.algorithms.quant.forward
     import amct_pytorch.algorithms.quant.gradient  # noqa: F401
 
