@@ -235,6 +235,7 @@ class QuantGlmMoeDsaAttention(nn.Module):
                 args,
                 attn_module.q_a_proj,
                 w_bits=self._get_bits(q_a, _W),
+                a_bits=self._get_bits(q_a, _A),
                 name="q_a_proj",
             )
             if quant_q_a
@@ -245,6 +246,7 @@ class QuantGlmMoeDsaAttention(nn.Module):
                 args,
                 attn_module.q_b_proj,
                 w_bits=self._get_bits(q_b, _W),
+                a_bits=self._get_bits(q_b, _A),
                 name="q_b_proj",
             )
             if use_quant
@@ -255,6 +257,7 @@ class QuantGlmMoeDsaAttention(nn.Module):
                 args,
                 attn_module.kv_a_proj_with_mqa,
                 w_bits=self._get_bits(kv_a, _W),
+                a_bits=self._get_bits(kv_a, _A),
                 name="kv_a_proj_with_mqa",
             )
             if quant_q_a
@@ -263,7 +266,11 @@ class QuantGlmMoeDsaAttention(nn.Module):
         self.kv_b_proj = PlainLinear(attn_module.kv_b_proj)
         self.o_proj = (
             QuantLinear(
-                args, attn_module.o_proj, w_bits=self._get_bits(o, _W), name="o_proj"
+                args,
+                attn_module.o_proj,
+                w_bits=self._get_bits(o, _W),
+                a_bits=self._get_bits(o, _A),
+                name="o_proj",
             )
             if use_quant
             else PlainLinear(attn_module.o_proj)
@@ -327,6 +334,7 @@ class QuantGlmIndexer(nn.Module):
                 args,
                 indexer.wq_b,
                 w_bits=QuantGlmMoeDsaAttention._get_bits(wq_b, _W),
+                a_bits=QuantGlmMoeDsaAttention._get_bits(wq_b, _A),
                 name="wq_b",
             )
             if use_quant
@@ -337,6 +345,7 @@ class QuantGlmIndexer(nn.Module):
                 args,
                 indexer.wk,
                 w_bits=QuantGlmMoeDsaAttention._get_bits(wk, _W),
+                a_bits=QuantGlmMoeDsaAttention._get_bits(wk, _A),
                 name="wk",
             )
             if quant_wk

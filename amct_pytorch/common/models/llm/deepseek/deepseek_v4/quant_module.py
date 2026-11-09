@@ -15,6 +15,12 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+# The prefill compressor/indexer/attention tensor operations adapt the DeepSeek
+# model implementation used by the adjacent modeling/modeling_deepseek_v4.py:
+# https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash/blob/main/inference/model.py
+# Copyright (c) 2023 DeepSeek. Original model code is MIT-licensed.
+# Full original notice: Third_Party_Open_Source_Software_Notice, DeepSeek-V4-Flash.
+
 """v4 quant wrappers — prefill-only, blockwise PTQ path.
 
 Wrappers compose around the upstream-style modules in `modeling_deepseek_v4.py`:
@@ -112,10 +118,14 @@ class QuantV4Compressor(nn.Module):
             bits = quant_args.bit_policy["attn-linear"]
             wkv, wgate = bits["comp_wkv"], bits["comp_wgate"]
             self.wkv = QuantLinear(
-                quant_args, compressor.wkv, w_bits=wkv.w, name="comp_wkv"
+                quant_args, compressor.wkv, w_bits=wkv.w, a_bits=wkv.a, name="comp_wkv"
             )
             self.wgate = QuantLinear(
-                quant_args, compressor.wgate, w_bits=wgate.w, name="comp_wgate"
+                quant_args,
+                compressor.wgate,
+                w_bits=wgate.w,
+                a_bits=wgate.a,
+                name="comp_wgate",
             )
             self.inp_afq = ActivationQuantizer(quant_args, wkv.a)
         else:
@@ -182,12 +192,13 @@ class QuantV4Indexer(nn.Module):
             bits = quant_args.bit_policy["attn-linear"]
             wq_b, weights_proj = bits["idx_wq_b"], bits["idx_weights_proj"]
             self.wq_b = QuantLinear(
-                quant_args, indexer.wq_b, w_bits=wq_b.w, name="idx_wq_b"
+                quant_args, indexer.wq_b, w_bits=wq_b.w, a_bits=wq_b.a, name="idx_wq_b"
             )
             self.weights_proj = QuantLinear(
                 quant_args,
                 indexer.weights_proj,
                 w_bits=weights_proj.w,
+                a_bits=weights_proj.a,
                 name="idx_weights_proj",
             )
             self.qr_afq = ActivationQuantizer(quant_args, wq_b.a)
@@ -276,10 +287,18 @@ class QuantV4Attention(nn.Module):
             bits = quant_args.bit_policy["attn-linear"]
             wq_a, wq_b = bits["wq_a"], bits["wq_b"]
             wkv, wo_b, wo_a = bits["wkv"], bits["wo_b"], bits["wo_a"]
-            self.wq_a = QuantLinear(quant_args, module.wq_a, w_bits=wq_a.w, name="wq_a")
-            self.wq_b = QuantLinear(quant_args, module.wq_b, w_bits=wq_b.w, name="wq_b")
-            self.wkv = QuantLinear(quant_args, module.wkv, w_bits=wkv.w, name="wkv")
-            self.wo_b = QuantLinear(quant_args, module.wo_b, w_bits=wo_b.w, name="wo_b")
+            self.wq_a = QuantLinear(
+                quant_args, module.wq_a, w_bits=wq_a.w, a_bits=wq_a.a, name="wq_a"
+            )
+            self.wq_b = QuantLinear(
+                quant_args, module.wq_b, w_bits=wq_b.w, a_bits=wq_b.a, name="wq_b"
+            )
+            self.wkv = QuantLinear(
+                quant_args, module.wkv, w_bits=wkv.w, a_bits=wkv.a, name="wkv"
+            )
+            self.wo_b = QuantLinear(
+                quant_args, module.wo_b, w_bits=wo_b.w, a_bits=wo_b.a, name="wo_b"
+            )
             from amct_pytorch.quantization.modules.quant_base import WeightQuantizer
 
             self.wo_a = module.wo_a

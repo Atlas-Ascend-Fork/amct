@@ -270,7 +270,9 @@ class LlmDeployWorkflow:
             "weight_map": weight_map,
         }
 
-    def _refresh_config(self, quant_ignore_layers, *, tensor_plan=None):
+    def _refresh_config(
+        self, quant_ignore_layers, *, tensor_plan=None, linear_bits=None
+    ):
         config_file = os.path.join(self.output_dir, 'config.json')
         with open(config_file, "r") as f:
             config = json.load(f)
@@ -289,6 +291,7 @@ class LlmDeployWorkflow:
                     quant_ignore_layers,
                     is_mx=self.is_mx,
                     bits_scheme=bits_scheme,
+                    linear_bits=linear_bits,
                 )
             config['quantization_config'] = quantization_config
         else:
@@ -330,6 +333,7 @@ class LlmDeployWorkflow:
     def _run_blockwise(self):
         self._copy_support_files()
         quant_ignore_layers = []
+        linear_bits = {}
         original_index = self._load_weight_index()
         original_weight_map = dict(original_index.get("weight_map", {}))
         updated_weight_map = {}
@@ -341,6 +345,7 @@ class LlmDeployWorkflow:
                 self.pipeline,
                 layer_idx,
                 quant_ignore_layers,
+                linear_bits=linear_bits,
             )
             if not layer_tensors:
                 continue
@@ -360,7 +365,7 @@ class LlmDeployWorkflow:
             )
         )
         index_path = self._refresh_weight_index(original_index, updated_weight_map)
-        self._refresh_config(quant_ignore_layers)
+        self._refresh_config(quant_ignore_layers, linear_bits=linear_bits)
         logger.info("Exported deploy model to {}", self.output_dir)
         logger.info("Refreshed weight index at {}", index_path)
         return {

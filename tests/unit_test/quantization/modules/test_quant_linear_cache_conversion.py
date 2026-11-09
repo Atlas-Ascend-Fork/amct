@@ -34,7 +34,7 @@ def make_quant_linear():
     with torch.no_grad():
         linear.weight.fill_(1.0)
         linear.bias.fill_(0.25)
-    layer = QuantLinear(args, linear)
+    layer = QuantLinear(args, linear, a_bits=16)
     layer.eval_mode = True
     return layer
 

@@ -66,7 +66,9 @@ class QuantIndexer(torch.nn.Module):
         self.softmax_scale = module.softmax_scale
         self.input_transform = None
         self.wq_b = (
-            QuantLinear(quant_args, module.wq_b, w_bits=wq_b.w, name="wq_b")
+            QuantLinear(
+                quant_args, module.wq_b, w_bits=wq_b.w, a_bits=wq_b.a, name="wq_b"
+            )
             if self.enable_attn_linear
             else PlainLinear(module.wq_b)
         )
@@ -144,7 +146,13 @@ class QuantDeepseekV3Attention(nn.Module):
         self.q_a_proj = module.q_a_proj
         self.q_a_layernorm = module.q_a_layernorm
         self.q_b_proj = (
-            QuantLinear(quant_args, module.q_b_proj, w_bits=q_b_proj.w, name="q_b_proj")
+            QuantLinear(
+                quant_args,
+                module.q_b_proj,
+                w_bits=q_b_proj.w,
+                a_bits=q_b_proj.a,
+                name="q_b_proj",
+            )
             if self.enable_attn_linear
             else PlainLinear(module.q_b_proj)
         )
@@ -152,7 +160,13 @@ class QuantDeepseekV3Attention(nn.Module):
         self.kv_a_layernorm = module.kv_a_layernorm
         self.kv_b_proj = module.kv_b_proj
         self.o_proj = (
-            QuantLinear(quant_args, module.o_proj, w_bits=o_proj.w, name="o_proj")
+            QuantLinear(
+                quant_args,
+                module.o_proj,
+                w_bits=o_proj.w,
+                a_bits=o_proj.a,
+                name="o_proj",
+            )
             if self.enable_attn_linear
             else PlainLinear(module.o_proj)
         )

@@ -97,7 +97,7 @@ def test_quantlinear_consumes_fp16_zero_weight_in_train_and_eval(kind):
     args = SimpleNamespace(
         quant_dtype=kind, w_bits=8, algos=[], block_size_col=128, scale_dtype="fp32"
     )
-    module = QuantLinear(args, linear)
+    module = QuantLinear(args, linear, a_bits=16)
     assert isinstance(
         module.weight_quantizer.quant_obj,
         {"int": QuantDequantInt, "mxfp": QuantDequantMx, "fp": QuantDequantFP}[kind],

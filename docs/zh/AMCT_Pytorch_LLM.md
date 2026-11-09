@@ -231,6 +231,8 @@ python -m amct_pytorch.ptq \
 
 `deploy` 当前支持 block 粒度导出，该过程会复制模型的非权重辅助文件，逐层导出量化权重，重写 `model.safetensors.index.json`，并在 `config.json` 中写入 `quantization_config`。
 
+block 导出按每个 Linear 实际采用的权重和输入激活位宽写入精确模块配置。16 bit 表示对应张量保持浮点：W16A8 的权重配置为 `null`、输入激活仍为 8 bit；W8A16 的输入激活配置为 `null`。只有权重和激活均为 16 bit 时才将整个模块加入 `ignore`。共享同一激活量化器的投影使用其实际输入位宽。
+
 ```bash
 python -m amct_pytorch.deploy \
   --trust_remote_code \

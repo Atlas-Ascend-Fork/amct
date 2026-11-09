@@ -158,7 +158,13 @@ class QuantLongcatMLA(LongcatFlashMLA):
         if hasattr(attn_module, "q_proj"):
             q = bits["q_proj"]
             self.q_proj = (
-                QuantLinear(quant_args, attn_module.q_proj, w_bits=q.w, name="q_proj")
+                QuantLinear(
+                    quant_args,
+                    attn_module.q_proj,
+                    w_bits=q.w,
+                    a_bits=q.a,
+                    name="q_proj",
+                )
                 if self.enable_attn_linear
                 else PlainLinear(attn_module.q_proj)
             )
@@ -166,7 +172,11 @@ class QuantLongcatMLA(LongcatFlashMLA):
             q_a, q_b = bits["q_a_proj"], bits["q_b_proj"]
             self.q_a_proj = (
                 QuantLinear(
-                    quant_args, attn_module.q_a_proj, w_bits=q_a.w, name="q_a_proj"
+                    quant_args,
+                    attn_module.q_a_proj,
+                    w_bits=q_a.w,
+                    a_bits=q_a.a,
+                    name="q_a_proj",
                 )
                 if self.enable_attn_linear
                 else PlainLinear(attn_module.q_a_proj)
@@ -174,7 +184,11 @@ class QuantLongcatMLA(LongcatFlashMLA):
             self.q_a_layernorm = attn_module.q_a_layernorm
             self.q_b_proj = (
                 QuantLinear(
-                    quant_args, attn_module.q_b_proj, w_bits=q_b.w, name="q_b_proj"
+                    quant_args,
+                    attn_module.q_b_proj,
+                    w_bits=q_b.w,
+                    a_bits=q_b.a,
+                    name="q_b_proj",
                 )
                 if self.enable_attn_linear
                 else PlainLinear(attn_module.q_b_proj)
@@ -185,6 +199,7 @@ class QuantLongcatMLA(LongcatFlashMLA):
                 quant_args,
                 attn_module.kv_a_proj_with_mqa,
                 w_bits=kv_a.w,
+                a_bits=kv_a.a,
                 name="kv_a_proj_with_mqa",
             )
             if self.enable_attn_linear
@@ -193,13 +208,19 @@ class QuantLongcatMLA(LongcatFlashMLA):
         self.kv_a_layernorm = attn_module.kv_a_layernorm
         self.kv_b_proj = (
             QuantLinear(
-                quant_args, attn_module.kv_b_proj, w_bits=kv_b.w, name="kv_b_proj"
+                quant_args,
+                attn_module.kv_b_proj,
+                w_bits=kv_b.w,
+                a_bits=kv_b.a,
+                name="kv_b_proj",
             )
             if self.enable_attn_linear
             else PlainLinear(attn_module.kv_b_proj)
         )
         self.o_proj = (
-            QuantLinear(quant_args, attn_module.o_proj, w_bits=o.w, name="o_proj")
+            QuantLinear(
+                quant_args, attn_module.o_proj, w_bits=o.w, a_bits=o.a, name="o_proj"
+            )
             if self.enable_attn_linear
             else PlainLinear(attn_module.o_proj)
         )

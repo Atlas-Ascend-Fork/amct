@@ -34,7 +34,7 @@ pytestmark = pytest.mark.cpu
 @pytest.mark.parametrize("nested", [False, True])
 def test_state_reload_rebuilds_eval_cache_from_new_parameters(assign, nested):
     args = SimpleNamespace(algos=[], quant_dtype="int", w_bits=8, quant_target=[])
-    layer = QuantLinear(args, nn.Linear(4, 3, bias=False), name="proj")
+    layer = QuantLinear(args, nn.Linear(4, 3, bias=False), name="proj", a_bits=16)
     layer.eval_mode = True
     with torch.no_grad():
         layer.linear.weight.fill_(1.0)
@@ -61,7 +61,7 @@ def test_state_reload_rebuilds_eval_cache_from_new_parameters(assign, nested):
 @pytest.mark.parametrize("nested", [False, True])
 def test_state_reload_clears_populated_transform_key(assign, nested):
     args = SimpleNamespace(algos=[], quant_dtype="int", w_bits=8, quant_target=[])
-    layer = QuantLinear(args, nn.Linear(4, 3, bias=False), name="proj")
+    layer = QuantLinear(args, nn.Linear(4, 3, bias=False), name="proj", a_bits=16)
     layer.eval_mode = True
     with torch.no_grad():
         layer.linear.weight.fill_(1.0)

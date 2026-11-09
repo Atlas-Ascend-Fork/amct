@@ -57,20 +57,34 @@ class QuantQwen3NextLinearAttn(Qwen3NextGatedDeltaNet):
         bits = quant_args.bit_policy["attn-linear"]
         out, qkvz, ba = bits["out_proj"], bits["in_proj_qkvz"], bits["in_proj_ba"]
         self.out_proj = (
-            QuantLinear(quant_args, attn_module.out_proj, w_bits=out.w, name="out_proj")
+            QuantLinear(
+                quant_args,
+                attn_module.out_proj,
+                w_bits=out.w,
+                a_bits=out.a,
+                name="out_proj",
+            )
             if self.enable_attn_linear
             else PlainLinear(attn_module.out_proj)
         )
         self.in_proj_qkvz = (
             QuantLinear(
-                quant_args, attn_module.in_proj_qkvz, w_bits=qkvz.w, name="in_proj_qkvz"
+                quant_args,
+                attn_module.in_proj_qkvz,
+                w_bits=qkvz.w,
+                a_bits=qkvz.a,
+                name="in_proj_qkvz",
             )
             if self.enable_attn_linear
             else PlainLinear(attn_module.in_proj_qkvz)
         )
         self.in_proj_ba = (
             QuantLinear(
-                quant_args, attn_module.in_proj_ba, w_bits=ba.w, name="in_proj_ba"
+                quant_args,
+                attn_module.in_proj_ba,
+                w_bits=ba.w,
+                a_bits=ba.a,
+                name="in_proj_ba",
             )
             if self.enable_attn_linear
             else PlainLinear(attn_module.in_proj_ba)
@@ -176,22 +190,30 @@ class QuantQwen3NextAttn(Qwen3NextAttention):
         bits = quant_args.bit_policy["attn-linear"]
         q, k, v, o = bits["q_proj"], bits["k_proj"], bits["v_proj"], bits["o_proj"]
         self.q_proj = (
-            QuantLinear(quant_args, attn_module.q_proj, w_bits=q.w, name="q_proj")
+            QuantLinear(
+                quant_args, attn_module.q_proj, w_bits=q.w, a_bits=q.a, name="q_proj"
+            )
             if self.enable_attn_linear
             else PlainLinear(attn_module.q_proj)
         )
         self.k_proj = (
-            QuantLinear(quant_args, attn_module.k_proj, w_bits=k.w, name="k_proj")
+            QuantLinear(
+                quant_args, attn_module.k_proj, w_bits=k.w, a_bits=k.a, name="k_proj"
+            )
             if self.enable_attn_linear
             else PlainLinear(attn_module.k_proj)
         )
         self.v_proj = (
-            QuantLinear(quant_args, attn_module.v_proj, w_bits=v.w, name="v_proj")
+            QuantLinear(
+                quant_args, attn_module.v_proj, w_bits=v.w, a_bits=v.a, name="v_proj"
+            )
             if self.enable_attn_linear
             else PlainLinear(attn_module.v_proj)
         )
         self.o_proj = (
-            QuantLinear(quant_args, attn_module.o_proj, w_bits=o.w, name="o_proj")
+            QuantLinear(
+                quant_args, attn_module.o_proj, w_bits=o.w, a_bits=o.a, name="o_proj"
+            )
             if self.enable_attn_linear
             else PlainLinear(attn_module.o_proj)
         )

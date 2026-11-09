@@ -151,13 +151,21 @@ class QuantGatedMLP(nn.Module):
         bits = quant_args.bit_policy[group]
         gate, up, down = bits["gate_proj"], bits["up_proj"], bits["down_proj"]
         self.gate_proj = QuantLinear(
-            quant_args, mlp_module.gate_proj, w_bits=gate.w, name="gate_proj"
+            quant_args,
+            mlp_module.gate_proj,
+            w_bits=gate.w,
+            a_bits=gate.a,
+            name="gate_proj",
         )
         self.up_proj = QuantLinear(
-            quant_args, mlp_module.up_proj, w_bits=up.w, name="up_proj"
+            quant_args, mlp_module.up_proj, w_bits=up.w, a_bits=gate.a, name="up_proj"
         )
         self.down_proj = QuantLinear(
-            quant_args, mlp_module.down_proj, w_bits=down.w, name="down_proj"
+            quant_args,
+            mlp_module.down_proj,
+            w_bits=down.w,
+            a_bits=down.a,
+            name="down_proj",
         )
         self.input_quant = ActivationQuantizer(quant_args, gate.a)
         self.hidden_quant = ActivationQuantizer(quant_args, down.a)

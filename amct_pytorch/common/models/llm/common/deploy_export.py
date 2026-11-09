@@ -61,6 +61,10 @@ def generate_quant_group(a_bits=8, w_bits=8, qtype="float", activation_use_clip=
             "type": qtype,
         },
     }
+    if a_bits == 16:
+        quant_group["input_activations"] = None
+    if w_bits == 16:
+        quant_group["weights"] = None
     return quant_group
 
 
@@ -71,21 +75,40 @@ def _default_bits_scheme():
     ]
 
 
-def generate_quant_config(cache_scheme, ignores, is_mx=False, bits_scheme=None):
+def generate_quant_config(
+    cache_scheme, ignores, is_mx=False, bits_scheme=None, *, linear_bits=None
+):
     """
     Generate a quantization configuration dictionary based on the specified parameters.
     """
     if bits_scheme is None:
         bits_scheme = _default_bits_scheme()
+    if linear_bits:
+        # Exact exported Linear targets avoid overlapping class-wide groups.
+        other_schemes = []
+        for group in bits_scheme:
+            targets = [target for target in group["targets"] if target != "Linear"]
+            if targets:
+                other_schemes.append({**group, "targets": targets})
+        grouped = {}
+        for name, bits in sorted(linear_bits.items()):
+            if tuple(bits) != (16, 16):
+                grouped.setdefault(tuple(bits), []).append(name)
+        bits_scheme = other_schemes + [
+            {"targets": targets, "w_bits": bits[0], "a_bits": bits[1]}
+            for bits, targets in grouped.items()
+        ]
     qtype = "float" if is_mx else "int"
     config_groups = {}
     for idx, group in enumerate(bits_scheme):
         entry = {"targets": group["targets"]}
-        entry.update(
-            generate_quant_group(
-                a_bits=group["a_bits"], w_bits=group["w_bits"], qtype=qtype
-            )
+        quant_group = generate_quant_group(
+            a_bits=group["a_bits"], w_bits=group["w_bits"], qtype=qtype
         )
+        # This helper's inactive legacy clip flag is not a QuantizationScheme
+        # field. Keep it on the public helper, not in the standard config file.
+        quant_group.pop("activation_use_clip")
+        entry.update(quant_group)
         config_groups[f"group_{idx}"] = entry
     quant_config = {
         "config_groups": config_groups,
@@ -115,10 +138,11 @@ def generate_tensor_quant_config(plan, cache_scheme=None):
     )
 
 
-def get_quant_ignore_linear_names(block, weight_prefix):
+def get_quant_ignore_linear_names(block, weight_prefix, *, linear_targets=None):
     """Return weight names of non-quantized Linear modules in a block.
 
-    QuantLinear modules are skipped (already quantized). PlainLinear and
+    QuantLinear modules using the floating bypass are collected. Quantized
+    QuantLinear modules are skipped. PlainLinear and
     raw nn.Linear modules are collected as ignore entries.
     """
     quant_linear_prefixes = tuple(
@@ -134,6 +158,12 @@ def get_quant_ignore_linear_names(block, weight_prefix):
 
     names = []
     for name, module in block.named_modules():
+        if isinstance(module, QuantLinear):
+            if module.w_bits == 16 and module.a_bits == 16:
+                names.append(
+                    (linear_targets or {}).get(id(module), f"{weight_prefix}{name}")
+                )
+            continue
         if isinstance(module, PlainLinear):
             names.append(f"{weight_prefix}{name}")
             continue
@@ -150,14 +180,28 @@ def get_quant_ignore_linear_names(block, weight_prefix):
     return names
 
 
-def export_block_deploy(pipeline, layer_idx: int, quant_ignore_layers: list):
+def export_block_deploy(
+    pipeline, layer_idx: int, quant_ignore_layers: list, *, linear_bits=None
+):
     block = pipeline.build_quant_block(layer_idx).to(pipeline.args.device).eval()
     pipeline.load_selected_layer_ptq_params(layer_idx, block, strict=False)
     deploy_tensors = {}
     tensor_routes = {}
     weight_prefix = pipeline.get_layer_weight_prefix(layer_idx)
-    quant_ignore_layers.extend(get_quant_ignore_linear_names(block, weight_prefix))
-    for weight_key, module in pipeline.iter_deploy_bindings(layer_idx, block):
+    bindings = list(pipeline.iter_deploy_bindings(layer_idx, block))
+    linear_targets = {
+        id(module): weight_key.removesuffix(".weight")
+        for weight_key, module in bindings
+        if isinstance(module, QuantLinear)
+    }
+    quant_ignore_layers.extend(
+        get_quant_ignore_linear_names(
+            block, weight_prefix, linear_targets=linear_targets
+        )
+    )
+    for weight_key, module in bindings:
+        if linear_bits is not None and isinstance(module, QuantLinear):
+            linear_bits[linear_targets[id(module)]] = (module.w_bits, module.a_bits)
         payload = module.export_deploy()
         deploy_tensors[weight_key] = payload["qweight"]
         tensor_routes[weight_key] = weight_key

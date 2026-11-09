@@ -37,7 +37,7 @@ def _args(algos=(), quant_dtype="int", w_bits=8):
 
 def _make_linear_and_quant(in_features=4, out_features=8):
     linear = nn.Linear(in_features, out_features)
-    return linear, QuantLinear(_args(), linear, w_bits=8, name="proj")
+    return linear, QuantLinear(_args(), linear, w_bits=8, name="proj", a_bits=16)
 
 
 def test_quant_linear_init_records_weight_size_in_args():

@@ -528,7 +528,10 @@ def test_deploy_run_unsupported_granularity(monkeypatch):
 
 
 def test_deploy_run_blockwise_mocked_loop(monkeypatch, tmp_path):
-    def _mock_export_block_deploy(pipeline, layer_idx, quant_ignore_layers):
+    def _mock_export_block_deploy(
+        pipeline, layer_idx, quant_ignore_layers, *, linear_bits=None
+    ):
+        linear_bits[f"model.layers.{layer_idx}.linear"] = (16, 8)
         return (
             {LAYER_WEIGHT: torch.zeros(2, 3)},
             {LAYER_WEIGHT: LAYER_WEIGHT},
@@ -575,7 +578,13 @@ def test_deploy_run_blockwise_mocked_loop(monkeypatch, tmp_path):
     assert "index_path" in result
     assert "num_output_files" in result
     assert wf._write_block_file.call_count == 2
-    wf._refresh_config.assert_called_once()
+    wf._refresh_config.assert_called_once_with(
+        [],
+        linear_bits={
+            "model.layers.0.linear": (16, 8),
+            "model.layers.1.linear": (16, 8),
+        },
+    )
 
 
 # ---- __init__ via actual constructor -------------------------------------
@@ -727,7 +736,7 @@ def test_write_remaining_weights_empty_input_returns_empty():
 def test_deploy_run_blockwise_empty_layer_tensors(monkeypatch, tmp_path):
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_deploy.export_block_deploy",
-        lambda pipeline, layer_idx, quant_ignore_layers: ({}, {}),
+        lambda pipeline, layer_idx, quant_ignore_layers, *, linear_bits=None: ({}, {}),
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_deploy.logger",
@@ -1427,3 +1436,91 @@ def test_ascend_tensor_run_preserves_source_config(
         assert set(description["custom_tensors"]) == {
             name + suffix for suffix in (".weight", ".weight_scale", ".weight_offset")
         }
+
+
+def test_refresh_config_serializes_activation_only_linear_without_overlap(tmp_path):
+    wf = _make_workflow(output_dir=str(tmp_path))
+    wf.pipeline = SimpleNamespace(cache_scheme=lambda: {}, bits_scheme=lambda: None)
+    (tmp_path / CONFIG_JSON).write_text(json.dumps({"hidden_size": 2}))
+    bits = {
+        "model.layers.0.mlp.gate_proj": (16, 8),
+        "model.layers.0.mlp.up_proj": (8, 8),
+        "model.layers.0.mlp.down_proj": (8, 16),
+    }
+    wf._refresh_config([], linear_bits=bits)
+    saved = json.loads((tmp_path / CONFIG_JSON).read_text())
+    config = saved[QUANTIZATION_CONFIG]
+    groups = config["config_groups"].values()
+    targets = [target for group in groups for target in group["targets"]]
+    assert "Linear" not in targets
+    assert all(targets.count(name) == 1 for name in bits)
+    by_target = {target: group for group in groups for target in group["targets"]}
+    assert by_target["model.layers.0.mlp.gate_proj"]["weights"] is None
+    assert (
+        by_target["model.layers.0.mlp.gate_proj"]["input_activations"]["num_bits"] == 8
+    )
+    assert by_target["model.layers.0.mlp.down_proj"]["input_activations"] is None
+    assert by_target["model.layers.0.mlp.down_proj"]["weights"]["num_bits"] == 8
+    assert saved["hidden_size"] == 2 and config["ignore"] == []
+
+
+def test_blockwise_real_weight_files_keep_activation_only_metadata(tmp_path):
+    from safetensors.torch import load_file
+    from amct_pytorch.common.models.llm.common.base import BaseModel
+    from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+
+    src, dst = tmp_path / "model", tmp_path / "deploy"
+    src.mkdir()
+    dst.mkdir()
+    weight = torch.tensor([[1.0, -0.5], [0.25, 0.75]])
+    other = torch.tensor([0.31, -0.97])
+    key = "model.layers.0.linear.weight"
+    save_file({key: weight, "other.weight": other}, str(src / MODEL_SAFETENSORS))
+    (src / CONFIG_JSON).write_text(json.dumps({"hidden_size": 2}))
+    args = SimpleNamespace(
+        device="cpu", w_bits=16, a_bits=8, algos=[], quant_dtype="int"
+    )
+    linear = torch.nn.Linear(2, 2, bias=False)
+    with torch.no_grad():
+        linear.weight.copy_(weight)
+    block = torch.nn.ModuleDict(
+        {"linear": QuantLinear(args, linear, w_bits=16, a_bits=8)}
+    )
+
+    class ModelLoadingBoundary:
+        num_layers = 1
+        iter_deploy_bindings = BaseModel.iter_deploy_bindings
+
+        def __init__(self):
+            self.args = args
+
+        def build_quant_block(self, layer_idx):
+            return block
+
+        def load_selected_layer_ptq_params(self, *args, **kwargs):
+            pass
+
+        def get_layer_weight_prefix(self, layer_idx):
+            return "model.layers.0."
+
+    workflow = _make_workflow(
+        model_path=str(src), output_dir=str(dst), quant_dtype="int8"
+    )
+    workflow.safetensors_files = None
+    workflow.pipeline = ModelLoadingBoundary()
+    result = workflow._run_blockwise()
+    index = json.loads(Path(result["index_path"]).read_text())["weight_map"]
+    restored = {}
+    for name in set(index.values()):
+        restored.update(load_file(str(dst / name)))
+    assert torch.equal(restored[key], weight)
+    assert torch.equal(restored["other.weight"], other)
+    config = json.loads((dst / CONFIG_JSON).read_text())[QUANTIZATION_CONFIG]
+    groups = [
+        group
+        for group in config["config_groups"].values()
+        if "model.layers.0.linear" in group["targets"]
+    ]
+    assert len(groups) == 1 and groups[0]["weights"] is None
+    assert groups[0]["input_activations"]["num_bits"] == 8
+    assert config["ignore"] == []

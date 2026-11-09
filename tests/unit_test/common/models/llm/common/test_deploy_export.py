@@ -146,7 +146,7 @@ def test_get_quant_ignore_linear_names_skips_quant_linear_prefix():
 
             register_dtype()
             args = SimpleNamespace(w_bits=4, quant_dtype=INT, algos=[])
-            super().__init__(args, nn.Linear(4, 4))
+            super().__init__(args, nn.Linear(4, 4), a_bits=16)
             self.nested_fc = nn.Linear(4, 4)
 
     block = nn.Module()

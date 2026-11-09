@@ -410,7 +410,7 @@ def _make_real_quant_linear(in_f=4, out_f=4, name="test_ql"):
         w_size=(out_f, in_f),
     )
     linear = nn.Linear(in_f, out_f, bias=False)
-    return QuantLinear(args, linear, w_bits=8, name=name)
+    return QuantLinear(args, linear, w_bits=8, name=name, a_bits=16)
 
 
 # ---------------------------------------------------------------------------
@@ -1390,3 +1390,64 @@ class TestGLM5_2NewFunctions:
 
 if __name__ == "__main__":
     pytest.main([__file__])
+
+
+@pytest.mark.parametrize("weight_bits", [8, 16])
+@pytest.mark.parametrize("quant_dtype", ["int", "mxfp"])
+def test_glm_deploy_activation_bits_follow_policy_without_cli_defaults(
+    weight_bits, quant_dtype
+):
+    from amct_pytorch.common.models.llm.common.deploy_export import (
+        export_block_deploy,
+        generate_quant_config,
+    )
+
+    _register_dtype_once()
+    args = _make_quant_args(quant_dtype=quant_dtype)
+    # The CLI has no top-level bit arguments; the policy is the source of truth.
+    for name in ("w_bits", "a_bits"):
+        if hasattr(args, name):
+            delattr(args, name)
+    args.bit_policy = BitPolicy({"w_bits": weight_bits, "a_bits": 8})
+    attention = QuantGlmMoeDsaAttention(args, _make_mock_attn_module())
+    assert attention.q_b_proj.a_bits == attention.q_b_proj_afq.bits == 8
+    assert attention.o_proj.a_bits == attention.o_proj_afq.bits == 8
+    assert attention.indexer.wq_b.a_bits == attention.indexer.qr_afq.bits == 8
+    if quant_dtype == "mxfp":
+        assert attention.q_a_proj.a_bits == attention.inp_afq.bits == 8
+        assert attention.kv_a_proj_with_mqa.a_bits == attention.inp_afq.bits == 8
+        assert attention.indexer.wk.a_bits == 8
+
+    class Boundary:
+        iter_deploy_bindings = GLM5_2.iter_deploy_bindings
+
+        def __init__(self):
+            self.args = SimpleNamespace(device="cpu")
+
+        def build_quant_block(self, layer_idx):
+            return attention
+
+        def load_selected_layer_ptq_params(self, *args, **kwargs):
+            return None
+
+        def get_layer_weight_prefix(self, layer_idx):
+            return "model.layers.0.self_attn."
+
+    ignored, bits = [], {}
+    export_block_deploy(Boundary(), 0, ignored, linear_bits=bits)
+    config = generate_quant_config(
+        None, ignored, is_mx=quant_dtype == "mxfp", linear_bits=bits
+    )
+    groups = {
+        target: group
+        for group in config["config_groups"].values()
+        for target in group["targets"]
+    }
+    expected = ["q_b_proj", "o_proj", "indexer.wq_b"]
+    if quant_dtype == "mxfp":
+        expected += ["q_a_proj", "kv_a_proj_with_mqa", "indexer.wk"]
+    for name in expected:
+        target = "model.layers.0.self_attn." + name
+        assert target not in ignored
+        assert bits[target] == (weight_bits, 8)
+        assert groups[target]["input_activations"]["num_bits"] == 8

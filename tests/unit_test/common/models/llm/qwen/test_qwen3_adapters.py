@@ -158,6 +158,7 @@ def _build_moe_block_with_quant_linears():
         nn.Linear(4, 4),
         w_bits=8,
         name="q_proj",
+        a_bits=16,
     )
 
     # MoE expert hierarchy: mlp.experts.expert_modules.{idx}.{proj_name}
@@ -171,6 +172,7 @@ def _build_moe_block_with_quant_linears():
             nn.Linear(4, 4),
             w_bits=8,
             name="up_proj",
+            a_bits=16,
         )
         block.mlp.experts.expert_modules.append(expert)
     return block
@@ -231,6 +233,7 @@ def test_qwen3_moe_iter_deploy_bindings_raises_on_malformed_expert_name():
         nn.Linear(4, 4),
         w_bits=8,
         name="bad",
+        a_bits=16,
     )
     with pytest.raises(ValueError, match="Unexpected Qwen3 MoE expert module name"):
         list(obj.iter_deploy_bindings(layer_idx=0, block=block))
@@ -261,6 +264,7 @@ def test_qwen3_5_moe_iter_deploy_bindings_keeps_non_expert_path():
         nn.Linear(4, 4),
         w_bits=8,
         name="down_proj",
+        a_bits=16,
     )
 
     bindings = list(obj.iter_deploy_bindings(layer_idx=1, block=block))
@@ -283,6 +287,7 @@ def test_qwen3_5_moe_iter_deploy_bindings_raises_on_malformed_expert_name():
         nn.Linear(4, 4),
         w_bits=8,
         name="bad",
+        a_bits=16,
     )
 
     with pytest.raises(ValueError, match="Unexpected Qwen3.5 MoE expert module name"):
