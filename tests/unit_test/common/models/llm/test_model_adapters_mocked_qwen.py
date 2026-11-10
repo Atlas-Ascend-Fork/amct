@@ -164,7 +164,7 @@ class TestQwen3Mocked:
         assert units[0].kind == QUANT_TARGET_MLP
 
     def test_qwen3_export_block_deploy_returns_tensors(self, mock_hf_model):
-        from amct_pytorch.common.models.llm.common.deploy_export import (
+        from amct_pytorch.common.models.llm.common.deployment.deploy_export import (
             export_block_deploy,
         )
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
@@ -1236,7 +1236,7 @@ class TestQwen3NextMocked:
     def test_qwen3_next_export_block_deploy(self, monkeypatch):
         from transformers.models.qwen3_next.modeling_qwen3_next import Qwen3NextConfig
 
-        from amct_pytorch.common.models.llm.common.deploy_export import (
+        from amct_pytorch.common.models.llm.common.deployment.deploy_export import (
             export_block_deploy,
         )
         from amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next import Qwen3Next

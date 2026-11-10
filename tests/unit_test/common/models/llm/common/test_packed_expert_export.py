@@ -17,7 +17,7 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-from amct_pytorch.common.models.llm.common.packed_expert_export import (
+from amct_pytorch.common.models.llm.common.deployment.packed_expert_export import (
     PackedGatedExpertLayout,
     detect_packed_gated_expert_layout,
 )

@@ -1,4 +1,3 @@
-# coding=utf-8
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,16 +13,17 @@
 # limitations under the License.
 
 import importlib
+from types import SimpleNamespace
 
 import pytest
 import torch
 
 
-def adapt(weight_name, payload):
+def adapt(weight_name, payload, quant_dtype="int"):
     module = importlib.import_module(
-        "amct_pytorch.common.models.llm.common.deploy_export"
+        "amct_pytorch.common.models.llm.common.deployment.deploy_export"
     )
-    return module.adapt_ascend_payload(weight_name, payload)
+    return module.adapt_payload(weight_name, payload, quant_dtype)
 
 
 def test_dynamic_payload_preserves_weight_and_original_scale():
@@ -41,6 +41,59 @@ def test_dynamic_payload_preserves_weight_and_original_scale():
     assert payload["x.weight_scale"] is scale
     assert scale.dtype == torch.float32
     assert "x.weight_offset" not in payload
+
+
+def test_mxfp8_payload_preserves_weight_and_e8m0_scale_without_offset():
+    weight = torch.ones(2, 64).to(torch.float8_e4m3fn)
+    scale = torch.ones(2, 2, dtype=torch.uint8)
+
+    result = adapt(
+        "x.weight",
+        {"x.weight": weight, "x.weight_scale": scale},
+        quant_dtype="mxfp",
+    )
+
+    assert set(result) == {"x.weight", "x.weight_scale"}
+    assert result["x.weight"] is weight
+    assert result["x.weight_scale"] is scale
+
+
+def test_hifp8_payload_preserves_uint8_weight_and_row_scale_without_offset():
+    weight = torch.ones(2, 64, dtype=torch.uint8)
+    scale = torch.ones(2, 1, dtype=torch.float32)
+    with pytest.raises(ValueError, match="Unsupported deployment quantization scheme"):
+        adapt(
+            "x.weight",
+            {"x.weight": weight, "x.weight_scale": scale},
+            quant_dtype="hifp",
+        )
+
+
+@pytest.mark.parametrize(
+    "weight,scale",
+    [
+        (torch.ones(2, 64), torch.ones(2, 2, dtype=torch.uint8)),
+        (
+            torch.ones(2, 64).to(torch.float8_e4m3fn),
+            torch.ones(2, 2),
+        ),
+        (
+            torch.ones(2, 63).to(torch.float8_e4m3fn),
+            torch.ones(2, 2, dtype=torch.uint8),
+        ),
+        (
+            torch.ones(2, 64).to(torch.float8_e4m3fn),
+            torch.ones(2, 1, dtype=torch.uint8),
+        ),
+    ],
+)
+def test_mxfp8_rejects_invalid_payload_dtype_or_shape(weight, scale):
+    with pytest.raises(ValueError, match="x.weight"):
+        adapt(
+            "x.weight",
+            {"x.weight": weight, "x.weight_scale": scale},
+            quant_dtype="mxfp",
+        )
 
 
 @pytest.mark.parametrize(
@@ -85,7 +138,7 @@ def test_rejects_missing_scale_or_unexpected_payload(extra):
 
 def test_description_tracks_actual_tensors():
     module = importlib.import_module(
-        "amct_pytorch.common.models.llm.common.deploy_export"
+        "amct_pytorch.common.models.llm.common.deployment.deploy_export"
     )
     names = {
         "x.weight",
@@ -95,7 +148,7 @@ def test_description_tracks_actual_tensors():
         "model.layers.2.eh_proj.weight",
         "model.norm.weight",
     }
-    desc = module.make_ascend_description(names, frozenset({"x"}))
+    desc = module.make_description(names, frozenset({"x"}))
     assert desc == {
         "version": "1.0.0",
         "model_quant_type": "W8A8_DYNAMIC",
@@ -111,11 +164,64 @@ def test_description_tracks_actual_tensors():
     }
 
 
+def test_mxfp8_description_tracks_weight_and_scale_without_offset():
+    module = importlib.import_module(
+        "amct_pytorch.common.models.llm.common.deployment.deploy_export"
+    )
+    names = {"x.weight", "x.weight_scale", "x.bias", "model.norm.weight"}
+
+    desc = module.make_description(names, frozenset({"x"}), quant_dtype="mxfp")
+
+    assert desc == {
+        "version": "1.0.0",
+        "model_quant_type": "W8A8_MXFP8",
+        "metadata": {},
+        "group_size": 32,
+        "optional": {},
+        "x.weight": "W8A8_MXFP8",
+        "x.weight_scale": "W8A8_MXFP8",
+        "x.bias": "FLOAT",
+        "model.norm.weight": "FLOAT",
+    }
+
+
+def test_description_from_plan_uses_module_quant_spec():
+    module = importlib.import_module(
+        "amct_pytorch.common.models.llm.common.deployment.deploy_export"
+    )
+    from amct_pytorch.common.models.llm.common.deployment.deploy_selection import (
+        QuantSpec,
+    )
+
+    plan = SimpleNamespace(
+        module_quant_specs={"x": QuantSpec("mxfp", 8, 8)},
+        selected_modules=frozenset({"x"}),
+    )
+
+    desc = module.make_description_from_plan(
+        {"x.weight", "x.weight_scale", "model.norm.weight"}, plan
+    )
+
+    assert desc["model_quant_type"] == "W8A8_MXFP8"
+    assert desc["x.weight"] == "W8A8_MXFP8"
+    assert desc["model.norm.weight"] == "FLOAT"
+
+
+def test_mxfp8_description_rejects_weight_offset():
+    module = importlib.import_module(
+        "amct_pytorch.common.models.llm.common.deployment.deploy_export"
+    )
+    names = {"x.weight", "x.weight_scale", "x.weight_offset"}
+
+    with pytest.raises(ValueError, match="weight_offset"):
+        module.make_description(names, frozenset({"x"}), quant_dtype="mxfp")
+
+
 @pytest.mark.parametrize("missing", ["weight", "weight_scale", "weight_offset"])
 def test_description_rejects_incomplete_selected_payload(missing):
     module = importlib.import_module(
-        "amct_pytorch.common.models.llm.common.deploy_export"
+        "amct_pytorch.common.models.llm.common.deployment.deploy_export"
     )
     names = {"x.weight", "x.weight_scale", "x.weight_offset"} - {"x." + missing}
     with pytest.raises(ValueError, match="missing"):
-        module.make_ascend_description(names, frozenset({"x"}))
+        module.make_description(names, frozenset({"x"}))

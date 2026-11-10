@@ -19,10 +19,8 @@
 python amct_pytorch/cli/llm/deploy.py \
   --trust_remote_code \
   --model /path/to/model \
-  --model_name qwen3_5 \
-  --device npu:0 \
-  --granularity block \
-  --quant_target mlp attn-linear \
-  --quant_dtype int \
-  --bit_config amct_pytorch/configs/w8a8.yaml \
+  --model_name qwen3_6 \
+  --device cpu \
+  --granularity tensor \
+  --quant_layers_config amct_pytorch/configs/deploy/qwen/qwen3_6/qwen3_6_w8a8_int.json \
   --output_dir ./deploy_out

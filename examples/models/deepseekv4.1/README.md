@@ -29,10 +29,8 @@ python3 amct_pytorch/cli/llm/deploy.py \
   --model_name deepseek_v4_1 \
   --device cpu \
   --granularity tensor \
-  --quant_dtype int \
-  --bit_config amct_pytorch/configs/deploy/tensor_w8a8.yaml \
-  --deploy_format ascend \
-  --quant_layers_config amct_pytorch/configs/deploy/deepseek_v4_1_ascend_w8a8.json \
+  --bit_config <CONFIG_PATH> \
+  --quant_layers_config <CONFIG_PATH> \
   --output_dir <A3_OUTPUT_DIR> \
   --deploy_platform A3
 ```
@@ -42,7 +40,7 @@ python3 amct_pytorch/cli/llm/deploy.py \
 - `<MODEL_DIR>`：官方 DeepSeek-V4.1-Flash 权重目录。
 - `<A3_OUTPUT_DIR>`：A3 部署权重的输出目录。
 - `--granularity tensor`：逐张量处理 checkpoint，不构建完整模型。
-- `--deploy_format ascend`：生成 vLLM-Ascend ModelSlim 兼容的部署产物。
+- ``：生成 vLLM-Ascend ModelSlim 兼容的部署产物。
 - `--deploy_platform A3`：启用 DeepSeek V4.1 的 A3 转换路径。
 
 主要输出包括：
@@ -64,10 +62,8 @@ python -m amct_pytorch.cli.llm.deploy \
   --model <MODEL_DIR> \
   --model_name deepseek_v4_1 \
   --granularity tensor \
-  --deploy_format legacy \
   --deploy_platform ascend950 \
-  --quant_dtype mxfp \
-  --quant_layers_config amct_pytorch/configs/deploy/deepseek_v4_1_tensor_mxfp.json \
+  --quant_layers_config <CONFIG_PATH> \
   --output_dir <A5_OUTPUT_DIR>
 ```
 
@@ -75,9 +71,8 @@ python -m amct_pytorch.cli.llm.deploy \
 
 - `<MODEL_DIR>`：官方 DeepSeek-V4.1-Flash 权重目录。
 - `<A5_OUTPUT_DIR>`：供 cann-recipes-infer 使用的 A5 部署权重目录。
-- `--deploy_format legacy`：生成 infer 仓兼容的 legacy 配置。
+- ``：生成 infer 仓兼容的 legacy 配置。
 - `--deploy_platform ascend950`：启用 A5/Ascend 950 转换路径。
-- `--quant_dtype mxfp`：保留源 MXFP 位宽语义。
 
 转换过程中，满足条件的 scale 会从 `[N/32, K/32]` 扩展为 `[N, K/32]`。FP4 专家、已经按行展开的 Engram scale、BF16/FP32 张量及其他不满足转换条件的张量保持不变。导出流程同时刷新 `model.safetensors.index.json` 和 `config.json`，输出目录可交付 cann-recipes-infer 的 Ascend 950PR/950DT 环境使用。
 
@@ -92,17 +87,14 @@ python -m amct_pytorch.cli.llm.deploy \
   --model <MODEL_DIR> \
   --model_name deepseek_v4_1 \
   --granularity tensor \
-  --deploy_format legacy \
   --deploy_platform ascend950 \
-  --quant_dtype hifp \
-  --quant_layers_config amct_pytorch/configs/deploy/deepseek_v4_1_hif8.json \
+  --quant_layers_config <CONFIG_PATH> \
   --output_dir <HIF8_OUTPUT_DIR>
 ```
 
 参数说明：
 
 - `<HIF8_OUTPUT_DIR>`：供 vLLM-Ascend 使用的 HiFloat8 权重目录。
-- `--quant_dtype hifp`：启用 HiFloat8 重编码，与 `mxfp` 的保位宽路径并列。
 - `--quant_layers_config`：选中 attn 的 `wq_a`/`wkv`/`wq_b`/`wo_a`/`wo_b`、indexer 的 `wq_b`、engram 的 `wkv`，以及 MTP 块的同名 Linear。
 
 转换后选中层的 weight 为 `U8 [out, in]`，scale 为 `F32 [out, 1]`；`config.json` 保持源文件不变。
@@ -111,9 +103,6 @@ python -m amct_pytorch.cli.llm.deploy \
 
 - DeepSeek V4.1 当前只支持 `granularity=tensor` 的部署转换，不支持通过该适配器执行 PTQ。
 - 平台与格式组合固定为：
-  - A3：`--deploy_platform A3 --deploy_format ascend --quant_dtype int`。
-  - A5：`--deploy_platform ascend950 --deploy_format legacy --quant_dtype mxfp`。
-  - A5 HiFloat8：`--deploy_platform ascend950 --deploy_format legacy --quant_dtype hifp`。
 - A5 的 `mxfp` 和 `hifp` 路径均不接受 `--bit_config`。
 - HiFloat8 路径选中的层必须是 32x32 块 FP8，其余层不做重编码。
 - 以上路径均不接受 `--algos`、`--attn_linear_param_dir`、`--attn_cache_param_dir` 或 `--moe_mlp_param_dir`。

@@ -29,10 +29,8 @@ python3 amct_pytorch/cli/llm/deploy.py \
   --model_name deepseek_v4_1 \
   --device cpu \
   --granularity tensor \
-  --quant_dtype int \
-  --bit_config amct_pytorch/configs/deploy/tensor_w8a8.yaml \
-  --deploy_format ascend \
-  --quant_layers_config amct_pytorch/configs/deploy/deepseek_v4_1_ascend_w8a8.json \
+  --bit_config <CONFIG_PATH> \
+  --quant_layers_config <CONFIG_PATH> \
   --output_dir <A3_OUTPUT_DIR> \
   --deploy_platform A3
 ```
@@ -42,7 +40,7 @@ Key arguments:
 - `<MODEL_DIR>`: directory containing the official DeepSeek-V4.1-Flash weights.
 - `<A3_OUTPUT_DIR>`: output directory for the A3 deployment checkpoint.
 - `--granularity tensor`: processes the checkpoint tensor by tensor without building the full model.
-- `--deploy_format ascend`: generates vLLM-Ascend ModelSlim-compatible artifacts.
+- ``: generates vLLM-Ascend ModelSlim-compatible artifacts.
 - `--deploy_platform A3`: enables the DeepSeek V4.1 A3 conversion path.
 
 The main output artifacts are:
@@ -64,10 +62,8 @@ python -m amct_pytorch.cli.llm.deploy \
   --model <MODEL_DIR> \
   --model_name deepseek_v4_1 \
   --granularity tensor \
-  --deploy_format legacy \
   --deploy_platform ascend950 \
-  --quant_dtype mxfp \
-  --quant_layers_config amct_pytorch/configs/deploy/deepseek_v4_1_tensor_mxfp.json \
+  --quant_layers_config <CONFIG_PATH> \
   --output_dir <A5_OUTPUT_DIR>
 ```
 
@@ -75,9 +71,8 @@ Key arguments:
 
 - `<MODEL_DIR>`: directory containing the official DeepSeek-V4.1-Flash weights.
 - `<A5_OUTPUT_DIR>`: A5 deployment checkpoint directory for cann-recipes-infer.
-- `--deploy_format legacy`: generates the legacy configuration expected by the infer repository.
+- ``: generates the legacy configuration expected by the infer repository.
 - `--deploy_platform ascend950`: enables the A5/Ascend 950 conversion path.
-- `--quant_dtype mxfp`: preserves the source MXFP bit-width semantics.
 
 During conversion, eligible scales are expanded from `[N/32, K/32]` to `[N, K/32]`. FP4 experts, already row-expanded Engram scales, BF16/FP32 tensors, and tensors that do not meet the conversion conditions remain unchanged. The workflow also refreshes `model.safetensors.index.json` and `config.json`. The resulting directory can be consumed by cann-recipes-infer on Ascend 950PR/950DT.
 
@@ -92,17 +87,14 @@ python -m amct_pytorch.cli.llm.deploy \
   --model <MODEL_DIR> \
   --model_name deepseek_v4_1 \
   --granularity tensor \
-  --deploy_format legacy \
   --deploy_platform ascend950 \
-  --quant_dtype hifp \
-  --quant_layers_config amct_pytorch/configs/deploy/deepseek_v4_1_hif8.json \
+  --quant_layers_config <CONFIG_PATH> \
   --output_dir <HIF8_OUTPUT_DIR>
 ```
 
 Key arguments:
 
 - `<HIF8_OUTPUT_DIR>`: HiFloat8 checkpoint directory for vLLM-Ascend.
-- `--quant_dtype hifp`: enables the HiFloat8 re-encoding, alongside the bit-width preserving `mxfp` path.
 - `--quant_layers_config`: selects `wq_a`/`wkv`/`wq_b`/`wo_a`/`wo_b` under attn, `wq_b` under the indexer, `wkv` under engram, and the same Linears in the MTP blocks.
 
 After conversion, a selected layer has a `U8 [out, in]` weight and an `F32 [out, 1]` scale; `config.json` is copied from the source unchanged.
@@ -111,9 +103,6 @@ After conversion, a selected layer has a `U8 [out, in]` weight and an `F32 [out,
 
 - DeepSeek V4.1 currently supports deployment conversion with `granularity=tensor` only. This adapter does not support PTQ.
 - The platform and format combinations are fixed:
-  - A3: `--deploy_platform A3 --deploy_format ascend --quant_dtype int`.
-  - A5: `--deploy_platform ascend950 --deploy_format legacy --quant_dtype mxfp`.
-  - A5 HiFloat8: `--deploy_platform ascend950 --deploy_format legacy --quant_dtype hifp`.
 - Neither the A5 `mxfp` nor the `hifp` path accepts `--bit_config`.
 - Every layer selected by the HiFloat8 path must be a 32x32 block FP8 weight; no other layer is re-encoded.
 - None of these paths accepts `--algos`, `--attn_linear_param_dir`, `--attn_cache_param_dir`, or `--moe_mlp_param_dir`.

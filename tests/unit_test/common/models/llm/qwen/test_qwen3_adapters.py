@@ -27,7 +27,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
-import torch.nn as nn
+from torch import nn
 
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm.common.base import BaseModel
@@ -101,6 +101,69 @@ def test_qwen3_5_moe_accepts_moe_and_attn_targets():
         assert obj.parse_quant_mode() is None
 
 
+def _structured_qwen_plan(adapter_cls, names, config):
+    from amct_pytorch.common.models.llm.common.deployment.deploy_selection import (
+        DeploySelection,
+        QuantLayerRule,
+        QuantSpec,
+        build_tensor_deploy_plan,
+        validate_tensor_deploy_plan,
+    )
+
+    obj = _stub_adapter(adapter_cls, [MLP])
+    obj.args.deploy_platform = "A3"
+    obj.config = config
+    selection = DeploySelection(
+        tuple(QuantLayerRule(name, QuantSpec("int", 8, 8)) for name in names)
+    )
+    weight_map = {name + ".weight": "model.safetensors" for name in names}
+    plan = build_tensor_deploy_plan(weight_map, selection, config=config)
+    return validate_tensor_deploy_plan(plan, weight_map, obj)
+
+
+def test_qwen3_5_structured_tensor_selection_validates_complete_groups():
+    prefix = "model.language_model.layers.0."
+    names = {
+        *(
+            prefix + "mlp." + projection
+            for projection in ("gate_proj", "up_proj", "down_proj")
+        ),
+        *(
+            prefix + "self_attn." + projection
+            for projection in ("q_proj", "k_proj", "v_proj", "o_proj")
+        ),
+    }
+    plan = _structured_qwen_plan(
+        Qwen3_5,
+        names,
+        SimpleNamespace(num_hidden_layers=1, layer_types=["full_attention"]),
+    )
+    assert plan.selected_modules == names
+
+
+def test_qwen3_5_moe_structured_tensor_selection_validates_experts():
+    prefix = "model.language_model.layers.0."
+    names = {
+        *(
+            prefix + f"mlp.experts.{expert}.{projection}"
+            for expert in range(2)
+            for projection in ("gate_proj", "up_proj", "down_proj")
+        ),
+        *(
+            prefix + "self_attn." + projection
+            for projection in ("q_proj", "k_proj", "v_proj")
+        ),
+    }
+    plan = _structured_qwen_plan(
+        Qwen3_5Moe,
+        names,
+        SimpleNamespace(
+            num_hidden_layers=1, num_experts=2, layer_types=["full_attention"]
+        ),
+    )
+    assert plan.selected_modules == names
+
+
 def test_qwen3_next_rejects_mlp_target():
     obj = _stub_adapter(Qwen3Next, [MLP])
     with pytest.raises(ValueError, match="does not support quant_target='mlp'"):
@@ -143,6 +206,160 @@ def test_qwen3_next_uses_model_layers_prefix():
 )
 def test_adapters_register_under_expected_keys(key, expected_cls):
     assert MODEL_REGISTRY.get(key) is expected_cls
+
+
+def _qwen3_6_dense_stub():
+    from amct_pytorch.common.models.llm.qwen.qwen3_6.qwen3_6 import Qwen3_6
+
+    obj = _stub_adapter(Qwen3_6, [MLP])
+    obj.config = SimpleNamespace(
+        num_hidden_layers=2,
+        layer_types=["full_attention", "linear_attention"],
+    )
+    return obj
+
+
+def test_qwen3_6_dense_candidates_include_mlp_and_full_attention():
+    obj = _qwen3_6_dense_stub()
+    expected = {
+        "model.language_model.layers.0.mlp.gate_proj",
+        "model.language_model.layers.0.mlp.up_proj",
+        "model.language_model.layers.0.mlp.down_proj",
+        "model.language_model.layers.0.self_attn.q_proj",
+        "model.language_model.layers.0.self_attn.k_proj",
+        "model.language_model.layers.0.self_attn.v_proj",
+        "model.language_model.layers.0.self_attn.o_proj",
+        "model.language_model.layers.1.linear_attn.in_proj_qkv",
+        "model.language_model.layers.1.linear_attn.in_proj_z",
+        "model.language_model.layers.1.linear_attn.in_proj_b",
+        "model.language_model.layers.1.linear_attn.in_proj_a",
+        "model.language_model.layers.1.linear_attn.out_proj",
+    }
+    unsupported = {
+        "model.language_model.layers.1.self_attn.q_proj",
+        "model.visual.blocks.0.attn.qkv",
+        "mtp.layers.0.eh_proj",
+        "model.language_model.layers.1.linear_attn.conv1d",
+        "model.language_model.layers.1.linear_attn.dt_bias",
+    }
+
+    assert obj.get_deploy_candidates(expected | unsupported) == expected
+
+
+def test_qwen3_6_dense_allows_partial_linear_attention_selection():
+    obj = _qwen3_6_dense_stub()
+    name = "model.language_model.layers.1.linear_attn.in_proj_qkv"
+
+    obj.validate_deploy_selection({name})
+
+
+def test_qwen3_6_dense_requires_complete_mlp_and_qkvo_groups():
+    obj = _qwen3_6_dense_stub()
+    mlp_prefix = "model.language_model.layers.0.mlp."
+    attn_prefix = "model.language_model.layers.0.self_attn."
+    complete = {
+        *(mlp_prefix + name for name in ("gate_proj", "up_proj", "down_proj")),
+        *(attn_prefix + name for name in ("q_proj", "k_proj", "v_proj", "o_proj")),
+    }
+    obj.validate_deploy_selection(complete)
+
+    with pytest.raises(ValueError, match="MLP.*together"):
+        obj.validate_deploy_selection({mlp_prefix + "gate_proj"})
+    with pytest.raises(ValueError, match="QKVO.*together"):
+        obj.validate_deploy_selection({attn_prefix + "q_proj"})
+
+
+def _qwen3_6_moe_stub():
+    from amct_pytorch.common.models.llm.qwen.qwen3_6.qwen3_6_moe import Qwen3_6Moe
+
+    obj = _stub_adapter(Qwen3_6Moe, [MOE])
+    obj.config = SimpleNamespace(
+        num_hidden_layers=2,
+        num_experts=2,
+        layer_types=["full_attention", "linear_attention"],
+    )
+    return obj
+
+
+def test_qwen3_6_moe_candidates_include_linear_attention_projections():
+    obj = _qwen3_6_moe_stub()
+    linear = {
+        "model.language_model.layers.1.linear_attn." + projection
+        for projection in (
+            "in_proj_qkv",
+            "in_proj_z",
+            "in_proj_b",
+            "in_proj_a",
+            "out_proj",
+        )
+    }
+    unsupported = {
+        "model.language_model.layers.1.linear_attn.conv1d",
+        "model.language_model.layers.1.linear_attn.dt_bias",
+    }
+
+    assert obj.get_deploy_candidates(linear | unsupported) == linear
+
+
+def test_qwen3_6_moe_allows_partial_linear_attention_selection():
+    obj = _qwen3_6_moe_stub()
+    name = "model.language_model.layers.1.linear_attn.out_proj"
+
+    obj.validate_deploy_selection({name})
+
+
+def _qwen3_6_plan(module_names, quant_dtype):
+    from amct_pytorch.common.models.llm.common.deployment.deploy_selection import (
+        DeploySelection,
+        QuantLayerRule,
+        QuantSpec,
+        build_tensor_deploy_plan,
+    )
+
+    selection = DeploySelection(
+        tuple(
+            QuantLayerRule(name, QuantSpec(quant_dtype, 8, 8)) for name in module_names
+        )
+    )
+    weight_map = {name + ".weight": "model.safetensors" for name in module_names}
+    return weight_map, build_tensor_deploy_plan(weight_map, selection)
+
+
+@pytest.mark.parametrize(
+    "platform,quant_dtype",
+    [("A3", "mxfp")],
+)
+def test_qwen3_6_dense_rejects_dtype_unsupported_by_platform(platform, quant_dtype):
+    from amct_pytorch.common.models.llm.common.deployment.deploy_selection import (
+        validate_tensor_deploy_plan,
+    )
+
+    obj = _qwen3_6_dense_stub()
+    obj.args.deploy_platform = platform
+    prefix = "model.language_model.layers.0.mlp."
+    names = {prefix + name for name in ("gate_proj", "up_proj", "down_proj")}
+    weight_map, plan = _qwen3_6_plan(names, quant_dtype)
+
+    with pytest.raises(ValueError, match=platform):
+        validate_tensor_deploy_plan(plan, weight_map, obj)
+
+
+@pytest.mark.parametrize(
+    "platform,quant_dtype",
+    [("A3", "int"), ("ascend950", "int"), ("ascend950", "mxfp")],
+)
+def test_qwen3_6_dense_accepts_supported_platform_dtype_pairs(platform, quant_dtype):
+    from amct_pytorch.common.models.llm.common.deployment.deploy_selection import (
+        validate_tensor_deploy_plan,
+    )
+
+    obj = _qwen3_6_dense_stub()
+    obj.args.deploy_platform = platform
+    prefix = "model.language_model.layers.0.mlp."
+    names = {prefix + name for name in ("gate_proj", "up_proj", "down_proj")}
+    weight_map, plan = _qwen3_6_plan(names, quant_dtype)
+
+    assert validate_tensor_deploy_plan(plan, weight_map, obj) is plan
 
 
 # ---- iter_deploy_bindings (Qwen3Moe) -------------------------------------
@@ -205,13 +422,15 @@ def test_qwen3_build_quant_block_applies_attn():
     obj = _stub_adapter(Qwen3, [ATTN_LINEAR])
     decoder_layer = MagicMock()
     decoder_layer.self_attn = MagicMock()
-    with patch.object(obj, 'block', return_value=decoder_layer):
-        with patch(
+    with (
+        patch.object(obj, 'block', return_value=decoder_layer),
+        patch(
             'amct_pytorch.common.models.llm.qwen.qwen3.qwen3.apply_quant_to_attn'
-        ) as mock_apply:
-            result = obj.build_quant_block(0)
-            mock_apply.assert_called_once()
-            assert result is decoder_layer
+        ) as mock_apply,
+    ):
+        result = obj.build_quant_block(0)
+        mock_apply.assert_called_once()
+        assert result is decoder_layer
 
 
 def test_qwen3_load_unit_inputs_delegates_to_super():

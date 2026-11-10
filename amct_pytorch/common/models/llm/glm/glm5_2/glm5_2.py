@@ -15,18 +15,25 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-from typing import Optional
+from __future__ import annotations
+
 import functools
 import re
 
 import torch
-from loguru import logger
 from compressed_tensors.utils.safetensors_load import get_weight_mappings
+from loguru import logger
 from transformers.models.glm_moe_dsa.configuration_glm_moe_dsa import GlmMoeDsaConfig
 from transformers.models.glm_moe_dsa.modeling_glm_moe_dsa import GlmMoeDsaDecoderLayer
 
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm.common.base import BaseModel
+from amct_pytorch.common.models.llm.common.deployment.deploy_selection import (
+    get_structured_quant_spec,
+)
+from amct_pytorch.common.models.llm.common.deployment.schemes import (
+    PLATFORM_QUANT_DTYPES,
+)
 from amct_pytorch.common.models.llm.common.quant_apply import (
     QuantGatedMLP,
     apply_quant_to_attn,
@@ -90,13 +97,7 @@ class GLM5_2(BaseModel):
                 "GLM-5.2 is a moe model and does not support quant_target='mlp'."
             )
 
-    def get_ascend_deploy_mtp_modules(self, module_names: set[str]) -> set[str]:
-        start = self.config.num_hidden_layers
-        end = start + getattr(self.config, "num_nextn_predict_layers", 0)
-        prefixes = tuple(f"model.layers.{idx}." for idx in range(start, end))
-        return {name for name in module_names if name.startswith(prefixes)}
-
-    def _ascend_deploy_role(self, name: str) -> Optional[tuple[str, str]]:
+    def _deploy_role(self, name: str) -> tuple[str, str] | None:
         """Map supported checkpoint modules to BitPolicy group/projection."""
         match = re.fullmatch(r"model\.layers\.(\d+)\.(.+)", name)
         if match is None:
@@ -134,24 +135,30 @@ class GLM5_2(BaseModel):
                 return "moe.routed", expert[2]
         return None
 
-    def get_ascend_deploy_candidates(self, module_names: set[str]) -> set[str]:
-        """Ascend INT candidates independent of legacy INT exclusions."""
-        return {
-            name for name in module_names if self._ascend_deploy_role(name) is not None
-        }
+    def get_deploy_candidates(self, module_names: set[str]) -> set[str]:
+        """INT candidates independent of legacy INT exclusions."""
+        return {name for name in module_names if self._deploy_role(name) is not None}
 
-    def validate_ascend_deploy_selection(self, selected: set[str]) -> None:
-        policy = ensure_bit_policy(self.args)
+    @staticmethod
+    def get_deploy_capabilities():
+        return PLATFORM_QUANT_DTYPES
+
+    def validate_deploy_selection(self, selected: set[str]) -> None:
+        selection = getattr(self.args, "deploy_selection", None)
+        structured = getattr(selection, "uses_structured_rules", False)
+        policy = None if structured else ensure_bit_policy(self.args)
         for name in sorted(selected):
-            role = self._ascend_deploy_role(name)
+            role = self._deploy_role(name)
             if role is None:
-                raise ValueError(f"Unsupported Ascend deployment module: {name}")
+                raise ValueError(f"Unsupported deployment module: {name}")
             group, projection = role
-            bits = policy.linear_bits(name=projection, group=group)
+            if structured:
+                spec = get_structured_quant_spec(selection, name)
+                bits = (spec.weight_bits, spec.activation_bits)
+            else:
+                bits = policy.linear_bits(name=projection, group=group)
             if bits != (8, 8):
-                raise ValueError(
-                    f"Ascend deployment requires W8A8 for {name}, got {bits}"
-                )
+                raise ValueError(f"deployment requires W8A8 for {name}, got {bits}")
 
         def require_pair(first, second):
             if (first in selected) != (second in selected):
@@ -178,7 +185,7 @@ class GLM5_2(BaseModel):
             }
             if selected & experts and not experts <= selected:
                 raise ValueError(
-                    f"Ascend deployment requires all experts and projections in {mlp}experts "
+                    f"Deployment requires all experts and projections in {mlp}experts "
                     "to share quantization"
                 )
 
@@ -479,7 +486,7 @@ class GLM5_2(BaseModel):
                 out[1] if isinstance(out, (tuple, list)) and len(out) >= 2 else None
             )
             if not isinstance(indices, torch.Tensor):
-                raise ValueError(f"Block {layer_idx} did not return indexer indices.")
+                raise TypeError(f"Block {layer_idx} did not return indexer indices.")
             current_indices.append(indices.detach().cpu())
             self._dsa_topk_indices = current_indices
             return out

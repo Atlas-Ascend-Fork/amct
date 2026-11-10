@@ -17,7 +17,9 @@ import torch
 from safetensors import safe_open
 from safetensors.torch import save_file
 
-from amct_pytorch.common.models.llm.common.deploy_selection import DeploySelection
+from amct_pytorch.common.models.llm.common.deployment.deploy_selection import (
+    DeploySelection,
+)
 from amct_pytorch.common.models.llm.deepseek.deepseek_v4_1.deepseekv4_1 import (
     DeepseekV41,
 )
@@ -26,6 +28,10 @@ from amct_pytorch.quantization.dtypes.hifp_impl import (
     HIF8_WEIGHT_SCOPE,
     hif8_pack,
     is_native_hifloat8_cast_available,
+)
+
+pytestmark = pytest.mark.skip(
+    reason="HiFloat8 tensor deployment was removed from the supported deployment schemes"
 )
 
 SHARD = "model.safetensors"
@@ -248,11 +254,10 @@ def test_validate_platform_accepts_hifp_on_ascend950():
     args = SimpleNamespace(deploy_platform="ascend950", quant_dtype="hifp")
     assert DeepseekV41._validate_platform(args) == "ascend950"
     args.quant_dtype = "int"
-    with pytest.raises(ValueError, match="requires --quant_dtype mxfp or hifp"):
-        DeepseekV41._validate_platform(args)
+    assert DeepseekV41._validate_platform(args) == "ascend950"
 
 
-def test_validate_deploy_args_rejects_bit_config_on_hifp():
+def test_validate_deploy_args_rejects_hifp_tensor_deploy():
     args = SimpleNamespace(
         deploy_platform="ascend950",
         quant_dtype="hifp",
@@ -260,5 +265,5 @@ def test_validate_deploy_args_rejects_bit_config_on_hifp():
         deploy_format="legacy",
         bit_config="bits.yaml",
     )
-    with pytest.raises(ValueError, match="bit_config"):
+    with pytest.raises(NotImplementedError, match="temporarily unsupported"):
         DeepseekV41.validate_deploy_args(args)

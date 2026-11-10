@@ -28,7 +28,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from amct_pytorch.common.models.llm.common.deploy_export import (
+from amct_pytorch.common.models.llm.common.deployment.deploy_export import (
     export_block_deploy,
     generate_quant_config,
     generate_quant_group,
@@ -196,7 +196,9 @@ def test_export_block_deploy_skips_none_extra_tensor():
 
 def test_convert_state_dict_non_fp8_passthrough(tmp_path):
     """Non-FP8 weight (element_size > 1) is returned unchanged."""
-    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+    from amct_pytorch.common.models.llm.common.deployment.deploy_export import (
+        convert_state_dict,
+    )
 
     weight = torch.randn(4, 4, dtype=torch.float32)
     result = convert_state_dict(
@@ -214,7 +216,9 @@ def test_convert_state_dict_non_fp8_passthrough(tmp_path):
 def test_convert_state_dict_fp8_with_scale_inv_loaded(tmp_path):
     """FP8 int8 weight with scale_inv present gets dequantized."""
     from safetensors.torch import save_file as sf_save
-    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+    from amct_pytorch.common.models.llm.common.deployment.deploy_export import (
+        convert_state_dict,
+    )
 
     # Create a safetensors file with scale_inv
     scale_inv = torch.ones(1, 2, dtype=torch.float32) * 0.5
@@ -242,7 +246,7 @@ def test_load_scales_rejects_shard_outside_model_directory(tmp_path):
     """A weight-map shard must not escape model_dir before load_file reads it."""
     from safetensors.torch import save_file as sf_save
 
-    from amct_pytorch.common.models.llm.common import deploy_export as deploy_export_mod
+    import amct_pytorch.common.models.llm.common.deployment.deploy_export as deploy_export_mod
 
     model_dir = tmp_path / "model"
     model_dir.mkdir()
@@ -262,7 +266,7 @@ def test_load_scales_rejects_shard_outside_model_directory(tmp_path):
 
 def test_convert_state_dict_fp8_missing_scale_inv_prints_warning(tmp_path, monkeypatch):
     """Missing scale_inv logs warning and returns original weight."""
-    from amct_pytorch.common.models.llm.common import deploy_export as deploy_export_mod
+    import amct_pytorch.common.models.llm.common.deployment.deploy_export as deploy_export_mod
 
     warnings = []
     monkeypatch.setattr(
@@ -287,7 +291,9 @@ def test_convert_state_dict_fp8_missing_scale_inv_prints_warning(tmp_path, monke
 def test_convert_state_dict_nvfp4_missing_shard_tensor_warns_and_skips(tmp_path):
     """NVFP4 keys in the map but absent from the shard warn and return the weight."""
     from safetensors.torch import save_file as sf_save
-    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+    from amct_pytorch.common.models.llm.common.deployment.deploy_export import (
+        convert_state_dict,
+    )
 
     sf_save({"other": torch.ones(1)}, str(tmp_path / "shard.safetensors"))
     weight = torch.ones(2, 16, dtype=torch.uint8)
@@ -309,7 +315,9 @@ def test_convert_state_dict_nvfp4_missing_shard_tensor_warns_and_skips(tmp_path)
 def test_convert_state_dict_fp8_non_int8_dtype(tmp_path):
     """FP8 weight with non-int8 dtype uses non-packed dequant (block_size=1)."""
     from safetensors.torch import save_file as sf_save
-    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+    from amct_pytorch.common.models.llm.common.deployment.deploy_export import (
+        convert_state_dict,
+    )
 
     scale_inv = torch.ones(2, 4, dtype=torch.float32)
     sf_save({"layer.weight_scale_inv": scale_inv}, str(tmp_path / "shard.safetensors"))
@@ -334,7 +342,9 @@ def test_convert_state_dict_fp8_non_int8_dtype(tmp_path):
 def test_convert_state_dict_reuses_loaded_file(tmp_path):
     """Already-loaded file is reused from loaded_files cache."""
     from safetensors.torch import save_file as sf_save
-    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+    from amct_pytorch.common.models.llm.common.deployment.deploy_export import (
+        convert_state_dict,
+    )
 
     scale_inv = torch.ones(1, 2, dtype=torch.float32) * 2.0
     sf_save({"layer.weight_scale_inv": scale_inv}, str(tmp_path / "shard.safetensors"))
@@ -365,7 +375,9 @@ def test_convert_state_dict_nvfp4_uses_paired_scales(tmp_path):
     反量化数值正确性由 test_nvfp4_format.py 覆盖，这里只验证元组路由生效。
     """
     from safetensors.torch import save_file as sf_save
-    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+    from amct_pytorch.common.models.llm.common.deployment.deploy_export import (
+        convert_state_dict,
+    )
 
     rows, cols = 2, 32
     weight = torch.randint(0, 256, (rows, cols // 2), dtype=torch.uint8)
@@ -401,7 +413,9 @@ def test_convert_state_dict_nvfp4_uses_paired_scales(tmp_path):
 def test_convert_state_dict_without_weight_scale_2_stays_on_mx_path(tmp_path):
     """MXFP4 has no weight_scale_2, so it keeps using the packed int8 dequant."""
     from safetensors.torch import save_file as sf_save
-    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+    from amct_pytorch.common.models.llm.common.deployment.deploy_export import (
+        convert_state_dict,
+    )
 
     scale = torch.ones(2, 1, dtype=torch.float32)
     sf_save({"layer.weight_scale": scale}, str(tmp_path / "shard.safetensors"))
@@ -424,7 +438,9 @@ def test_convert_state_dict_without_weight_scale_2_stays_on_mx_path(tmp_path):
 def test_convert_state_dict_nvfp4_wrong_scale_layout_raises(tmp_path):
     """名字像 NVFP4 但 scale 布局不符时，nvfp4_weight_dequant 内部校验抛 ValueError。"""
     from safetensors.torch import save_file as sf_save
-    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+    from amct_pytorch.common.models.llm.common.deployment.deploy_export import (
+        convert_state_dict,
+    )
 
     scale = torch.ones(2, 1, dtype=torch.float32)
     sf_save(
@@ -458,7 +474,9 @@ def test_convert_state_dict_nvfp4_loads_scales_from_other_shard(tmp_path):
     反量化数值正确性由 test_nvfp4_format.py 覆盖，这里只验证跨 shard 按需加载。
     """
     from safetensors.torch import save_file as sf_save
-    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+    from amct_pytorch.common.models.llm.common.deployment.deploy_export import (
+        convert_state_dict,
+    )
 
     rows, cols = 2, 32
     weight = torch.randint(0, 256, (rows, cols // 2), dtype=torch.uint8)
@@ -498,7 +516,9 @@ def test_convert_state_dict_nvfp4_loads_scales_from_other_shard(tmp_path):
 def test_convert_state_dict_fp8_not_hijacked_by_weight_scale_2(tmp_path):
     """An FP8 float8 weight keeps the FP8 path even if weight_scale_2 keys exist."""
     from safetensors.torch import save_file as sf_save
-    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+    from amct_pytorch.common.models.llm.common.deployment.deploy_export import (
+        convert_state_dict,
+    )
 
     scale_inv = torch.ones(2, 4, dtype=torch.float32)
     sf_save(
@@ -533,7 +553,9 @@ def test_convert_state_dict_fp8_not_hijacked_by_weight_scale_2(tmp_path):
 
 def test_quant_payload_basic():
     """quant_payload builds tensors dict from quant_cls.export_deploy."""
-    from amct_pytorch.common.models.llm.common.deploy_export import quant_payload
+    from amct_pytorch.common.models.llm.common.deployment.deploy_export import (
+        quant_payload,
+    )
 
     captured = {}
 
@@ -571,7 +593,9 @@ def test_quant_payload_basic():
 
 def test_quant_payload_skips_none_extras():
     """quant_payload skips extra tensors that are None."""
-    from amct_pytorch.common.models.llm.common.deploy_export import quant_payload
+    from amct_pytorch.common.models.llm.common.deployment.deploy_export import (
+        quant_payload,
+    )
 
     class FakeQuantCls:
         def __init__(self, bits, is_act=False, *args):
@@ -589,7 +613,9 @@ def test_quant_payload_skips_none_extras():
 
 def test_quant_payload_fp4_e8m0_does_not_raise():
     """4-bit fp export must pass scale_dtype='e8m0' instead of the fp32 default."""
-    from amct_pytorch.common.models.llm.common.deploy_export import quant_payload
+    from amct_pytorch.common.models.llm.common.deployment.deploy_export import (
+        quant_payload,
+    )
     from amct_pytorch.quantization.dtypes import register_dtype
 
     register_dtype()
@@ -634,7 +660,9 @@ def test_get_quant_ignore_linear_names_mixed_plain_and_plain_linear():
 
 def test_convert_state_dict_mxfp8_dequant():
     """FP8 weight + uint8 E8M0 2-D scale must dequantize via the MXFP8 branch."""
-    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+    from amct_pytorch.common.models.llm.common.deployment.deploy_export import (
+        convert_state_dict,
+    )
 
     w8 = torch.zeros(2, 64, dtype=torch.float8_e4m3fn)
     w8[0, 0] = 448.0
@@ -651,7 +679,9 @@ def test_convert_state_dict_mxfp8_dequant():
 
 def test_convert_state_dict_mxfp8_bad_scale_tiling_raises():
     """An E8M0 scale whose last dim does not divide the weight last dim must fail loudly."""
-    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+    from amct_pytorch.common.models.llm.common.deployment.deploy_export import (
+        convert_state_dict,
+    )
 
     w8 = torch.zeros(2, 64, dtype=torch.float8_e4m3fn)
     scale = torch.zeros(2, 3, dtype=torch.uint8)  # 64 % 3 != 0

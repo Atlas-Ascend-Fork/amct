@@ -15,6 +15,10 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+from __future__ import annotations
+
+import re
+
 import torch
 from compressed_tensors.utils.safetensors_load import get_weight_mappings
 from transformers.models.qwen3_5_moe.modeling_qwen3_5_moe import (
@@ -23,16 +27,17 @@ from transformers.models.qwen3_5_moe.modeling_qwen3_5_moe import (
 )
 
 from amct_pytorch.common.models import MODEL_REGISTRY
-
 from amct_pytorch.common.models.llm.common.base import PtqUnit
+from amct_pytorch.common.models.llm.common.deployment.schemes import (
+    PLATFORM_QUANT_DTYPES,
+)
 from amct_pytorch.common.models.llm.common.moe_unpack import find_moe_module
+from amct_pytorch.common.models.llm.common.quant_apply import build_no_algo_args
 from amct_pytorch.common.models.llm.qwen.moe_common import (
     QuantGatedExperts,
     is_packed_experts,
 )
-from amct_pytorch.common.models.llm.qwen.qwen3_5.qwen3_5 import Qwen3_5, QuantQwen35MLP
-
-from amct_pytorch.common.models.llm.common.quant_apply import build_no_algo_args
+from amct_pytorch.common.models.llm.qwen.qwen3_5.qwen3_5 import QuantQwen35MLP, Qwen3_5
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
@@ -43,6 +48,17 @@ from amct_pytorch.quantization.modules.quant_linear import QuantLinear
     description="Qwen3.5 moe model adapter",
 )
 class Qwen3_5Moe(Qwen3_5):
+    _LAYER_RE = re.compile(r"model\.language_model\.layers\.(\d+)\.(.+)")
+    _LINEAR_ATTN_PROJECTIONS = frozenset(
+        {
+            "linear_attn.in_proj_qkv",
+            "linear_attn.in_proj_z",
+            "linear_attn.in_proj_b",
+            "linear_attn.in_proj_a",
+            "linear_attn.out_proj",
+        }
+    )
+
     def __init__(self, args):
         super().__init__(args)
         self._weight_map = get_weight_mappings(self.model_path)
@@ -54,6 +70,79 @@ class Qwen3_5Moe(Qwen3_5):
             raise ValueError(
                 "Qwen3.5-moe is a moe model and does not support quant_target='mlp'."
             )
+
+    @staticmethod
+    def get_deploy_capabilities():
+        return PLATFORM_QUANT_DTYPES
+
+    def _is_full_attention_layer(self, layer_idx: int) -> bool:
+        layer_types = getattr(self.config, "layer_types", ())
+        return (
+            layer_idx < len(layer_types) and layer_types[layer_idx] == "full_attention"
+        )
+
+    def _is_linear_attention_layer(self, layer_idx: int) -> bool:
+        layer_types = getattr(self.config, "layer_types", ())
+        return (
+            layer_idx < len(layer_types)
+            and layer_types[layer_idx] == "linear_attention"
+        )
+
+    def _deploy_role(self, name: str) -> str | None:
+        match = self._LAYER_RE.fullmatch(name)
+        if match is None:
+            return None
+        layer_idx, suffix = int(match[1]), match[2]
+        if not 0 <= layer_idx < int(self.config.num_hidden_layers):
+            return None
+        expert = re.fullmatch(
+            r"mlp\.experts\.(\d+)\.(gate_proj|up_proj|down_proj)", suffix
+        )
+        if expert and int(expert[1]) < int(self.config.num_experts):
+            return "moe.routed"
+        if self._is_full_attention_layer(layer_idx) and suffix in {
+            "self_attn.q_proj",
+            "self_attn.k_proj",
+            "self_attn.v_proj",
+        }:
+            return "attn-linear"
+        if (
+            self._is_linear_attention_layer(layer_idx)
+            and suffix in self._LINEAR_ATTN_PROJECTIONS
+        ):
+            return "attn-linear"
+        return None
+
+    def get_deploy_candidates(self, module_names: set[str]) -> set[str]:
+        return {name for name in module_names if self._deploy_role(name) is not None}
+
+    def validate_deploy_selection(self, selected: set[str]) -> None:
+        unsupported = sorted(
+            name for name in selected if self._deploy_role(name) is None
+        )
+        if unsupported:
+            raise ValueError(f"Unsupported Deployment modules: {unsupported}")
+        for layer_idx in range(int(self.config.num_hidden_layers)):
+            prefix = f"model.language_model.layers.{layer_idx}.self_attn."
+            qkv = {prefix + projection for projection in ("q_proj", "k_proj", "v_proj")}
+            if (
+                self._is_full_attention_layer(layer_idx)
+                and qkv & selected
+                and not qkv <= selected
+            ):
+                raise ValueError(
+                    f"{type(self).__name__} full-attention QKV must be selected together at layer {layer_idx}"
+                )
+            expert_prefix = f"model.language_model.layers.{layer_idx}.mlp.experts."
+            experts = {
+                f"{expert_prefix}{expert_idx}.{projection}"
+                for expert_idx in range(int(self.config.num_experts))
+                for projection in ("gate_proj", "up_proj", "down_proj")
+            }
+            if selected & experts and not experts <= selected:
+                raise ValueError(
+                    f"{type(self).__name__} requires all experts and projections at layer {layer_idx}"
+                )
 
     def float_model(self):
         return super().float_model()

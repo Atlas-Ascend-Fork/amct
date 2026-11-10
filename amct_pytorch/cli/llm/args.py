@@ -1,4 +1,3 @@
-# coding=utf-8
 # Adapted from
 # https://github.com/ruikangliu/FlatQuant/blob/main/flatquant/args_utils.py
 # Copyright (c) 2025 Huawei Technologies Co., Ltd.
@@ -21,10 +20,8 @@ import os
 
 from loguru import logger
 
-from amct_pytorch.common.models.llm.common.deploy_selection import (
-    requires_tensor_deploy_config,
-    validate_ascend_deploy_args,
-    validate_tensor_deploy_args,
+from amct_pytorch.common.models.llm.common.deployment.deploy_selection import (
+    prepare_deploy_args,
 )
 from amct_pytorch.quantization.bit_policy import BitPolicy
 
@@ -91,17 +88,12 @@ def parser_gen(command=None):
             help="Target deployment hardware; required for DeepSeek V4.1.",
         )
         parser.add_argument(
-            "--deploy_format",
-            choices=["legacy", "ascend"],
-            default="legacy",
-            help="Deployment format. Ascend exports modelslim-compatible W8A8_DYNAMIC metadata for vllm-ascend.",
-        )
-        parser.add_argument(
             "--quant_layers_config",
             type=str,
             default=None,
-            help="Required for tensor deployment: JSON quant_layers/ignore_layers module globs; "
-            "replaces quant_target selection for both legacy and ascend.",
+            help="Required for configured tensor deployment: JSON module globs "
+            "with per-rule dtype and bit widths; replaces quant_target, "
+            "bit_config, and quant_dtype for structured rules.",
         )
 
     parser.add_argument(
@@ -242,12 +234,8 @@ def parser_gen(command=None):
 
     _ignore_reserved_args(args)
 
-    if (
-        command == "deploy"
-        and args.granularity == "tensor"
-        and requires_tensor_deploy_config(args)
-    ):
-        validate_tensor_deploy_args(args)
+    if command == "deploy":
+        prepare_deploy_args(args)
     elif args.bit_config:
         args.bit_policy = BitPolicy.from_yaml(args.bit_config)
     else:
@@ -255,10 +243,8 @@ def parser_gen(command=None):
 
     if command == "eval":
         _validate_eval_mode(args)
-    elif command == "deploy":
-        validate_ascend_deploy_args(args)
-        if args.granularity != "tensor":
-            args.deploy_selection = None
+    elif command == "deploy" and args.granularity != "tensor":
+        args.deploy_selection = None
 
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
 

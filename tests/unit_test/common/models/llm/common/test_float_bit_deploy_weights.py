@@ -63,7 +63,7 @@ def load_export_modules():
             "amct_pytorch.common.models.llm.common.quant_apply"
         ),
         "export": importlib.import_module(
-            "amct_pytorch.common.models.llm.common.deploy_export"
+            "amct_pytorch.common.models.llm.common.deployment.deploy_export"
         ),
         "linear": importlib.import_module(
             "amct_pytorch.quantization.modules.quant_linear"

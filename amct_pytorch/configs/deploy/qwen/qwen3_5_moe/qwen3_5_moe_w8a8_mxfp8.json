@@ -1,0 +1,77 @@
+{
+  "quant_layers": [
+    {
+      "pattern": "model.language_model.layers.*.mlp.experts.*.gate_proj",
+      "quant_dtype": "mxfp",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.*.mlp.experts.*.up_proj",
+      "quant_dtype": "mxfp",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.*.mlp.experts.*.down_proj",
+      "quant_dtype": "mxfp",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.*.self_attn.q_proj",
+      "quant_dtype": "mxfp",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.*.self_attn.k_proj",
+      "quant_dtype": "mxfp",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.*.self_attn.v_proj",
+      "quant_dtype": "mxfp",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.*.linear_attn.in_proj_qkv",
+      "quant_dtype": "mxfp",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.*.linear_attn.in_proj_z",
+      "quant_dtype": "mxfp",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.*.linear_attn.in_proj_b",
+      "quant_dtype": "mxfp",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.*.linear_attn.in_proj_a",
+      "quant_dtype": "mxfp",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.*.linear_attn.out_proj",
+      "quant_dtype": "mxfp",
+      "w_bits": 8,
+      "a_bits": 8
+    }
+  ],
+  "ignore_layers": [
+    "model.visual.*",
+    "model.language_model.embed_tokens",
+    "model.language_model.norm",
+    "lm_head",
+    "mtp.layers.*"
+  ]
+}

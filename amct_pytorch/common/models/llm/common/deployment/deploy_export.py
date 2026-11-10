@@ -15,9 +15,9 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import torch
-import torch.nn as nn
 from loguru import logger
 from safetensors.torch import load_file
+from torch import nn
 
 from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
 from amct_pytorch.common.models.llm.common.weight_path_validation import (
@@ -26,6 +26,8 @@ from amct_pytorch.common.models.llm.common.weight_path_validation import (
 )
 from amct_pytorch.quantization.dtypes.fp_impl import weight_dequant
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+
+from .schemes import QuantSchemeKey, get_quant_scheme
 
 
 def generate_quant_group(a_bits=8, w_bits=8, qtype="float", activation_use_clip=False):
@@ -133,8 +135,25 @@ def generate_tensor_quant_config(plan, cache_scheme=None):
     ignore set on the plan for selection-equivalence auditing.
     """
     ignores = sorted(plan.ignored_modules | plan.unselected_weight_modules)
+    specs = tuple(plan.module_quant_specs.values())
+    if not specs:
+        raise ValueError(
+            "Tensor quantization config requires a nonempty deployment plan"
+        )
+    keys = {
+        QuantSchemeKey(spec.quant_dtype, spec.weight_bits, spec.activation_bits)
+        for spec in specs
+    }
+    if len(keys) != 1:
+        raise ValueError(
+            "Tensor quantization config requires one quantization scheme per model"
+        )
+    scheme = get_quant_scheme(next(iter(keys)))
     return generate_quant_config(
-        cache_scheme, ignores, bits_scheme=_default_bits_scheme()
+        cache_scheme,
+        ignores,
+        is_mx=scheme.quant_dtype == "mxfp",
+        bits_scheme=_default_bits_scheme(),
     )
 
 
@@ -324,32 +343,62 @@ def quant_payload(
     return tensors
 
 
-def adapt_ascend_payload(
-    weight_name: str, payload: dict[str, torch.Tensor]
+def adapt_payload(
+    weight_name: str,
+    payload: dict[str, torch.Tensor],
+    quant_dtype: str = "int",
+    weight_bits: int = 8,
+    activation_bits: int = 8,
 ) -> dict[str, torch.Tensor]:
-    """Adapt symmetric INT8 payload to the W8A8_DYNAMIC checkpoint contract."""
+    """Adapt a tensorwise payload to its deployment checkpoint contract."""
     if not weight_name.endswith(".weight"):
-        raise ValueError(f"Ascend payload requires a .weight key: {weight_name}")
+        raise ValueError(f"Deployment payload requires a .weight key: {weight_name}")
     prefix = weight_name.removesuffix(".weight")
     scale_name = prefix + ".weight_scale"
     if set(payload) != {weight_name, scale_name}:
         raise ValueError(
-            f"Ascend payload for {weight_name} must contain only weight and weight_scale"
+            f"Deployment payload for {weight_name} must contain only weight and weight_scale"
         )
+    scheme = get_quant_scheme(QuantSchemeKey(quant_dtype, weight_bits, activation_bits))
     weight = payload[weight_name]
     scale = payload[scale_name]
+    if scheme.quant_dtype == "mxfp":
+        weight_dtype = torch.uint8 if scheme.weight_bits == 4 else torch.float8_e4m3fn
+        # MXFP4 stores two E2M1 values per byte along the input dimension.
+        pack_factor = 8 // scheme.weight_bits
+        if (
+            weight.dtype != weight_dtype
+            or weight.ndim != 2
+            or weight.numel() == 0
+            or weight.shape[1] * pack_factor % scheme.group_size != 0
+        ):
+            raise ValueError(
+                f"Deployment {scheme.model_quant_type} payload {weight_name} requires a "
+                f"nonempty 2-D {weight_dtype} weight with logical input size "
+                f"divisible by {scheme.group_size}; got {weight.dtype} "
+                f"shape {tuple(weight.shape)}"
+            )
+        input_size = weight.shape[1] * pack_factor
+        expected_scale_shape = (weight.shape[0], input_size // scheme.group_size)
+        if scale.dtype != torch.uint8 or scale.shape != expected_scale_shape:
+            raise ValueError(
+                f"Deployment {scheme.model_quant_type} payload {weight_name} requires a "
+                f"UINT8 scale with shape {list(expected_scale_shape)}; "
+                f"got {scale.dtype} shape {tuple(scale.shape)}"
+            )
+        return dict(payload)
     if weight.dtype != torch.int8 or weight.ndim != 2 or weight.numel() == 0:
         raise ValueError(
-            f"Ascend payload {weight_name} requires a nonempty 2-D INT8 weight"
+            f"Deployment payload {weight_name} requires a nonempty 2-D INT8 weight"
         )
     if not scale.is_floating_point() or scale.shape != (weight.shape[0], 1):
         raise ValueError(
-            f"Ascend payload {weight_name} requires floating scale shape [out, 1]"
+            f"Deployment payload {weight_name} requires floating scale shape [out, 1]"
         )
     scale = scale.to(torch.bfloat16)
     if not torch.isfinite(scale).all() or not (scale > 0).all():
         raise ValueError(
-            f"Ascend scale for {weight_name} must remain finite and positive in BF16"
+            f"Deployment scale for {weight_name} must remain finite and positive in BF16"
         )
     result = dict(payload)
     result[scale_name] = scale
@@ -357,31 +406,64 @@ def adapt_ascend_payload(
     return result
 
 
-def make_ascend_description(
-    output_tensor_names: set[str], selected_modules: frozenset[str]
+def make_description(
+    output_tensor_names: set[str],
+    selected_modules: frozenset[str],
+    quant_dtype: str = "int",
+    weight_bits: int = 8,
+    activation_bits: int = 8,
 ) -> dict:
     """Describe exactly the tensors written by the shared shard exporter."""
-    dynamic_names = {
-        module + suffix
+    scheme = get_quant_scheme(QuantSchemeKey(quant_dtype, weight_bits, activation_bits))
+    quant_type = scheme.model_quant_type
+    suffixes = scheme.tensor_suffixes
+    description = scheme.globals_dict()
+    unexpected_auxiliary = {
+        module + ".weight_offset"
         for module in selected_modules
-        for suffix in (".weight", ".weight_scale", ".weight_offset")
+        if ".weight_offset" not in suffixes
+    } & output_tensor_names
+    if unexpected_auxiliary:
+        raise ValueError(
+            f"{quant_type} output must not contain weight_offset: "
+            f"{sorted(unexpected_auxiliary)}"
+        )
+    dynamic_names = {
+        module + suffix for module in selected_modules for suffix in suffixes
     }
     missing = dynamic_names - output_tensor_names
     if missing:
         raise ValueError(
-            f"Ascend output is missing quantized tensors: {sorted(missing)}"
+            f"Deployment output is missing quantized tensors: {sorted(missing)}"
         )
-    description = {
-        "version": "1.0.0",
-        "model_quant_type": "W8A8_DYNAMIC",
-        "metadata": {},
-        "group_size": 0,
-        "is_rot_used": False,
-    }
     description.update(
         {
-            name: "W8A8_DYNAMIC" if name in dynamic_names else "FLOAT"
+            name: quant_type if name in dynamic_names else "FLOAT"
             for name in sorted(output_tensor_names)
         }
     )
     return description
+
+
+def make_description_from_plan(output_tensor_names: set[str], plan) -> dict:
+    """Generate deployment metadata from the resolved per-module quantization plan."""
+    specs = tuple(plan.module_quant_specs.values())
+    if not specs:
+        raise ValueError("Deployment description requires a nonempty deployment plan")
+    scheme_keys = {
+        QuantSchemeKey(spec.quant_dtype, spec.weight_bits, spec.activation_bits)
+        for spec in specs
+    }
+    if len(scheme_keys) != 1:
+        raise ValueError(
+            "Deployment description requires one quantization scheme per model, "
+            f"got {sorted((key.quant_dtype, key.weight_bits, key.activation_bits) for key in scheme_keys)}"
+        )
+    spec = specs[0]
+    return make_description(
+        output_tensor_names,
+        plan.selected_modules,
+        quant_dtype=spec.quant_dtype,
+        weight_bits=spec.weight_bits,
+        activation_bits=spec.activation_bits,
+    )

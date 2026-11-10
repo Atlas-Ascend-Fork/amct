@@ -27,7 +27,9 @@ from transformers.models.qwen3.modeling_qwen3 import (
     Qwen3MLP,
 )
 
-from amct_pytorch.common.models.llm.common.deploy_export import generate_quant_config
+from amct_pytorch.common.models.llm.common.deployment.deploy_export import (
+    generate_quant_config,
+)
 from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
 from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
 from amct_pytorch.common.models.llm.qwen.qwen3.quant_module import (

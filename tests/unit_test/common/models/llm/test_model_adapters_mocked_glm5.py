@@ -1397,7 +1397,7 @@ if __name__ == "__main__":
 def test_glm_deploy_activation_bits_follow_policy_without_cli_defaults(
     weight_bits, quant_dtype
 ):
-    from amct_pytorch.common.models.llm.common.deploy_export import (
+    from amct_pytorch.common.models.llm.common.deployment.deploy_export import (
         export_block_deploy,
         generate_quant_config,
     )

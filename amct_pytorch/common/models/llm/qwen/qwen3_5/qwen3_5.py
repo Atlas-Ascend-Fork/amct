@@ -15,7 +15,10 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+from __future__ import annotations
+
 import json
+import re
 from functools import cached_property
 from pathlib import Path
 
@@ -28,6 +31,9 @@ from transformers.models.qwen3_5.modeling_qwen3_5 import (
 
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm.common.base import BaseModel, PtqUnit
+from amct_pytorch.common.models.llm.common.deployment.schemes import (
+    PLATFORM_QUANT_DTYPES,
+)
 from amct_pytorch.common.models.llm.common.quant_apply import (
     apply_quant_to_attn,
     apply_quant_to_moe_mlp,
@@ -47,6 +53,17 @@ from amct_pytorch.common.models.llm.qwen.qwen3_5.quant_module import (
     description="Qwen3.5 dense model adapter",
 )
 class Qwen3_5(BaseModel):
+    _LAYER_RE = re.compile(r"model\.language_model\.layers\.(\d+)\.(.+)")
+    _LINEAR_ATTN_PROJECTIONS = frozenset(
+        {
+            "linear_attn.in_proj_qkv",
+            "linear_attn.in_proj_z",
+            "linear_attn.in_proj_b",
+            "linear_attn.in_proj_a",
+            "linear_attn.out_proj",
+        }
+    )
+
     def __init__(self, args):
         super().__init__(args)
         self.textconfig = Qwen3_5TextConfig
@@ -61,6 +78,80 @@ class Qwen3_5(BaseModel):
             raise ValueError(
                 "Qwen3.5 < 7B is a dense model and does not support quant_target='moe'."
             )
+
+    @staticmethod
+    def get_deploy_capabilities():
+        return dict(PLATFORM_QUANT_DTYPES)
+
+    def _is_full_attention_layer(self, layer_idx: int) -> bool:
+        layer_types = getattr(self.config, "layer_types", ())
+        return (
+            layer_idx < len(layer_types) and layer_types[layer_idx] == "full_attention"
+        )
+
+    def _is_linear_attention_layer(self, layer_idx: int) -> bool:
+        layer_types = getattr(self.config, "layer_types", ())
+        return (
+            layer_idx < len(layer_types)
+            and layer_types[layer_idx] == "linear_attention"
+        )
+
+    def _deploy_role(self, name: str) -> str | None:
+        match = self._LAYER_RE.fullmatch(name)
+        if match is None:
+            return None
+        layer_idx, suffix = int(match[1]), match[2]
+        if not 0 <= layer_idx < int(self.config.num_hidden_layers):
+            return None
+        if suffix in {"mlp.gate_proj", "mlp.up_proj", "mlp.down_proj"}:
+            return "mlp"
+        if self._is_full_attention_layer(layer_idx) and suffix in {
+            "self_attn.q_proj",
+            "self_attn.k_proj",
+            "self_attn.v_proj",
+            "self_attn.o_proj",
+        }:
+            return "attn-linear"
+        if (
+            self._is_linear_attention_layer(layer_idx)
+            and suffix in self._LINEAR_ATTN_PROJECTIONS
+        ):
+            return "attn-linear"
+        return None
+
+    def get_deploy_candidates(self, module_names: set[str]) -> set[str]:
+        return {name for name in module_names if self._deploy_role(name) is not None}
+
+    def validate_deploy_selection(self, selected: set[str]) -> None:
+        unsupported = sorted(
+            name for name in selected if self._deploy_role(name) is None
+        )
+        if unsupported:
+            raise ValueError(f"Unsupported Deployment modules: {unsupported}")
+        for layer_idx in range(int(self.config.num_hidden_layers)):
+            layer_prefix = f"model.language_model.layers.{layer_idx}."
+            mlp = {
+                layer_prefix + "mlp." + projection
+                for projection in ("gate_proj", "up_proj", "down_proj")
+            }
+            if selected & mlp and not mlp <= selected:
+                raise ValueError(
+                    f"{type(self).__name__} MLP projections must be selected together at "
+                    f"layer {layer_idx}"
+                )
+            attn = {
+                layer_prefix + "self_attn." + projection
+                for projection in ("q_proj", "k_proj", "v_proj", "o_proj")
+            }
+            if (
+                self._is_full_attention_layer(layer_idx)
+                and selected & attn
+                and not attn <= selected
+            ):
+                raise ValueError(
+                    f"{type(self).__name__} full-attention QKVO must be selected together at "
+                    f"layer {layer_idx}"
+                )
 
     @cached_property
     def _checkpoint_keys(self):
@@ -84,13 +175,6 @@ class Qwen3_5(BaseModel):
         if f"{base_name}_scale_2" in self._checkpoint_keys:
             return scale_prefix, (f"{base_name}_scale", f"{base_name}_scale_2")
         return scale_prefix, f"{base_name}_scale"
-
-    def generate_tensorwise_quant_layers(self):
-        """Pure dequant (NVFP4->bf16 / HiF4->fp32) re-quantizes nothing."""
-        return {}
-
-    def generate_tensorwise_ignore_layers(self):
-        return []
 
     def float_model(self):
         return super().float_model()

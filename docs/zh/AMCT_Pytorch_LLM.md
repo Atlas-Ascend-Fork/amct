@@ -217,7 +217,7 @@ python -m amct_pytorch.ptq \
 - 管理未替换权重：在量化过程中未被处理的原始权重将被重新分片，并存储在 `rest_*.safetensors` 文件中以供恢复或进一步使用。
 - 更新配置文件：完成操作后，系统将更新核心配置文件 `model.safetensors.index.json` 和 `config.json`，以确保文件的完整性以及一致性。
 
-**输出**：部署模型目录。blockwise 导出包括 `layer_*.safetensors`、`rest_*.safetensors`、更新后的 `model.safetensors.index.json` 和 `config.json`；tensorwise 导出保留源权重分片布局并刷新权重索引，`deploy_format=ascend` 时还会生成 `quant_model_description.json` 和 `deployment_validation.json`。
+**输出**：部署模型目录。blockwise 导出包括 `layer_*.safetensors`、`rest_*.safetensors`、更新后的 `model.safetensors.index.json` 和 `config.json`；tensorwise 导出保留源权重分片布局并刷新权重索引，tensorwise 时还会生成 `quant_model_description.json` 和 `deployment_validation.json`。
 
 **约束**：
 
@@ -264,7 +264,7 @@ python -m amct_pytorch.deploy \
 }
 ```
 
-`deploy_format=legacy` 输出 AMCT 既有部署格式；`deploy_format=ascend` 输出 vLLM-Ascend ModelSlim 兼容的 W8A8 动态量化权重和描述文件。DeepSeek V4.1 的 A3/Ascend 950 输入要求、完整命令及产物说明请参见 [DeepSeek V4.1 部署说明](../../examples/models/deepseekv4.1/README.md)。
+`deploy_format=legacy` 输出 AMCT 既有部署格式；tensorwise 输出 vLLM-Ascend ModelSlim 兼容的 W8A8 动态量化权重和描述文件。DeepSeek V4.1 的 A3/Ascend 950 输入要求、完整命令及产物说明请参见 [DeepSeek V4.1 部署说明](../../examples/models/deepseekv4.1/README.md)。
 
 ## 参数说明
 
@@ -290,7 +290,6 @@ python -m amct_pytorch.deploy \
 | 参数 | 默认值 | 含义 |
 |------|------|------|
 | `--deploy_platform` | `None` | 目标部署硬件。DeepSeek V4.1 必填，支持 `A3` 和 `ascend950`（`ascend950` 上 `--quant_dtype` 取 `mxfp` 保留源位宽、取 `hifp` 将注意力 Linear 重编码为 HiFloat8）；其他模型由对应适配器决定是否使用。 |
-| `--deploy_format` | `legacy` | 部署产物格式。`legacy` 使用 AMCT 既有格式；`ascend` 生成 vLLM-Ascend ModelSlim 兼容的 W8A8 动态量化产物。 |
 | `--quant_layers_config` | `None` | Tensorwise 直转量化的 JSON 配置路径，通过 `quant_layers` 和 `ignore_layers` glob 选择 checkpoint 模块；显式选择路径会替代 `quant_target`。 |
 
 ### PPL 评估参数

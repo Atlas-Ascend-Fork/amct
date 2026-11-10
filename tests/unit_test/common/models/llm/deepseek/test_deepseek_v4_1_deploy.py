@@ -20,7 +20,9 @@ import pytest
 import torch
 from safetensors.torch import load_file, save_file
 
-from amct_pytorch.common.models.llm.common.deploy_selection import DeploySelection
+from amct_pytorch.common.models.llm.common.deployment.deploy_selection import (
+    DeploySelection,
+)
 from amct_pytorch.common.models.llm.deepseek.deepseek_v4_1 import deepseekv4_1
 from amct_pytorch.common.models.llm.deepseek.deepseek_v4_1.deepseekv4_1 import (
     BLOCK,
@@ -90,7 +92,7 @@ def _write_shard(model, tensors, filename=SHARD):
 
 @pytest.mark.parametrize(
     "platform,dtype",
-    [("A3", "int"), ("ascend950", "mxfp")],
+    [("A3", "int"), ("ascend950", "int"), ("ascend950", "mxfp")],
 )
 def test_validate_platform_accepts_supported_pairs(platform, dtype):
     assert (
@@ -106,7 +108,6 @@ def test_validate_platform_accepts_supported_pairs(platform, dtype):
     [
         ("A2", "int", "A3 or ascend950"),
         ("A3", "mxfp", "requires --quant_dtype int"),
-        ("ascend950", "int", "requires --quant_dtype mxfp"),
     ],
 )
 def test_validate_platform_rejects_unsupported_pairs(platform, dtype, message):
@@ -116,7 +117,8 @@ def test_validate_platform_rejects_unsupported_pairs(platform, dtype, message):
         )
 
 
-def test_validate_ascend_source_accepts_clean_official_fp8_config(tmp_path):
+@pytest.mark.parametrize("platform", ["A3", "ascend950"])
+def test_validate_deploy_source_accepts_clean_official_fp8_config(tmp_path, platform):
     (tmp_path / "config.json").write_text(
         json.dumps(
             {"quantization_config": {"quant_method": "fp8"}, "is_rot_used": False}
@@ -124,35 +126,39 @@ def test_validate_ascend_source_accepts_clean_official_fp8_config(tmp_path):
         encoding="utf-8",
     )
 
-    assert DeepseekV41.validate_ascend_source(_args(model=str(tmp_path))) is True
+    assert (
+        DeepseekV41.validate_deploy_source(
+            _args(model=str(tmp_path), deploy_platform=platform)
+        )
+        is True
+    )
 
     (tmp_path / "rot.safetensors").touch()
-    assert DeepseekV41.validate_ascend_source(_args(model=str(tmp_path))) is False
+    assert DeepseekV41.validate_deploy_source(_args(model=str(tmp_path))) is False
 
 
-def test_validate_ascend_source_rejects_wrong_mode_and_invalid_config(tmp_path):
+def test_validate_deploy_source_rejects_wrong_mode_and_invalid_config(tmp_path):
     assert (
-        DeepseekV41.validate_ascend_source(
+        DeepseekV41.validate_deploy_source(
             _args(model=str(tmp_path), deploy_platform="ascend950", quant_dtype="mxfp")
         )
         is False
     )
     (tmp_path / "config.json").write_text("{", encoding="utf-8")
-    assert DeepseekV41.validate_ascend_source(_args(model=str(tmp_path))) is False
+    assert DeepseekV41.validate_deploy_source(_args(model=str(tmp_path))) is False
 
 
 @pytest.mark.parametrize(
     "overrides,message",
     [
         ({"granularity": "block"}, "tensor deployment only"),
-        ({"deploy_format": "legacy"}, "A3 requires"),
         (
             {
                 "deploy_platform": "ascend950",
                 "quant_dtype": "mxfp",
                 "deploy_format": "ascend",
             },
-            "ascend950 requires",
+            "temporarily unsupported",
         ),
         (
             {
@@ -161,7 +167,7 @@ def test_validate_ascend_source_rejects_wrong_mode_and_invalid_config(tmp_path):
                 "deploy_format": "legacy",
                 "bit_config": "bits.yaml",
             },
-            "bit_config",
+            "temporarily unsupported",
         ),
         ({"algos": ["lwc"]}, "algos"),
         ({"attn_linear_param_dir": "params"}, "attn_linear_param_dir"),
@@ -187,6 +193,20 @@ def test_validate_deploy_args_loads_selection_and_sets_empty_bit_policy(tmp_path
 
     assert args.deploy_selection == DeploySelection((MODULE,), ("model.norm",))
     assert isinstance(args.bit_policy, BitPolicy)
+
+
+def test_prepare_structured_plan_does_not_override_platform_scheme(tmp_path):
+    from amct_pytorch.common.models.llm.common.deployment.deploy_selection import (
+        QuantLayerRule,
+        QuantSpec,
+    )
+
+    selection = DeploySelection((QuantLayerRule(MODULE, QuantSpec("mxfp", 8, 8)),))
+    model = _bare_model(tmp_path, selection=selection)
+    _write_shard(model, {f"{MODULE}.weight": torch.ones(2, 2)})
+
+    with pytest.raises(ValueError, match="does not support quant_dtype 'mxfp'"):
+        model.prepare_tensor_deploy_plan({f"{MODULE}.weight": SHARD})
 
 
 def test_init_loads_config_and_checkpoint_inventory(tmp_path):
@@ -240,11 +260,13 @@ def test_is_block_fp8_requires_matching_32x32_layout(
     )
 
 
-def test_prepare_a3_plan_resolves_selected_ignored_and_mtp_modules(tmp_path):
+@pytest.mark.parametrize("platform", ["A3", "ascend950"])
+def test_prepare_a3_plan_resolves_selected_ignored_and_mtp_modules(tmp_path, platform):
     ignored = "model.layers.0.mlp.gate_proj"
     mtp = "mtp.layers.0.eh_proj"
     selection = DeploySelection((MODULE,), (ignored, "missing.*"))
     model = _bare_model(tmp_path, selection=selection)
+    model.args.deploy_platform = platform
     tensors = {
         f"{MODULE}.weight": torch.ones(2, 2),
         f"{ignored}.weight": torch.ones(2, 2),
@@ -416,13 +438,15 @@ def test_convert_a3_shard_rejects_scale_missing_from_mapped_shard(tmp_path):
         )
 
 
-def test_convert_a3_shard_cache_does_not_accumulate_across_shards(tmp_path):
+@pytest.mark.parametrize("platform", ["A3", "ascend950"])
+def test_convert_a3_shard_cache_does_not_accumulate_across_shards(tmp_path, platform):
     """Regression for issue #246: peak host memory stays at one shard's set.
 
     Both scales live in a single shared shard, so the second source shard must
     still be able to re-read them after the first shard's cache is dropped.
     """
     model = _bare_model(tmp_path, selection=DeploySelection((MODULE, MODULE_B)))
+    model.args.deploy_platform = platform
     shards = ("model-00001-of-00002.safetensors", "model-00002-of-00002.safetensors")
     scale_shard = "scales.safetensors"
     source = (((torch.arange(BLOCK * BLOCK, dtype=torch.float32) % 7) - 3) / 4).reshape(
@@ -634,11 +658,11 @@ def test_read_source_scale_caches_shard_keys_per_handle(tmp_path, monkeypatch):
     assert model.processed_modules == {MODULE, MODULE_B}
 
 
-def test_prepare_a3_scale_expands_e8m0_rows_for_block_fp8():
+def test_prepare_int_scale_expands_e8m0_rows_for_block_fp8():
     weight = torch.ones((32, 64), dtype=torch.float8_e4m3fn)
     scale = torch.ones((1, 2), dtype=torch.uint8).view(torch.float8_e8m0fnu)
 
-    result = DeepseekV41._prepare_a3_scale(weight, scale)
+    result = DeepseekV41._prepare_int_scale(weight, scale)
 
     assert result.dtype == torch.uint8
     assert result.shape == (32, 2)
@@ -791,7 +815,7 @@ def test_refresh_config_writes_platform_contract_without_mutating_source(
         assert written["quantization_config"]["format"] == "float-quantized"
 
 
-def test_make_ascend_description_dispatches_by_platform(tmp_path):
+def test_make_description_dispatches_by_platform(tmp_path):
     model = _bare_model(tmp_path)
     names = {
         f"{MODULE}.weight",
@@ -799,11 +823,120 @@ def test_make_ascend_description_dispatches_by_platform(tmp_path):
         f"{MODULE}.weight_offset",
     }
 
-    description = model.make_ascend_description(names, frozenset({MODULE}))
+    description = model.make_description(names, frozenset({MODULE}))
 
     assert description[f"{MODULE}.weight"] == "W8A8_DYNAMIC"
 
     model.args.deploy_platform = "ascend950"
     model.args.quant_dtype = "mxfp"
     with pytest.raises(NotImplementedError, match="not implemented"):
-        model.make_ascend_description(names, frozenset({MODULE}))
+        model.make_description(names, frozenset({MODULE}))
+
+
+@pytest.mark.parametrize("platform", ["A3", "ascend950"])
+@pytest.mark.parametrize("cli_dtype", ["", "int"])
+def test_cli_int_json_reaches_model_validation(
+    tmp_path, monkeypatch, platform, cli_dtype
+):
+    import sys
+
+    from amct_pytorch.cli.llm.args import parser_gen
+
+    config = tmp_path / "selection.json"
+    config.write_text(
+        json.dumps(
+            {
+                "quant_layers": [
+                    {
+                        "pattern": MODULE,
+                        "quant_dtype": "int",
+                        "w_bits": 8,
+                        "a_bits": 8,
+                    }
+                ]
+            }
+        )
+    )
+    argv = [
+        "deploy",
+        "--model_name",
+        "deepseek_v4_1",
+        "--granularity",
+        "tensor",
+        "--deploy_platform",
+        platform,
+        "--quant_layers_config",
+        str(config),
+    ]
+    if cli_dtype:
+        argv += ["--quant_dtype", cli_dtype]
+    monkeypatch.setattr(sys, "argv", argv)
+    args = parser_gen(command="deploy")
+    assert args.quant_dtype == ("int" if cli_dtype else "")
+    assert args.deploy_selection.uses_structured_rules
+
+
+@pytest.mark.parametrize("platform", ["A3", "ascend950"])
+@pytest.mark.parametrize("dtype", ["mxfp", "fp"])
+def test_model_validator_rejects_non_int_dtype(platform, dtype):
+    with pytest.raises(
+        NotImplementedError, match=f"quant_dtype '{dtype}' is temporarily unsupported"
+    ):
+        DeepseekV41.validate_deploy_args(
+            _args(deploy_platform=platform, quant_dtype=dtype)
+        )
+
+
+@pytest.mark.parametrize("platform", ["A3", "ascend950"])
+def test_int_output_metadata_on_both_platforms(tmp_path, platform):
+    model = _bare_model(tmp_path)
+    model.args.deploy_platform = platform
+    model.refresh_config([])
+    config = json.loads((model.output_dir / "config.json").read_text())
+    assert config["quantization_config"] == {
+        "quant_method": "ascend",
+        "model_quant_type": "W8A8_DYNAMIC",
+    }
+    names = {
+        MODULE + suffix for suffix in (".weight", ".weight_scale", ".weight_offset")
+    }
+    description = model.make_description(names, frozenset({MODULE}))
+    assert description[MODULE + ".weight"] == "W8A8_DYNAMIC"
+
+
+@pytest.mark.parametrize("dtype", ["mxfp", "hifp"])
+@pytest.mark.parametrize("cli_dtype", ["", "int"])
+def test_json_non_int_cannot_bypass_validation(tmp_path, dtype, cli_dtype):
+    from amct_pytorch.common.models.llm.common.deployment.deploy_selection import (
+        prepare_deploy_args,
+    )
+
+    config = tmp_path / "selection.json"
+    config.write_text(
+        json.dumps(
+            {
+                "quant_layers": [
+                    {
+                        "pattern": MODULE,
+                        "quant_dtype": dtype,
+                        "w_bits": 8,
+                        "a_bits": 8,
+                    }
+                ]
+            }
+        )
+    )
+    args = _args(
+        deploy_platform="ascend950",
+        quant_dtype=cli_dtype,
+        quant_layers_config=str(config),
+    )
+    error = NotImplementedError if dtype == "hifp" or not cli_dtype else ValueError
+    message = (
+        "temporarily unsupported"
+        if dtype == "hifp" or not cli_dtype
+        else "does not match"
+    )
+    with pytest.raises(error, match=message):
+        prepare_deploy_args(args)
+        DeepseekV41.validate_deploy_args(args)

@@ -9,7 +9,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""DeepSeek V4.1 deployment adapter; no model construction or PTQ support.
+"""DeepSeek V4.1 INT W8A8 deployment; no model construction or PTQ support.
 
 The legacy 950 format follows cann-recipes-infer's deepseek_v4_1/utils
 converter: preserve weights, expand UE8M0 scales from 32x32 to 1x32.
@@ -27,11 +27,14 @@ from safetensors import safe_open
 from safetensors.torch import load_file, save_file
 
 from amct_pytorch.common.models import MODEL_REGISTRY
-from amct_pytorch.common.models.llm.common.deploy_export import (
-    adapt_ascend_payload,
+from amct_pytorch.common.models.llm.common.deployment.deploy_export import (
+    adapt_payload,
     convert_state_dict,
-    make_ascend_description,
+    make_description,
     quant_payload,
+)
+from amct_pytorch.common.models.llm.common.deployment.schemes import (
+    PLATFORM_QUANT_DTYPES,
 )
 from amct_pytorch.common.models.llm.common.weight_path_validation import (
     collect_safetensors_files,
@@ -79,13 +82,13 @@ class DeepseekV41:
     @staticmethod
     def _validate_platform(args):
         platform = getattr(args, "deploy_platform", None)
-        expected = {"A3": ("int",), "ascend950": ("mxfp", "hifp")}
-        if platform not in expected:
+        if platform not in PLATFORM_QUANT_DTYPES:
             raise ValueError("DeepSeek V4.1 requires --deploy_platform A3 or ascend950")
-        if getattr(args, "quant_dtype", None) not in expected[platform]:
+        supported_dtypes = PLATFORM_QUANT_DTYPES[platform]
+        if getattr(args, "quant_dtype", None) not in supported_dtypes:
             raise ValueError(
                 f"DeepSeek V4.1 {platform} requires --quant_dtype "
-                + " or ".join(expected[platform])
+                + " or ".join(sorted(supported_dtypes))
             )
         return platform
 
@@ -93,10 +96,10 @@ class DeepseekV41:
         return getattr(self.args, "quant_dtype", None) == "hifp"
 
     @classmethod
-    def validate_ascend_source(cls, args):
-        """Allow the official FP8/FP4 source only for the A3 conversion path."""
+    def validate_deploy_source(cls, args):
+        """Allow the official FP8/FP4 source for INT deployment on either platform."""
         if (
-            getattr(args, "deploy_platform", None) != "A3"
+            getattr(args, "deploy_platform", None) not in {"A3", "ascend950"}
             or getattr(args, "quant_dtype", None) != "int"
         ):
             return False
@@ -120,25 +123,26 @@ class DeepseekV41:
 
     @classmethod
     def validate_deploy_args(cls, args):
-        from amct_pytorch.common.models.llm.common.deploy_selection import (
+        cli_dtype = getattr(args, "quant_dtype", None)
+        if (
+            getattr(args, "granularity", None) == "tensor"
+            and cli_dtype
+            and cli_dtype != "int"
+        ):
+            raise NotImplementedError(
+                f"DeepSeek V4.1 tensor deployment with quant_dtype '{cli_dtype}' "
+                "is temporarily unsupported"
+            )
+
+        from amct_pytorch.common.models.llm.common.deployment.deploy_selection import (
             DeploySelection,
             load_deploy_selection,
         )
         from amct_pytorch.quantization.bit_policy import BitPolicy
 
-        platform = cls._validate_platform(args)
         if getattr(args, "granularity", None) != "tensor":
             raise NotImplementedError(
                 "DeepSeek V4.1 supports tensor deployment only; PTQ is not implemented"
-            )
-        deploy_format = getattr(args, "deploy_format", "legacy")
-        if platform == "A3" and deploy_format != "ascend":
-            raise ValueError("DeepSeek V4.1 A3 requires --deploy_format ascend")
-        if platform == "ascend950" and deploy_format != "legacy":
-            raise ValueError("DeepSeek V4.1 ascend950 requires --deploy_format legacy")
-        if platform == "ascend950" and getattr(args, "bit_config", None):
-            raise ValueError(
-                "DeepSeek V4.1 ascend950 (mxfp/hifp) does not support --bit_config"
             )
         for key in (
             "algos",
@@ -153,6 +157,29 @@ class DeepseekV41:
             args.deploy_selection = load_deploy_selection(path)
         elif not isinstance(getattr(args, "deploy_selection", None), DeploySelection):
             raise ValueError("DeepSeek V4.1 requires --quant_layers_config")
+        selection = args.deploy_selection
+        if selection.uses_structured_rules:
+            from amct_pytorch.common.models.llm.common.deployment.schemes import (
+                validate_selection_quant_scheme,
+            )
+
+            scheme = validate_selection_quant_scheme(selection)
+            if cli_dtype and cli_dtype != scheme.quant_dtype:
+                raise ValueError(
+                    "DeepSeek V4.1 --quant_dtype does not match "
+                    "quant_layers_config: "
+                    f"{cli_dtype!r} != {scheme.quant_dtype!r}"
+                )
+            selected_dtype = scheme.quant_dtype
+        else:
+            selected_dtype = cli_dtype
+        args.quant_dtype = selected_dtype
+        if selected_dtype != "int":
+            raise NotImplementedError(
+                "DeepSeek V4.1 tensor deployment with quant_dtype "
+                f"'{selected_dtype}' is temporarily unsupported"
+            )
+        cls._validate_platform(args)
         args.bit_policy = BitPolicy()
 
     @staticmethod
@@ -168,10 +195,15 @@ class DeepseekV41:
 
     def prepare_tensor_deploy_plan(self, weight_map):
         """Inspect shard headers before writing, then select only actual FP8 work."""
-        from amct_pytorch.common.models.llm.common.deploy_selection import (
+        from amct_pytorch.common.models.llm.common.deployment.deploy_selection import (
             MtpSelectionReport,
+            QuantSpec,
             ResolvedDeployPlan,
+            get_structured_quant_spec,
             match_deploy_modules,
+        )
+        from amct_pytorch.common.models.llm.common.deployment.schemes import (
+            validate_platform_quant_scheme,
         )
 
         names = {name.rsplit(".", 1)[0] for name in weight_map}
@@ -180,6 +212,9 @@ class DeepseekV41:
         candidates = set()
         selected = set(selected)
         platform = self._validate_platform(self.args)
+        is_int = self.args.quant_dtype == "int"
+        if selection.uses_structured_rules:
+            validate_platform_quant_scheme(selection, platform)
         weight_keys = {key for key in weight_map if key.endswith(".weight")}
         header_keys = weight_keys | {
             key.removesuffix(".weight") + ".scale"
@@ -206,11 +241,11 @@ class DeepseekV41:
             weight_header = headers.get(key)
             if weight_header is None:
                 continue
-            if platform == "A3" and base in selected:
+            if is_int and base in selected:
                 weight_shape = weight_header[1]
                 if len(weight_shape) != 2 or any(size <= 0 for size in weight_shape):
                     raise ValueError(
-                        f"Selected A3 module is not a nonempty 2-D weight: {base}"
+                        f"Selected INT module is not a nonempty 2-D weight: {base}"
                     )
                 candidates.add(base)
                 continue
@@ -222,16 +257,21 @@ class DeepseekV41:
                 scale_header[1],
             ):
                 candidates.add(base)
-        if platform == "A3" and (missing := selected - candidates):
+        if is_int and (missing := selected - candidates):
             raise ValueError(
-                f"Selected A3 modules are not nonempty 2-D weights: {sorted(missing)}"
+                f"Selected INT modules are not nonempty 2-D weights: {sorted(missing)}"
             )
-        # A3 follows ModelSlim's selective policy: source FP8/FP4 modules that
+        # INT export follows ModelSlim's selective policy: source FP8/FP4 modules that
         # are not selected are decoded to BF16 and described as FLOAT. The 950
         # legacy converter, however, only expands scales for explicitly
         # selected FP8 modules and must retain its all-candidates guard.
         hif8 = self._is_hif8()
-        if platform == "ascend950" and not hif8 and (missing := candidates - selected):
+        if (
+            platform == "ascend950"
+            and self.args.quant_dtype != "int"
+            and not hif8
+            and (missing := candidates - selected)
+        ):
             raise ValueError(
                 f"FP8 32x32 modules not selected by JSON: {sorted(missing)}"
             )
@@ -239,9 +279,13 @@ class DeepseekV41:
             raise ValueError(
                 f"Selected HiFloat8 modules are not 32x32 block FP8: {sorted(missing)}"
             )
-        planned = candidates if platform == "ascend950" and not hif8 else selected
+        planned = (
+            candidates
+            if platform == "ascend950" and self.args.quant_dtype != "int" and not hif8
+            else selected
+        )
         # Fail on invalid config before any checkpoint output is created.
-        if platform == "ascend950" and not hif8:
+        if platform == "ascend950" and self.args.quant_dtype != "int" and not hif8:
             self._make_legacy_quant_config()
         self.processed_modules.clear()
         ignored = frozenset(
@@ -255,10 +299,18 @@ class DeepseekV41:
         mtp = frozenset(
             name for name in names if name.startswith("mtp.") or ".mtp." in name
         )
+        if selection.uses_structured_rules:
+            module_quant_specs = {
+                name: get_structured_quant_spec(selection, name) for name in planned
+            }
+        else:
+            default_dtype = self.args.quant_dtype
+            module_quant_specs = {
+                name: QuantSpec(default_dtype, 8, 8) for name in planned
+            }
         return ResolvedDeployPlan(
-            selected_modules=frozenset(planned),
+            module_quant_specs=module_quant_specs,
             selected_weight_keys=frozenset(name + ".weight" for name in planned),
-            module_bits={name: (8, 8) for name in planned},
             ignored_modules=ignored,
             unselected_weight_modules=frozenset(weights - planned),
             match_counts=counts,
@@ -272,9 +324,9 @@ class DeepseekV41:
         self, source_file, model_dir, original_weight_map, quant_layers, loaded_files
     ):
         """Same arguments and {tensor_name: shard_name} return as the workflow."""
-        platform = self._validate_platform(self.args)
-        if platform == "A3":
-            convert = self._convert_tensorwise_shard_a3
+        self._validate_platform(self.args)
+        if self.args.quant_dtype == "int":
+            convert = self._convert_tensorwise_shard_int
         elif self._is_hif8():
             convert = self._convert_tensorwise_shard_hif8
         else:
@@ -283,7 +335,7 @@ class DeepseekV41:
             source_file, model_dir, original_weight_map, quant_layers, loaded_files
         )
 
-    def _convert_tensorwise_shard_a3(
+    def _convert_tensorwise_shard_int(
         self, source_file, model_dir, original_weight_map, quant_layers, loaded_files
     ):
         # Nothing read for this shard may outlive the call: the workflow hands
@@ -323,7 +375,7 @@ class DeepseekV41:
                     # single-entry overlay, so the loaded shard is never
                     # mutated and no adapted scale is retained afterwards.
                     scale_overlay = {
-                        scale_file: {scale_name: self._prepare_a3_scale(weight, scale)}
+                        scale_file: {scale_name: self._prepare_int_scale(weight, scale)}
                     }
                     weight = convert_state_dict(
                         weight,
@@ -346,7 +398,7 @@ class DeepseekV41:
                 else None
             )
             if module_name in quant_layers:
-                state_dict = self._export_a3_payload(
+                state_dict = self._export_int_payload(
                     weight_name, weight, quant_layers[module_name]
                 )
                 new_state_dict.update(state_dict)
@@ -365,10 +417,10 @@ class DeepseekV41:
         return {name: source_file for name in new_state_dict}
 
     @staticmethod
-    def _export_a3_payload(weight_name, weight, bit):
+    def _export_int_payload(weight_name, weight, bit):
         register_dtype()
         payload = quant_payload(DTYPE_REGISTRY.get("int"), weight_name, weight, bit)
-        return adapt_ascend_payload(weight_name, payload)
+        return adapt_payload(weight_name, payload)
 
     def _read_source_scale(self, model_dir, scale_file, scale_name, open_files):
         """Read one source scale tensor without materialising its whole shard.
@@ -398,7 +450,7 @@ class DeepseekV41:
         return handle.get_tensor(scale_name)
 
     @staticmethod
-    def _prepare_a3_scale(weight, scale):
+    def _prepare_int_scale(weight, scale):
         """Adapt official UE8M0 scales to the common MX dequant contract."""
         if scale.dtype == torch.float8_e8m0fnu:
             scale = scale.view(torch.uint8)
@@ -551,9 +603,7 @@ class DeepseekV41:
     def validate_tensorwise_result(self, plan):
         """Return actual converted modules for the workflow's completion check."""
         if self.processed_modules != plan.selected_modules:
-            raise ValueError(
-                "Actual FP8 scale conversions differ from the deployment plan"
-            )
+            raise ValueError("Actual converted modules differ from the deployment plan")
         return self.processed_modules
 
     @staticmethod
@@ -575,7 +625,7 @@ class DeepseekV41:
         return value
 
     def _make_legacy_quant_config(self):
-        from amct_pytorch.common.models.llm.common.deploy_export import (
+        from amct_pytorch.common.models.llm.common.deployment.deploy_export import (
             generate_quant_config,
         )
 
@@ -617,19 +667,19 @@ class DeepseekV41:
         return config
 
     def refresh_config(self, quant_ignore_layers, *, tensor_plan=None):
-        platform = self._validate_platform(self.args)
-        if platform == "A3":
-            refresh = self._refresh_config_a3
+        self._validate_platform(self.args)
+        if self.args.quant_dtype == "int":
+            refresh = self._refresh_config_int
         elif self._is_hif8():
             refresh = self._refresh_config_hif8
         else:
             refresh = self._refresh_config_950
         return refresh(quant_ignore_layers, tensor_plan=tensor_plan)
 
-    def _refresh_config_a3(self, quant_ignore_layers, *, tensor_plan=None):
+    def _refresh_config_int(self, quant_ignore_layers, *, tensor_plan=None):
         config = copy.deepcopy(self.config)
         config.pop("quantization_config", None)
-        # Match the vLLM-Ascend ModelSlim contract consumed by the A3 runtime.
+        # Match the vLLM ModelSlim contract used for INT deployment on both platforms.
         config["quantization_config"] = {
             "quant_method": "ascend",
             "model_quant_type": "W8A8_DYNAMIC",
@@ -639,7 +689,7 @@ class DeepseekV41:
         os.replace(temporary, self.output_dir / "config.json")
 
     def _refresh_config_hif8(self, quant_ignore_layers, *, tensor_plan=None):
-        # Written unchanged: vLLM-Ascend picks its FP8 config from quant_method
+        # Written unchanged: vLLM picks its FP8 config from quant_method
         # "fp8" and finds the HiFloat8 Linears by their uint8 weights, so no
         # ignore list is needed either.
         config = copy.deepcopy(self.config)
@@ -658,19 +708,19 @@ class DeepseekV41:
         temporary.write_text(json.dumps(config, indent=2), encoding="utf-8")
         os.replace(temporary, self.output_dir / "config.json")
 
-    def make_ascend_description(self, output_tensor_names, selected_modules):
-        platform = self._validate_platform(self.args)
+    def make_description(self, output_tensor_names, selected_modules):
+        self._validate_platform(self.args)
         describe = (
-            self._make_ascend_description_a3
-            if platform == "A3"
-            else self._make_ascend_description_950
+            self._make_description_int
+            if self.args.quant_dtype == "int"
+            else self._make_description_950
         )
         return describe(output_tensor_names, selected_modules)
 
-    def _make_ascend_description_a3(self, output_tensor_names, selected_modules):
-        return make_ascend_description(output_tensor_names, selected_modules)
+    def _make_description_int(self, output_tensor_names, selected_modules):
+        return make_description(output_tensor_names, selected_modules)
 
-    def _make_ascend_description_950(self, output_tensor_names, selected_modules):
+    def _make_description_950(self, output_tensor_names, selected_modules):
         raise NotImplementedError(
-            "DeepSeek V4.1 950 ascend description is not implemented"
+            "DeepSeek V4.1 950 deployment description is not implemented"
         )

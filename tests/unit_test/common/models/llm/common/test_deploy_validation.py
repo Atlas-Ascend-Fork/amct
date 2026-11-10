@@ -1,4 +1,3 @@
-# coding=utf-8
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,13 +20,19 @@ import pytest
 import torch
 from safetensors.torch import save_file
 
+from amct_pytorch.common.models.llm.common.deployment.deploy_selection import QuantSpec
 
-def validate(path):
+
+def validate(path, quant_dtype="int"):
     module = importlib.import_module(
-        "amct_pytorch.common.models.llm.common.deploy_validation"
+        "amct_pytorch.common.models.llm.common.deployment.deploy_validation"
     )
-    return module.validate_ascend_artifacts(
-        path, SimpleNamespace(selected_modules=frozenset({"x"}))
+    return module.validate_artifacts(
+        path,
+        SimpleNamespace(
+            module_quant_specs={"x": QuantSpec(quant_dtype, 8, 8)},
+            selected_modules=frozenset({"x"}),
+        ),
     )
 
 
@@ -74,6 +79,109 @@ def test_valid_artifacts_report_header_bytes_and_counts(artifacts):
     assert report["tensor_count"] == 4 and report["selected_modules"] == 1
     assert report["dynamic_tensor_count"] == 3 and report["float_tensor_count"] == 1
     assert all(value == 0 for value in report["error_counts"].values())
+    assert report["contract"] == {
+        "quant_dtype": "int",
+        "weight_bits": 8,
+        "activation_bits": 8,
+        "model_quant_type": "W8A8_DYNAMIC",
+        "group_size": 0,
+    }
+    assert report["artifacts"] == {
+        "config": "config.json",
+        "description": "quant_model_description.json",
+        "index": "model.safetensors.index.json",
+        "shards": ["one.safetensors"],
+    }
+
+
+@pytest.fixture
+def mxfp_artifacts(tmp_path):
+    tensors = {
+        "x.weight": torch.ones(2, 64).to(torch.float8_e4m3fn),
+        "x.weight_scale": torch.ones(2, 2, dtype=torch.uint8),
+        "model.norm.weight": torch.ones(2, 64, dtype=torch.bfloat16),
+    }
+    description = {
+        "version": "1.0.0",
+        "model_quant_type": "W8A8_MXFP8",
+        "metadata": {},
+        "group_size": 32,
+        "optional": {},
+        "x.weight": "W8A8_MXFP8",
+        "x.weight_scale": "W8A8_MXFP8",
+        "model.norm.weight": "FLOAT",
+    }
+    index = {
+        "metadata": {"total_size": 388},
+        "weight_map": dict.fromkeys(tensors, "one.safetensors"),
+    }
+    (tmp_path / "config.json").write_text(json.dumps({"num_hidden_layers": 2}))
+    save_file(tensors, str(tmp_path / "one.safetensors"))
+    (tmp_path / "model.safetensors.index.json").write_text(json.dumps(index))
+    (tmp_path / "quant_model_description.json").write_text(json.dumps(description))
+    return tmp_path
+
+
+def test_valid_mxfp8_artifacts_report_header_bytes_and_counts(mxfp_artifacts):
+    report = validate(mxfp_artifacts, quant_dtype="mxfp")
+
+    assert report["status"] == "passed"
+    assert report["total_tensor_bytes"] == 388
+    assert report["dynamic_tensor_count"] == 2
+    assert report["float_tensor_count"] == 1
+    assert report["contract"]["quant_dtype"] == "mxfp"
+    assert report["contract"]["model_quant_type"] == "W8A8_MXFP8"
+
+
+def test_artifacts_reject_config_quant_type_mismatch(artifacts):
+    path, *_ = artifacts
+    config_path = path / "config.json"
+    config = json.loads(config_path.read_text())
+    config["quantization_config"] = {
+        "quant_method": "ascend",
+        "model_quant_type": "W8A8_MXFP8",
+    }
+    config_path.write_text(json.dumps(config))
+
+    report = validate(path)
+
+    assert report["status"] == "failed"
+    assert any("config.json" in error for error in report["errors"])
+
+
+def test_artifacts_reject_nonlocal_index_shard(artifacts):
+    path, _, index, _, write = artifacts
+    index["weight_map"]["x.weight"] = "../one.safetensors"
+    write()
+
+    report = validate(path)
+
+    assert report["status"] == "failed"
+    assert any("local shard filename" in error for error in report["errors"])
+
+
+def test_mxfp8_artifacts_reject_weight_offset(mxfp_artifacts):
+    tensors = {
+        "x.weight": torch.ones(2, 64).to(torch.float8_e4m3fn),
+        "x.weight_scale": torch.ones(2, 2, dtype=torch.uint8),
+        "x.weight_offset": torch.zeros(2, 1, dtype=torch.bfloat16),
+        "model.norm.weight": torch.ones(2, 64, dtype=torch.bfloat16),
+    }
+    save_file(tensors, str(mxfp_artifacts / "one.safetensors"))
+    index_path = mxfp_artifacts / "model.safetensors.index.json"
+    index = json.loads(index_path.read_text())
+    index["metadata"]["total_size"] = 392
+    index["weight_map"] = dict.fromkeys(tensors, "one.safetensors")
+    index_path.write_text(json.dumps(index))
+    description_path = mxfp_artifacts / "quant_model_description.json"
+    description = json.loads(description_path.read_text())
+    description["x.weight_offset"] = "FLOAT"
+    description_path.write_text(json.dumps(description))
+
+    report = validate(mxfp_artifacts, quant_dtype="mxfp")
+
+    assert report["status"] == "failed"
+    assert any("weight_offset" in error for error in report["errors"])
 
 
 @pytest.mark.parametrize(
@@ -153,7 +261,7 @@ def test_corrupt_artifacts_fail_validation(artifacts, fault):
 def test_validation_reads_only_auxiliary_tensor_values(artifacts, monkeypatch):
     path, *_ = artifacts
     module = importlib.import_module(
-        "amct_pytorch.common.models.llm.common.deploy_validation"
+        "amct_pytorch.common.models.llm.common.deployment.deploy_validation"
     )
     original = module.safe_open
     reads = []
