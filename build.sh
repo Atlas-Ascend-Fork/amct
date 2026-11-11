@@ -31,7 +31,7 @@ usage() {
   echo "Options:"
   echo "    -h, --help        Print usage"
   echo "    -v, --verbose     Display build command"
-  echo "    -j<N>             Set the number of threads used for building HIXL, default is 8"
+  echo "    -j<N>             Set AMCT build threads, default is the detected host logical CPU count"
   echo "    --build-type=<TYPE>"
   echo "                      Specify build type (TYPE options: Release/Debug), Default: Release"
   echo "    --pkg             Build full amct package (amct_pytorch + graph)"
