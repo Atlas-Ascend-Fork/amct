@@ -15,6 +15,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import copy
+
 import numpy as np
 from onnx import onnx_pb  # pylint: disable=import-error
 
@@ -91,6 +93,50 @@ class InsertBiasQuantPass(BaseFusionPass):
 
         return True
 
+    @staticmethod
+    def split_reused_bias(graph, object_node, bias_node):
+        """
+        Function: Split object_node's bias (in bias_node) into a dedicated copy
+        when the bias initializer is shared by multiple nodes, so that the
+        in-place INT32 rewrite below only affects object_node's own copy.
+        Inputs:
+            graph: graph structure
+            object_node: node whose bias is to be quantized
+            bias_node: the shared bias node of object_node
+        Returns:
+            new_bias_node: the node whose tensor should be quantized; equals
+            bias_node itself when the bias is not shared
+        """
+        if len(bias_node.get_output_anchor(0).get_peer_input_anchor()) <= 1:
+            return bias_node
+
+        bias_op = copy.deepcopy(bias_node.proto)
+        bias_op.name = '_'.join([bias_op.name, object_node.name])
+        new_bias_node = graph.add_node(bias_op)
+        if len(new_bias_node.output_anchors) == 0:
+            new_bias_node.add_output_anchor(
+                '{}_quantized_bias'.format(object_node.name)
+            )
+
+        if object_node.type == 'MatMul':
+            # MatMul's bias is the second input of its unique Add consumer.
+            add_node = object_node.get_consumers(0)[0][0]
+            bias_index = 1
+            graph.remove_edge(bias_node, 0, add_node, bias_index)
+            graph.add_edge(new_bias_node, 0, add_node, bias_index)
+        else:
+            bias_index = QuantOpInfo.get_quant_index(object_node).get('bias_index')
+            graph.remove_edge(bias_node, 0, object_node, bias_index)
+            graph.add_edge(new_bias_node, 0, object_node, bias_index)
+        LOGGER.logd(
+            "Bias '{}' is shared by multiple nodes, split a dedicated copy "
+            "'{}' for layer '{}' before quantize.".format(
+                bias_node.name, new_bias_node.name, object_node.name
+            ),
+            'BiasQuantPass',
+        )
+        return new_bias_node
+
     def do_pass(self, graph, object_node, model=None):
         """
         Function: Do actual quantization and node's bias is changed to int32.
@@ -102,6 +148,7 @@ class InsertBiasQuantPass(BaseFusionPass):
         Return: None
         """
         bias_param = QuantOpInfo.get_bias_node(object_node)
+        bias_param = self.split_reused_bias(graph, object_node, bias_param)
         bias_helper = TensorProtoHelper(bias_param.proto, bias_param.model_path)
         bias = bias_helper.get_data()
         bias_helper.clear_data()

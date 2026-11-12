@@ -127,6 +127,233 @@ class TestInsertBiasQuantPass(unittest.TestCase):
             'conv1',
         )
 
+    def _build_shared_bias_graph(self, temp_dir):
+        """Build an onnx model whose bias initializer is shared by two MatMul
+        layers, then parse it into an amct graph.
+
+        Returns the graph, in which only ``layer_shared_a`` and
+        ``layer_shared_b`` consume the shared ``shared_bias`` initializer.
+        """
+        import onnx
+        from onnx import TensorProto, helper, numpy_helper
+
+        bias = numpy_helper.from_array(
+            np.array([1.1, 2.2, 3.3, 4.4], dtype=np.float32), name='shared_bias'
+        )
+        weight_a = numpy_helper.from_array(np.eye(4, dtype=np.float32), name='weight_a')
+        weight_b = numpy_helper.from_array(np.eye(4, dtype=np.float32), name='weight_b')
+        graph_input = helper.make_tensor_value_info('x', TensorProto.FLOAT, [1, 4])
+        out_a = helper.make_tensor_value_info('y_a', TensorProto.FLOAT, [1, 4])
+        out_b = helper.make_tensor_value_info('y_b', TensorProto.FLOAT, [1, 4])
+        nodes = [
+            helper.make_node(
+                'MatMul', ['x', 'weight_a'], ['mm_a_out'], name='layer_shared_a'
+            ),
+            helper.make_node(
+                'Add', ['mm_a_out', 'shared_bias'], ['add_a_out'], name='AddA'
+            ),
+            helper.make_node(
+                'MatMul', ['x', 'weight_b'], ['mm_b_out'], name='layer_shared_b'
+            ),
+            helper.make_node('Add', ['mm_b_out', 'shared_bias'], ['y_b'], name='AddB'),
+            helper.make_node('Identity', ['add_a_out'], ['y_a'], name='OutA'),
+        ]
+        graph = helper.make_graph(
+            nodes,
+            'shared_bias_graph',
+            [graph_input],
+            [out_a, out_b],
+            initializer=[weight_a, weight_b, bias],
+        )
+        model = helper.make_model(graph, opset_imports=[helper.make_opsetid('', 13)])
+        onnx_file = os.path.join(temp_dir, 'shared_bias.onnx')
+        onnx.save(model, onnx_file)
+        graph = Parser.parse_net_to_graph(onnx_file)
+        return graph
+
+    def test_shared_bias_not_polluted(self):
+        """A shared bias initializer must keep FLOAT for the non-quantized
+        consumer: the quantized layer works on a dedicated split copy.
+        """
+        temp_dir = os.path.join(CUR_DIR, 'test_bias_quant_shared')
+        os.makedirs(temp_dir, exist_ok=True)
+        try:
+            graph = self._build_shared_bias_graph(temp_dir)
+            records = {
+                'layer_shared_a': {
+                    'weight_scale': np.array([0.001] * 4),
+                    'data_scale': np.array(1.0),
+                    'dst_type': 'INT8',
+                }
+            }
+            optimizer = GraphOptimizer()
+            optimizer.add_pass(InsertBiasQuantPass(records))
+            optimizer.do_optimizer(graph, None)
+
+            from onnx import TensorProto
+
+            bias_node = graph.get_node_by_name('shared_bias')
+            self.assertEqual(bias_node.proto.data_type, TensorProto.FLOAT)
+            kept_value = TensorProtoHelper(bias_node.proto).get_data()
+            self.assertTrue(np.allclose(kept_value, [1.1, 2.2, 3.3, 4.4]))
+
+            # The quantized layer consumes a dedicated INT32 copy instead.
+            split_node = graph.get_node_by_name('shared_bias_layer_shared_a')
+            self.assertEqual(split_node.proto.data_type, TensorProto.INT32)
+            quant_value = TensorProtoHelper(split_node.proto).get_data()
+            self.assertEqual(quant_value.dtype, np.int32)
+            add_a = graph.get_node_by_name('AddA')
+            bias_anchor = add_a.get_input_anchor(1)
+            self.assertEqual(
+                bias_anchor.get_peer_output_anchor().node.name,
+                'shared_bias_layer_shared_a',
+            )
+            add_b = graph.get_node_by_name('AddB')
+            bias_anchor = add_b.get_input_anchor(1)
+            self.assertEqual(
+                bias_anchor.get_peer_output_anchor().node.name, 'shared_bias'
+            )
+        finally:
+            os.popen('rm -r ' + temp_dir)
+
+    def _build_shared_conv_bias_graph(self, temp_dir):
+        """Build an onnx model whose bias initializer is shared by two Conv
+        layers (bias is the third input of Conv itself, not of a follower
+        Add), then parse it into an amct graph.
+
+        Returns the graph, in which only ``conv_shared_a`` and
+        ``conv_shared_b`` consume the shared ``shared_conv_bias``
+        initializer.
+        """
+        import onnx
+        from onnx import TensorProto, helper, numpy_helper
+
+        bias = numpy_helper.from_array(
+            np.array([1.1, 2.2], dtype=np.float32), name='shared_conv_bias'
+        )
+        weight_a = numpy_helper.from_array(
+            np.full([2, 1, 1, 1], 1.0, dtype=np.float32), name='conv_weight_a'
+        )
+        weight_b = numpy_helper.from_array(
+            np.full([2, 1, 1, 1], 1.0, dtype=np.float32), name='conv_weight_b'
+        )
+        graph_input = helper.make_tensor_value_info(
+            'x', TensorProto.FLOAT, [1, 1, 2, 2]
+        )
+        out_a = helper.make_tensor_value_info('y_a', TensorProto.FLOAT, [1, 2, 2, 2])
+        out_b = helper.make_tensor_value_info('y_b', TensorProto.FLOAT, [1, 2, 2, 2])
+        nodes = [
+            helper.make_node(
+                'Conv',
+                ['x', 'conv_weight_a', 'shared_conv_bias'],
+                ['y_a'],
+                name='conv_shared_a',
+            ),
+            helper.make_node(
+                'Conv',
+                ['x', 'conv_weight_b', 'shared_conv_bias'],
+                ['y_b'],
+                name='conv_shared_b',
+            ),
+        ]
+        graph = helper.make_graph(
+            nodes,
+            'shared_conv_bias_graph',
+            [graph_input],
+            [out_a, out_b],
+            initializer=[weight_a, weight_b, bias],
+        )
+        model = helper.make_model(graph, opset_imports=[helper.make_opsetid('', 13)])
+        onnx_file = os.path.join(temp_dir, 'shared_conv_bias.onnx')
+        onnx.save(model, onnx_file)
+        graph = Parser.parse_net_to_graph(onnx_file)
+        return graph
+
+    def test_shared_conv_bias_not_polluted(self):
+        """A shared Conv bias initializer (re-linked via the bias_index of the
+        conv node itself, not via a follower Add) must keep FLOAT for the
+        non-quantized consumer: the quantized layer works on a dedicated
+        split copy.
+        """
+        temp_dir = os.path.join(CUR_DIR, 'test_bias_quant_shared_conv')
+        os.makedirs(temp_dir, exist_ok=True)
+        try:
+            graph = self._build_shared_conv_bias_graph(temp_dir)
+            records = {
+                'conv_shared_a': {
+                    'weight_scale': np.array([0.001] * 2),
+                    'data_scale': np.array(1.0),
+                    'dst_type': 'INT8',
+                }
+            }
+            optimizer = GraphOptimizer()
+            optimizer.add_pass(InsertBiasQuantPass(records))
+            optimizer.do_optimizer(graph, None)
+
+            from onnx import TensorProto
+
+            bias_node = graph.get_node_by_name('shared_conv_bias')
+            self.assertEqual(bias_node.proto.data_type, TensorProto.FLOAT)
+            kept_value = TensorProtoHelper(bias_node.proto).get_data()
+            self.assertTrue(np.allclose(kept_value, [1.1, 2.2]))
+
+            # The quantized conv consumes a dedicated INT32 copy instead.
+            split_node = graph.get_node_by_name('shared_conv_bias_conv_shared_a')
+            self.assertEqual(split_node.proto.data_type, TensorProto.INT32)
+            quant_value = TensorProtoHelper(split_node.proto).get_data()
+            self.assertEqual(quant_value.dtype, np.int32)
+            self.assertTrue(np.allclose(quant_value, [1100, 2200]))
+
+            conv_a = graph.get_node_by_name('conv_shared_a')
+            bias_anchor = conv_a.get_input_anchor(2)
+            self.assertEqual(
+                bias_anchor.get_peer_output_anchor().node.name,
+                'shared_conv_bias_conv_shared_a',
+            )
+            conv_b = graph.get_node_by_name('conv_shared_b')
+            bias_anchor = conv_b.get_input_anchor(2)
+            self.assertEqual(
+                bias_anchor.get_peer_output_anchor().node.name, 'shared_conv_bias'
+            )
+        finally:
+            os.popen('rm -r ' + temp_dir)
+
+    def test_shared_bias_both_quantized_use_own_scale(self):
+        """When both consumers are quantized, each one gets its own copy
+        quantized with its own scale instead of overwriting each other.
+        """
+        temp_dir = os.path.join(CUR_DIR, 'test_bias_quant_shared_both')
+        os.makedirs(temp_dir, exist_ok=True)
+        try:
+            graph = self._build_shared_bias_graph(temp_dir)
+            records = {
+                'layer_shared_a': {
+                    'weight_scale': np.array([0.001] * 4),
+                    'data_scale': np.array(1.0),
+                    'dst_type': 'INT8',
+                },
+                'layer_shared_b': {
+                    'weight_scale': np.array([0.01] * 4),
+                    'data_scale': np.array(1.0),
+                    'dst_type': 'INT8',
+                },
+            }
+            optimizer = GraphOptimizer()
+            optimizer.add_pass(InsertBiasQuantPass(records))
+            optimizer.do_optimizer(graph, None)
+
+            split_a = graph.get_node_by_name('shared_bias_layer_shared_a')
+            quant_a = TensorProtoHelper(split_a.proto).get_data()
+            self.assertTrue(np.allclose(quant_a, [1100, 2200, 3300, 4400]))
+            # layer_shared_b quantizes the original node directly: after the
+            # split for layer A its fan-out is 1, so no second copy is needed.
+            bias_node = graph.get_node_by_name('shared_bias')
+            quant_b = TensorProtoHelper(bias_node.proto).get_data()
+            self.assertEqual(quant_b.dtype, np.int32)
+            self.assertTrue(np.allclose(quant_b, [110, 220, 330, 440]))
+        finally:
+            os.popen('rm -r ' + temp_dir)
+
     def test_rnn_bias_quant_success(self):
         layer_name = 'lstm'
         records = {
