@@ -100,7 +100,7 @@ checkopts() {
         ;;
       --output_path)
         if [ -d "$2" ]; then
-          OUTPUT_PATH="$(realpath $2)"
+          OUTPUT_PATH="$(realpath "$2")"
         else
           echo "Warning: Output path '$2' does not exist or is not a directory"
         fi
@@ -177,14 +177,14 @@ build() {
 
   if [ -d "${OUTPUT_PATH}" ];then
     echo "${OUTPUT_PATH} exist, delete old path"
-    rm -rf ${OUTPUT_PATH}
+    rm -rf "${OUTPUT_PATH}"
   fi
   echo "create path ${OUTPUT_PATH}"
-  mkdir ${OUTPUT_PATH}
+  mkdir "${OUTPUT_PATH}"
   mkdir "${OUTPUT_PATH}/amct_package"
   mkdir "${OUTPUT_PATH}/amct_package/amct_pytorch"
-  cp ${BASEPATH}/dist/*.tar.gz ${OUTPUT_PATH}/amct_package/amct_pytorch/
-  cp -r ${BASEPATH}/amctgraph/* ${OUTPUT_PATH}/amct_package/
+  cp ${BASEPATH}/dist/*.tar.gz "${OUTPUT_PATH}/amct_package/amct_pytorch/"
+  cp -r ${BASEPATH}/amctgraph/* "${OUTPUT_PATH}/amct_package/"
 
   VERSION=$(awk -F'=' '/^Version=/ {print $2}' ../version.info)
   echo "package ${VERSION}"
@@ -192,10 +192,10 @@ build() {
   PACKAGE_NAME="cann-amct_${VERSION}_${SYS,,}-$(uname -m).tar.gz"
   TAR_FILE="${OUTPUT_PATH}/${PACKAGE_NAME}"
   TARGET_DIR="${OUTPUT_PATH}/amct_package"
-  tar -czf ${TAR_FILE} -C ${TARGET_DIR} .
+  tar -czf "${TAR_FILE}" -C "${TARGET_DIR}" .
   echo "tar -czf ${TAR_FILE} -C ${TARGET_DIR} ."
 
-  if [ -f ${TAR_FILE} ];then
+  if [ -f "${TAR_FILE}" ];then
     echo "package amct run success"
   else
     echo "package amct run failed"
@@ -204,7 +204,7 @@ build() {
 
   rm -rf ${BASEPATH}/dist
   rm -rf ${BASEPATH}/amct_pytorch/*.egg-info
-  [ -n "${TARGET_DIR}" ] && rm -rf ${TARGET_DIR}
+  [ -n "${TARGET_DIR}" ] && rm -rf "${TARGET_DIR}"
   rm -rf ${BASEPATH}/amctgraph
 }
 
@@ -251,7 +251,7 @@ clean_build() {
 
 clean_build_out() {
   if [ -d "${OUTPUT_PATH}" ]; then
-    rm -rf ${OUTPUT_PATH}/*
+    rm -rf "${OUTPUT_PATH}"/*
   fi
 }
 
@@ -270,13 +270,13 @@ build_pytorch_package() {
   build || { echo "Build failed."; exit 1; }
   if [ -d "${OUTPUT_PATH}" ];then
     echo "${OUTPUT_PATH} exist, delete old path"
-    rm -rf ${OUTPUT_PATH}
+    rm -rf "${OUTPUT_PATH}"
   fi
   echo "create path ${OUTPUT_PATH}"
-  mkdir ${OUTPUT_PATH}
-  cp ${BASEPATH}/dist/*.tar.gz ${OUTPUT_PATH}/
+  mkdir "${OUTPUT_PATH}"
+  cp ${BASEPATH}/dist/*.tar.gz "${OUTPUT_PATH}/"
 
-  if ls ${OUTPUT_PATH}/*.tar.gz >/dev/null 2>&1; then
+  if ls "${OUTPUT_PATH}"/*.tar.gz >/dev/null 2>&1; then
     echo "package amct_pytorch run success"
   else
     echo "package amct_pytorch run failed"
