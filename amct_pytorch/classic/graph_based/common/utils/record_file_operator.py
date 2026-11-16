@@ -311,6 +311,28 @@ def create_empty_record(records, layer_name):
     record.value.Clear()
 
 
+def record_fixed_shift_value(records, layer_name, fixed_shift_value):
+    """
+    Function: Write fixed_shift_value to record file. Only add or update the
+        fixed_shift_value field of the layer's record, never touch other
+        fields (scale_w / offset_w etc. may belong to the same record).
+    Parameters: records: ScaleOffsetRecord() object to write
+                layer_name: layer name of fixed_shift_value
+                fixed_shift_value: int, per-tensor shift value
+    Return: None
+    """
+    done_flag = False
+    for record in records.record:
+        if record.key == layer_name:
+            record.value.fixed_shift_value = int(fixed_shift_value)
+            done_flag = True
+            break
+    if not done_flag:
+        record = records.record.add()
+        record.key = layer_name
+        record.value.fixed_shift_value = int(fixed_shift_value)
+
+
 def record_kv_cache_scale_offset(records, layer_name, scale, offset):
     """
     Function: Write scale and offset to record file
@@ -484,7 +506,7 @@ class ScaleOffsetRecordHelper:
         """
         for record in records.record:
             if self.has_key(record.key):
-                raise RuntimeError('Merge failed, alrady has key "%s"' % record.key)
+                raise RuntimeError('Merge failed, already has key "%s"' % record.key)
             self._records.record.append(record)
 
     def has_key(self, key):
@@ -666,7 +688,7 @@ class ScaleOffsetRecordHelper:
 
     def record_activation_scale_offset(self, key, scale, offset, dst_type=None):
         """
-        Reccord scale and offset of layer's activation.
+        Record scale and offset of layer's activation.
 
         Args:
             key (str): the layer name.
@@ -694,7 +716,7 @@ class ScaleOffsetRecordHelper:
 
     def record_activation_h_scale_offset(self, key, scale, offset):
         """
-        Reccord scale_h and offset_h of layer's initial_h.
+        Record scale_h and offset_h of layer's initial_h.
 
         Args:
             key (str): the layer name.
@@ -717,7 +739,7 @@ class ScaleOffsetRecordHelper:
 
     def record_tensor_quant_scale_offset(self, key, scale, offset, dst_type):
         """
-        Reccord scale and offset of layer's activation.
+        Record scale and offset of layer's activation.
 
         Args:
             key (str): the layer name.

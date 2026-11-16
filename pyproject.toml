@@ -23,6 +23,7 @@ testpaths = ["tests/unit_test", "tests/amct_pytorch"]
 markers = [
     "cpu: tests that run on CPU only and are fast (default)",
     "npu: tests that require an Ascend NPU",
+    "gpu: tests that require a CUDA GPU",
     "slow: tests that take more than a few seconds",
 ]
 addopts = "-ra"

@@ -60,6 +60,7 @@ from .field import ApproximateAlgoField
 from .field import LayerActOffsetField
 from .field import DMQBalancerParamField
 from .field import FakequantPrecisionModeField
+from .field import EnableShiftValueField
 from .field import RegParamField
 from .field import NumIterationField
 from .field import WarmStartField
@@ -84,6 +85,7 @@ BATCH_NUM = 'batch_num'
 ASYMMETRIC = 'asymmetric'
 BETA_RANGE = 'beta_range'
 FAKEQUANT_PRECISION_MODE = 'fakequant_precision_mode'
+ENABLE_SHIFT_VALUE = 'enable_shift_value'
 
 
 class ConfigBase:
@@ -114,6 +116,7 @@ class ConfigBase:
         self.capacity = capacity
         self.quantizable_type = capacity.get_value('QUANTIZABLE_TYPES')
         self.approximate_type = capacity.get_value('OP_APPROXIMATION_TYPES')
+        self.fixed_shift_value_types = capacity.get_value('FIXED_SHIFT_VALUE_TYPES')
         self.graph_querier = graph_objects.graph_querier
         self.graph_checker = graph_objects.graph_checker
 
@@ -596,6 +599,26 @@ class ConfigBase:
         self.root.check(None, quant_config)
         self.root.fill_default(quant_config)
 
+        # enable_shift_value='all' forces FIXED_SHIFT_VALUE_TYPES layers onto
+        # the FP16 path: drop them from quant layers so the quantization
+        # passes skip them and only fixed_shift_value is calibrated.
+        if quant_config.get(ENABLE_SHIFT_VALUE) == 'all':
+            shift_type_layers = [
+                item
+                for item in quant_layers
+                if layer_type.get(item) in self.fixed_shift_value_types
+            ]
+            if shift_type_layers:
+                LOGGER.logi(
+                    "enable_shift_value is 'all', layers {} are forced to the "
+                    "FP16 shift value calibration path.".format(shift_type_layers),
+                    module_name=_MODULE_NAME,
+                )
+                quant_layers = [
+                    item for item in quant_layers if item not in shift_type_layers
+                ]
+            self.set_param_pool(quant_layers, graph)
+
         for item in list(quant_config):
             if item in self.root.get_keys():
                 continue
@@ -618,6 +641,7 @@ class ConfigBase:
         root.add_child(
             'fakequant_precision_mode', FakequantPrecisionModeField(capacity)
         )
+        root.add_child('enable_shift_value', EnableShiftValueField(capacity))
         root.add_child('skip_fusion_layers', SkipFusionLayersField(capacity))
 
         layer_plh = root.add_placeholder(LayerPlhField(capacity))
@@ -678,6 +702,20 @@ class ConfigBase:
             quant_layers.append(item)
         # step4: check quant_layers empty and tensor quant invalid
         if not quant_layers and not tensor_quant_valid:
+            if global_config.get(ENABLE_SHIFT_VALUE) == 'all':
+                shift_layers = [
+                    item
+                    for item in supported_layers
+                    if layer_type.get(item) in self.fixed_shift_value_types
+                ]
+                if shift_layers:
+                    LOGGER.logi(
+                        "enable_shift_value is 'all', all quantizable layers "
+                        "run the FP16 shift value calibration path.",
+                        module_name=_MODULE_NAME,
+                    )
+                    self.set_param_pool(quant_layers, graph)
+                    return supported_layers, layer_type
             raise ValueError(
                 'Except skip_layers or skip_types, no layer need to quantize.'
             )
@@ -756,7 +794,7 @@ def check_config_quant_enable(quant_config):
             quant_enable_layers.append(key)
     if quant_config.get('tensor_quantize'):
         quant_enable_layers.append('tensor_quantize')
-    if quant_enable_layers == []:
+    if quant_enable_layers == [] and quant_config.get(ENABLE_SHIFT_VALUE) != 'all':
         LOGGER.loge(
             "No quant enable layer in quant config file, "
             "please check the quant config file.",

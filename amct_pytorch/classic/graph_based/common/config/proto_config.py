@@ -221,6 +221,11 @@ class ProtoConfig:  # pylint: disable=too-many-instance-attributes, too-few-publ
             return precision_mode_define.get(self.proto_config.fakequant_precision_mode)
         return None
 
+    def _get_enable_shift_value(self):
+        if self.proto_config.HasField('enable_shift_value'):
+            return self.proto_config.enable_shift_value
+        return None
+
     def _get_activation_offset(self):
         if self.proto_config.HasField('activation_offset'):
             return self.proto_config.activation_offset
@@ -535,6 +540,10 @@ class ProtoConfig:  # pylint: disable=too-many-instance-attributes, too-few-publ
             global_config['fakequant_precision_mode'] = (
                 self._get_fakequant_precision_mode()
             )
+        if hasattr(self.proto_config, 'enable_shift_value'):
+            enable_shift_value = self._get_enable_shift_value()
+            if enable_shift_value is not None:
+                global_config['enable_shift_value'] = enable_shift_value
         global_config['skip_layers'] = self._get_skip_layers()
         global_config['skip_layer_types'] = self._get_skip_layer_types()
         global_config['do_fusion'] = self._get_do_fusion()

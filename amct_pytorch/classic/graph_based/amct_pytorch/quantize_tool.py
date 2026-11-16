@@ -313,6 +313,7 @@ def _inner_quantize_data(model, graph, record_file, dump_config, records):
     # quantize
     torch_recorder = Recorder(record_file)
     optimizer = opt.ModelOptimizer()
+    optimizer.add_pass(opt.InsertShiftCalibrationModulePass(record_file))
     optimizer.add_pass(opt.InsertCaliQuantPass(torch_recorder, records, dump_config))
     optimizer.do_optimizer(model, graph)
 
@@ -701,21 +702,47 @@ def _check_config_consistency(retrain_config, single_instance_config):
     return consistency
 
 
+def _split_shift_value_records(records):
+    """Split records into (quant_records, shift_records).
+
+    Extracts ``fixed_shift_value`` from every layer record into
+    ``shift_records``; the remaining quant factors (``scale_w`` /
+    ``data_scale`` etc.) stay in ``quant_records``. Layers whose record
+    becomes empty (FP16 path, ``enable_shift_value="all"``) drop out of
+    ``quant_records`` entirely — the quantization passes would fail on
+    a shift-only record.
+    """
+    quant_records = {}
+    shift_records = {}
+    for name, params in records.items():
+        if not isinstance(params, dict):
+            quant_records[name] = params
+            continue
+        if 'fixed_shift_value' in params:
+            shift_records[name] = {'fixed_shift_value': params['fixed_shift_value']}
+        params = {k: v for k, v in params.items() if k != 'fixed_shift_value'}
+        if params:
+            quant_records[name] = params
+    return quant_records, shift_records
+
+
 def _generate_model(graph, records, save_path):
     """Generate deploy and fakequant onnx model."""
     save_dir, save_prefix = split_dir_prefix(save_path)
     files_util.create_path(save_dir)
 
+    quant_records, shift_records = _split_shift_value_records(records)
+
     # do common pass
     optimizer = opt.GraphOptimizer()
-    optimizer.add_pass(opt.GemmTransBOptimizePass(records))
-    optimizer.add_pass(opt.ApplyDMQBalancerPass(records))
-    optimizer.add_pass(opt.InsertQuantPass(records))
-    optimizer.add_pass(opt.InsertWeightQuantPass(records))
-    optimizer.add_pass(opt.InsertDequantPass(records))
-    optimizer.add_pass(opt.MultQuantOptimizerPass(records))
-    optimizer.add_pass(opt.InsertBiasQuantPass(records))
-    optimizer.add_pass(opt.QuantFusionPass(records))
+    optimizer.add_pass(opt.GemmTransBOptimizePass(quant_records))
+    optimizer.add_pass(opt.ApplyDMQBalancerPass(quant_records))
+    optimizer.add_pass(opt.InsertQuantPass(quant_records))
+    optimizer.add_pass(opt.InsertWeightQuantPass(quant_records))
+    optimizer.add_pass(opt.InsertDequantPass(quant_records))
+    optimizer.add_pass(opt.MultQuantOptimizerPass(quant_records))
+    optimizer.add_pass(opt.InsertBiasQuantPass(quant_records))
+    optimizer.add_pass(opt.QuantFusionPass(quant_records))
     optimizer.do_optimizer(graph)
 
     # copy graph after common pass done
@@ -723,19 +750,20 @@ def _generate_model(graph, records, save_path):
 
     # generate and save deploy model
     deploy_optimizer = opt.GraphOptimizer()
-    deploy_optimizer.add_pass(opt.ReplaceRNNPass(records))
+    deploy_optimizer.add_pass(opt.ReplaceRNNPass(quant_records))
+    deploy_optimizer.add_pass(opt.WriteShiftValueAttrPass(shift_records))
     deploy_optimizer.do_optimizer(graph)
     deploy_file = generate_onnx_file_name(save_dir, save_prefix, 'Deploy')
     save_onnx_model(graph, deploy_file, 'Deploy', None, ['op_data_type'])
 
     # generate and save fakequant model
     optimizer = opt.GraphOptimizer()
-    optimizer.add_pass(opt.InsertRNNFakeQuantPass(records))
-    optimizer.add_pass(opt.ReplaceQuantPass(records))
-    optimizer.add_pass(opt.WeightFakequantPass(records))
-    optimizer.add_pass(opt.ReplaceDequantPass(records))
-    optimizer.add_pass(opt.ReplaceAntiQuantPass(records))
-    optimizer.add_pass(opt.ReplaceBiasQuantPass(records))
+    optimizer.add_pass(opt.InsertRNNFakeQuantPass(quant_records))
+    optimizer.add_pass(opt.ReplaceQuantPass(quant_records))
+    optimizer.add_pass(opt.WeightFakequantPass(quant_records))
+    optimizer.add_pass(opt.ReplaceDequantPass(quant_records))
+    optimizer.add_pass(opt.ReplaceAntiQuantPass(quant_records))
+    optimizer.add_pass(opt.ReplaceBiasQuantPass(quant_records))
     optimizer.do_optimizer(graph_copy)
     fakequant_file = generate_onnx_file_name(save_dir, save_prefix, 'Fakequant')
     save_onnx_model(graph_copy, fakequant_file, 'Fakequant', None, ['op_data_type'])

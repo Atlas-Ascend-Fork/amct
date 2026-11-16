@@ -146,10 +146,12 @@ class Configuration:
     def get_layers_name(quant_config):
         """Get all layers' name from quant_config"""
         layers_name = list(quant_config.keys())
-        # contains other keys: version, activation_offset,etc
-        for item in CONFIGURER.root.get_keys():
-            layers_name.remove(item)
-        return layers_name
+        # contains other keys: version, activation_offset,etc. A root
+        # key newer than the config dict (hand written test dicts,
+        # configs from an older version) is simply absent -- remove
+        # only what is present (mirrors the amct_tensorflow precedent)
+        root_keys = set(CONFIGURER.root.get_keys())
+        return [item for item in layers_name if item not in root_keys]
 
     @check_params(config_file=str, record_file=str, graph=Graph)
     def init(self, config_file, record_file, graph):

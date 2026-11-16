@@ -24,6 +24,7 @@ __all__ = [
     'Conv3dQAT',
     'LinearQAT',
     'QuantCalibrationOp',
+    'ShiftCalibrationModule',
     'LSTMQAT',
     'GRUQAT',
     'MatMulQAT',
@@ -41,6 +42,9 @@ from .....amct_pytorch.nn.module.quantization.conv3d import Conv3dQAT
 from .....amct_pytorch.nn.module.quantization.linear import LinearQAT
 from .....amct_pytorch.nn.module.quantization.quant_calibration_op import (
     QuantCalibrationOp,
+)
+from .....amct_pytorch.nn.module.quantization.shift_calibration import (
+    ShiftCalibrationModule,
 )
 from .....amct_pytorch.nn.module.quantization.lstm import LSTMQAT
 from .....amct_pytorch.nn.module.quantization.gru import GRUQAT

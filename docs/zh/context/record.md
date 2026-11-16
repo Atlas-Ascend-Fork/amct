@@ -26,6 +26,7 @@ message SingleLayerRecord {
     optional int32 offset_h = 22;
     repeated float scale_r = 23;
     repeated int32 offset_r = 24;
+    optional int32 fixed_shift_value = 37;
 }
 
 message SingleLayerKVCacheRecord {
@@ -71,7 +72,7 @@ message PruneNode {
 </th>
 </tr>
 </thead>
-<tbody><tr id="zh-cn_topic_0254211904_row173077381744"><td class="cellrowborder" rowspan="16" valign="top" width="16.878312168783122%" headers="mcps1.1.6.1.1 "><p id="zh-cn_topic_0254211904_p1574404011413"><a name="zh-cn_topic_0254211904_p1574404011413"></a><a name="zh-cn_topic_0254211904_p1574404011413"></a>SingleLayerRecord</p>
+<tbody><tr id="zh-cn_topic_0254211904_row173077381744"><td class="cellrowborder" rowspan="17" valign="top" width="16.878312168783122%" headers="mcps1.1.6.1.1 "><p id="zh-cn_topic_0254211904_p1574404011413"><a name="zh-cn_topic_0254211904_p1574404011413"></a><a name="zh-cn_topic_0254211904_p1574404011413"></a>SingleLayerRecord</p>
 <p id="p12702171315511"><a name="p12702171315511"></a><a name="p12702171315511"></a></p>
 <p id="p20534911145111"><a name="p20534911145111"></a><a name="p20534911145111"></a></p>
 </td>
@@ -219,6 +220,15 @@ message PruneNode {
 <td class="cellrowborder" valign="top" headers="mcps1.1.6.1.3 "><p id="p2601150004"><a name="p2601150004"></a><a name="p2601150004"></a>offset_r</p>
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="p2601150005"><a name="p2601150005"></a><a name="p2601150005"></a>权重量化因子，与offset_w配对使用。<br>当前版本不支持该字段。</p>
+</td>
+</tr>
+<tr id="row2601160001"><td class="cellrowborder" valign="top" headers="mcps1.1.6.1.1 "><p id="p2601160002"><a name="p2601160002"></a><a name="p2601160002"></a>optional</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.2 "><p id="p2601160003"><a name="p2601160003"></a><a name="p2601160003"></a>int32</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.3 "><p id="p2601160004"><a name="p2601160004"></a><a name="p2601160004"></a>fixed_shift_value</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="p2601160005"><a name="p2601160005"></a><a name="p2601160005"></a>fp16定点方案该层的定点移位值。enable_shift_value开启后，校准阶段按层搜索SSE最小的候选值写入该字段（FP16*FP16候选{34,...,43}默认42；FP16*INT8候选{5,...,14}默认13），save_model阶段仅写入deploy模型目标算子的INT属性。当前版本不支持该参数。</p>
 </td>
 </tr>
 <tr id="row11121216131510"><td class="cellrowborder" rowspan="3" valign="top" width="16.878312168783122%" headers="mcps1.1.6.1.1 "><p id="p2011231691515"><a name="p2011231691515"></a><a name="p2011231691515"></a>SingleLayerKVCacheRecord</p>

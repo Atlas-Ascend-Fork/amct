@@ -30,6 +30,7 @@ __all__ = [
     'GemmTransBOptimizePass',
     'GraphOptimizer',
     'InsertCaliQuantPass',
+    'InsertShiftCalibrationModulePass',
     'InsertDequantPass',
     'InsertQuantPass',
     'InsertWeightQuantPass',
@@ -54,6 +55,7 @@ __all__ = [
     'SetRecorderPass',
     'ShareActCompPass',
     'WeightsCalibrationPass',
+    'WriteShiftValueAttrPass',
     'InsertFakequantConvPass',
     'InsertFakequantConvTransposePass',
     'InsertFakequantLinearPass',
@@ -123,6 +125,7 @@ from .delete_isolated_node_pass import DeleteIsolatedNodePass
 from .gemm_transb_optimize_pass import GemmTransBOptimizePass
 from .graph_optimizer import GraphOptimizer
 from .insert_cali_quant import InsertCaliQuantPass
+from .insert_shift_calibration_module_pass import InsertShiftCalibrationModulePass
 from .insert_dequant_pass import InsertDequantPass
 from .insert_quant_pass import InsertQuantPass
 from .insert_weight_quant_pass import InsertWeightQuantPass
@@ -148,6 +151,7 @@ from .replace_rnn_pass import ReplaceRNNPass
 from .set_recorder_pass import SetRecorderPass
 from .share_act_comp_pass import ShareActCompPass
 from .weight_calibration import WeightsCalibrationPass
+from .write_shift_value_attr_pass import WriteShiftValueAttrPass
 from .insert_fakequant_conv_pass import InsertFakequantConvPass
 from .insert_fakequant_convtranspose_pass import InsertFakequantConvTransposePass
 from .insert_fakequant_linear_pass import InsertFakequantLinearPass

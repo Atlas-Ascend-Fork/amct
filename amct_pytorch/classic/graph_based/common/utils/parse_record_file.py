@@ -199,6 +199,7 @@ class RecordFileParserBase:
                     "cannot find 'value' in %s in record_file." % (record.key)
                 )
             node, is_quantize_tensor = self.find_layer_in_graph(record)
+            has_fixed_shift_value = record.value.HasField('fixed_shift_value')
 
             recorder = RecordManager(
                 record,
@@ -224,6 +225,14 @@ class RecordFileParserBase:
                             self.graph, [record.key]
                         )
                     layers_params[record.key] = layer_params
+                elif has_fixed_shift_value:
+                    # a record carrying only fixed_shift_value: the layer runs
+                    # the weight-only path and has no act quant factors yet
+                    layers_params[record.key] = collections.OrderedDict()
+                if has_fixed_shift_value and record.key in layers_params:
+                    layers_params[record.key]['fixed_shift_value'] = (
+                        record.value.fixed_shift_value
+                    )
                 tensor_balance_factor = recorder.parse_tensor_balance_factor_value()
                 if tensor_balance_factor:
                     if not layers_params.get(record.key):
@@ -242,6 +251,13 @@ class RecordFileParserBase:
                 layer_params = recorder.parse_quant_value(False, False)
                 if layer_params:
                     layers_params[record.key] = layer_params
+            elif has_fixed_shift_value:
+                # a FP16 non-quantized layer: the record only carries the
+                # fixed_shift_value field and the layer is not in quant config
+                layers_params[record.key] = collections.OrderedDict()
+                layers_params[record.key]['fixed_shift_value'] = (
+                    record.value.fixed_shift_value
+                )
             else:
                 raise RuntimeError("layer %s cannot be quantized " % (node.name))
         return RecordFileParsedResult(layers_params, skip_fusion_layers)
@@ -340,7 +356,7 @@ class RecordManager:
             layer_params.get('h_scale'), SCALE_RANGE[0], SCALE_RANGE[1], included=False
         ):
             raise ValueError(
-                "scale_h's value shoule be in positivate range "
+                "scale_h's value should be in positivate range "
                 "of float32 in layer %s." % (layer_name)
             )
         # scale_r
@@ -353,7 +369,7 @@ class RecordManager:
             included=False,
         ):
             raise ValueError(
-                "scale_r's value shoule be in positivate range "
+                "scale_r's value should be in positivate range "
                 "of float32 in layer %s" % (layer_name)
             )
 
@@ -396,7 +412,7 @@ class RecordManager:
             layer_params.get(DATA_SCALE), SCALE_RANGE[0], SCALE_RANGE[1], included=False
         ):
             raise ValueError(
-                "scale_d's value shoule be in positivate range "
+                "scale_d's value should be in positivate range "
                 "of float32 in layer %s." % (layer_name)
             )
         # scale_w
@@ -407,7 +423,7 @@ class RecordManager:
             included=False,
         ):
             raise ValueError(
-                "scale_w's value shoule be in positivate range "
+                "scale_w's value should be in positivate range "
                 "of float32 in layer %s" % (layer_name)
             )
 
@@ -423,7 +439,7 @@ class RecordManager:
             layer_params.get(SHIFT_N)
         ):
             raise ValueError(
-                "shift_bit's value shoule be in %s or all be 0 "
+                "shift_bit's value should be in %s or all be 0 "
                 "in layer %s" % (SHIFT_N_RANGE, layer_name)
             )
 
@@ -593,7 +609,7 @@ class RecordManager:
             or not (tensor_balance_factor_array <= TENSOR_BALANCE_FACTOR_RANGE[1]).all()
         ):
             raise ValueError(
-                "tensor_balance_factor's value shoule be in range[FLT_EPSILON, 1/FLT_EPSILON] "
+                "tensor_balance_factor's value should be in range[FLT_EPSILON, 1/FLT_EPSILON] "
                 "of float32 in layer {}".format(self.get_key())
             )
 

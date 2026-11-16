@@ -34,6 +34,9 @@ from ....amct_pytorch.common.utils.record_file_operator import (
 from ....amct_pytorch.common.utils.record_file_operator import (
     record_kv_cache_scale_offset,
 )
+from ....amct_pytorch.common.utils.record_file_operator import (
+    record_fixed_shift_value,
+)
 from ....amct_pytorch.utils.log import LOGGER
 from ....amct_pytorch.custom_op.utils import tensor
 from ....amct_pytorch.utils.singleton_record import SingletonScaleOffsetRecord
@@ -84,6 +87,7 @@ class Recorder(nn.Module):  # pylint: disable=R0902
             'arq': self._add_wts_factors,
             'dmq_balancer': self._add_dmq_balancer_factors,
             'kv_cache': self._add_kv_cache_factors,
+            'fixed_shift_value': self._add_fixed_shift_value_factors,
         }
 
         SingletonScaleOffsetRecord().reset_record()
@@ -159,11 +163,28 @@ class Recorder(nn.Module):  # pylint: disable=R0902
         if not self.__read_over:
             with open(self.record_file, 'r') as fid:
                 pbtxt_string = fid.read()
-                text_format.Merge(pbtxt_string, self.records)
+            # clear before merge: repeated entries merge in append mode. the
+            # singleton may already carry the file content (refreshed by the
+            # shift value writer), merging again would duplicate every entry.
+            self.records.Clear()
+            text_format.Merge(pbtxt_string, self.records)
             if self.quant_layer_num.cpu():
                 self.__counts[LAYERS_NUM] = self.quant_layer_num.cpu()
             else:
-                self.__counts[LAYERS_NUM] = len(self.records.record)
+                # count quantized entries only: records carrying only the
+                # fixed_shift_value field belong to FP16 layers and do not
+                # take part in the activation calibration accounting
+                self.__counts[LAYERS_NUM] = len(
+                    [
+                        item
+                        for item in self.records.record
+                        if not (
+                            item.value.HasField('fixed_shift_value')
+                            and not item.value.scale_w
+                            and not item.value.HasField('scale_d')
+                        )
+                    ]
+                )
             self.__read_over = True
 
     def _write_record_file(self):
@@ -275,4 +296,15 @@ class Recorder(nn.Module):  # pylint: disable=R0902
         LOGGER.logd(
             "Record layer '{}' kv_cache data's quant factors!".format(layers_name),
             'Recorder',
+        )
+
+    def _add_fixed_shift_value_factors(self, layers_name, quant_factors):
+        """add fixed_shift_value to record, only update this field"""
+        fixed_shift_value = quant_factors.get('fixed_shift_value')
+        if fixed_shift_value is None:
+            raise ValueError("fixed_shift_value is necessary")
+        for layer_name in layers_name:
+            record_fixed_shift_value(self.records, layer_name, fixed_shift_value)
+        LOGGER.logd(
+            "Record layer '{}' fixed_shift_value!".format(layers_name), 'Recorder'
         )

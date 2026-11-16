@@ -66,7 +66,12 @@ class InsertCaliQuantPass(BaseModuleFusionPass):
         Return: True: matched
                 False: mismatch
         """
-        if type(module).__name__ not in QUANTIZABLE_TYPES:
+        module_type = type(module).__name__
+        if module_type == 'ShiftCalibrationModule':
+            # a shift value wrapper on a quantized (weight-only) module: the
+            # activation calibration still applies, wrap the wrapper
+            module_type = type(module.object_module).__name__
+        if module_type not in QUANTIZABLE_TYPES:
             return False
         if name not in self.conf.get_quant_config():
             return False

@@ -65,6 +65,7 @@ ACT_ALGO = 'act_algo'
 WTS_ALGO = 'wts_algo'
 SEARCH_RANGE = 'search_range'
 FAKEQUANT_PRECISION_MODE = ['DEFAULT', 'FORCE_FP16_QUANT']
+ENABLE_SHIFT_VALUE = ['off', 'all', 'auto']
 
 
 def _check_type(name, variable, typeinfo):
@@ -407,6 +408,22 @@ class FakequantPrecisionModeField(LeafField):
             raise ValueError(
                 "Type of {} should be {}, but is {}".format(
                     name, FAKEQUANT_PRECISION_MODE, value
+                )
+            )
+
+
+class EnableShiftValueField(LeafField):
+    '''an object for enable_shift_value field'''
+
+    def default_value(self):
+        return 'off'
+
+    def check(self, name, value):
+        _check_type(name, value, str)
+        if value not in ENABLE_SHIFT_VALUE:
+            raise ValueError(
+                "Value of {} should be one of {}, but is {}".format(
+                    name, ENABLE_SHIFT_VALUE, value
                 )
             )
 

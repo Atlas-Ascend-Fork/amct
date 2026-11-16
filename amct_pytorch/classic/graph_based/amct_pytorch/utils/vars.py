@@ -66,6 +66,22 @@ CHANNEL_UNRELATED_ONNX_TYPES = (
 KV_CACHE_QUANTIZE_TYPES = CAPACITY.get_value('KV_CACHE_QUANTIZE_TYPES')
 ADA_ROUND_TYPES = CAPACITY.get_value('ADA_ROUND_TYPES')
 
+FIXED_SHIFT_VALUE_TYPES = CAPACITY.get_value('FIXED_SHIFT_VALUE_TYPES')
+# MatMul in FIXED_SHIFT_VALUE_ONNX_TYPES is reserved for the amct-graph
+# ONNX twin implementation (which has a real MatMul shift path): the
+# PyTorch side never exports a standalone MatMul shift target (Linear
+# exports as Gemm, there is no Fp16FixedMatMul operator class), so the entry
+# is unreachable from the PyTorch record / deploy attribute flow.
+FIXED_SHIFT_VALUE_ONNX_TYPES = CAPACITY.get_value('FIXED_SHIFT_VALUE_ONNX_TYPES')
+
+# fixed shift value candidates: FP16*FP16 in [34, 43] default 42, FP16*INT8 in [5, 14] default 13
+FIXED_SHIFT_VALUE_FP16_FP16_CANDIDATES = list(range(34, 44))
+FIXED_SHIFT_VALUE_FP16_INT8_CANDIDATES = list(range(5, 15))
+FIXED_SHIFT_VALUE_FP16_FP16_DEFAULT = 42
+FIXED_SHIFT_VALUE_FP16_INT8_DEFAULT = 13
+FIXED_SHIFT_VALUE = 'fixed_shift_value'
+ENABLE_SHIFT_VALUE = 'enable_shift_value'
+
 MATMUL_DEQUANT_AFTER_ADD = CAPACITY.get_value('MATMUL_DEQUANT_AFTER_ADD')
 
 CLIBRATION_BIT = 8

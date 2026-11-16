@@ -81,6 +81,9 @@ class Capacity:
                 # skip empty line
                 if len(line) == 0:
                     continue
+                # skip comment line (license header etc.)
+                if line[0].strip().startswith("#"):
+                    continue
                 if len(line) < 3:
                     raise ValueError('Invalid line {}'.format(','.join(line)))
 

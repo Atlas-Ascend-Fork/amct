@@ -140,6 +140,20 @@ class TestConfigBaseModuleFuncs(unittest.TestCase):
             {'l1': {'quant_enable': False}, 'scalar': 1},
         )
 
+    def test_check_config_quant_enable_all_mode_allows_empty(self):
+        # enable_shift_value='all' forces every target layer onto the FP16
+        # shift value path: a config with no quant-enable layer is valid
+        check_config_quant_enable(
+            {'enable_shift_value': 'all', 'l1': {'quant_enable': False}}
+        )
+
+    def test_check_config_quant_enable_auto_mode_still_raises(self):
+        self.assertRaises(
+            RuntimeError,
+            check_config_quant_enable,
+            {'enable_shift_value': 'auto', 'l1': {'quant_enable': False}},
+        )
+
     def test_check_config_dmq_balancer_ok(self):
         check_config_dmq_balancer({'l1': {'dmq_balancer_param': {'a': 1}}})
 
