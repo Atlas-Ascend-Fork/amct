@@ -50,6 +50,7 @@ def _artifact_contract(
         "suffixes": scheme.tensor_suffixes,
         "weight_dtype": scheme.weight_dtype,
         "weight_bits": scheme.weight_bits,
+        "activation_bits": scheme.activation_bits,
         "scale_dtype": scheme.scale_dtype,
         "group_size": scheme.group_size,
         "globals": scheme.globals_dict(),
@@ -70,13 +71,10 @@ def _resolve_plan_contracts(plan: ResolvedDeployPlan):
         module_contracts[module] = _artifact_contract(
             key.quant_dtype, key.weight_bits, key.activation_bits
         )
-    if len(scheme_keys) != 1:
-        raise ValueError(
-            "Deployment artifact validation requires one Deployment quantization scheme "
-            f"per model, got {sorted(scheme_keys, key=lambda key: (key.quant_dtype, key.weight_bits, key.activation_bits))}"
-        )
-    key = next(iter(scheme_keys))
-    return key.quant_dtype, (key.weight_bits, key.activation_bits), module_contracts
+    if len(scheme_keys) == 1:
+        key = next(iter(scheme_keys))
+        return key.quant_dtype, (key.weight_bits, key.activation_bits), module_contracts
+    return None, None, module_contracts
 
 
 def validate_artifacts(output_dir: Path, plan: ResolvedDeployPlan) -> dict:
@@ -127,14 +125,31 @@ def validate_artifacts(output_dir: Path, plan: ResolvedDeployPlan) -> dict:
     except (AttributeError, TypeError, ValueError) as exc:
         error("metadata", str(exc))
         return report
-    contract = _artifact_contract(quant_dtype, *bits)
-    report["contract"] = {
-        "quant_dtype": quant_dtype,
-        "weight_bits": bits[0],
-        "activation_bits": bits[1],
-        "model_quant_type": contract["quant_type"],
-        "group_size": contract["globals"]["group_size"],
-    }
+    mixed = quant_dtype is None
+    if mixed:
+        contract = None
+        report["contract"] = {
+            "quant_schemes": sorted(
+                {
+                    (
+                        item["quant_dtype"],
+                        item["weight_bits"],
+                        item["activation_bits"],
+                    )
+                    for item in module_contracts.values()
+                }
+            ),
+            "group_size": 32,
+        }
+    else:
+        contract = _artifact_contract(quant_dtype, *bits)
+        report["contract"] = {
+            "quant_dtype": quant_dtype,
+            "weight_bits": bits[0],
+            "activation_bits": bits[1],
+            "model_quant_type": contract["quant_type"],
+            "group_size": contract["globals"]["group_size"],
+        }
     try:
         index = json.loads(
             (root / "model.safetensors.index.json").read_text(encoding="utf-8")
@@ -152,15 +167,15 @@ def validate_artifacts(output_dir: Path, plan: ResolvedDeployPlan) -> dict:
         error("files", f"Cannot read artifact metadata: {exc}")
         return report
 
-    globals_ = contract["globals"]
-    quant_type = contract["quant_type"]
+    globals_ = {"group_size": 32} if mixed else contract["globals"]
+    quant_type = None if mixed else contract["quant_type"]
     for key, value in globals_.items():
         if (
             type(description.get(key)) is not type(value)
             or description.get(key) != value
         ):
             error("metadata", f"Invalid description field: {key}")
-    if quant_dtype == "int" and "optional" in description:
+    if not mixed and quant_dtype == "int" and "optional" in description:
         error("metadata", "Rotation optional metadata must be absent")
     quantization_config = config.get("quantization_config")
     if quantization_config is not None:
@@ -168,7 +183,7 @@ def validate_artifacts(output_dir: Path, plan: ResolvedDeployPlan) -> dict:
             error("metadata", "config.json quantization_config must be an object")
         else:
             declared_type = quantization_config.get("model_quant_type")
-            if declared_type is not None and declared_type != quant_type:
+            if not mixed and declared_type is not None and declared_type != quant_type:
                 error(
                     "metadata",
                     "config.json model_quant_type conflicts with deployment plan: "

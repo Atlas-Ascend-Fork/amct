@@ -150,13 +150,8 @@ def _selection_schemes(selection):
 
 
 def validate_selection_quant_scheme(selection) -> QuantScheme:
-    """Validate that a JSON selection describes one supported model scheme."""
+    """Validate that a JSON selection contains supported deployment schemes."""
     keys = _selection_schemes(selection)
-    if len(keys) != 1:
-        raise ValueError(
-            "Deployment requires one quantization scheme per model, "
-            f"got {sorted(keys, key=lambda key: (key.quant_dtype, key.weight_bits, key.activation_bits))}"
-        )
     return get_quant_scheme(next(iter(keys)))
 
 

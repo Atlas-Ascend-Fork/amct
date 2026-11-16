@@ -665,7 +665,7 @@ def test_ascend_plan_requires_adapter_capabilities():
         validate_tensor_deploy_plan(SimpleNamespace(), {}, SimpleNamespace())
 
 
-def test_ascend_plan_rejects_mixed_quant_dtypes_before_export():
+def test_ascend_plan_accepts_mixed_quant_dtypes_before_export():
     from amct_pytorch.common.models.llm.common.deployment.deploy_selection import (
         validate_tensor_deploy_plan,
     )
@@ -681,14 +681,46 @@ def test_ascend_plan_rejects_mixed_quant_dtypes_before_export():
         ),
     )
     adapter = SimpleNamespace(
-        args=SimpleNamespace(deploy_platform="A3"),
+        args=SimpleNamespace(deploy_platform="ascend950"),
         get_deploy_candidates=lambda module_names: module_names,
         validate_deploy_selection=lambda selected: None,
     )
 
-    with pytest.raises(ValueError, match="one quant_dtype"):
+    resolved = validate_tensor_deploy_plan(
+        plan,
+        {name + ".weight": "one.safetensors" for name in names},
+        adapter,
+    )
+    assert resolved.module_quant_specs == names
+
+
+@pytest.mark.parametrize(
+    "platform, quant_dtype, message",
+    [
+        ("A3", "mxfp", "quant_dtype values"),
+        ("A2", "int", "does not support Deployment platform"),
+    ],
+)
+def test_ascend_plan_rejects_unsupported_platform_contract(
+    platform, quant_dtype, message
+):
+    from amct_pytorch.common.models.llm.common.deployment.deploy_selection import (
+        validate_tensor_deploy_plan,
+    )
+
+    name = "model.layers.0.self_attn.q_proj"
+    plan = build_tensor_deploy_plan(
+        {name + ".weight": "one.safetensors"},
+        DeploySelection((QuantLayerRule(name, QuantSpec(quant_dtype, 8, 8)),)),
+    )
+    adapter = SimpleNamespace(
+        args=SimpleNamespace(deploy_platform=platform),
+        get_deploy_capabilities=lambda: {"A3": frozenset({"int"})},
+        get_deploy_candidates=lambda module_names: module_names,
+        validate_deploy_selection=lambda selected: None,
+    )
+
+    with pytest.raises(ValueError, match=message):
         validate_tensor_deploy_plan(
-            plan,
-            {name + ".weight": "one.safetensors" for name in names},
-            adapter,
+            plan, {name + ".weight": "one.safetensors"}, adapter
         )

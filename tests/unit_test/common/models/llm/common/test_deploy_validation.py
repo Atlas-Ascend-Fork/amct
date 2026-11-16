@@ -133,6 +133,97 @@ def test_valid_mxfp8_artifacts_report_header_bytes_and_counts(mxfp_artifacts):
     assert report["contract"]["model_quant_type"] == "W8A8_MXFP8"
 
 
+def test_mixed_contract_includes_per_module_activation_bits():
+    module = importlib.import_module(
+        "amct_pytorch.common.models.llm.common.deployment.deploy_validation"
+    )
+    plan = SimpleNamespace(
+        module_quant_specs={
+            "mxfp8": QuantSpec("mxfp", 8, 8),
+            "mxfp4": QuantSpec("mxfp", 4, 8),
+        }
+    )
+
+    quant_dtype, bits, contracts = module._resolve_plan_contracts(plan)
+
+    assert quant_dtype is None
+    assert bits is None
+    assert contracts["mxfp8"]["activation_bits"] == 8
+    assert contracts["mxfp4"]["activation_bits"] == 8
+
+
+def test_mixed_contract_validation_reports_per_module_schemes(tmp_path):
+    module = importlib.import_module(
+        "amct_pytorch.common.models.llm.common.deployment.deploy_validation"
+    )
+    plan = SimpleNamespace(
+        module_quant_specs={
+            "mxfp8": QuantSpec("mxfp", 8, 8),
+            "mxfp4": QuantSpec("mxfp", 4, 8),
+        },
+        selected_modules=frozenset({"mxfp8", "mxfp4"}),
+    )
+
+    report = module.validate_artifacts(tmp_path, plan)
+
+    assert report["contract"]["quant_schemes"] == [
+        ("mxfp", 4, 8),
+        ("mxfp", 8, 8),
+    ]
+
+
+def test_valid_mixed_contract_uses_shared_group_size(tmp_path):
+    module = importlib.import_module(
+        "amct_pytorch.common.models.llm.common.deployment.deploy_validation"
+    )
+    tensors = {
+        "mxfp8.weight": torch.ones(2, 64).to(torch.float8_e4m3fn),
+        "mxfp8.weight_scale": torch.ones(2, 2, dtype=torch.uint8),
+        "mxfp4.weight": torch.ones(2, 32, dtype=torch.uint8),
+        "mxfp4.weight_scale": torch.ones(2, 2, dtype=torch.uint8),
+        "model.norm.weight": torch.ones(2, 64, dtype=torch.bfloat16),
+    }
+    description = {
+        "group_size": 32,
+        "mxfp8.weight": "W8A8_MXFP8",
+        "mxfp8.weight_scale": "W8A8_MXFP8",
+        "mxfp4.weight": "W4A8_MXFP",
+        "mxfp4.weight_scale": "W4A8_MXFP",
+        "model.norm.weight": "FLOAT",
+    }
+    (tmp_path / "config.json").write_text(
+        json.dumps({"num_hidden_layers": 1}), encoding="utf-8"
+    )
+    save_file(tensors, str(tmp_path / "one.safetensors"))
+    (tmp_path / "model.safetensors.index.json").write_text(
+        json.dumps(
+            {
+                "metadata": {"total_size": 456},
+                "weight_map": dict.fromkeys(tensors, "one.safetensors"),
+            }
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "quant_model_description.json").write_text(
+        json.dumps(description), encoding="utf-8"
+    )
+    plan = SimpleNamespace(
+        module_quant_specs={
+            "mxfp8": QuantSpec("mxfp", 8, 8),
+            "mxfp4": QuantSpec("mxfp", 4, 8),
+        },
+        selected_modules=frozenset({"mxfp8", "mxfp4"}),
+    )
+
+    report = module.validate_artifacts(tmp_path, plan)
+
+    assert report["status"] == "passed"
+    assert report["contract"] == {
+        "quant_schemes": [("mxfp", 4, 8), ("mxfp", 8, 8)],
+        "group_size": 32,
+    }
+
+
 def test_artifacts_reject_config_quant_type_mismatch(artifacts):
     path, *_ = artifacts
     config_path = path / "config.json"

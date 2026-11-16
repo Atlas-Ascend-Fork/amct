@@ -20,13 +20,10 @@ from amct_pytorch.common.models.llm.common.deployment.deploy_selection import (
     validate_deploy_cli_args,
 )
 from amct_pytorch.common.models.llm.common.deployment.schemes import (
-    PLATFORM_QUANT_DTYPES,
     QUANT_SCHEMES,
     QuantSchemeKey,
     get_quant_scheme,
     resolve_deploy_platform,
-    validate_platform_quant_scheme,
-    validate_selection_quant_scheme,
 )
 
 
@@ -73,84 +70,6 @@ def test_supported_ascend_scheme_has_vllm_metadata(key, model_quant_type):
 def test_unsupported_ascend_scheme_is_rejected(key):
     with pytest.raises(ValueError, match="Unsupported deployment quantization scheme"):
         get_quant_scheme(key)
-
-
-@pytest.mark.parametrize(
-    "platform, quant_dtype",
-    [
-        ("A3", "int"),
-        ("A3", "mxfp"),
-        ("ascend950", "int"),
-        ("ascend950", "mxfp"),
-    ],
-)
-def test_platform_quant_dtype_cross_product(platform, quant_dtype):
-    selection = SimpleNamespace(
-        quant_layers=(
-            SimpleNamespace(
-                quant_spec=SimpleNamespace(
-                    quant_dtype=quant_dtype, weight_bits=8, activation_bits=8
-                )
-            ),
-        )
-    )
-
-    if quant_dtype in PLATFORM_QUANT_DTYPES[platform]:
-        validate_platform_quant_scheme(selection, platform)
-        return
-
-    expected_platforms = sorted(
-        candidate
-        for candidate, dtypes in PLATFORM_QUANT_DTYPES.items()
-        if candidate != platform and quant_dtype in dtypes
-    )
-    expected_hint = (
-        f" Use --deploy_platform {' or '.join(expected_platforms)}."
-        if expected_platforms
-        else ""
-    )
-    with pytest.raises(ValueError) as exc_info:
-        validate_platform_quant_scheme(selection, platform)
-    assert str(exc_info.value) == (
-        f"Deployment platform {platform} does not support quant_dtype "
-        f"{quant_dtype!r}; supported values: {sorted(PLATFORM_QUANT_DTYPES[platform])}."
-        f"{expected_hint}"
-    )
-
-
-def test_platform_rejects_unknown_platform():
-    selection = SimpleNamespace(
-        quant_layers=(
-            SimpleNamespace(
-                quant_spec=SimpleNamespace(
-                    quant_dtype="int", weight_bits=8, activation_bits=8
-                )
-            ),
-        )
-    )
-
-    with pytest.raises(ValueError, match="Unsupported Deployment platform"):
-        validate_platform_quant_scheme(selection, "ascend960")
-
-
-def test_selection_rejects_mixed_schemes():
-    selection = SimpleNamespace(
-        quant_layers=(
-            SimpleNamespace(
-                quant_spec=SimpleNamespace(
-                    quant_dtype="int", weight_bits=8, activation_bits=8
-                )
-            ),
-            SimpleNamespace(
-                quant_spec=SimpleNamespace(
-                    quant_dtype="mxfp", weight_bits=8, activation_bits=8
-                )
-            ),
-        )
-    )
-
-    with pytest.raises(ValueError, match="one quantization scheme"):
-        validate_selection_quant_scheme(selection)
 
 
 def test_cli_validator_requires_tensor_json_file(tmp_path):

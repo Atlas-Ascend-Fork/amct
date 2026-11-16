@@ -328,13 +328,8 @@ def validate_tensor_deploy_plan(plan, weight_map, adapter):
         QuantSchemeKey(spec.quant_dtype, spec.weight_bits, spec.activation_bits)
         for spec in plan.module_quant_specs.values()
     }
-    if len(scheme_keys) > 1:
-        raise ValueError(
-            "Tensorwise export currently requires one quant_dtype and "
-            "one quantization scheme "
-            f"per model, got {sorted(scheme_keys, key=lambda key: (key.quant_dtype, key.weight_bits, key.activation_bits))}"
-        )
-    scheme = get_quant_scheme(next(iter(scheme_keys)))
+    for key in scheme_keys:
+        get_quant_scheme(key)
     capabilities = getattr(adapter, "get_deploy_capabilities", None)
     if callable(capabilities):
         platform = resolve_deploy_platform(
@@ -345,10 +340,15 @@ def validate_tensor_deploy_plan(plan, weight_map, adapter):
             raise ValueError(
                 f"{type(adapter).__name__} does not support Deployment platform {platform}"
             )
-        if scheme.quant_dtype not in set(platform_capabilities[platform]):
+        unsupported = {
+            key.quant_dtype
+            for key in scheme_keys
+            if key.quant_dtype not in set(platform_capabilities[platform])
+        }
+        if unsupported:
             raise ValueError(
                 f"{type(adapter).__name__} on {platform} does not support "
-                f"quant_dtype value: {scheme.quant_dtype!r}"
+                f"quant_dtype values: {sorted(unsupported)}"
             )
     candidates = adapter.get_deploy_candidates(
         {key.removesuffix(".weight") for key in weight_map if key.endswith(".weight")}

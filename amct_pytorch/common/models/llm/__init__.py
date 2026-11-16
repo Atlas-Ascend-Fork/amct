@@ -29,6 +29,7 @@ def register_llm_models():
     from .glm.glm5.glm5 import GLM5  # noqa: F401
     from .glm.glm5_2.glm5_2 import GLM5_2  # noqa: F401
     from .hyv3.hyv3 import HyV3  # noqa: F401
+    from .kimi.kimi_k3.kimi_k3 import KimiK3  # noqa: F401
     from .longcat.longcat_lite.longcat_lite import LongcatLite  # noqa: F401
     from .longcat.longcat_next.longcat_next import LongcatNext  # noqa: F401
     from .qwen.qwen3.qwen3 import Qwen3  # noqa: F401
