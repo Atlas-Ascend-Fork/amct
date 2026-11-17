@@ -1,69 +1,40 @@
 # ----------------------------------------------------------------------------
-# Copyright (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
 #
 # This program is free software; you can redistribute it and/or modify
-# it under the terms of the Apache License Version 2.0.You may not use this file except in compliance with the License.
+# it under the Apache License Version 2.0.You may not use this file except in compliance with the License.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# Apache License for more details at
+# MERCHANTABILITY or FITNESS OF A PARTICULAR PURPOSE. See the
+# Apache License for more details.
 # http://www.apache.org/licenses/LICENSE-2.0
 # ----------------------------------------------------------------------------
+
+"""Qwen3 FlatQuant量化示例（quantize -> sequential_calibrate -> convert）。
+
+quantize生成量化校准模型后，由sequential_calibrate逐层做梯度校准
+（框架负责block切分与输入捕获，FlatQuant注册的gradient block calibrator
+负责每层的AdamW训练），最后convert固化为NPU部署模块。
+"""
 
 import argparse
 import logging
 import os
 
-from utils import get_qwen, build_enc, seed_everything, get_wikitext2
+import torch
+
+from utils import build_enc, get_qwen, get_wikitext2, seed_everything
 import amct_pytorch as amct
-from amct_pytorch.experimental.flatquant.flat_quant_module.flat_utils import (
-    save_flat_matrices,
+from amct_pytorch.classic.quantize_op.flatquant.flat_utils import (
     load_flat_matrices,
+    save_flat_matrices,
 )
-from amct_pytorch.experimental.flatquant.flat_quant_module.train_utils import (
-    cali_flat_quant,
-)
+from amct_pytorch.common.config.config import INT4_INT4_FLAT_QUANT_CFG
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logging.getLogger("Log").propagate = False
-
-INT4_FLAT_QUANT_CFG = {
-    'quant_cfg': {
-        'inputs': {'type': 'int4', 'symmetric': True, 'strategy': 'token'},
-        'weights': {
-            'type': 'int4',
-            'symmetric': True,
-            'strategy': 'channel',
-        },
-    },
-    'algorithm': {
-        'flatquant': {
-            # KV-cache quantization
-            'use_kcache_quant': False,
-            'k_bits': 16,
-            'k_sym': False,
-            'use_vcache_quant': False,
-            'v_bits': 16,
-            'v_sym': False,
-            # special control for o_proj & down_proj
-            'use_o_quant': False,
-            'use_down_quant': False,  # we choose to skip dowm_proj quantization,
-            # for qwen3 model '/no_think' prompt is sensitive to quantization
-            # Other quantization parameters
-            'lac': True,
-            'lwc': True,
-            'diag_alpha': 0.8,
-            # Calibration
-            'epochs': 15,
-            'cali_bsz': 4,
-            'flat_lr': 3e-3,
-            'cali_trans': True,
-        },
-    },
-    'skip_layers': {'lm_head'},
-}
 
 
 def content_generate(model, tokenizer):
@@ -96,9 +67,11 @@ if __name__ == '__main__':
         default="./outputs/qwen/flat_matrices.pth",
         help='flat matrix location',
     )
+    parser.add_argument('--seed', type=int, default=0, help='random seed')
     args = parser.parse_args()
 
-    seed_everything()
+    seed_everything(args.seed)
+    torch.manual_seed(args.seed)
     os.makedirs(os.path.dirname(args.flat_matrix_path), exist_ok=True)
 
     # prepare model
@@ -110,14 +83,19 @@ if __name__ == '__main__':
     ori_content = content_generate(model, tokenizer)
 
     # quantize & calibration
-    amct.quantize(model, INT4_FLAT_QUANT_CFG)
+    amct.quantize(model, INT4_INT4_FLAT_QUANT_CFG)
     if args.load_matrix:
         model = load_flat_matrices(model, args.flat_matrix_path)
+        for _, module in model.named_modules():
+            if hasattr(module, 'flat_config') and hasattr(module, 'set_fake_quant'):
+                module._calibrated = True
     else:
         calib_dataset = get_wikitext2(
             nsamples=128, seed=0, seqlen=2048, tokenizer=tokenizer
         )
-        cali_flat_quant(model, calib_dataset, args.device)
+        # 每项(inp, tar): sequential_calibrate只消费模型级输入
+        calib_set = [inp.to(args.device) for inp, _ in calib_dataset]
+        amct.sequential_calibrate(model, calib_set)
         save_flat_matrices(model, args.flat_matrix_path)
 
     model.to(args.device)

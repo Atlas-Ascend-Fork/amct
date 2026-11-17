@@ -15,19 +15,21 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-from amct_pytorch.common.block_calibrator import GRADIENT, register_block_calibrator
+import torch
+
+from amct_pytorch.common.block_calibrator import (
+    GRADIENT,
+    collect_fp_reference,
+    register_block_calibrator,
+)
+from amct_pytorch.common.utils.log import LOGGER
 
 
 def _is_gradient_module(module):
-    """
-    Matcher for the 'gradient' calibrator: recognize gradient-based quantized
-    modules by their non-empty `trainable_params()` (e.g. FlatQuant / AutoRound
-    learnable terms). Gradient-free algorithms (e.g. GPTQ) return an empty list.
-
-    Mirrors `_is_forward_module`'s guards: the module must carry a resolved
-    `quant_config` (non-quantized wrappers holding nn.Parameter must not be
-    picked up) and must not be a shared-input layer (`shared_param_mode` is
-    None); only then is `trainable_params()` consulted.
+    """Matcher for the 'gradient' calibrator: recognize gradient-based
+    quantized modules by their non-empty `trainable_params()`. Only called
+    on modules with a resolved `quant_config` that are not shared-input
+    layers (same guards as `_is_forward_module`).
     """
     quant_config = getattr(module, 'quant_config', None)
     if not quant_config:
@@ -40,18 +42,116 @@ def _is_gradient_module(module):
     return len(list(params_fn())) > 0
 
 
+def _collect_trainable(quant_modules):
+    """De-duplicated trainable params owned by the modules of this block."""
+    seen = set()
+    params = []
+    for module in quant_modules:
+        for param in module.trainable_params():
+            if id(param) not in seen:
+                seen.add(id(param))
+                params.append(param)
+    return params
+
+
 @register_block_calibrator(GRADIENT, matcher=_is_gradient_module)
 def calibrate_gradient(model, block_name, block, quant_modules, block_inputs, **kwargs):
     """
-    Block calibrator (kind='gradient'): placeholder until FlatQuant is integrated.
+    Block calibrator (kind='gradient'): gradient-based per-block calibration.
 
-    The real gradient-based algorithm (FlatQuant) currently runs its own
-    calibration entry under `experimental/flatquant` and does not go through
-    `sequential_calibrate`. This calibrator is therefore intentionally left
-    unimplemented; it will be filled in once FlatQuant's per-block calibration
-    can reuse this dispatch path.
+    sequential_calibrate handles block splitting and input capture; this
+    kernel implements the per-block training:
+
+    1. replay every captured (args, kwargs) sample through the block's
+       float forward to build the fp reference (framework-side
+       ``collect_fp_reference``);
+    2. enable fake quant via each module's ``set_fake_quant(True)``, then
+       call the block's single declared ``block_trainer`` (see the
+       contract in amct_pytorch.common.block_calibrator);
+    3. disable fake quant and mark the modules ``_calibrated``.
+
+    A trainer that hits a non-finite loss raises, aborting the whole
+    calibration run — a NaN-contaminated block must never reach convert.
+
+    Modules need the contract (quant_config / trainable_params /
+    set_fake_quant / block_trainer); the kernel itself is algorithm-agnostic
+    and imports nothing from any algorithm package.
     """
-    raise NotImplementedError(
-        "gradient block calibrator is not implemented yet; it will be provided "
-        "when the FlatQuant algorithm is integrated."
+    verbose = kwargs.get('_verbose', True)
+
+    if not _collect_trainable(quant_modules):
+        LOGGER.logw(
+            f"gradient block '{block_name}': matched modules report no "
+            'trainable params, skip.',
+            'BlockCalibrator',
+        )
+        return
+
+    # block_trainer contract: every dispatchable module declares its training
+    # loop as a class attribute; a block must carry exactly one distinct
+    # implementation (one algorithm's trainer). Mixed or missing trainers
+    # fail fast instead of silently training nothing / the wrong thing.
+    trainers = {getattr(module, 'block_trainer', None) for module in quant_modules}
+    trainers.discard(None)
+    if len(trainers) != 1:
+        if not trainers:
+            LOGGER.logw(
+                f"gradient block '{block_name}': quant modules declare no "
+                'block_trainer (see the contract in '
+                'amct_pytorch.common.block_calibrator); skip.',
+                'BlockCalibrator',
+            )
+            return
+        raise ValueError(
+            f"gradient block '{block_name}' mixes {len(trainers)} distinct "
+            'block_trainer implementations across its quant modules; a block '
+            'carries one trainer. Split the block or share one trainer '
+            'implementation.'
+        )
+    train = trainers.pop()
+
+    forward_kwargs = kwargs.get('forward_kwargs') or {}
+
+    fp_inps, fp_outs, call_kwargs = collect_fp_reference(
+        block, block_inputs, forward_kwargs
     )
+    n_samples = fp_inps.shape[0]
+
+    # NaN/Inf guard, mirroring the 'forward' calibrator's contract
+    if not torch.isfinite(fp_inps).all():
+        raise RuntimeError(
+            "Run gradient block calibration error! Invalid value(nan or inf) "
+            'in activation!'
+        )
+    if not torch.isfinite(fp_outs).all():
+        raise RuntimeError(
+            "Run gradient block calibration error! Invalid value(nan or inf) "
+            'in fp reference output!'
+        )
+
+    # 2. fake-quant training (module-side loop: init hooks + param
+    #    grouping + AdamW/cosine), then back to the float forward
+    for module in quant_modules:
+        module.set_fake_quant(True)
+    try:
+        train(block, fp_inps, fp_outs, call_kwargs, quant_modules)
+    finally:
+        for module in quant_modules:
+            module.set_fake_quant(False)
+
+    # Release the per-block training working set so N blocks of
+    # calibration do not accumulate in the caching allocator's pool.
+    # Numerically inert: frees cached memory only.
+    if getattr(torch, 'npu', None) is not None and torch.npu.is_available():
+        torch.npu.empty_cache()
+
+    # 3. mark calibrated so convert knows the transforms are trained
+    for module in quant_modules:
+        module._calibrated = True
+
+    if verbose:
+        LOGGER.logi(
+            f"gradient block '{block_name}' done: modules={len(quant_modules)} "
+            f'samples={n_samples}',
+            'BlockCalibrator',
+        )

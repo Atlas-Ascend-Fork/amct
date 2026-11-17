@@ -1288,3 +1288,142 @@ def test_get_supported_layers_fuzzy_group_size_overrides_global():
     assert "small" not in result
     assert "wide" in result
     assert result["wide"]["weights_cfg"]["group_size"] == 32
+
+
+def _bf16_int8_int4_qc():
+    from amct_pytorch.common.config.fields import QuantConfig
+    from amct_pytorch.algorithms import AlgorithmRegistry
+
+    return QuantConfig(
+        {
+            "batch_num": 1,
+            "quant_cfg": {
+                "weights": {
+                    "type": "int4",
+                    "symmetric": True,
+                    "strategy": "channel",
+                },
+                "inputs": {
+                    "type": "int8",
+                    "symmetric": True,
+                    "strategy": "token",
+                },
+            },
+            "algorithm": {"minmax": {}},
+        },
+        AlgorithmRegistry,
+    )
+
+
+def test_int8_int4_bf16_rejected_for_non_flatquant(caplog):
+    """bf16 on int8/int4 is a flatquant-only relaxation; minmax keeps the
+    master behaviour (logw + skip the layer)."""
+    from amct_pytorch.common.config.parser import _check_layer_constraints
+    from amct_pytorch.common.utils.log import LOGGER
+    import logging as _logging
+
+    class HasWeight(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.weight = torch.nn.Parameter(torch.randn(4, 4).to(torch.bfloat16))
+
+    mod = HasWeight()
+    qc = _bf16_int8_int4_qc()
+    with caplog.at_level(_logging.WARNING, logger=LOGGER.logw and "amct_pytorch"):
+        allowed = _check_layer_constraints(mod, "test.layer", "minmax", "int8 int4", qc)
+    assert allowed is False  # rejected (logw + skip), like master
+
+
+def test_int8_int4_bf16_allowed_for_flatquant():
+    from amct_pytorch.common.config.parser import _check_layer_constraints
+
+    class HasWeight(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.weight = torch.nn.Parameter(torch.randn(4, 4).to(torch.bfloat16))
+
+    mod = HasWeight()
+    qc = _bf16_int8_int4_qc()
+    assert _check_layer_constraints(mod, "test.layer", "flatquant", "int8 int4", qc)
+
+
+def test_int8_int4_fp16_allowed_for_every_algorithm():
+    from amct_pytorch.common.config.parser import _check_layer_constraints
+
+    class HasWeight(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.weight = torch.nn.Parameter(torch.randn(4, 4).to(torch.float16))
+
+    mod = HasWeight()
+    qc = _bf16_int8_int4_qc()
+    for algo in ("minmax", "smoothquant", "flatquant"):
+        assert _check_layer_constraints(mod, "test.layer", algo, "int8 int4", qc)
+
+
+def test_per_token_combo_table_not_mutated_by_repeated_checks():
+    """check_config / check_layer_config must not grow the shared per-token
+    combo table on repeated calls (a '+=' on the map lookup once did,
+    OOM-killing long test sessions)."""
+    from amct_pytorch.common.config.parser import check_config
+    from amct_pytorch.common.utils.vars import ACT_PER_TOKEN_SUPPORT_COMBINATION
+
+    base_len = len(ACT_PER_TOKEN_SUPPORT_COMBINATION)
+    flatquant_cfg = {
+        "quant_cfg": {
+            "weights": {"type": "int4", "symmetric": True, "strategy": "tensor"},
+            "inputs": {
+                "type": "int8",
+                "symmetric": True,
+                "strategy": "token",
+                "enable_quant": True,
+            },
+        },
+        "algorithm": {"flatquant": {}},
+    }
+    fq_qc = QuantConfig(flatquant_cfg, AlgorithmRegistry)
+    for _ in range(5):
+        check_config("int8 int4", fq_qc, "flatquant")
+    assert len(ACT_PER_TOKEN_SUPPORT_COMBINATION) == base_len
+
+
+def test_per_token_combos_widen_only_for_flatquant():
+    """flatquant accepts W4A8/W4A4 per-token activations; other algorithms
+    keep rejecting them (master behaviour)."""
+    from amct_pytorch.common.config.fields import QuantConfig
+    from amct_pytorch.common.config.parser import check_config
+
+    def _fq_qc(weight_type, input_type):
+        return QuantConfig(
+            {
+                "quant_cfg": {
+                    "weights": {
+                        "type": weight_type,
+                        "symmetric": True,
+                        "strategy": "tensor",
+                    },
+                    "inputs": {
+                        "type": input_type,
+                        "symmetric": True,
+                        "strategy": "token",
+                        "enable_quant": True,
+                    },
+                },
+                "algorithm": {"flatquant": {}},
+            },
+            AlgorithmRegistry,
+        )
+
+    # flatquant W4A8 / W4A4 per-token pass
+    check_config("int8 int4", _fq_qc("int4", "int8"), "flatquant")
+    check_config("int4 int4", _fq_qc("int4", "int4"), "flatquant")
+    # the same combos with minmax stay rejected (either the granularity
+    # table check or the combination-rule check fires first)
+    with pytest.raises(ValueError, match="activation quant strategy"):
+        check_config(
+            "int8 int4",
+            _make_quant_config(
+                weight_type="int4", input_type="int8", input_strategy="token"
+            ),
+            MINMAX,
+        )

@@ -87,7 +87,17 @@ amct_pytorch/experimental/quantization/DeepSeekV3.2/cores/calibrator/function_ut
 amct_pytorch/experimental/quantization/DeepSeekV3.2/cores/quantization/linear.py,
 amct_pytorch/experimental/quantization/DeepSeekV3.2/cores/quantization/node.py,
 amct_pytorch/experimental/quantization/DeepSeekV3.2/cores/utils/args_utils.py,
-amct_pytorch/experimental/quantization/DeepSeekV3.2/cores/utils/utils.py
+amct_pytorch/experimental/quantization/DeepSeekV3.2/cores/utils/utils.py,
+amct_pytorch/classic/quantize_op/flatquant/trans_utils.py,
+amct_pytorch/classic/quantize_op/flatquant/quantizer.py,
+amct_pytorch/classic/quantize_op/flatquant/flat_linear.py,
+amct_pytorch/classic/quantize_op/flatquant/flat_base.py,
+amct_pytorch/classic/quantize_op/flatquant/flat_config.py,
+amct_pytorch/classic/quantize_op/flatquant/flat_utils.py,
+amct_pytorch/classic/quantize_op/flatquant/cali_flatquant.py,
+amct_pytorch/classic/quantize_op/flatquant/qwen3/flat_attention.py,
+amct_pytorch/classic/quantize_op/flatquant/qwen3/flat_mlp.py,
+amct_pytorch/classic/quantize_op/flatquant/clip/flat_modules.py
 "
 Copyright Notice:
 Copyright (c) 2024 ruikangliu

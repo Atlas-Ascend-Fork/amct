@@ -50,6 +50,24 @@ from amct_pytorch.classic.deploy_op.npu_hif8_quantization_linear import NpuHIF8L
 from amct_pytorch.classic.deploy_op.npu_quantization_deepseekv3_attention import (
     NpuDeepseekV3AttentionQuant,
 )
+from amct_pytorch.classic.deploy_op.npu_flat_quant_module.clip.npu_flat_modules import (
+    NpuFlatQuantCLIPAttention,
+    NpuFlatQuantCLIPMLP,
+)
+from amct_pytorch.classic.deploy_op.npu_flat_quant_module.qwen3.npu_flat_modules import (
+    NpuFlatQuantQwen3Attention,
+    NpuFlatQuantQwen3MLP,
+)
+from amct_pytorch.classic.quantize_op.flatquant.clip.flat_modules import (
+    FlatQuantCLIPAttention,
+    FlatQuantCLIPMLP,
+)
+from amct_pytorch.classic.quantize_op.flatquant.qwen3.flat_attention import (
+    FlatQuantQwen3Attention,
+)
+from amct_pytorch.classic.quantize_op.flatquant.qwen3.flat_mlp import (
+    FlatQuantQwen3MLP,
+)
 from amct_pytorch.classic.deploy_op.npu_quantization_longcat_flashmla import (
     NpuLongcatFlashMLA,
 )
@@ -67,6 +85,7 @@ BUILT_IN_ALGORITHM = [
     'ofmr',
     'cast',
     'quantile',
+    'flatquant',
 ]
 
 AlgorithmRegistry.register('gptq', 'Linear', GPTQuant, NpuWeightQuantizedLinear)
@@ -99,4 +118,23 @@ AlgorithmRegistry.register(
 )
 AlgorithmRegistry.register(
     'quantile', 'LongcatFlashMLA', LongcatFlashMLAQuant, NpuLongcatFlashMLA
+)
+
+AlgorithmRegistry.register(
+    'flatquant',
+    'Qwen3Attention',
+    FlatQuantQwen3Attention,
+    NpuFlatQuantQwen3Attention,
+)
+AlgorithmRegistry.register(
+    'flatquant', 'Qwen3MLP', FlatQuantQwen3MLP, NpuFlatQuantQwen3MLP
+)
+AlgorithmRegistry.register(
+    'flatquant',
+    'CLIPAttention',
+    FlatQuantCLIPAttention,
+    NpuFlatQuantCLIPAttention,
+)
+AlgorithmRegistry.register(
+    'flatquant', 'CLIPMLP', FlatQuantCLIPMLP, NpuFlatQuantCLIPMLP
 )

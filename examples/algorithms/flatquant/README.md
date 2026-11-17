@@ -1,7 +1,9 @@
-# AMCT大模型对于LLAMA2/Qwen3的FlatQuant量化
+# AMCT大模型FlatQuant量化
 
-> **注意（试验特性）**：本样例依赖 `amct_pytorch/experimental/flatquant/`，需使用
-> `bash build.sh --torch --experimental` 构建并安装含试验特性的包后方可运行。
+> Qwen3走正式量化链路`quantize -> sequential_calibrate -> convert`，
+> 默认构建包即可运行（无需experimental构建选项）。
+> Llama2为experimental链路遗留样例（`run_llama2_samples.py`），
+> 需`bash build.sh --torch --experimental`构建后运行，后续将迁移或下线。
 
 ## 1 量化前提
 
@@ -13,10 +15,17 @@
 
 ### 1.2 模型和数据集准备
 
-本sample以Llama2-7b/Qwen3-8b，wikitext2数据集为示例，请用户自行下载，并在脚本中传入实际目录。
+本sample以Llama2-7b/Qwen3-0.6B，wikitext2数据集为示例，请用户自行下载，并在脚本中传入实际目录。
 
 ### 1.3 简易量化配置
 本sample中使用的量化配置已经内置在工具中，可以通过下述方式获取并使用：
+
+正式链路（Qwen3）的内置量化配置可通过下述方式获取：
+
+`from amct_pytorch.common.config.config import INT8_INT4_FLAT_QUANT_CFG`（W4A8，仅用于伪量化精度验收）
+`from amct_pytorch.common.config.config import INT4_INT4_FLAT_QUANT_CFG`（W4A4，支持全链路含部署）
+
+experimental链路（Llama2）使用：
 
 `from amct_pytorch.experimental.flatquant.config import INT4_FLAT_QUANT_CFG`
 
@@ -32,7 +41,9 @@ flatquant算法支持如下部分的量化：
 | 字段 | 类型 | 说明 | 取值范围 | 注意事项 |
 |:--| :-: | :-- | :-: | :-- |
 |skip_layers|list[str] / set[str]|跳过量化的层 |/|对配置列表或集合中的每个字符串做模糊匹配；当层名包含任一配置字符串时，跳过该层量化，不生成量化配置。例如：{"lm_head"}。|
-|algorithm|dict|量化使用的算法配置|{'flatquant'}|参考`INT4_FLAT_QUANT_CFG`示例
+|algorithm|dict|量化使用的算法配置|{'flatquant'}|参考`INT8_INT4_FLAT_QUANT_CFG`/`INT4_INT4_FLAT_QUANT_CFG`示例。|
+
+> 说明：激活/权重的位宽（如int8/int4、int4/int4）、对称性与粒度（激活per-token、权重per-channel）在`quant_cfg.inputs`/`quant_cfg.weights`中配置，与算法参数分开。组合支持：int8/int4与int4/int4。
 
 ## 2 量化示例
 
@@ -67,11 +78,19 @@ INFO Time diff after real quant: 139.707 ms
 python3 src/run_llama2_samples.py --model_path <llama2 model path> --load_matrix --flat_matrix_path <matrix path, e.g. ./outputs/llama2_7b/flat_matrices.pth>
 ```
 
-### 2.2 qwen3量化
+### 2.2 qwen3量化（正式链路）
+
+正式链路示例：`quantize`生成量化校准模型后，由`sequential_calibrate`逐层做梯度校准
+（框架按block捕获输入，FlatQuant的gradient block calibrator对每层做AdamW训练），
+校准产物`flat_matrices.pth`可保存/复用，最后`convert`固化为NPU部署模块（W4A4真量化）。
 
 **step 1.**  请在当前目录执行如下命令运行示例程序，并根据实际情况修改示例程序中的模型路径：
 ```python
-python3 src/run_qwen_samples.py --model_path <qwen3-8b model path>
+python3 src/run_qwen_samples.py --model_path <qwen3-0.6b model path>
+```
+复用已校准矩阵跳过校准：
+```python
+python3 src/run_qwen_samples.py --model_path <qwen3-0.6b model path> --load_matrix --flat_matrix_path ./outputs/qwen/flat_matrices.pth
 ```
 
 若出现如下信息，则说明量化成功：

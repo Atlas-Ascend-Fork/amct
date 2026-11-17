@@ -25,12 +25,24 @@ from amct_pytorch.common.utils.vars import (
 from amct_pytorch.common.utils.vars import (
     WTS_GRANULARITY_SUPPORT_MAP,
     ACT_GRANULARITY_SUPPORT_MAP,
+    FLATQUANT_ACT_PER_TOKEN_EXTRA_COMBINATION,
 )
 from amct_pytorch.common.utils.vars import (
     ALGORITHM_SUPPORTED_QUANT_TYPE_KV_CACHE,
     KVCACHE_OPS,
 )
 from amct_pytorch.algorithms import BUILT_IN_ALGORITHM
+
+
+def _act_token_combinations(algo):
+    """Per-token activation combos the algorithm accepts.
+
+    flatquant additionally accepts W4A8/W4A4 per-token activations; other
+    algorithms keep the shared table (master behaviour)."""
+    combos = list(ACT_GRANULARITY_SUPPORT_MAP.get('token') or [])
+    if algo == 'flatquant':
+        combos += FLATQUANT_ACT_PER_TOKEN_EXTRA_COMBINATION
+    return combos
 
 
 def set_default_config():
@@ -76,7 +88,7 @@ def check_config(quant_data_comb, quant_config, algo):
         raise ValueError(
             f"Algorithm {algo} do not support act and weight quant dtype {quant_data_comb}"
         )
-    _check_quant_dtype_comb_rules(quant_data_comb, quant_config)
+    _check_quant_dtype_comb_rules(quant_data_comb, quant_config, algo=algo)
 
     weight_strategy = quant_config.quant_cfg.weights_cfg.strategy
     if quant_data_comb not in WTS_GRANULARITY_SUPPORT_MAP.get(weight_strategy):
@@ -88,9 +100,12 @@ def check_config(quant_data_comb, quant_config, algo):
     if quant_config.quant_cfg.inputs_cfg.quant_input:
         act_strategy = quant_config.quant_cfg.inputs_cfg.strategy
         act_dtype = quant_config.quant_cfg.inputs_cfg.quant_type
-        if act_dtype not in [
-            "mxfp8_e4m3fn"
-        ] and quant_data_comb not in ACT_GRANULARITY_SUPPORT_MAP.get(act_strategy):
+        # a fresh copy: '+=' on the dict lookup result would append to the
+        # shared table and grow it on every call
+        supported = list(ACT_GRANULARITY_SUPPORT_MAP.get(act_strategy) or [])
+        if act_strategy == 'token':
+            supported += _act_token_combinations(algo)
+        if act_dtype not in ["mxfp8_e4m3fn"] and quant_data_comb not in supported:
             raise ValueError(
                 f"act_dtype and wts_dtype {quant_data_comb} do not support "
                 f"activation quant strategy {act_strategy}"
@@ -110,7 +125,7 @@ def check_config(quant_data_comb, quant_config, algo):
 
 
 def _check_layer_quant_dtype_comb_rules(
-    quant_data_comb, weights_cfg, inputs_cfg, prefix=''
+    quant_data_comb, weights_cfg, inputs_cfg, prefix='', algo=None
 ):
     """
     Per layer counterpart of _check_quant_dtype_comb_rules(), working on the
@@ -133,9 +148,13 @@ def _check_layer_quant_dtype_comb_rules(
             f"{prefix}{quant_data_comb} only support weight quant strategy "
             f"tensor or channel"
         )
-    if inputs_cfg.get('strategy') != 'tensor':
+    # per-token activations on W4A8 are flatquant-only; every other algorithm
+    # keeps the master 'tensor'-only rule.
+    act_strategies = ['tensor', 'token'] if algo == 'flatquant' else ['tensor']
+    if inputs_cfg.get('strategy') not in act_strategies:
         raise ValueError(
-            f"{prefix}{quant_data_comb} only support activation quant strategy tensor"
+            f"{prefix}{quant_data_comb} only support activation quant "
+            f"strategy {' or '.join(act_strategies)}"
         )
 
 
@@ -196,7 +215,7 @@ def check_layer_config(quant_data_comb, layer_quant_cfg, algo, layer_name=None):
     weights_cfg = layer_quant_cfg.get('weights_cfg') or {}
     inputs_cfg = layer_quant_cfg.get('inputs_cfg') or {}
     _check_layer_quant_dtype_comb_rules(
-        quant_data_comb, weights_cfg, inputs_cfg, prefix
+        quant_data_comb, weights_cfg, inputs_cfg, prefix, algo=algo
     )
 
     weight_strategy = weights_cfg.get('strategy')
@@ -209,9 +228,12 @@ def check_layer_config(quant_data_comb, layer_quant_cfg, algo, layer_name=None):
     act_dtype = inputs_cfg.get('quant_type')
     if act_dtype is not None:
         act_strategy = inputs_cfg.get('strategy')
-        if act_dtype not in ["mxfp8_e4m3fn"] and quant_data_comb not in (
-            ACT_GRANULARITY_SUPPORT_MAP.get(act_strategy) or []
-        ):
+        # a fresh copy: '+=' on the dict lookup result would append to the
+        # shared table and grow it on every call
+        supported = list(ACT_GRANULARITY_SUPPORT_MAP.get(act_strategy) or [])
+        if act_strategy == 'token':
+            supported += _act_token_combinations(algo)
+        if act_dtype not in ["mxfp8_e4m3fn"] and quant_data_comb not in supported:
             raise ValueError(
                 f"{prefix}act_dtype and wts_dtype {quant_data_comb} do not support "
                 f"activation quant strategy {act_strategy}"
@@ -230,7 +252,7 @@ def check_layer_config(quant_data_comb, layer_quant_cfg, algo, layer_name=None):
         )
 
 
-def _check_quant_dtype_comb_rules(quant_data_comb, quant_config):
+def _check_quant_dtype_comb_rules(quant_data_comb, quant_config, algo=None):
     """
     Check combination-specific constraints that should fail during config parsing.
     """
@@ -252,9 +274,13 @@ def _check_quant_dtype_comb_rules(quant_data_comb, quant_config):
         raise ValueError(
             f"{quant_data_comb} only support weight quant strategy tensor or channel"
         )
-    if inputs_cfg.strategy != 'tensor':
+    # per-token activations on W4A8 are flatquant-only; every other algorithm
+    # keeps the master 'tensor'-only rule.
+    act_strategies = ['tensor', 'token'] if algo == 'flatquant' else ['tensor']
+    if inputs_cfg.strategy not in act_strategies:
         raise ValueError(
-            f"{quant_data_comb} only support activation quant strategy tensor"
+            f"{quant_data_comb} only support activation quant strategy "
+            f"{' or '.join(act_strategies)}"
         )
 
 
@@ -513,21 +539,37 @@ def _check_layer_constraints(
     '''Check layer constraints for built-in algorithms'''
     if algo not in BUILT_IN_ALGORITHM:
         return True
-    if (
-        quant_type_comb is not None
-        and hasattr(mod, "weight")
-        and mod.weight.dtype not in ALLOWED_WEIGHT_DTYPES.get(quant_type_comb)
-    ):
-        LOGGER.logw(
-            "Layer {} cannot be quantized. The act_dtype and wts dtype combination {} only supports "
-            "original dtypes {}, but the weight dtype is {}.".format(
-                name,
-                quant_type_comb,
-                ALLOWED_WEIGHT_DTYPES.get(quant_type_comb),
-                mod.weight.dtype,
+    if quant_type_comb is not None and hasattr(mod, "weight"):
+        allowed_dtypes = ALLOWED_WEIGHT_DTYPES.get(quant_type_comb)
+        # bf16/fp32 on 'int8 int4' are a flatquant-only relaxation; other
+        # algorithms keep the master behaviour (fp16-only: logw + skip)
+        if (
+            quant_type_comb == 'int8 int4'
+            and algo != 'flatquant'
+            and mod.weight.dtype not in allowed_dtypes[:1]
+        ):
+            LOGGER.logw(
+                "Layer {} cannot be quantized. The act_dtype and wts dtype combination {} only supports "
+                "original dtypes {} for algorithm {}, but the weight dtype is {}.".format(
+                    name,
+                    quant_type_comb,
+                    allowed_dtypes[:1],
+                    algo,
+                    mod.weight.dtype,
+                )
             )
-        )
-        return False
+            return False
+        if mod.weight.dtype not in allowed_dtypes:
+            LOGGER.logw(
+                "Layer {} cannot be quantized. The act_dtype and wts dtype combination {} only supports "
+                "original dtypes {}, but the weight dtype is {}.".format(
+                    name,
+                    quant_type_comb,
+                    allowed_dtypes,
+                    mod.weight.dtype,
+                )
+            )
+            return False
     if quant_type_comb is not None and not check_quant_op_constraint(
         mod, name, quant_type_comb, quant_config, layer_quant_cfg
     ):

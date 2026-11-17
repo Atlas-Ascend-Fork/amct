@@ -237,6 +237,39 @@ def _check_auto_smooth_calibrated(model):
     )
 
 
+def _check_flatquant_w4a8_not_deployable(model):
+    """Reject convert() for flatquant W4A8 (int8/int4) configurations.
+
+    The deployment operators (npu_kronecker_quant / npu_dynamic_quant) only
+    support INT4 activation outputs, so the deploy chain is W4A4 by
+    construction. Converting a W4A8-calibrated model would silently change
+    the activation bitwidth from 8 to 4 behind the user's back — reject at
+    the convert() call site instead. W4A8's accuracy verdict is defined on
+    the calibration module's fake-quant forward; deployment requires an
+    int4/int4 (W4A4) configuration and a fresh calibration.
+    """
+    w4a8_layers = [
+        name
+        for name, module in model.named_modules()
+        if getattr(module, 'flat_config', None) is not None
+        and getattr(module.flat_config, 'a_bits', 16) == 8
+        and getattr(module.flat_config, 'w_bits', 16) < 16
+    ]
+    if not w4a8_layers:
+        return
+    preview = ', '.join(repr(name) for name in w4a8_layers[:3])
+    if len(w4a8_layers) > 3:
+        preview += f', ... ({len(w4a8_layers)} layers total)'
+    raise ValueError(
+        f'flatquant W4A8 (int8/int4) does not support deployment: {preview}. '
+        'The deployment operators (npu_kronecker_quant / npu_dynamic_quant) '
+        'only support INT4 activation outputs, so the deploy chain is W4A4. '
+        'W4A8 accuracy is verified on the calibration module\'s fake-quant '
+        'forward; to deploy, re-quantize with int4/int4 (W4A4) and calibrate '
+        'again.'
+    )
+
+
 @check_params(model=nn.Module, quant_result_dir=(str, type(None)))
 def convert(model, quant_result_dir=None):
     """
@@ -257,6 +290,7 @@ def convert(model, quant_result_dir=None):
         reload_quant_params(model, quant_result_dir)
 
     _check_auto_smooth_calibrated(model)
+    _check_flatquant_w4a8_not_deployable(model)
 
     optimizer = ModelOptimizer()
     optimizer.add_pass(ApplyScalingFusionPass())
@@ -323,7 +357,7 @@ def _resolve_calib_kind(module):
         except Exception as exc:
             # A matcher must never raise (contract: matcher(module) -> bool).
             # Swallowing the exception would silently drop this module from
-            # block calibration, so surface it instead of hiding the failure.
+            # calibration failure must surface, not be silently swallowed.
             LOGGER.loge(
                 f"block calibrator matcher '{kind}' raised {type(exc).__name__} "
                 f"while resolving module kind: {exc}",
@@ -378,6 +412,41 @@ def _arm_sequential_quant_result(model, quant_result_dir, logger):
         'SequentialCalibrate',
     )
     return writer
+
+
+#: Cross-layer KV cache kwargs that must never ride a captured block input.
+#: transformers >= 5.x threads one DynamicCache object through every decoder
+#: layer's kwargs; retaining it pins the full-model KV bytes per sample
+#: (28 layers x 8.4 MB x 128 samples = 30 GB for Qwen3-0.6B @ seq 2048) even
+#: though block-local replay never consumes a cache. Numerically inert: an
+#: empty/None cache and no cache at all produce identical attention outputs
+#: (K/V come from the block's own projection of the captured hidden_states).
+_CACHE_KWARGS = ('past_key_values', 'past_key_value')
+
+
+def _make_capture_pre_hook(captured_inputs):
+    """Build the forward pre-hook capturing one block's inputs.
+
+    The hook drops KV cache objects from the captured kwargs and, only when
+    the block's signature is known to accept cache controls (it just received
+    one), forces use_cache off so the replayed block forward allocates no
+    cache either. Blocks without cache kwargs (e.g. CLIP towers) are captured
+    untouched.
+    """
+
+    def pre_hook(module, args, kwargs=None):
+        if kwargs is None:
+            kwargs = {}
+        if any(k in kwargs for k in _CACHE_KWARGS):
+            kwargs = {k: v for k, v in kwargs.items() if k not in _CACHE_KWARGS}
+            kwargs['use_cache'] = False
+        # Captured block input is always an (args, kwargs) pair so the
+        # calibrator can replay both position-dependant and keyword inputs
+        # (e.g. CLIP's attention_mask as positional, Qwen3's position_embeddings
+        # as keyword).
+        captured_inputs.append((tuple(args), dict(kwargs)))
+
+    return pre_hook
 
 
 @check_params(
@@ -490,18 +559,6 @@ def sequential_calibrate(
                 'SequentialCalibrate',
             )
 
-    def _pre_hook_factory(captured_inputs):
-        def pre_hook(module, args, kwargs=None):
-            if kwargs is None:
-                kwargs = {}
-            # Captured block input is always an (args, kwargs) pair so the
-            # calibrator can replay both position-dependant and keyword inputs
-            # (e.g. CLIP's attention_mask as positional, Qwen3's position_embeddings
-            # as keyword).
-            captured_inputs.append((tuple(args), dict(kwargs)))
-
-        return pre_hook
-
     # Classic two-pass per-block calibration: only the current block's inputs
     # are retained in memory. Each block hooks itself, the calibration set runs
     # through the whole model once, the block is calibrated immediately and its
@@ -513,7 +570,7 @@ def sequential_calibrate(
 
         captured_inputs = []
         hook = block.register_forward_pre_hook(
-            _pre_hook_factory(captured_inputs), with_kwargs=True
+            _make_capture_pre_hook(captured_inputs), with_kwargs=True
         )
         try:
             with torch.no_grad():

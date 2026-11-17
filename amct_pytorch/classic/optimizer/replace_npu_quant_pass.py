@@ -16,12 +16,34 @@
 # ----------------------------------------------------------------------------
 
 from amct_pytorch.classic.optimizer.base_module_fusion_pass import BaseModuleFusionPass
+from amct_pytorch.classic.optimizer.external_reparam import reparameterize_ln
 from amct_pytorch.common.utils.log import LOGGER
 from amct_pytorch.common.utils.model_util import ModuleHelper
 from amct_pytorch.classic.deploy_op import NpuQuantizationLinear
 from amct_pytorch.classic.deploy_op import NpuWeightQuantizedLinear
 from amct_pytorch.classic.deploy_op import NpuQuantizationConv2d
 from amct_pytorch.algorithms import AlgorithmRegistry
+
+
+def _apply_external_reparam(model, object_name, host_name, trans):
+    """Execute one declared external reparam: find the host module by
+    walking up from object_name, then merge.
+
+    host_name is the attribute of the layer that owns object_module,
+    e.g. 'input_layernorm' for attention ln_trans, 'post_attention_layernorm'
+    for MLP up_gate_trans."""
+    # object_name like 'model.layers.0.self_attn' -> layer path is the parent
+    parent_path = object_name.rsplit('.', 1)[0]
+    layer = model
+    for part in parent_path.split('.'):
+        layer = getattr(layer, part)
+    host = getattr(layer, host_name, None)
+    if host is None or not hasattr(host, 'weight'):
+        raise RuntimeError(
+            f'external reparam host {parent_path}.{host_name} not found '
+            f'for {object_name}'
+        )
+    reparameterize_ln(host, trans)
 
 
 class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
@@ -89,21 +111,15 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
             LOGGER.logd(f'{module_type.__name__} does not need to invoke convert')
             return
 
-        if (
-            type(object_module).__name__ == 'FlatQuantAttention'
-            or type(object_module).__name__ == 'FlatQuantMLP'
-        ):
-            # We needs to access layernorm and trans from higher level, so it cannot be done within the module
-            # TODO: eventually we need to decouple the experimental part and avoid importing it in the main logic
-            from amct_pytorch.experimental.flatquant.reparam_utils import (
-                get_replacement_module,
-            )
+        # external side effects first: a calibration module may
+        # declare out-of-module modifications (e.g. flatquant's diag scale
+        # merges into the preceding Norm weight); the Pass executes them.
+        declared = getattr(object_module, 'get_external_reparam', None)
+        if callable(declared):
+            for host_name, trans in declared():
+                _apply_external_reparam(model, object_name, host_name, trans)
 
-            npu_module = get_replacement_module(
-                model, type(object_module).__name__, object_name, object_module
-            )
-        else:
-            npu_module = self._get_deploy_module(object_module, module_type)
+        npu_module = self._get_deploy_module(object_module, module_type)
 
         ModuleHelper.replace_module_by_name(model, object_name, npu_module)
         LOGGER.logd(

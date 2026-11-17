@@ -66,7 +66,8 @@ GROUP_SIZE_SUPPORTED_MAP = {
 
 ALGORITHM_SUPPORTED_QUANT_TYPE_COMB = {
     'int8 int8': ['minmax', 'smoothquant', 'auto_smooth'],
-    'int8 int4': ['minmax', 'smoothquant', 'auto_smooth'],
+    'int8 int4': ['minmax', 'smoothquant', 'auto_smooth', 'flatquant'],
+    'int4 int4': ['flatquant'],
     'NOT_QUANTIZE int8': ['minmax', 'awq', 'gptq'],
     'NOT_QUANTIZE int4': ['minmax', 'awq', 'gptq'],
     'hifloat8 hifloat8': ['ofmr', 'cast', 'quantile', 'smoothquant', 'auto_smooth'],
@@ -85,7 +86,12 @@ ALLOWED_WEIGHT_DTYPES = {
     'NOT_QUANTIZE int4': [torch.float32, torch.bfloat16, torch.float16],
     'NOT_QUANTIZE int8': [torch.bfloat16, torch.float16],
     'int8 int8': [torch.bfloat16, torch.float16],
-    'int8 int4': [torch.float16],
+    # bf16/fp32 are for the flatquant algorithm only (bf16 Qwen3 / fp32 CLIP
+    # carriers); other algorithms are rejected on this combination by the
+    # algo check in parser._check_layer_constraints, keeping their
+    # master behaviour (logw + skip).
+    'int8 int4': [torch.float16, torch.bfloat16, torch.float32],
+    'int4 int4': [torch.float32, torch.float16, torch.bfloat16],
     'hifloat8 hifloat8': [torch.float32, torch.float16, torch.bfloat16],
     'hifloat4 hifloat4': [torch.float32, torch.float16, torch.bfloat16],
     'float8_e4m3fn float8_e4m3fn': [torch.float32, torch.float16, torch.bfloat16],
@@ -104,6 +110,7 @@ WTS_PER_TENSOR_SUPPORT_COMBINATION = [
     'float8_e4m3fn float8_e4m3fn',
     'int8 int8',
     'int8 int4',
+    'int4 int4',
     'NOT_QUANTIZE int8',
     'NOT_QUANTIZE int4',
     'NOT_QUANTIZE hifloat8',
@@ -116,6 +123,7 @@ WTS_PER_CHANNEL_SUPPORT_COMBINATION = [
     'float8_e4m3fn float8_e4m3fn',
     'int8 int8',
     'int8 int4',
+    'int4 int4',
     'NOT_QUANTIZE int8',
     'NOT_QUANTIZE int4',
     'NOT_QUANTIZE hifloat8',
@@ -140,6 +148,14 @@ ACT_PER_TENSOR_SUPPORT_COMBINATION = [
     'float8_e4m3fn float4_e2m1',
 ]
 ACT_PER_TOKEN_SUPPORT_COMBINATION = ['int8 int8', 'hifloat8 hifloat8']
+
+# Per-token activation combos only flatquant accepts; other algorithms keep
+# rejecting them, mirroring the master behaviour. int8 int8 / hifloat8 hifloat8
+# stay in the shared table above, so this only widens the W4A8/W4A4 cases.
+FLATQUANT_ACT_PER_TOKEN_EXTRA_COMBINATION = [
+    'int8 int4',
+    'int4 int4',
+]
 
 # Quantization bit width combinations supported by different quantization granularities
 WTS_GRANULARITY_SUPPORT_MAP = {

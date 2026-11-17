@@ -904,8 +904,15 @@ class TestConfigParse(unittest.TestCase):
             detail_config.get('linear1').get('inputs_cfg').get('symmetric'), False
         )
 
-    def test_int8_int4_dtype_skip_cfg(self):
-        cfg = {
+    def test_int8_int4_dtype_support_cfg(self):
+        """The bf16/fp32 relaxation under 'int8 int4' is flatquant-only (the
+        flatquant path itself is covered by unit_test/common/config/
+        test_parser.py); other algorithms (smoothquant here) keep the master
+        fp16-only behaviour (logw + skip). Activation strategy stays
+        'tensor': per-token on 'int8 int4' is also flatquant-only, and a
+        smoothquant 'token' config is rejected by the parser before the
+        dtype gate under test is ever reached."""
+        cfg_sq = {
             'batch_num': 1,
             'quant_cfg': {
                 'weights': {'type': 'int4', 'symmetric': True, 'strategy': 'channel'},
@@ -917,10 +924,20 @@ class TestConfigParse(unittest.TestCase):
             },
             'algorithm': {'smoothquant': {'smooth_strength': 0.5}},
         }
+        # smoothquant: bf16 / fp32 skip (master behaviour restored)
         detail_config = parse_config(
-            copy.deepcopy(self.test_model).to(torch.bfloat16), cfg, AlgorithmRegistry
+            copy.deepcopy(self.test_model).to(torch.bfloat16), cfg_sq, AlgorithmRegistry
         )
         self.assertEqual(len(detail_config.keys()), 0)
+        detail_config = parse_config(
+            copy.deepcopy(self.test_model).to(torch.float32), cfg_sq, AlgorithmRegistry
+        )
+        self.assertEqual(len(detail_config.keys()), 0)
+        # smoothquant: fp16 keeps working
+        detail_config = parse_config(
+            copy.deepcopy(self.test_model).to(torch.float16), cfg_sq, AlgorithmRegistry
+        )
+        self.assertEqual(len(detail_config.keys()), 2)
 
     def test_float8_float4_smooth_cfg(self):
         cfg = {

@@ -1,7 +1,9 @@
-# AMCT Large Model FlatQuant Quantization for LLAMA2/Qwen3
+# AMCT Large Model FlatQuant Quantization
 
-> **Note (Experimental feature)**: This sample depends on `amct_pytorch/experimental/flatquant/`.
-> Build and install the package with `bash build.sh --torch --experimental` before running.
+> **Official pipeline (Qwen3)**: `run_qwen_samples.py` has switched to the official
+> quantization pipeline `quantize -> sequential_calibrate -> convert` (no
+> `--experimental` build option required). `run_llama2_samples.py` remains an
+> experimental-pipeline sample and requires `bash build.sh --torch --experimental`.
 
 ## 1 Quantization Prerequisites
 
@@ -13,10 +15,17 @@ Note that the TorchNPU package version needs to match the Python and torch packa
 
 ### 1.2 Model and Dataset Preparation
 
-This sample uses Llama2-7b/Qwen3-8b and wikitext2 dataset as examples. Please download them yourself and pass the actual directory in the script.
+This sample uses Llama2-7b/Qwen3-0.6B and wikitext2 dataset as examples. Please download them yourself and pass the actual directory in the script.
 
 ### 1.3 Simple Quantization Configuration
 The quantization configuration used in this sample is built into the tool and can be obtained and used in the following ways:
+
+For the official pipeline (Qwen3), the built-in configurations can be obtained as follows:
+
+`from amct_pytorch.common.config.config import INT8_INT4_FLAT_QUANT_CFG` (W4A8, fake-quant accuracy evaluation only)
+`from amct_pytorch.common.config.config import INT4_INT4_FLAT_QUANT_CFG` (W4A4, full pipeline including deployment)
+
+For the experimental pipeline (Llama2), use:
 
 `from amct_pytorch.experimental.flatquant.config import INT4_FLAT_QUANT_CFG`
 
@@ -32,7 +41,7 @@ Supported quantization types and quantization configurations:
 | Field | Type | Description | Value Range | Notes |
 |:--| :-: | :-- | :-: | :-- |
 |skip_layers|list[str] / set[str]|Layers to skip quantization |/|Fuzzy matching is applied to each string in the list or set. A layer is skipped when its name contains any configured string and no quantization configuration is generated. For example: {"lm_head"}.|
-|algorithm|dict|Quantization algorithm configuration used|{'flatquant'}|Refer to `INT4_FLAT_QUANT_CFG` example
+|algorithm|dict|Quantization algorithm configuration used|{'flatquant'}|Refer to the `INT8_INT4_FLAT_QUANT_CFG`/`INT4_INT4_FLAT_QUANT_CFG` examples.|
 
 ## 2 Quantization Example
 
@@ -67,11 +76,21 @@ After the script finishes running, calibration parameters `./outputs/llama2_7b/f
 python3 src/run_llama2_samples.py --model_path <llama2 model path> --load_matrix --flat_matrix_path <matrix path, e.g. ./outputs/llama2_7b/flat_matrices.pth>
 ```
 
-### 2.2 Qwen3 Quantization
+### 2.2 Qwen3 Quantization (Official Pipeline)
+
+Official pipeline walkthrough: `quantize` builds the quantization-calibration model, then
+`sequential_calibrate` performs layer-by-layer gradient calibration (the framework captures
+inputs per block, and the FlatQuant gradient block calibrator trains each layer with AdamW).
+The calibration artifact `flat_matrices.pth` can be saved/reused, and finally `convert`
+solidifies the transforms into NPU deployment modules (W4A4 real quantization).
 
 **step 1.** Please execute the following command in the current directory to run the sample program and modify the model path in the sample program according to actual conditions:
 ```python
-python3 src/run_qwen_samples.py --model_path <qwen3-8b model path>
+python3 src/run_qwen_samples.py --model_path <qwen3-0.6b model path>
+```
+To reuse calibrated matrices and skip calibration:
+```python
+python3 src/run_qwen_samples.py --model_path <qwen3-0.6b model path> --load_matrix --flat_matrix_path ./outputs/qwen/flat_matrices.pth
 ```
 
 If the following information appears, it indicates that quantization is successful:

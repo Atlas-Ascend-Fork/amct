@@ -59,6 +59,68 @@ INT8_SMOOTHQUANT_CFG = {
 }
 
 
+# FlatQuant W4A8 (int8/int4): fake-quant accuracy evaluation only — the
+# deploy operators only support INT4 activations, convert() rejects this
+# combination. Use INT4 activations for the full deploy pipeline.
+INT8_INT4_FLAT_QUANT_CFG = {
+    'quant_cfg': {
+        'inputs': {'type': 'int8', 'symmetric': True, 'strategy': 'token'},
+        'weights': {'type': 'int4', 'symmetric': True, 'strategy': 'channel'},
+    },
+    'algorithm': {
+        'flatquant': {
+            'use_kcache_quant': False,
+            'k_bits': 16,
+            'k_sym': False,
+            'use_vcache_quant': False,
+            'v_bits': 16,
+            'v_sym': False,
+            'use_o_quant': False,
+            'use_down_quant': True,
+            'add_diag': True,
+            'lac': False,
+            'lwc': True,
+            'diag_alpha': 0.3,
+            'epochs': 15,
+            'cali_bsz': 4,
+            'flat_lr': 5e-3,
+            'cali_trans': True,
+        },
+    },
+    'skip_layers': {'lm_head'},
+}
+
+
+# FlatQuant W4A4 (int4/int4): full pipeline including deployment. Parameters
+# follow the Qwen3 tuning used by examples/algorithms/flatquant.
+INT4_INT4_FLAT_QUANT_CFG = {
+    'quant_cfg': {
+        'inputs': {'type': 'int4', 'symmetric': True, 'strategy': 'token'},
+        'weights': {'type': 'int4', 'symmetric': True, 'strategy': 'channel'},
+    },
+    'algorithm': {
+        'flatquant': {
+            'use_kcache_quant': False,
+            'k_bits': 16,
+            'k_sym': False,
+            'use_vcache_quant': False,
+            'v_bits': 16,
+            'v_sym': False,
+            'use_o_quant': False,
+            'use_down_quant': False,
+            'add_diag': True,
+            'lac': True,
+            'lwc': True,
+            'diag_alpha': 0.8,
+            'epochs': 15,
+            'cali_bsz': 4,
+            'flat_lr': 3e-3,
+            'cali_trans': True,
+        },
+    },
+    'skip_layers': {'lm_head'},
+}
+
 INT8_MINMAX_WEIGHT_QUANT_CFG = {
     'batch_num': 1,
     'quant_cfg': {

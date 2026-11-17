@@ -23,6 +23,9 @@ dispatch, auto_smooth grid search + finalize, quant_result_dir persistence +
 reload, and illegal-kind rejection by register_block_calibrator.
 """
 
+from types import SimpleNamespace
+from unittest.mock import patch
+
 import pytest
 import torch
 from torch import nn
@@ -45,6 +48,7 @@ from amct_pytorch.classic.quantize import (
     sequential_calibrate,
 )
 from amct_pytorch.classic.quantize_op import SmoothQuant
+from amct_pytorch.classic.quantize_op.flatquant.cali_flatquant import train_block
 from amct_pytorch.common.block_calibrator import (
     FORWARD,
     GRADIENT,
@@ -237,9 +241,121 @@ def test_calibrate_forward_grid_search_selects_best_alpha():
     assert block.proj.smooth_strength == best
 
 
-def test_calibrate_gradient_raises_not_implemented():
-    with pytest.raises(NotImplementedError, match='FlatQuant'):
-        calibrate_gradient(None, 'layers.0', None, [], [])
+class _FlatLikeModule(nn.Module):
+    """Minimal module honoring the gradient-calibrator contract.
+
+    set_fake_quant toggles a flag, flat_config carries the training
+    switches (all off -> the AdamW loop assembles no group and returns
+    immediately), block_trainer declares the flatquant training loop, and
+    the block's forward runs this module so the fp reference replay works.
+    """
+
+    #: gradient-kernel contract entry (see block_calibrator docs)
+    block_trainer = staticmethod(train_block)
+
+    def __init__(self):
+        super().__init__()
+        self.quant_config = {'algorithm': {'flatquant': {}}}
+        self.value = nn.Parameter(torch.ones(1))
+        self.flat_config = SimpleNamespace(
+            diag_alpha=0.5,
+            cali_trans=False,
+            lwc=False,
+            lac=False,
+            cali_bsz=1,
+            epochs=1,
+            flat_lr=1e-3,
+        )
+        self.fake_quant_on = False
+
+    def trainable_params(self):
+        return [self.value]
+
+    def set_fake_quant(self, enabled):
+        self.fake_quant_on = enabled
+
+    def forward(self, x):
+        return x * self.value
+
+
+def test_calibrate_gradient_skips_when_no_trainable_params():
+    # Matcher-matched module whose trainable_params() drains to empty after
+    # dispatch: the kernel must skip instead of training nothing.
+    module = _FlatLikeModule()
+
+    class Block(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.proj = module
+
+        def forward(self, x):
+            return self.proj(x)
+
+    block = Block()
+    with patch.object(_FlatLikeModule, 'trainable_params', lambda self: []):
+        calibrate_gradient(
+            model=None,
+            block_name='layers.0',
+            block=block,
+            quant_modules=[module],
+            block_inputs=[(torch.randn(4, 8),)],
+            _verbose=False,
+        )
+    assert module.fake_quant_on is False  # fake quant never enabled
+
+
+def test_calibrate_gradient_marks_module_calibrated():
+    # The kernel replays the fp reference through the float forward, runs
+    # the (empty) training loop, then restores float forward and marks the
+    # module calibrated.
+    module = _FlatLikeModule()
+
+    class Block(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.proj = module
+
+        def forward(self, x):
+            return self.proj(x)
+
+    block = Block()
+    x = torch.randn(2, 8)
+    calibrate_gradient(
+        model=None,
+        block_name='layers.0',
+        block=block,
+        quant_modules=[module],
+        block_inputs=[(x,)],
+        _verbose=False,
+    )
+    assert module.fake_quant_on is False  # fake quant disabled again
+    assert module._calibrated is True
+
+
+def test_calibrate_gradient_rejects_nan_in_activation():
+    module = _FlatLikeModule()
+
+    class Block(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.proj = module
+
+        def forward(self, x):
+            return self.proj(x)
+
+    block = Block()
+    x = torch.randn(2, 8)
+    x[0, 0] = float('nan')
+
+    with pytest.raises(RuntimeError, match='Invalid value'):
+        calibrate_gradient(
+            model=None,
+            block_name='layers.0',
+            block=block,
+            quant_modules=[module],
+            block_inputs=[(x,)],
+            _verbose=False,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -456,6 +572,56 @@ def test_sequential_calibrate_warns_when_block_captures_no_input():
     assert any("block 'fc1'" in msg for msg in warnings)
 
 
+def test_sequential_calibrate_strips_kv_cache_from_captured_kwargs():
+    # transformers >= 5.x threads one DynamicCache through every decoder
+    # layer's kwargs; retaining it would pin the full-model KV bytes per
+    # captured sample (30 GB for Qwen3-0.6B x 128 samples). The pre-hook
+    # must drop the cache object and force use_cache=False on the replayed
+    # forward, while leaving unrelated kwargs (attention_mask /
+    # position_embeddings) untouched for exact replay.
+    from amct_pytorch.classic.quantize import _make_capture_pre_hook
+
+    class _CacheLike:
+        pass
+
+    captured = []
+    hook = _make_capture_pre_hook(captured)
+    x = torch.randn(2, 8)
+    hook(
+        None,
+        (x,),
+        {
+            'past_key_values': _CacheLike(),
+            'use_cache': True,
+            'attention_mask': torch.zeros(2, 8),
+            'position_embeddings': (torch.zeros(2, 8), torch.zeros(2, 8)),
+        },
+    )
+
+    assert len(captured) == 1
+    args, kwargs = captured[0]
+    assert args == (x,)
+    assert 'past_key_values' not in kwargs and 'past_key_value' not in kwargs
+    assert kwargs['use_cache'] is False
+    assert 'attention_mask' in kwargs and 'position_embeddings' in kwargs
+
+
+def test_pre_hook_leaves_cache_free_blocks_untouched():
+    # CLIP towers and other cache-free blocks carry no past_key_values kwarg;
+    # their kwargs must round-trip verbatim (no synthetic use_cache injected).
+    from amct_pytorch.classic.quantize import _make_capture_pre_hook
+
+    captured = []
+    hook = _make_capture_pre_hook(captured)
+    x = torch.randn(2, 8)
+    mask = torch.zeros(2, 8)
+    hook(None, (x, mask), {'foo': 1})
+
+    args, kwargs = captured[0]
+    assert args == (x, mask)
+    assert kwargs == {'foo': 1}
+
+
 def test_sequential_calibrate_rejects_invalid_blocks_type():
     model = _TinyModel().to(torch.bfloat16)
     quantize(model, _MINMAX_CFG)
@@ -646,3 +812,60 @@ def test_sequential_calibrate_replays_one_shot_generator_per_block():
     for module in calibratable:
         assert module.finalized is True
         assert module.smooth_strength is not None
+
+
+def test_calibrate_gradient_skips_module_without_block_trainer(caplog):
+    # contract: matched modules must declare block_trainer; a module that
+    # only implements the matcher side (trainable_params non-empty) is
+    # skipped with a warning instead of silently training nothing.
+    class _NoTrainerModule(_FlatLikeModule):
+        block_trainer = None  # contract deliberately missing
+
+    module = _NoTrainerModule()
+
+    class Block(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.proj = module
+
+        def forward(self, x):
+            return self.proj(x)
+
+    calibrate_gradient(
+        model=None,
+        block_name='layers.0',
+        block=Block(),
+        quant_modules=[module],
+        block_inputs=[(torch.randn(4, 8),)],
+        _verbose=False,
+    )
+    assert module.fake_quant_on is False  # never reached the training phase
+
+
+def test_calibrate_gradient_rejects_mixed_trainers():
+    # contract: one block carries exactly one distinct block_trainer; two
+    # different trainer implementations in one block fail fast.
+    def _other_trainer(block, fp_inps, fp_outs, layer_kwargs, quant_modules):
+        return None  # pragma: no cover - must not be called
+
+    class _OtherTrainerModule(_FlatLikeModule):
+        block_trainer = staticmethod(_other_trainer)
+
+    class Block(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.a = _FlatLikeModule()
+            self.b = _OtherTrainerModule()
+
+        def forward(self, x):
+            return self.a(x) + self.b(x)
+
+    with pytest.raises(ValueError, match='distinct'):
+        calibrate_gradient(
+            model=None,
+            block_name='layers.0',
+            block=Block(),
+            quant_modules=[Block().a, Block().b],
+            block_inputs=[(torch.randn(4, 8),)],
+            _verbose=False,
+        )

@@ -10,9 +10,14 @@
 
 ## 功能说明
 
-逐层校准接口。将 `quantize` 接口生成的量化校准模型按 block（如大语言模型的每个 decoder layer、视觉 Transformer 的每个 encoder layer）切分，逐 block 运行校准数据收集统计信息，并将该 block 的算法级校准逻辑分派给对应算法注册的 block calibrator，把搜索/优化得到的量化参数写回模型。
+逐层校准接口。将`quantize`接口生成的量化校准模型按block（如大语言模型的每个decoder layer、视觉Transformer的每个encoder layer）切分，逐block运行校准数据收集统计信息，并将该block的算法级校准逻辑分派给对应算法注册的block calibrator，把搜索/优化得到的量化参数写回模型。
 
-当前该接口主要配合 `auto_smooth` 算法使用：对每个 block 在预设的平滑强度范围内做网格搜索，选择使 block 量化输出与原始输出均方误差（MSE）最小的平滑强度与量化参数。接口本身与算法解耦，后续算法（如 FlatQuant 等）只需注册对应的 block calibrator 即可复用。
+当前该接口支持两类算法：
+
+- `auto_smooth`：对每个block在预设的平滑强度范围内做网格搜索，选择使block量化输出与原始输出均方误差（MSE）最小的平滑强度与量化参数；
+- `flatquant`：逐block以AdamW最小化量化输出与浮点输出的MSE，训练可学习变换矩阵（配置参数参见[FlatQuant使用说明](../../../examples/algorithms/flatquant/README.md)）。
+
+接口本身与算法解耦，后续算法只需注册对应的block calibrator（按梯度/无梯度分类）即可复用。
 
 > 说明：本接口为试验接口，后续版本可能变更，请谨慎使用。
 
@@ -35,6 +40,13 @@ sequential_calibrate(model, calib_set, blocks=None, quant_result_dir=None, **kwa
 ## 返回值说明
 
 无
+
+## 约束说明
+
+- 调用前必须先通过`quantize`接口对模型插入量化算子；否则接口会报错提示无可用校准模块。
+- 配置了`auto_smooth`算法的层必须通过本接口校准：`auto_smooth`的平滑强度由block级网格搜索确定，legacy的`quantize` → 前向校准 → `convert`流程不会使其生效，此时直接调用`convert`会报错提示`auto_smooth layers are not calibrated`。
+- `auto_smooth`算法的`grid_num`、`smooth_range`等参数在`quantize`的config中配置（详见[quantize](./quantize.md)的`algorithm`配置）。
+- 默认block自动推断依赖层名含数字段（如`layers.0`、`encoder.layers.5`），若模型结构特殊，请通过`blocks`参数显式指定block边界。
 
 ## 调用示例
 
@@ -59,13 +71,6 @@ sequential_calibrate(model, calib_set)
 # 3. 转换为量化部署模型
 convert(model)
 ```
-
-## 约束
-
-- 调用前必须先通过 `quantize` 接口对模型插入量化算子；否则接口会报错提示无可用校准模块。
-- 配置了 `auto_smooth` 算法的层必须通过本接口校准：`auto_smooth` 的平滑强度由 block 级网格搜索确定，legacy 的 `quantize` → 前向校准 → `convert` 流程不会使其生效，此时直接调用 `convert` 会报错提示 `auto_smooth layers are not calibrated`。
-- `auto_smooth` 算法的 `grid_num`、`smooth_range` 等参数在 `quantize` 的 config 中配置（详见 [quantize](./quantize.md) 的 `algorithm` 配置）。
-- 默认 block 自动推断依赖层名含数字段（如 `layers.0`、`encoder.layers.5`），若模型结构特殊，请通过 `blocks` 参数显式指定 block 边界。
 
 ## 扩展说明（注册 block calibrator）
 
