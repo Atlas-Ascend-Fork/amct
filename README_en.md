@@ -231,7 +231,7 @@ Welcome to join the AMCT community and participate in discussion and exchange:
 <a id="contribute"></a>
 ## 🤝 Participate in Contribution
 
-Welcome to contribute code, algorithms, and documentation, see [Contributing Guide](CONTRIBUTING.md):
+Welcome to contribute code, algorithms, and documentation, see [Contributing Guide](CONTRIBUTING_en.md):
 
 - **Simple bug fix**: Submit PR directly
 - **New features / interface changes**: First discuss solution in [Issue](https://gitcode.com/cann/amct/issues), reach consensus then submit PR
