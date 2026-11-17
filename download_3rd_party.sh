@@ -82,7 +82,7 @@ OBS_URL="https://cann-3rd.obs.cn-north-4.myhuaweicloud.com"
 # plus the cann-cmake build framework.
 # Format: "URL SHA256 Path relative to third_party"
 DOWNLOAD_LIST=(
-    "https://raw.gitcode.com/cann/cmake/archive/refs/heads/master-059.tar.gz 9e59939b5c97c9498293969df22ab2dd40e450700c51f84f117d065880f40d25 cmake-master-059.tar.gz"
+    "https://raw.gitcode.com/cann/cmake/archive/refs/heads/master-059.tar.gz 9cb9def78f6baaf0146d06565cd2e14d00399f00e4def1e98c90cfd552a48bf2 cmake-master-059.tar.gz"
     "${OBS_URL}/abseil-cpp/abseil-cpp-20230802.1.tar.gz 987ce98f02eefbaf930d6e38ab16aa05737234d7afbab2d5c4ea7adbe50c28ed abseil-cpp-20230802.1.tar.gz"
     "https://gitcode.com/cann-src-third-party/abseil-cpp/releases/download/20230802.1-h0/backport-CVE-2025-0838.patch a4e4ef6fc4f4c1ed871a3472c5e650068aaadaad2adfef2c8ccb00918bb36d8c patch/backport-CVE-2025-0838.patch"
     "${OBS_URL}/protobuf/protobuf-25.1.tar.gz 9bd87b8280ef720d3240514f884e56a712f2218f0d693b48050c836028940a42 protobuf-25.1.tar.gz"
