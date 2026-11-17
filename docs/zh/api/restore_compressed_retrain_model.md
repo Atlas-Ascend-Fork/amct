@@ -65,8 +65,8 @@ compressed_retrain_model = restore_compressed_retrain_model(model, input_data, c
 </td>
 <td class="cellrowborder" valign="top" width="5.949999999999999%" headers="mcps1.1.4.1.2 "><p id="p13482131324113"><a name="p13482131324113"></a><a name="p13482131324113"></a>输入</p>
 </td>
-<td class="cellrowborder" valign="top" width="81.10000000000001%" headers="mcps1.1.4.1.3 "><p id="p6795104910343"><a name="p6795104910343"></a><a name="p6795104910343"></a>含义：模型的输入数据。一个torch.tensor会被等价为tuple(torch.tensor)。</p>
-<p id="p12421175414419"><a name="p12421175414419"></a><a name="p12421175414419"></a>数据类型：tuple</p>
+<td class="cellrowborder" valign="top" width="81.10000000000001%" headers="mcps1.1.4.1.3 "><p id="p6795104910343"><a name="p6795104910343"></a><a name="p6795104910343"></a>含义：模型的输入数据。一个 torch.Tensor 等价于仅包含该 Tensor 的元组 (tensor,)。</p>
+<p id="p12421175414419"><a name="p12421175414419"></a><a name="p12421175414419"></a>数据类型：torch.Tensor 或 tuple</p>
 </td>
 </tr>
 <tr id="zh-cn_topic_0254208276_zh-cn_topic_0240188739_row16254133823918"><td class="cellrowborder" valign="top" width="12.950000000000001%" headers="mcps1.1.4.1.1 "><p id="p325314411272"><a name="p325314411272"></a><a name="p325314411272"></a>config_defination</p>
@@ -121,7 +121,7 @@ compressed_retrain_model = restore_compressed_retrain_model(model, input_data, c
 import amct_pytorch as amct
 # 建立待进行组合压缩的网络图结构
 model = build_model()
-input_data = tuple(torch.randn(input_shape))
+input_data = (torch.randn(input_shape),)
 save_pth_path = "/your/path/to/save/tmp.pth"
 
 record_file = os.path.join(TMP, 'compressed_record.txt')
