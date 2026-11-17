@@ -1865,9 +1865,9 @@ AMCT提供了基于图的torch模型量化蒸馏方法，这种方法通过将to
       ```python
       distill_model = amct.distill(
                       model=ori_model,
-                      compress_model,
+                      compress_model=compress_model,
                       config_file=config_file,
-                      train_loader,
+                      train_loader=train_loader,
                       epochs=1,
                       lr=1e-3,
                       sample_instance=None, 
