@@ -195,14 +195,14 @@ amct.accuracy_based_auto_calibration(
 
      fake\_quant模型主要用于验证量化后模型的精度，可以在ONNX Runtime环境下运行。进行前向推理的计算过程中，在fake\_quant模型中对卷积层等的输入数据和权重进行了量化反量化的操作，来模拟量化后的计算结果，从而快速验证量化后模型的精度。如下图所示，以INT8量化为例，Quant层、Conv2d卷积层和DeQuant层之间的数据都是float32数据类型的，其中Quant层将数据量化到INT8又反量化为float32，权重也是量化到INT8又反量化为float32，实际卷积层的计算是基于float32数据类型的，该模型用于在ONNX Runtime环境验证量化后模型的精度，不能够用于ATC工具转换成om模型。
 
-     **图 2**  fake\_quant模型<a name="fig830317361367"></a>  
+     **图 2**  fake\_quant模型<a name="fig830317361367"></a>
      ![fake_quant模型](./zh/figures/fake_quant_module.png "fake_quant模型")
 
    - 部署模型文件：ONNX格式的模型文件，模型名中包含deploy，经过ATC转换工具转换后可部署到AI处理器。
 
      以INT8量化为例，deploy模型由于已经将权重等转换为INT8，INT32类型，因此不能在ONNX Runtime环境上执行推理计算。如下图所示，deploy模型的AscendQuant层将float32的输入数据量化为INT8，作为卷积层的输入，权重也是使用INT8数据类型作为计算，在deploy模型中的卷积层的计算是基于INT8，INT32数据类型的，输出为INT32数据类型经过AscendDeQuant层转换成float32数据类型传输给下一个网络层。
 
-     **图 3**  deploy模型<a name="fig32095209306"></a>  
+     **图 3**  deploy模型<a name="fig32095209306"></a>
      ![deploy模型](./zh/figures/deploy_module.png "deploy模型")
 
 ##### 调用示例
@@ -324,7 +324,7 @@ amct.accuracy_based_auto_calibration(
 
 7. 若按照[6](#li6823133201119)中的量化配置进行量化后，精度满足要求，则调参结束，否则表明量化对精度影响很大，不能进行量化，去除量化配置。
 
-**图 4**  调参流程<a name="zh-cn_topic_0240188709_fig10376759162410"></a>  
+**图 4**  调参流程<a name="zh-cn_topic_0240188709_fig10376759162410"></a>
 ![调参流程](./zh/figures/adjustprocess.png "调参流程")
 
 ### 量化感知训练
@@ -963,7 +963,7 @@ AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模
   v_i=loss(w)-loss(w-W_i)
 
   $$
-  
+
   采用近似估计的方法对loss\(w - w<sub>i</sub>\)进行泰勒展开，目前考虑到计算量只算一阶。
 
 - 稀疏收益：当前通道的稀疏收益用比特复杂度表示，为计算量化Flops与计算比特位宽之积：
@@ -1028,7 +1028,7 @@ AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模
 
    ```python
    from amct_pytorch.common.auto_channel_prune.sensitivity_base import SensitivityBase
-   
+
    class Sensitivity(SensitivityBase):
        def __init__(self):
            pass
@@ -1045,12 +1045,12 @@ AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模
 
    ```python
    from amct_pytorch.common.auto_channel_prune.search_channel_base import SearchChannelBase
-   
+
    class Search(SearchChannelBase):
        def __init__(self):
            # 初始化
            pass
-   
+
        def channel_prune_search(self, graph_info, search_records, prune_config):
            """
            输入：
@@ -1084,8 +1084,8 @@ AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模
    ```python
    output_prune_cfg = './prune.cfg'
    amct.auto_channel_prune_search(
-       model=model, 
-       config=cfg_file, 
+       model=model,
+       config=cfg_file,
        input_data=input_data,
        output_cfg=output_prune_cfg,
        sensitivity='TaylorLossSensitivity',
@@ -1205,7 +1205,8 @@ AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模
           config_defination=config_defination,
           pth_file=pth_file,
           state_dict_name='state_dict')
-```
+
+      ```
 
    2. （由用户补充处理）使用修改后的模型，恢复断点，创建反向梯度，在训练集上做训练。
       1. 从稀疏后训练中断的checkpoint恢复模型参数。
@@ -1378,7 +1379,8 @@ prune_retrain_model = amct.save_prune_retrain_model(
           config_defination=config_defination,
           pth_file=pth_file,
           state_dict_name='state_dict')
-```
+
+      ```
 
    2. （由用户补充处理）使用修改后的模型，恢复断点，创建反向梯度，在训练集上做训练。
       1. 从稀疏后训练中断的checkpoint恢复模型参数。
@@ -1572,8 +1574,8 @@ prune_retrain_model = amct.save_prune_retrain_model(
     推荐执行该步骤，请确保原始模型可以完成推理且精度正常；执行该步骤时，可以使用部分测试集，减少运行时间。
 
     ```python
-    ori_model.load() 
-    # 测试模型 
+    ori_model.load()
+    # 测试模型
     user_test_model(ori_model, test_data, test_iterations)
     ```
 
@@ -1606,7 +1608,7 @@ prune_retrain_model = amct.save_prune_retrain_model(
             注意：从训练好的checkpoint恢复模型参数后再训练；训练中保存的参数应该包括量化因子：前batch\_num次训练后会生成量化因子，如果训练次数少于batch\_num会导致失败。
 
             ```python
-            compressed_pth = './ckpt/user_model' 
+            compressed_pth = './ckpt/user_model'
             user_train_model(optimizer, compressed_retrain_model, train_data)
             ```
 
@@ -1630,7 +1632,7 @@ prune_retrain_model = amct.save_prune_retrain_model(
 4. （可选，由用户补充处理）基于ONNX Runtime的环境，使用组合压缩后模型（compressed\_model）在测试集（test\_data）上做推理，测试组合压缩后仿真模型的精度。使用组合压缩后仿真模型精度与[1](#li2796152115712)中的原始精度做对比，可以观察组合压缩对精度的影响。
 
     ```python
-    compressed_model = './results/user_model_fake_quant_model.onnx' 
+    compressed_model = './results/user_model_fake_quant_model.onnx'
     user_do_inference_onnx(compressed_model, test_data, test_iterations)
     ```
 
@@ -1677,7 +1679,7 @@ prune_retrain_model = amct.save_prune_retrain_model(
             注意：从训练好的checkpoint恢复模型参数后再训练；训练中保存的参数应该包括量化因子：前batch\_num次训练后会生成量化因子，如果训练次数少于batch\_num会导致失败。
 
             ```python
-            compressed_pth = './ckpt/user_model' 
+            compressed_pth = './ckpt/user_model'
             user_train_model(optimizer, compressed_retrain_model, train_data)
             ```
 
@@ -1701,7 +1703,7 @@ prune_retrain_model = amct.save_prune_retrain_model(
 4. （可选，由用户补充处理）基于ONNX Runtime的环境，使用组合压缩后模型（compressed\_model）在测试集（test\_data）上做推理，测试组合压缩后仿真模型的精度。使用组合压缩后仿真模型精度与[1](#li2796152115712)中的原始精度做对比，可以观察组合压缩对精度的影响。
 
     ```python
-    compressed_model = './results/user_model_fake_quant_model.onnx' 
+    compressed_model = './results/user_model_fake_quant_model.onnx'
     user_do_inference_onnx(compressed_model, test_data, test_iterations)
     ```
 
@@ -1870,7 +1872,7 @@ AMCT提供了基于图的torch模型量化蒸馏方法，这种方法通过将to
                       train_loader=train_loader,
                       epochs=1,
                       lr=1e-3,
-                      sample_instance=None, 
+                      sample_instance=None,
                       loss=loss,
                       optimizer=optimizer)
       ```
@@ -1881,7 +1883,7 @@ AMCT提供了基于图的torch模型量化蒸馏方法，这种方法通过将to
 
       ```python
       amct.save_distill_model(
-                       model, 
+                       model,
                        "./model/distilled",
                        input_data,
                        record_file="./results/records.txt",

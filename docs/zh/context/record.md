@@ -6,7 +6,7 @@ record文件，为基于protobuf协议的序列化数据结构文件，记录量
 
 record文件对应的protobuf原型定义为（或查看AMCT安装目录/amct\_pytorch/proto/scale\_offset\_record\_pytorch.proto文件）：
 
-```
+```protobuf
 syntax = "proto2";
 import "amct_pytorch/proto/basic_info.proto";
 
@@ -399,13 +399,13 @@ message PruneNode {
 
 ## record记录文件<a name="section1850911716537"></a>
 
-最终生成的record文件格式为_record.txt_，文件内容根据特性不同划分如下。
+最终生成的record文件格式为*record.txt*，文件内容根据特性不同划分如下。
 
--   量化特性record文件
+- 量化特性record文件
 
     对于一般量化层配置需要包含scale\_d、offset\_d、scale\_w、offset\_w参数，文件内容示例如下：
 
-    ```
+    ```protobuf
     record {
       key: "conv1"
       value {
@@ -431,9 +431,9 @@ message PruneNode {
     }
     ```
 
--   量化数据均衡预处理特性record文件，内容示例如下：
+- 量化数据均衡预处理特性record文件，内容示例如下：
 
-    ```
+    ```protobuf
     record {
       key: "linear_1"
       value {
@@ -458,9 +458,9 @@ message PruneNode {
     }
     ```
 
--   通道稀疏record文件记录各稀疏层间的级联关系，文件内容示例如下:
+- 通道稀疏record文件记录各稀疏层间的级联关系，文件内容示例如下:
 
-    ```
+    ```protobuf
     prune_record {
       producer {
         name: "conv1"
@@ -501,9 +501,9 @@ message PruneNode {
     }
     ```
 
--   结构化稀疏record文件内容示例如下：
+- 结构化稀疏record文件内容示例如下：
 
-    ```
+    ```protobuf
     prune_record {
       selective_prune {
         name: "conv1"

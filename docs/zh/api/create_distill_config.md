@@ -4,13 +4,11 @@
 
 <a name="zh-cn_topic_0000002517188794_table38301303189"></a>
 
-| 产品                                        | 是否支持 |
+| 产品 | 是否支持 |
 | ------------------------------------------- | -------- |
-| Ascend 950PR&950DT系列产品                   | √        |
-| Atlas A3系列产品 | √        |
-| Atlas A2系列产品 | √        |
-
-
+| Ascend 950PR&950DT系列产品 | √ |
+| Atlas A3系列产品 | √ |
+| Atlas A2系列产品 | √ |
 
 ## 功能说明<a name="section14397134012517"></a>
 
@@ -69,7 +67,6 @@ create_distill_config(config_file, model, input_data, config_defination=None)
 </tbody>
 </table>
 
-
 ## 返回值说明<a name="zh-cn_topic_0240188739_zh-cn_topic_0122830089_section293415513458"></a>
 
 无
@@ -82,7 +79,7 @@ import amct_pytorch as amct
 model = build_model()
 model.load_state_dict(torch.load(state_dict_path))
 input_data = tuple([torch.randn(input_shape)])
- 
+
 # 生成蒸馏配置文件
 amct.create_distill_config(config_file="./configs/config.json",
                            model=model,

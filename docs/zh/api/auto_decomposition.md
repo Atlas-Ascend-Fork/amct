@@ -4,14 +4,11 @@
 
 <a name="zh-cn_topic_0000002517188794_table38301303189"></a>
 
-| 产品                                        | 是否支持 |
+| 产品 | 是否支持 |
 | ------------------------------------------- | -------- |
-| Ascend 950PR&950DT系列产品                   | √        |
-| Atlas A3系列产品 | √        |
-| Atlas A2系列产品 | √        |
-
-
-
+| Ascend 950PR&950DT系列产品 | √ |
+| Atlas A3系列产品 | √ |
+| Atlas A2系列产品 | √ |
 
 ## 功能说明<a name="zh-cn_topic_0240188739_section15406195619561"></a>
 
@@ -56,14 +53,14 @@ model, changes = auto_decomposition(model, decompose_info_path=None)
 
 ## 返回值说明<a name="zh-cn_topic_0240188739_zh-cn_topic_0122830089_section293415513458"></a>
 
--   张量分解后的模型对象，类型为torch.nn.Module。
--   张量分解前后的对应层名构成的字典，类型为dict，形如\{'conv1': \['conv1.0', 'conv1.1'\], 'conv2': \['conv2.0', 'conv2.1'\], ...\}。
+- 张量分解后的模型对象，类型为torch.nn.Module。
+- 张量分解前后的对应层名构成的字典，类型为dict，形如\{'conv1': \['conv1.0', 'conv1.1'\], 'conv2': \['conv2.0', 'conv2.1'\], ...\}。
 
 ## 约束说明<a name="zh-cn_topic_0240188739_section1443392021419"></a>
 
--   用户输入的模型需为torch.nn.Module类型的对象。
--   本接口函数仅对通过torch.nn.Conv2d\(\)构建的卷积进行分解。
--   用户调用本接口函数，接口函数对符合分解条件的卷积层进行自动分解，约束请参见[分解约束](../../README.md)。
+- 用户输入的模型需为torch.nn.Module类型的对象。
+- 本接口函数仅对通过torch.nn.Conv2d\(\)构建的卷积进行分解。
+- 用户调用本接口函数，接口函数对符合分解条件的卷积层进行自动分解，约束请参见[分解约束](../../README.md)。
 
 ## 调用示例<a name="section179052217494"></a>
 
@@ -77,7 +74,7 @@ net, changes = auto_decomposition(                             # 执行张量分
 )
 ```
 
-> [!NOTE]说明 
+> [!NOTE]说明
 >
->1.  当涉及模型训练时，本接口的调用需在将模型参数传递给优化器之前；如使用了torch.nn.parallel.DistributedDataParallel \(DDP\)，则本接口的调用也需在将模型传递给DDP之前。
->2.  本接口将原地修改传入的模型对象，即分解后会改变用户传入的模型对象本身（例外：传入的模型是一个torch.nn.Conv2d对象，该情况下本接口不会对其进行修改，如发生分解，则返回的模型是新构建的torch.nn.Module对象）。
+>1. 当涉及模型训练时，本接口的调用需在将模型参数传递给优化器之前；如使用了torch.nn.parallel.DistributedDataParallel \(DDP\)，则本接口的调用也需在将模型传递给DDP之前。
+>2. 本接口将原地修改传入的模型对象，即分解后会改变用户传入的模型对象本身（例外：传入的模型是一个torch.nn.Conv2d对象，该情况下本接口不会对其进行修改，如发生分解，则返回的模型是新构建的torch.nn.Module对象）。

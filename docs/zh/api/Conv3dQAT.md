@@ -4,14 +4,11 @@
 
 <a name="zh-cn_topic_0000002517188794_table38301303189"></a>
 
-| 产品                                        | 是否支持 |
+| 产品 | 是否支持 |
 | ------------------------------------------- | -------- |
-| Ascend 950PR&950DT系列产品                   | √        |
-| Atlas A3系列产品 | √        |
-| Atlas A2系列产品 | √        |
-
-
-
+| Ascend 950PR&950DT系列产品 | √ |
+| Atlas A3系列产品 | √ |
+| Atlas A2系列产品 | √ |
 
 ## 功能说明<a name="zh-cn_topic_0240187365_section15406195619561"></a>
 
@@ -19,13 +16,13 @@
 
 ## 函数原型<a name="zh-cn_topic_0240187365_zh-cn_topic_0122830089_section428121323411"></a>
 
--   直接构造接口：
+- 直接构造接口：
 
     ```python
     qat = amct_pytorch.nn.module.quantization.conv3d.Conv3dQAT(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias, padding_mode, device, dtype, config)
     ```
 
--   基于原生算子构造接口：
+- 基于原生算子构造接口：
 
     ```python
     qat = amct_pytorch.nn.module.quantization.conv3d.Conv3dQAT.from_float(mod, config)
@@ -164,8 +161,6 @@
 </tbody>
 </table>
 
-
-
 **表 2**  基于原生算子构造接口
 
 <a name="table18947259560"></a>
@@ -212,32 +207,30 @@
 </tbody>
 </table>
 
-
-
 ## 返回值说明<a name="zh-cn_topic_0240188739_zh-cn_topic_0122830089_section293415513458"></a>
 
--   直接构造：返回构造的QAT单算子实例。
--   基于原生算子构造：torch.nn.Module转化后的QAT单算子。
+- 直接构造：返回构造的QAT单算子实例。
+- 基于原生算子构造：torch.nn.Module转化后的QAT单算子。
 
 ## 调用示例<a name="zh-cn_topic_0240188739_section64231658994"></a>
 
--   直接构造：
+- 直接构造：
 
     ```python
     from amct_pytorch.nn.module.quantization.conv3d import Conv3dQAT
-    
+
     Conv3dQAT(in_channels=1, out_channels=1, kernel_size=1, stride=1,
               padding=0, dilation=1, groups=1, bias=True,
               padding_mode='zeros', device=None, dtype=None, config=None)
     ```
 
--   基于原生算子构造：
+- 基于原生算子构造：
 
     ```python
     import torch
-    
+
     from amct_pytorch.nn.module.quantization.conv3d import Conv3dQAT
-    
+
     conv3d_op = torch.nn.Conv3d(in_channels=1, out_channels=1, kernel_size=1, stride=1,
                                 padding=0, dilation=1, groups=1, bias=True,
                                 padding_mode='zeros', device=None, dtype=None)

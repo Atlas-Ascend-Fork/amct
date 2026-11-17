@@ -89,7 +89,6 @@ compressed_retrain_model = create_compressed_retrain_model(model, input_data, co
 </tbody>
 </table>
 
-
 ## 返回值说明<a name="zh-cn_topic_0254208276_zh-cn_topic_0240188739_zh-cn_topic_0122830089_section293415513458"></a>
 
 根据配置文件进行稀疏后（如果配置稀疏），且插入量化相关层（如果配置量化）的torch.nn.Module静态组合压缩模型。

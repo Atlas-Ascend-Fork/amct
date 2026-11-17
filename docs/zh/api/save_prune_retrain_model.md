@@ -141,9 +141,9 @@ amct.save_prune_retrain_model(
 
 落盘文件说明：
 
--   精度仿真模型文件：ONNX格式的模型文件，模型名中包含fake\_quant，可以在ONNX Runtime环境进行精度仿真。
--   部署模型文件：ONNX格式的模型文件，模型名中包含deploy，经过ATC转换工具转换后可部署到AI处理器。
--   （可选）external data文件，稀疏特性不区分\*deploy.external和\*fakequant.external文件：
+- 精度仿真模型文件：ONNX格式的模型文件，模型名中包含fake\_quant，可以在ONNX Runtime环境进行精度仿真。
+- 部署模型文件：ONNX格式的模型文件，模型名中包含deploy，经过ATC转换工具转换后可部署到AI处理器。
+- （可选）external data文件，稀疏特性不区分\*deploy.external和\*fakequant.external文件：
 
     只有保存的精度仿真模型以及部署模型文件大小\>=2GB才会生成该类文件，且与压缩后的\*.onnx文件生成在同级目录，用于保存Tensor中的数据，每个Tensor数据单独保存一个文件，文件名与Tensor相同，例如conv\_1.weight。
 

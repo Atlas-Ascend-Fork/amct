@@ -220,7 +220,7 @@ cfg = {
                 'strategy': 'tensor',
             },
         },
-        'algorithm': {'minmax'},
+        'algorithm': 'minmax',
         }
 # 调用量化接口生成量化校准模型
 quantize(model, cfg)
@@ -352,7 +352,7 @@ quantize(model, cfg)
 </td>
 <td class="cellrowborder" valign="top" width="11.07%" headers="mcps1.1.5.1.3 "><p id="p1060425541813"><a name="p1060425541813"></a><a name="p1060425541813"></a>-</p>
 </td>
-<td class="cellrowborder" valign="top" width="69.85%" headers="mcps1.1.5.1.4 "><p id="p66040553184"><a name="p66040553184"></a><a name="p66040553184"></a>string类型，量化算法，支持如下配置：</p>
+<td class="cellrowborder" valign="top" width="69.85%" headers="mcps1.1.5.1.4 "><p id="p66040553184"><a name="p66040553184"></a><a name="p66040553184"></a>string类型，量化算法。仅配置单个无参算法时直接传算法名字符串；配置多个算法时支持set形式（无参算法名集合，如 {'minmax', 'gptq'}）或dict形式（算法名到参数的映射，如 {'awq': {'grids_num': 20}}），支持如下配置：</p>
 <a name="ul2808111772013"></a><a name="ul2808111772013"></a><ul id="ul2808111772013"><li>awq：grids_num，uint32类型，搜索格点数量，默认为20。</li><li>gptq。</li><li>minmax。</li><li>smoothquant：smooth_strength，float类型，迁移强度，默认值0.5。</li><li>auto_smooth：grid_num，正整数类型，网格搜索格点数量，默认为9；smooth_range，list类型，迁移强度搜索范围[lo, hi]，默认为[0.1, 0.99]。配合[sequential_calibrate](./sequential_calibrate.md)接口完成逐层校准。</li><li>ofmr。</li><li>mxquant：仅做mx数据类型转换。</li><li>cast：HiFloat8数据直转算法，用于将权重和激活直接转换为HiFloat8类型。</li><li>quantile：HiFloat8分位量化算法，用于根据分位统计计算HiFloat8量化参数。</li></ul>
 <p id="p66040553185"><a name="p66040553185"></a><a name="p66040553185"></a>支持同时配置多个算法，多个算法按其支持的源算子（src_op）分工，即不同类型的层可由不同算法处理。同一个源算子只允许由一个算法负责，若配置的多个算法声明支持同一源算子，将在配置解析阶段报错。</p>
 <p id="p4604195517184"><a name="p4604195517184"></a><a name="p4604195517184"></a>具体请参见<a href="../algorithm_brief.md" target="_blank" rel="noopener noreferrer">量化算法介绍</a>。</p>

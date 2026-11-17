@@ -86,8 +86,6 @@ prune_retrain_model = create_prune_retrain_model (model, input_data, config_defi
 </tbody>
 </table>
 
-
-
 ## 通道稀疏支持的层及约束
 
 **表 1**  通道稀疏支持的层以及约束
@@ -116,7 +114,6 @@ prune_retrain_model = create_prune_retrain_model (model, input_data, config_defi
 </tr>
 </tbody>
 </table>
-
 
 ## 4选2结构化稀疏支持的层及约束
 
@@ -153,8 +150,6 @@ prune_retrain_model = create_prune_retrain_model (model, input_data, config_defi
 </tbody>
 </table>
 
-
-
 ## 返回值说明<a name="zh-cn_topic_0240188739_zh-cn_topic_0122830089_section293415513458"></a>
 
 返回修改后可用于稀疏后训练的torch.nn.Module模型。
@@ -167,7 +162,7 @@ import amct_pytorch as amct
 model = build_model()
 model.load_state_dict(torch.load(state_dict_path))
 input_data = tuple([torch.randn(input_shape)])
- 
+
 # 调用稀疏模型API
 record_file = os.path.join(TMP, 'scale_offset_record.txt')
 cfg_file = './prune_config.cfg'

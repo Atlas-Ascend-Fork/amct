@@ -406,7 +406,6 @@ distill\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
 </tbody>
 </table>
 
-
 基于该文件构造的**蒸馏简易配置文件**_quant_.cfg样例如下所示：
 
 ```
@@ -455,7 +454,7 @@ distill_override_layers : {
     distill_weight_quant_config: {
         arq_distill: {
            channel_wise: false
-           dst_type: INT8     
+           dst_type: INT8
         }
     }
 }
@@ -475,9 +474,8 @@ distill_override_layer_types : {
     distill_weight_quant_config: {
         ulq_distill: {
            channel_wise: false
-           dst_type: INT8     
+           dst_type: INT8
         }
     }
 }
 ```
-

@@ -7,7 +7,7 @@ English | [简体中文](./README.md)
 **Ascend Model Compression Toolkit**
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![CANN](https://img.shields.io/badge/CANN-%E2%89%A58.5.0-green.svg)](docs/zh/quick_install.md)
+[![CANN](https://img.shields.io/badge/CANN-%E2%89%A58.5.0-green.svg)](docs/en/quick_install.md)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.1.0%20%7C%202.7.1-orange.svg)](requirements.txt)
 
 [Quick Start](#quickstart) · [Features](#core) · [Samples](#documentsdemo) · [FAQ](#faq) · [Contribution](#contribute)
@@ -47,8 +47,8 @@ AMCT is an Ascend NPU native model quantization compression tool. After quantiza
 
 | Feature Category | Introduction |
 |----------|------|
-| **PTQ Quantization Algorithms** | Min-Max / AWQ / GPTQ / SmoothQuant and other post-training quantization algorithms, see [Algorithm Introduction](docs/zh/algorithm_brief.md) |
-| **HiFloat8 Quantization** | Huawei self-developed 8-bit floating-point format, tapered precision + large dynamic range, see [HiFloat8 Introduction](docs/zh/context/hifloat8_quantization.md) |
+| **PTQ Quantization Algorithms** | Min-Max / AWQ / GPTQ / SmoothQuant and other post-training quantization algorithms, see [Algorithm Introduction](docs/en/algorithm_brief.md) |
+| **HiFloat8 Quantization** | Huawei self-developed 8-bit floating-point format, tapered precision + large dynamic range, see [HiFloat8 Introduction](docs/en/context/hifloat8_quantization.md) |
 | **NPU Custom Operators** | Self-developed operators based on NPU, Ascend C kernel implementation, see [amct_ops](amct_ops/README.md) |
 | **Large Model Quantization** | DeepSeek-V3.2 / V4 quantization solutions, see [DeepSeek-V4](./amct_pytorch/experimental/deepseek-v4/README.md) |
 | **Structured Pruning** | Structured pruning of dense FFN intermediate dims / CNN channels / MoE experts, see [Structured Pruning](amct_pytorch/pruning/README_en.md) |
@@ -80,7 +80,7 @@ Quantization significantly reduces deployment costs:
 
 > ⚠️ For the NPU acceleration backend, install CPU PyTorch before installing the matching `TorchNPU`. Do not mix non-CPU PyTorch and `TorchNPU` in the same environment.
 
-For complete environment deployment, please refer to [Quick Installation](docs/zh/quick_install.md).
+For complete environment deployment, please refer to [Quick Installation](docs/en/quick_install.md).
 
 ### Installation & Verification
 
@@ -119,11 +119,11 @@ If the build environment has no network access, run `bash download_3rd_party.sh`
 bash build.sh --torch --cann_3rd_lib_path=third_party
 ```
 
-See the [Build Guide](docs/zh/build.md) for details (including the scope of `--pkg` full-package builds).
+See the [Build Guide](docs/en/build.md) for details (including the scope of `--pkg` full-package builds).
 
 </details>
 
-For more build options and local verification, please refer to [Build Guide](docs/zh/build.md).
+For more build options and local verification, please refer to [Build Guide](docs/en/build.md).
 
 ### 🏃 One-Stop Platform Quick Experience
 
@@ -140,11 +140,11 @@ The "One-Stop Platform" is an NPU environment provided for developers, internall
 
 | Topic | Content |
 |------|------|
-| [Compression Concepts](docs/zh/compression_concepts.md) | Quantization, sparsity, distillation and other basic concepts |
-| [LLM Quantization](docs/zh/AMCT_Pytorch_LLM.md) | Quantization features for large language models (LLM) |
-| [Compression Features](docs/README.md) | Basic compression features supported by AMCT |
-| [API Documentation](docs/zh/api/README.md) | Interface usage instructions |
-| [Algorithm Introduction](docs/zh/algorithm_brief.md) | AWQ, GPTQ, SmoothQuant and other algorithm principles |
+| [Compression Concepts](docs/en/compression_concepts.md) | Quantization, sparsity, distillation and other basic concepts |
+| [LLM Quantization](docs/en/AMCT_Pytorch_LLM.md) | Quantization features for large language models (LLM) |
+| [Compression Features](docs/README_en.md) | Basic compression features supported by AMCT |
+| [API Documentation](docs/en/api/README.md) | Interface usage instructions |
+| [Algorithm Introduction](docs/en/algorithm_brief.md) | AWQ, GPTQ, SmoothQuant and other algorithm principles |
 
 ## 🔍 Directory Structure
 

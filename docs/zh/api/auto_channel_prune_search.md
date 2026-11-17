@@ -4,14 +4,11 @@
 
 <a name="zh-cn_topic_0000002517188794_table38301303189"></a>
 
-| 产品                                        | 是否支持 |
+| 产品 | 是否支持 |
 | ------------------------------------------- | -------- |
-| Ascend 950PR&950DT系列产品                   | √        |
-| Atlas A3系列产品 | √        |
-| Atlas A2系列产品 | √        |
-
-
-
+| Ascend 950PR&950DT系列产品 | √ |
+| Atlas A3系列产品 | √ |
+| Atlas A2系列产品 | √ |
 
 ## 功能说明<a name="zh-cn_topic_0254208276_zh-cn_topic_0240188739_section15406195619561"></a>
 
@@ -87,7 +84,6 @@ auto_channel_prune_search(model, config, input_data, output_cfg, sensitivity, se
 </tbody>
 </table>
 
-
 ## 返回值说明<a name="zh-cn_topic_0254208276_zh-cn_topic_0240188739_zh-cn_topic_0122830089_section293415513458"></a>
 
 无
@@ -97,18 +93,18 @@ auto_channel_prune_search(model, config, input_data, output_cfg, sensitivity, se
 ```python
 import amct_pytorch as amct
 #构造输入数据input_data
-input_data = torch.randn(input_shape)         
-model.eval()        
-output = model.forward(input_data)        
-labels = torch.randn(output.size())        
+input_data = torch.randn(input_shape)
+model.eval()
+output = model.forward(input_data)
+labels = torch.randn(output.size())
 data = [input_data,labels]
 
 amct.auto_channel_prune_search(
      model=model,
      config='./tmp/sample.cfg',
-     input_data=data,  
-     output_cfg='./tmp/output.cfg', 
-     sensitivity='TaylorLossSensitivity', 
+     input_data=data,
+     output_cfg='./tmp/output.cfg',
+     sensitivity='TaylorLossSensitivity',
      search_alg='GreedySearch')
 ```
 

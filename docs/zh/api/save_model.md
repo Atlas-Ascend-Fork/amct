@@ -73,7 +73,7 @@ save_model(modfied_onnx_file, record_file, save_path)
 ```python
 import amct_pytorch as amct
 # 进行网络推理，期间完成量化
-for i in batch_num:
+for i in range(batch_num):
     output = calibration_model(input_batch)
 
 # 插入API，将量化的模型存为ONNX文件

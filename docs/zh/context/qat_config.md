@@ -564,10 +564,9 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
 </tbody>
 </table>
 
+- 基于该文件构造的**量化感知训练简易配置文件**_quant_.cfg样例如下所示：
 
--   基于该文件构造的**量化感知训练简易配置文件**_quant_.cfg样例如下所示：
-
-    ```
+    ```protobuf
     # global quantize parameter
     retrain_data_quant_config: {
         ulq_quantize: {
@@ -614,9 +613,9 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
     }
     ```
 
--   基于该文件构造的**通道稀疏简易配置文件**_prune_.cfg样例如下所示：
+- 基于该文件构造的**通道稀疏简易配置文件**_prune_.cfg样例如下所示：
 
-    ```
+    ```protobuf
     # global prune parameter
     prune_config{
         filter_pruner {
@@ -645,9 +644,9 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
     }
     ```
 
--   基于该文件构造的**4选2结构化稀疏简易配置文件**_selective\_prune_.cfg样例如下所示：
+- 基于该文件构造的**4选2结构化稀疏简易配置文件**_selective\_prune_.cfg样例如下所示：
 
-    ```
+    ```protobuf
     # global prune parameter
     prune_config{
         n_out_of_m_pruner {
@@ -676,9 +675,9 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
     }
     ```
 
--   基于该文件构造的**组合压缩（通道稀疏+INT8量化）简易配置文件**_compressed1_.cfg样例如下所示：
+- 基于该文件构造的**组合压缩（通道稀疏+INT8量化）简易配置文件**_compressed1_.cfg样例如下所示：
 
-    ```
+    ```protobuf
     prune_config : {
         filter_pruner : {
             balanced_l2_norm_filter_prune : {
@@ -728,9 +727,9 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
     }
     ```
 
--   基于该文件构造的**组合压缩（4选2结构化稀疏+INT8量化）简易配置文件**_compressed2_.cfg样例如下所示：
+- 基于该文件构造的**组合压缩（4选2结构化稀疏+INT8量化）简易配置文件**_compressed2_.cfg样例如下所示：
 
-    ```
+    ```protobuf
     prune_config{
         n_out_of_m_pruner {
             l1_selective_prune {

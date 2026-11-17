@@ -9,7 +9,7 @@
 量化工具主要由以下模块组成：
 
 | 模块 | 路径 | 作用 |
-|------|------|------|
+| ------ | ------ | ------ |
 | CLI 入口 | `amct_pytorch/cli/llm/` | 提供 `eval`、`extract_ptq_data`、`ptq`、`deploy` 四类命令行入口。 |
 | 工作流 | `amct_pytorch/workflows/` | 支持编排 PPL 评估、校准数据提取、PTQ 优化训练和部署导出等功能。 |
 | 模型适配器 | `amct_pytorch/common/models/llm/` | 适配 DeepSeek、Qwen、LongCat、Pangu、GLM 等模型结构。 |
@@ -31,20 +31,22 @@
 确保模型目录为 HuggingFace/safetensors 格式，并包含 `config.json`、tokenizer 相关文件以及 `model.safetensors.index.json`。支持的模型适配器名称以及对应的大模型为：
 
 | 模型名称（`--model_name`） | 说明 |
-|------|------|
-|[`deepseek_v3_2`](https://huggingface.co/deepseek-ai/DeepSeek-V3.2-Exp/tree/main) | DeepSeek V3.2 |
-|[`deepseek_v4`](https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main) | DeepSeek V4 |
-|[`qwen3`](https://huggingface.co/Qwen/Qwen3-4B/tree/main) | Qwen3 Dense |
-|[`qwen3_moe`](https://huggingface.co/Qwen/Qwen3-235B-A22B/tree/main) | Qwen3 MoE |
-|[`qwen3_5`](https://huggingface.co/Qwen/Qwen3.5-4B/tree/main) | Qwen3.5 Dense |
-|[`qwen3_5_moe`](https://huggingface.co/Qwen/Qwen3.5-35B-A3B/tree/main) | Qwen3.5 MoE |
-|[`qwen3_6_moe`](https://huggingface.co/Qwen/Qwen3.6-35B-A3B/tree/main) | Qwen3.6 MoE |
-|[`qwen3_next`](https://huggingface.co/Qwen/Qwen3-Next-80B-A3B-Instruct/tree/main) | Qwen3 Next |
-|[`longcat_lite`](https://huggingface.co/meituan-longcat/LongCat-Flash-Lite/tree/main) | LongCat Flash Lite |
-|[`longcat_next`](https://huggingface.co/meituan-longcat/LongCat-Next/tree/main) | LongCat Next |
-|[`glm5`](https://huggingface.co/zai-org/GLM-5.1/tree/main) | GLM-5.1 |
+| ------ | ------ |
+| [`deepseek_v3_2`](https://huggingface.co/deepseek-ai/DeepSeek-V3.2-Exp/tree/main) | DeepSeek V3.2 |
+| [`deepseek_v4`](https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main) | DeepSeek V4 |
+| [`qwen3`](https://huggingface.co/Qwen/Qwen3-4B/tree/main) | Qwen3 Dense |
+| [`qwen3_moe`](https://huggingface.co/Qwen/Qwen3-235B-A22B/tree/main) | Qwen3 MoE |
+| [`qwen3_5`](https://huggingface.co/Qwen/Qwen3.5-4B/tree/main) | Qwen3.5 Dense |
+| [`qwen3_5_moe`](https://huggingface.co/Qwen/Qwen3.5-35B-A3B/tree/main) | Qwen3.5 MoE |
+| [`qwen3_6_moe`](https://huggingface.co/Qwen/Qwen3.6-35B-A3B/tree/main) | Qwen3.6 MoE |
+| [`qwen3_next`](https://huggingface.co/Qwen/Qwen3-Next-80B-A3B-Instruct/tree/main) | Qwen3 Next |
+| [`longcat_lite`](https://huggingface.co/meituan-longcat/LongCat-Flash-Lite/tree/main) | LongCat Flash Lite |
+| [`longcat_next`](https://huggingface.co/meituan-longcat/LongCat-Next/tree/main) | LongCat Next |
+| [`glm5`](https://huggingface.co/zai-org/GLM-5.1/tree/main) | GLM-5.1 |
 
 ## CLI入口及对应实例化操作
+
+本节所述四个入口的实现位于`amct_pytorch/cli/llm/`目录；包顶层同时提供同名包装模块（amct_pytorch/eval.py等），可通过 `python -m amct_pytorch.eval`方式启动，二者最终执行同一工作流，本文bash示例统一采用顶层模块写法。
 
 ### `eval`
 
@@ -58,6 +60,7 @@
 **输出**：在`output_dir/logs/` 目录下会生成评估日志，日志中包含 PPL。
 
 **约束**：
+
 - 考虑到用户环境的限制，`granularity`请尽量选择block。
 - `bit_config`、`model`请配置本地路径，`bit_config`对应的yaml文件可以参考仓上amct_pytorch/configs内的文件
 - 断点续测 `--dump` 仅支持 `granularity=block`。
@@ -271,7 +274,7 @@ python -m amct_pytorch.deploy \
 ### 通用参数
 
 | 参数 | 默认值 | 含义 |
-|------|------|------|
+| ------ | ------ | ------ |
 | `--model` | `deepseek-ai/DeepSeek-V4-Flash` | 模型权重路径或模型标识，部署导出时应为本地模型目录。 |
 | `--model_name` | **必填** | AMCT 内部模型适配器名称，需匹配已注册模型，如 `qwen3`、`deepseek_v4`。 |
 | `--trust_remote_code` | 默认关闭 | 是否允许 HuggingFace 模型仓执行自定义代码。传入该开关时启用；DeepSeek V3.2、DeepSeek V4 等依赖本地模型实现的模型必须启用，其他模型未启用时会给出 Warning。 |
@@ -279,7 +282,7 @@ python -m amct_pytorch.deploy \
 | `--granularity` | `block` | 工作粒度，即量化或处理的单位，按子命令校验合法值：<br> `block`：按模块块处理（更细粒度，可能效果更好但耗时），所有子命令的默认值。<br> `model`：整个模型统一处理（整模型加载后前向，粗粒度，速度快），仅 `eval` 支持，`ptq` 中为预留接口。<br> `tensor`：按张（tensor）粒度转换权重（用于反量化或直转量化），仅 `deploy` 支持。 |
 | `--seed` | `42` | 随机种子，用于控制实验中随机行为的一致性（如数据采样、初始化等），设置为固定值可保证结果可复现。 |
 | `--quant_target` | `[]`（`ptq` / `extract_ptq_data` **必填**；`deploy` 的 blockwise 导出**必填**） | 量化目标，取值：mlp（多层感知机）/ moe（混合专家）/ attn-linear（注意力线性层）/ attn-cache（注意力缓存）。各命令用法不同：`eval` 与 `deploy` 可同时指定多个（如 `--quant_target mlp attn-linear`）；`ptq` / `extract_ptq_data` 一次仅允许一个，多目标请分目标依次执行。`deploy` blockwise 中该参数决定构建并导出哪些量化模块，缺失时会静默导出未量化权重；`granularity=tensor` 时纯反量化（如 FP8/FP4 → BF16 权重转换）不使用该参数，tensorwise 直转量化（部分模型族，如 hy_v3 / glm5_2）仍需指定。 |
-| `--seq_len` | `4096` | 校准和评估时使用的输入序列长度。用于确定模型在处理多长文本时的表现（尤其在量化校准阶段很重要）。 可选值：`1024`、`2048`、`4096`|
+| `--seq_len` | `4096` | 校准和评估时使用的输入序列长度。用于确定模型在处理多长文本时的表现（尤其在量化校准阶段很重要）。 可选值：`1024`、`2048`、`4096` |
 | `--data_dir` | 空字符串（`ptq` / `extract_ptq_data` **必填**） | PTQ 中间数据保存/读取目录：`extract_ptq_data` 的输出目录，`ptq` 从中读取。 |
 | `--output_dir` | `./outputs` | 输出目录，存放日志文件、PTQ 参数配置、最终部署模型等所有生成内容。 |
 
@@ -288,14 +291,14 @@ python -m amct_pytorch.deploy \
 以下参数仅用于 `deploy` 子命令：
 
 | 参数 | 默认值 | 含义 |
-|------|------|------|
+| ------ | ------ | ------ |
 | `--deploy_platform` | `None` | 目标部署硬件。DeepSeek V4.1 必填，支持 `A3` 和 `ascend950`（`ascend950` 上 `--quant_dtype` 取 `mxfp` 保留源位宽、取 `hifp` 将注意力 Linear 重编码为 HiFloat8）；其他模型由对应适配器决定是否使用。 |
 | `--quant_layers_config` | `None` | Tensorwise 直转量化的 JSON 配置路径，通过 `quant_layers` 和 `ignore_layers` glob 选择 checkpoint 模块；显式选择路径会替代 `quant_target`。 |
 
 ### PPL 评估参数
 
 | 参数 | 默认值 | 含义 |
-|------|------|------|
+| ------ | ------ | ------ |
 | `--eval_mode` | `bf16` | 评估模式，指定模型在计算困惑度（PPL）时使用的精度格式，支持如下两种格式：<br> `bf16`：半精度浮点数（BF16），常用于加速推理并保持较高精度。<br>`quant`：量化模式，可能指 INT8/INT4 等量化格式，用于降低内存和计算开销，但可能牺牲少量精度。 |
 | `--dump` | 默认关闭 | 仅用于 `granularity=block` 的 PPL 评估。按模型名和类型保存最近一个已完成 block 的输出并自动续测，用户自行保证配置一致；PPL 成功输出后清理对应断点文件。 |
 | `--wikitext_final_out` | 空字符串 | **【预留参数，暂不生效】** WikiText 末端输出路径参数，用于指定 WikiText 数据集处理后最终输出的文件路径。当前版本主链路（`eval` / `extract_ptq_data` / `ptq` / `deploy`）尚未读取该参数，传入的值不会生效，仅打印告警；参数本身予以保留，后续版本按需接通。 |
@@ -314,7 +317,7 @@ python -m amct_pytorch.deploy \
 ### 量化配置参数
 
 | 参数 | 默认值 | 含义 |
-|------|------|------|
+| ------ | ------ | ------ |
 | `--quant_dtype` | 空字符串（`deploy` 的 blockwise 导出**必填**；`eval_mode=quant` 时需显式指定） | 量化后数据的类型，取值 `int` / `mxfp` / `hifp`。`deploy` blockwise 导出时必须显式指定，以保证 `config.json` 中的量化声明与 PTQ 产物一致；`eval_mode=quant` 时构建量化模块需按该参数选择量化数据类型实现，缺失会在运行期报错；`granularity=tensor` 时纯反量化不使用该参数，tensorwise 直转量化（部分模型族）仍需指定（当前支持 `int` / `mxfp` / `hifp`）。 |
 | `--bit_config` | `None` | YAML 格式的配置文件路径，该文件定义了具体的位宽策略。如果不提供此参数，则使用默认的 `W16A16` 配置。 |
 | `--algos` | `[]` | 启用的量化算法列表，算法会根据其注册的 `target` 自动应用到模型的权重（weight）、激活值（activation）或结构（structure）上。 |
@@ -324,7 +327,7 @@ python -m amct_pytorch.deploy \
 常用 `bit_config`：
 
 | 文件 | 含义 |
-|------|------|
+| ------ | ------ |
 | [bf16.yaml](../../amct_pytorch/configs/bf16.yaml) | 全部保持 16 bit。 |
 | [w8a8.yaml](../../amct_pytorch/configs/w8a8.yaml) | 全局 W8A8（权重激活都为8bit）。 |
 | [w4a8.yaml](../../amct_pytorch/configs/w4a8.yaml) | 全局 W4A8（权重4bit，激活8bit）。 |
@@ -338,7 +341,7 @@ python -m amct_pytorch.deploy \
 ### PTQ 参数
 
 | 参数 | 默认值 | 含义 |
-|------|------|------|
+| ------ | ------ | ------ |
 | `--cali_bsz` | `4` | PTQ 校准训练batch size。<br>PTQ过程中，需要使用一小部分数据（称为校准数据集）来调整量化参数（如缩放因子和零点），该参数定义了每次处理多少个样本进行校准。 |
 | `--base_lr` | `1e-5` | 基础学习率，该参数决定了模型参数在每次迭代中更新的步长。 |
 | `--optimizer` | `adamw` | 优化器，指定用于更新模型参数的算法；支持如下几种优化器。<br> `adamw`：Adam的改进版，通常能更好地处理权重衰减。<br>`adam`：经典的Adam优化器。<br/>`sgd`：随机梯度下降。<br/>`signsgd`：基于梯度符号的随机梯度下降变体。 |

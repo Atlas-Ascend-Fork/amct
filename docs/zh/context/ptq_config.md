@@ -508,8 +508,7 @@ calibration\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_02401
 </tbody>
 </table>
 
-
--   基于该文件构造的**训练后量化简易配置文件**_quant_.cfg样例如下所示：
+- 基于该文件构造的**训练后量化简易配置文件**_quant_.cfg样例如下所示：
 
     ```
     # global quantize parameter
@@ -536,7 +535,7 @@ calibration\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_02401
              migration_strength : 0.5
         }
     }
-     
+
     override_layer_types : {
         layer_type : "Conv2d"
         calibration_config : {
@@ -557,7 +556,7 @@ calibration\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_02401
              }
         }
     }
-     
+
     override_layer_configs : {
         layer_name : "Opname"
         calibration_config : {
@@ -595,7 +594,7 @@ calibration\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_02401
     }
     ```
 
--   基于该文件构造的**自适应舍入简易配置文件**_ada\_round.cfg_样例如下所示：
+- 基于该文件构造的**自适应舍入简易配置文件**_ada\_round.cfg_样例如下所示：
 
     ```
     common_config : {
@@ -610,7 +609,7 @@ calibration\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_02401
     }
     ```
 
--   基于该文件构造的**量化数据均衡预处理简易配置文件**_dmq\_balancer_.cfg样例如下所示：
+- 基于该文件构造的**量化数据均衡预处理简易配置文件**_dmq\_balancer_.cfg样例如下所示：
 
     ```
     # global quantize parameter
@@ -636,7 +635,7 @@ calibration\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_02401
             migration_strength : 0.5
         }
     }
-     
+
     override_layer_types : {
         layer_type : "Optype"
         calibration_config : {
@@ -656,7 +655,7 @@ calibration\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_02401
            }
         }
     }
-     
+
     override_layer_configs : {
         layer_name : "Opname"
         calibration_config : {

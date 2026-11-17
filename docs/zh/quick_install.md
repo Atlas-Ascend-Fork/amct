@@ -1,4 +1,5 @@
 # 环境部署
+
 使用AMCT工具之前，请先参考下面步骤完成基础环境搭建和源码下载，确保已经安装NPU固件、驱动和CANN软件（Ascend-cann-toolkit和Ascend-cann-ops）。
 
 ## 环境安装
@@ -27,7 +28,7 @@
    <img src="./figures/cloudIDE.png" alt="云平台"  width="750px" height="90px">
 
 2. 根据页面提示创建NPU环境并配置规格，启动云开发环境后，单击“`连接 > WebIDE`”进入一站式开发平台。
-  
+
    当前开源项目资源默认在`/mnt/workspace/gitCode/${gitCode_id}`目录下，\$\{gitCode\_id\}表示开发者个人gitCode账号。
 
    <img src="./figures/webIDE.png" alt="云平台"  width="1000px" height="150px">
@@ -68,17 +69,17 @@ docker run --name cann_container --device /dev/davinci0 --device /dev/davinci_ma
 | 参数 | 说明 | 注意事项 |
 | :--- | :--- | :--- |
 | `--name cann_container` | 为容器指定名称，便于管理。 | 可自定义。 |
-| `--device /dev/davinci0` | 核心：将宿主机的NPU设备卡映射到容器内，可指定映射多张NPU设备卡。 | 必须根据实际情况调整：`davinci0`对应系统中的第0张NPU卡。请先在宿主机执行 `npu-smi info`命令，根据输出显示的设备号（如`NPU 0`, `NPU 1`）来修改此编号。|
+| `--device /dev/davinci0` | 核心：将宿主机的NPU设备卡映射到容器内，可指定映射多张NPU设备卡。 | 必须根据实际情况调整：`davinci0`对应系统中的第0张NPU卡。请先在宿主机执行 `npu-smi info`命令，根据输出显示的设备号（如`NPU 0`, `NPU 1`）来修改此编号。 |
 | `--device /dev/davinci_manager` | 映射NPU设备管理接口。 | - |
 | `--device /dev/devmm_svm` | 映射设备内存管理接口。 | - |
 | `--device /dev/hisi_hdc` | 映射主机与设备间的通信接口。 | - |
 | `-v /usr/local/dcmi:/usr/local/dcmi` | 挂载设备容器管理接口（DCMI）相关工具和库。 | - |
-| `-v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi` | 挂载`npu-smi`工具。 | 使容器内可以直接运行此命令来查询NPU状态和性能信息。|
+| `-v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi` | 挂载`npu-smi`工具。 | 使容器内可以直接运行此命令来查询NPU状态和性能信息。 |
 | `-v /usr/local/Ascend/driver/lib64/:/usr/local/Ascend/driver/lib64/` | 关键挂载：将宿主机的NPU驱动库映射到容器内。 | - |
 | `-v /usr/local/Ascend/driver/version.info:/usr/local/Ascend/driver/version.info` | 挂载驱动版本信息文件。 | - |
 | `-v /etc/ascend_install.info:/etc/ascend_install.info` | 挂载CANN软件安装信息文件。 | - |
 | `-it` | `-i`（交互式）和 `-t`（分配伪终端）的组合参数。 | - |
-| `swr.cn-south-1.myhuaweicloud.com/ascendhub/cann:8.5.0-910b-ubuntu22.04-py3.10-ops` | 指定要运行的Docker镜像。 |请确保此镜像名和标签（tag）与你通过`docker pull`拉取的镜像完全一致。 |
+| `swr.cn-south-1.myhuaweicloud.com/ascendhub/cann:8.5.0-910b-ubuntu22.04-py3.10-ops` | 指定要运行的Docker镜像。 | 请确保此镜像名和标签（tag）与你通过`docker pull`拉取的镜像完全一致。 |
 | `bash` | 容器启动后立即执行的命令。 | - |
 
 ### 方式3：手动安装

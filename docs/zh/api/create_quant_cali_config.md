@@ -91,7 +91,6 @@ create_quant_cali_config(config_file,model,quant_layers=None,config_defination=N
 </tbody>
 </table>
 
-
 ## 返回值说明<a name="zh-cn_topic_0240188739_zh-cn_topic_0122830089_section293415513458"></a>
 
 无

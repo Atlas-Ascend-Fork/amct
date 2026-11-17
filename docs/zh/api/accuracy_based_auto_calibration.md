@@ -4,13 +4,11 @@
 
 <a name="zh-cn_topic_0000002517188794_table38301303189"></a>
 
-| 产品                                        | 是否支持 |
+| 产品 | 是否支持 |
 | ------------------------------------------- | -------- |
-| Ascend 950PR&950DT系列产品                   | √        |
-| Atlas A3系列产品 | √        |
-| Atlas A2系列产品 | √        |
-
-
+| Ascend 950PR&950DT系列产品 | √ |
+| Atlas A3系列产品 | √ |
+| Atlas A2系列产品 | √ |
 
 ## 功能说明<a name="zh-cn_topic_0240188739_section15406195619561"></a>
 
@@ -156,7 +154,7 @@ class AutoCalibrationEvaluator(AutoCalibrationEvaluatorBase):
 
     def evaluate(self, model):
         """ implement the evaluate function of AutoCalibrationEvaluatorBase
-            params: model in torch.nn.module 
+            params: model in torch.nn.module
             return: the accuracy of input model on the eval dataset, or other metric which
                     can describe the 'accuracy' of model
         """
@@ -217,8 +215,8 @@ class AutoCalibrationEvaluator(AutoCalibrationEvaluatorBase):
 
 落盘文件说明：
 
--   精度仿真模型文件：ONNX格式的模型文件，模型名中包含fake\_quant，可以在ONNX Runtime环境进行精度仿真。
--   部署模型文件：ONNX格式的模型文件，模型名中包含deploy，经过ATC转换工具转换后可部署到AI处理器。
--   量化因子记录文件：在接口中的record\_file中写入量化因子。
--   敏感度信息文件：该文件记录了待量化层对于量化的敏感度信息，根据该信息进行量化回退层的选择。
--   自动量化回退历史记录文件：记录的回退层的信息。
+- 精度仿真模型文件：ONNX格式的模型文件，模型名中包含fake\_quant，可以在ONNX Runtime环境进行精度仿真。
+- 部署模型文件：ONNX格式的模型文件，模型名中包含deploy，经过ATC转换工具转换后可部署到AI处理器。
+- 量化因子记录文件：在接口中的record\_file中写入量化因子。
+- 敏感度信息文件：该文件记录了待量化层对于量化的敏感度信息，根据该信息进行量化回退层的选择。
+- 自动量化回退历史记录文件：记录的回退层的信息。

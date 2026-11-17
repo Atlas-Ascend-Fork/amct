@@ -117,11 +117,11 @@ input_data = tuple([torch.randn(input_shape)])
 train_model(quant_retrain_model, input_batch)
 # 推理量化retrain模型，导出量化因子
 infer_model(quant_retrain_model, input_batch)
- 
+
 # 插入量化API，将量化感知训练的模型存为ONNX文件
 amct.save_quant_retrain_model(
                config_json_file,
-               model, 
+               quant_retrain_model,
                record_file,
                save_path="./results/model",
                input_data=input_data,

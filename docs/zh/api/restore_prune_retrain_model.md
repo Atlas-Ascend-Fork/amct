@@ -102,7 +102,6 @@ prune_retrain_model = restore_prune_retrain_model (model, input_data, record_fil
 </tbody>
 </table>
 
-
 ## 返回值说明<a name="zh-cn_topic_0240188739_zh-cn_topic_0122830089_section293415513458"></a>
 
 返回修改后可用于稀疏后训练的torch.nn.Module模型。
@@ -117,10 +116,10 @@ model = build_model()
 input_data = tuple([torch.randn(input_shape)])
 save_pth_path = "/your/path/to/save/tmp.pth"
 model.load_state_dict(torch.load(state_dict_path))
- 
+
 # 调用稀疏模型API
 record_file = os.path.join(TMP, 'scale_offset_record.txt')
-prune_retrain_model = amct.restore_prune_retrain_model(           
+prune_retrain_model = amct.restore_prune_retrain_model(
                model,
                input_data,
                record_file,
