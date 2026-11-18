@@ -55,5 +55,5 @@ class ModelOptimizer:
         Return: None
         """
         for model_pass in self.__passes:
-            LOGGER.logi('Do {}'.format(type(model_pass)), 'Optimizer')
+            LOGGER.logd('Do {}'.format(type(model_pass)), 'Optimizer')
             model_pass.run(model)

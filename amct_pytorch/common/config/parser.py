@@ -522,8 +522,8 @@ def _is_layer_supported(mod, name, layer_types, quant_type_comb, quant_config):
     if type(mod).__name__ == 'Conv2d' and mod.padding_mode != 'zeros':
         LOGGER.logd(
             "layer:{} cannot be quantized, act_dtype and wts dtype {} has requirement "
-            "on padding_mode of conv2d, padding_mode should be zero.".format(
-                name, quant_type_comb
+            "on padding_mode of conv2d, padding_mode is {}, but should be zeros.".format(
+                name, quant_type_comb, mod.padding_mode
             )
         )
         return False

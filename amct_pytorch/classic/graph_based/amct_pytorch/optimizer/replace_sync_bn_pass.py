@@ -94,5 +94,5 @@ class RepalceSyncBNPass(BaseModuleFusionPass):
             "Replace Sync BatchNorm with BatchNorm2d({}) successfully!".format(
                 object_name
             ),
-            'RepalceSyncBNPass',
+            'ReplaceSyncBNPass',
         )

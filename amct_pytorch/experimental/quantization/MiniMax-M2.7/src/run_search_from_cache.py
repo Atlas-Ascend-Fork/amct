@@ -1,3 +1,17 @@
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """直接基于「已缓存激活 + safetensors 权重」运行 OSPlus SmoothQuant 搜索。
 
 本脚本用于 stage1 的「仅记录激活」模式（``run_stage1.sh`` 中 ``RECORD_ONLY=1``）
@@ -277,7 +291,7 @@ def main():
             f"elapsed={elapsed:.0f}s ETA={eta:.0f}s"
         )
 
-    print(f"\nDone. All scale files written under {record_dir}")
+    print(f"Done. All scale files written under {record_dir}")
 
 
 if __name__ == "__main__":
