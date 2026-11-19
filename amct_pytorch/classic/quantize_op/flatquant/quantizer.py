@@ -91,7 +91,8 @@ class ActivationQuantizer(torch.nn.Module):
             # per-token scales; the deploy path consumes them as fp32).
             # Doing the division in fp16 instead would overflow x/scale
             # to Inf whenever one token's outlier exceeds ~516x another
-            # element (bits=8), and round_ste(Inf) = Inf - Inf = NaN.
+            # element at bits=8, and the STE round of Inf is Inf - Inf,
+            # which is NaN.
             x = x.to(torch.float16).to(x_dtype)
         scale, zero = self.get_scale_zero(x)
         if self.sym:

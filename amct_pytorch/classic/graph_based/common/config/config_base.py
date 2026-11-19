@@ -599,9 +599,10 @@ class ConfigBase:
         self.root.check(None, quant_config)
         self.root.fill_default(quant_config)
 
-        # enable_shift_value='all' forces FIXED_SHIFT_VALUE_TYPES layers onto
-        # the FP16 path: drop them from quant layers so the quantization
-        # passes skip them and only fixed_shift_value is calibrated.
+        # With enable_shift_value set to 'all', the FIXED_SHIFT_VALUE_TYPES
+        # layers are forced onto the FP16 path: they are dropped from the
+        # quant layers so the quantization passes skip them and only
+        # fixed_shift_value is calibrated.
         if quant_config.get(ENABLE_SHIFT_VALUE) == 'all':
             shift_type_layers = [
                 item

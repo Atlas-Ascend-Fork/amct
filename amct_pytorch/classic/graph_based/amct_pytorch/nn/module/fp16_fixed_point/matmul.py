@@ -296,8 +296,10 @@ def _to_fixed_point_all_tiles(
     exp_tiles = exponent_raw_all.reshape(tiles_shape)
     tile_max_exp = exp_tiles.amax(dim=-1)  # (..., M, T) int32
 
-    # align all elements onto their tile max exponent:
-    # aligned = base - delta, base = 4 (normal) / 5 (subnormal)
+    # Align all elements onto their tile max exponent: each element ends
+    # up as its base minus the delta, with base 4 for normal numbers and
+    # 5 for subnormal numbers (the implicit leading 1 of normals costs one
+    # exponent bit).
     is_normal_tiles = is_normal_all.reshape(tiles_shape)
     exponent_delta = tile_max_exp.unsqueeze(-1) - exp_tiles  # int32
     is_normal_i32 = is_normal_tiles.to(torch.int32)

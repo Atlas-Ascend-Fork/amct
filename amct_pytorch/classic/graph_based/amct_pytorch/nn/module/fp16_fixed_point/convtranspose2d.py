@@ -217,8 +217,9 @@ def _im2col(upsampled_input, kernel_h, kernel_w, dilation_h, dilation_w, out_h, 
     # gather the dilated kernel taps: [cin, kh, out_h, kw, out_w]
     gathered_rows = upsampled_input[:, row_indices]
     patches = gathered_rows[:, :, :, column_indices]
-    # [out_h, out_w, kh, kw, cin]: rows are output positions, columns
-    # run (kh, kw, cin)
+    # Patches are laid out as [out_h, out_w, kh, kw, cin]: rows are output
+    # positions, columns iterate the kernel window in the order
+    # kh, then kw, then cin.
     patches = patches.permute(2, 4, 1, 3, 0)
     return patches.reshape(out_h * out_w, -1)
 
@@ -296,9 +297,9 @@ def convt_f16f16_int32(
         device=x.device,
     )
     if bias is not None:
-        # convt semantics: the scaled bias (LSB = 2**(sv-58) of real
-        # value) is broadcast into the result before the tile loop,
-        # unlike conv2d's after-the-last-tile
+        # Convt semantics: the scaled bias, whose LSB is 2**(sv-58) of
+        # the real value, is broadcast into the result before the tile
+        # loop, unlike conv2d which applies it after the last tile.
         bias_f32 = bias.to(torch.float32)
         bias_int32 = _saturate_to_int32(
             torch.round(bias_f32 * float(1 << (58 - fixed_shift_value)))

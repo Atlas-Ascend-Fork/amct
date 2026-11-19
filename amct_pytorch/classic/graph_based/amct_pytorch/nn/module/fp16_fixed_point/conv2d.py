@@ -295,9 +295,9 @@ def _matmul_f16f16_int32(input_matrix, weight_matrix, bias, fixed_shift_value=42
             factor = torch.where(raw_shift < -26, factor_lo, factor)
             tile_mac.mul_(factor)
 
-        # tile_result = round_half_even(mac * 2**-clamped_shift): the
-        # fp64 multiply is an exact power-of-two scaling, in-place to
-        # avoid per-tile temporaries
+        # Each tile result is mac scaled by an exact power of two
+        # (2**-clamped_shift) and rounded half to even; the fp64 scaling
+        # is exact, done in-place to avoid per-tile temporaries.
         tile_mac.round_()
         if bool(maybe_zero_tile[tile_index]):
             # exact probe on the per-tile unique exponent values

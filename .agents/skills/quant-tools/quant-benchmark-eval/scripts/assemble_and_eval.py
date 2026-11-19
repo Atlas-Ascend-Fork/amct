@@ -638,7 +638,7 @@ def assemble_quant_model(
     seq_len,
     device_map=None,
     quant_target=None,
-    output_dir="/tmp/qbe_out",
+    output_dir="./qbe_out",
     allow_attn_quant=False,
     algos=None,
     trust_remote_code=False,

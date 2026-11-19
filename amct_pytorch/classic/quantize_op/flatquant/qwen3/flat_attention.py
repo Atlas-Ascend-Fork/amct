@@ -289,9 +289,10 @@ class FlatQuantQwen3Attention(FlatQuantModuleBase):
                 hidden_states
             )
         else:
-            # both the training forward and the deploy forward route through the
-            # transform: y = Q(x*M) @ Q(W*M^-T) keeps its activation half
-            # after convert (only the Linear internals change)
+            # Both the training forward and the deploy forward route through
+            # the transform: the output, Q(x*M) @ Q(W*M^-T), keeps its
+            # activation half after convert (only the Linear internals
+            # change).
             query_states, key_states, value_states = self._trans_forward_after_ln(
                 hidden_states
             )
