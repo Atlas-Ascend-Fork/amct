@@ -58,10 +58,11 @@ def test_mxfp8_payload_preserves_weight_and_e8m0_scale_without_offset():
     assert result["x.weight_scale"] is scale
 
 
-def test_hifp8_payload_preserves_uint8_weight_and_row_scale_without_offset():
-    weight = torch.ones(2, 64, dtype=torch.uint8)
+def test_hifp_payload_is_rejected_by_shared_adapter():
+    weight = torch.ones(2, 64, dtype=torch.int8)
     scale = torch.ones(2, 1, dtype=torch.float32)
-    with pytest.raises(ValueError, match="Unsupported deployment quantization scheme"):
+    # DeepSeek V4.1 exports HIFP through its adapter-specific converter.
+    with pytest.raises(ValueError, match="does not support hifp"):
         adapt(
             "x.weight",
             {"x.weight": weight, "x.weight_scale": scale},

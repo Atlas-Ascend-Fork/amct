@@ -1,0 +1,67 @@
+{
+  "quant_layers": [
+    {
+      "pattern": "layers.*.attn.wkv",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "layers.*.attn.wq_a",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "layers.*.attn.wq_b",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "layers.*.attn.indexer.wq_b",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "layers.*.ffn.experts.*.w1",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "layers.*.ffn.experts.*.w2",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "layers.*.ffn.experts.*.w3",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "layers.*.ffn.shared_experts.w1",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "layers.*.ffn.shared_experts.w2",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "layers.*.ffn.shared_experts.w3",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    }
+  ],
+  "ignore_layers": [
+    "mtp.*"
+  ]
+}

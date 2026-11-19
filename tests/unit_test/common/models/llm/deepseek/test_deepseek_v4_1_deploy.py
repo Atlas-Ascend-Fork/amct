@@ -23,14 +23,15 @@ from safetensors.torch import load_file, save_file
 from amct_pytorch.common.models.llm.common.deployment.deploy_selection import (
     DeploySelection,
 )
+from amct_pytorch.common.models.llm.deepseek import deepseek_deploy_common
 from amct_pytorch.common.models.llm.deepseek.deepseek_v4_1 import deepseekv4_1
 from amct_pytorch.common.models.llm.deepseek.deepseek_v4_1.deepseekv4_1 import (
-    BLOCK,
     DeepseekV41,
 )
 from amct_pytorch.quantization.bit_policy import BitPolicy
 
 SHARD = "model.safetensors"
+BLOCK = 32
 MODULE = "model.layers.0.mlp.down_proj"
 MODULE_B = "model.layers.1.mlp.down_proj"
 
@@ -43,7 +44,6 @@ def _args(**overrides):
         "deploy_platform": "A3",
         "quant_dtype": "int",
         "granularity": "tensor",
-        "deploy_format": "ascend",
         "bit_config": None,
         "quant_layers_config": None,
         "deploy_selection": DeploySelection((MODULE,)),
@@ -66,20 +66,14 @@ def _bare_model(tmp_path, *, platform="A3", selection=None):
         model=str(model_dir),
         output_dir=str(output_dir),
         deploy_platform=platform,
-        quant_dtype="int" if platform == "A3" else "mxfp",
-        deploy_format="ascend" if platform == "A3" else "legacy",
+        quant_dtype="int",
         deploy_selection=selection or DeploySelection((MODULE,)),
     )
     model.model_path = model_dir
     model.output_dir = output_dir
     model.safetensors_files = frozenset()
     model.processed_modules = set()
-    model.config = {
-        "text_config": {
-            "kv_source_layer_ids": [1],
-            "index_source_layers": [2],
-        }
-    }
+    model.config = {}
     return model
 
 
@@ -88,33 +82,6 @@ def _write_shard(model, tensors, filename=SHARD):
     save_file(tensors, str(path))
     model.safetensors_files = frozenset({path.resolve()})
     return path
-
-
-@pytest.mark.parametrize(
-    "platform,dtype",
-    [("A3", "int"), ("ascend950", "int"), ("ascend950", "mxfp")],
-)
-def test_validate_platform_accepts_supported_pairs(platform, dtype):
-    assert (
-        DeepseekV41._validate_platform(
-            SimpleNamespace(deploy_platform=platform, quant_dtype=dtype)
-        )
-        == platform
-    )
-
-
-@pytest.mark.parametrize(
-    "platform,dtype,message",
-    [
-        ("A2", "int", "A3 or ascend950"),
-        ("A3", "mxfp", "requires --quant_dtype int"),
-    ],
-)
-def test_validate_platform_rejects_unsupported_pairs(platform, dtype, message):
-    with pytest.raises(ValueError, match=message):
-        DeepseekV41._validate_platform(
-            SimpleNamespace(deploy_platform=platform, quant_dtype=dtype)
-        )
 
 
 @pytest.mark.parametrize("platform", ["A3", "ascend950"])
@@ -156,7 +123,6 @@ def test_validate_deploy_source_rejects_wrong_mode_and_invalid_config(tmp_path):
             {
                 "deploy_platform": "ascend950",
                 "quant_dtype": "mxfp",
-                "deploy_format": "ascend",
             },
             "temporarily unsupported",
         ),
@@ -164,7 +130,6 @@ def test_validate_deploy_source_rejects_wrong_mode_and_invalid_config(tmp_path):
             {
                 "deploy_platform": "ascend950",
                 "quant_dtype": "mxfp",
-                "deploy_format": "legacy",
                 "bit_config": "bits.yaml",
             },
             "temporarily unsupported",
@@ -179,6 +144,11 @@ def test_validate_deploy_source_rejects_wrong_mode_and_invalid_config(tmp_path):
 def test_validate_deploy_args_rejects_incompatible_options(overrides, message):
     with pytest.raises((ValueError, NotImplementedError), match=message):
         DeepseekV41.validate_deploy_args(_args(**overrides))
+
+
+def test_validate_deploy_args_requires_model_name():
+    with pytest.raises(ValueError, match="--model_name is required"):
+        DeepseekV41.validate_deploy_args(_args(model_name=""))
 
 
 def test_validate_deploy_args_loads_selection_and_sets_empty_bit_policy(tmp_path):
@@ -205,7 +175,7 @@ def test_prepare_structured_plan_does_not_override_platform_scheme(tmp_path):
     model = _bare_model(tmp_path, selection=selection)
     _write_shard(model, {f"{MODULE}.weight": torch.ones(2, 2)})
 
-    with pytest.raises(ValueError, match="does not support quant_dtype 'mxfp'"):
+    with pytest.raises(ValueError, match="does not support quant_dtype"):
         model.prepare_tensor_deploy_plan({f"{MODULE}.weight": SHARD})
 
 
@@ -242,24 +212,6 @@ def test_init_rejects_unsafe_output_directories(tmp_path, output_kind):
         DeepseekV41(_args(model=str(model_dir), output_dir=str(output_dir)))
 
 
-@pytest.mark.parametrize(
-    "weight_dtype,weight_shape,scale_dtype,scale_shape,expected",
-    [
-        ("F8_E4M3", (32, 64), "F8_E8M0", (1, 2), True),
-        ("F16", (32, 64), "F8_E8M0", (1, 2), False),
-        ("F8_E4M3", (31, 64), "F8_E8M0", (1, 2), False),
-        ("F8_E4M3", (32, 64), "F8_E8M0", (1, 1), False),
-    ],
-)
-def test_is_block_fp8_requires_matching_32x32_layout(
-    weight_dtype, weight_shape, scale_dtype, scale_shape, expected
-):
-    assert (
-        DeepseekV41._is_block_fp8(weight_dtype, weight_shape, scale_dtype, scale_shape)
-        is expected
-    )
-
-
 @pytest.mark.parametrize("platform", ["A3", "ascend950"])
 def test_prepare_a3_plan_resolves_selected_ignored_and_mtp_modules(tmp_path, platform):
     ignored = "model.layers.0.mlp.gate_proj"
@@ -294,57 +246,6 @@ def test_prepare_a3_plan_rejects_non_matrix_selection(tmp_path):
         model.prepare_tensor_deploy_plan({f"{MODULE}.weight": SHARD})
 
 
-def test_prepare_950_plan_rejects_unselected_fp8_candidate(tmp_path, monkeypatch):
-    selected = "model.layers.0.mlp.gate_proj"
-    model = _bare_model(
-        tmp_path,
-        platform="ascend950",
-        selection=DeploySelection((selected,)),
-    )
-    scale = torch.ones((1, 1), dtype=torch.uint8).view(torch.float8_e8m0fnu)
-    tensors = {
-        f"{MODULE}.weight": torch.ones((32, 32), dtype=torch.float8_e4m3fn),
-        f"{MODULE}.scale": scale,
-        f"{selected}.weight": torch.ones(2, 2),
-    }
-    _write_shard(model, tensors)
-    monkeypatch.setattr(model, "_make_legacy_quant_config", dict)
-
-    with pytest.raises(ValueError, match="not selected"):
-        model.prepare_tensor_deploy_plan(dict.fromkeys(tensors, SHARD))
-
-
-def test_prepare_950_plan_detects_fp8_pair_across_shards(tmp_path):
-    model = _bare_model(tmp_path, platform="ascend950")
-    weight_name = f"{MODULE}.weight"
-    scale_name = f"{MODULE}.scale"
-    _write_shard(
-        model,
-        {weight_name: torch.ones((32, 64), dtype=torch.float8_e4m3fn)},
-        "weight.safetensors",
-    )
-    scale_path = model.model_path / "scale.safetensors"
-    save_file(
-        {scale_name: torch.ones((1, 2), dtype=torch.uint8).view(torch.float8_e8m0fnu)},
-        str(scale_path),
-    )
-    model.safetensors_files = frozenset(
-        {
-            (model.model_path / "weight.safetensors").resolve(),
-            scale_path.resolve(),
-        }
-    )
-    weight_map = {
-        weight_name: "weight.safetensors",
-        scale_name: "scale.safetensors",
-    }
-
-    plan = model.prepare_tensor_deploy_plan(weight_map)
-
-    assert plan.selected_modules == {MODULE}
-    assert plan.quant_layers == {MODULE: 8}
-
-
 def test_convert_a3_shard_dequantizes_then_exports_selected_weight(
     tmp_path, monkeypatch
 ):
@@ -372,7 +273,7 @@ def test_convert_a3_shard_dequantizes_then_exports_selected_weight(
         calls.append((args, kwargs))
         return weight.to(torch.bfloat16)
 
-    monkeypatch.setattr(deepseekv4_1, "convert_state_dict", fake_convert)
+    monkeypatch.setattr(deepseek_deploy_common, "convert_state_dict", fake_convert)
     weight_map = {
         weight_name: SHARD,
         scale_name: scale_shard,
@@ -521,13 +422,13 @@ def test_convert_a3_shard_reads_scales_without_loading_their_shards(
     model.safetensors_files = frozenset(path.resolve() for path in paths)
 
     loaded = []
-    real_load_file = deepseekv4_1.load_file
+    real_load_file = deepseek_deploy_common.load_file
 
     def counting_load_file(path, **kwargs):
         loaded.append(Path(path).name)
         return real_load_file(path, **kwargs)
 
-    monkeypatch.setattr(deepseekv4_1, "load_file", counting_load_file)
+    monkeypatch.setattr(deepseek_deploy_common, "load_file", counting_load_file)
     quant_layers = dict.fromkeys((MODULE, MODULE_B), 8)
     for module in (MODULE, MODULE_B):
         model.convert_tensorwise_shard(
@@ -591,8 +492,8 @@ def test_convert_a3_shard_evicts_scale_handles_beyond_the_bound(tmp_path, monkey
         },
     )
 
-    monkeypatch.setattr(deepseekv4_1, "MAX_OPEN_SCALE_FILES", 1)
-    real_read = deepseekv4_1.DeepseekV41._read_source_scale
+    monkeypatch.setattr(deepseek_deploy_common, "MAX_OPEN_SCALE_FILES", 1)
+    real_read = deepseek_deploy_common.DeepSeekTensorwiseDeployCommon._read_source_scale
     peak = {"handles": 0}
 
     def tracking_read(self, model_dir, scale_file, scale_name, open_files):
@@ -625,7 +526,7 @@ def test_read_source_scale_caches_shard_keys_per_handle(tmp_path, monkeypatch):
         {MODULE: "scales-a.safetensors", MODULE_B: "scales-a.safetensors"},
     )
 
-    real_safe_open = deepseekv4_1.safe_open
+    real_safe_open = deepseek_deploy_common.safe_open
     calls = {"keys": 0, "opens": 0}
 
     class CountingHandle:
@@ -643,7 +544,7 @@ def test_read_source_scale_caches_shard_keys_per_handle(tmp_path, monkeypatch):
         calls["opens"] += 1
         return CountingHandle(real_safe_open(*args, **kwargs))
 
-    monkeypatch.setattr(deepseekv4_1, "safe_open", counting_safe_open)
+    monkeypatch.setattr(deepseek_deploy_common, "safe_open", counting_safe_open)
 
     model.convert_tensorwise_shard(
         SHARD,
@@ -658,88 +559,15 @@ def test_read_source_scale_caches_shard_keys_per_handle(tmp_path, monkeypatch):
     assert model.processed_modules == {MODULE, MODULE_B}
 
 
-def test_prepare_int_scale_expands_e8m0_rows_for_block_fp8():
+def test_prepare_int_scale_converts_e8m0_to_uint8():
     weight = torch.ones((32, 64), dtype=torch.float8_e4m3fn)
     scale = torch.ones((1, 2), dtype=torch.uint8).view(torch.float8_e8m0fnu)
 
     result = DeepseekV41._prepare_int_scale(weight, scale)
 
     assert result.dtype == torch.uint8
-    assert result.shape == (32, 2)
-    assert torch.equal(result, torch.ones(32, 2, dtype=torch.uint8))
-
-
-def test_convert_950_shard_expands_only_selected_fp8_scale(tmp_path):
-    model = _bare_model(tmp_path, platform="ascend950")
-    scale = torch.ones((1, 1), dtype=torch.uint8).view(torch.float8_e8m0fnu)
-    tensors = {
-        f"{MODULE}.weight": torch.ones((32, 32), dtype=torch.float8_e4m3fn),
-        f"{MODULE}.scale": scale,
-        "model.norm.weight": torch.ones(32),
-    }
-    _write_shard(model, tensors)
-
-    plan = model.prepare_tensor_deploy_plan(dict.fromkeys(tensors, SHARD))
-    routing = model.convert_tensorwise_shard(
-        SHARD,
-        model.model_path,
-        dict.fromkeys(tensors, SHARD),
-        plan.quant_layers,
-        {},
-    )
-    output = load_file(str(model.output_dir / SHARD))
-
-    assert output[f"{MODULE}.scale"].shape == (32, 1)
-    assert output[f"{MODULE}.scale"].dtype == torch.float8_e8m0fnu
-    assert output["model.norm.weight"].shape == (32,)
-    assert routing == dict.fromkeys(output, SHARD)
-    assert plan.selected_modules == {MODULE}
-    assert model.processed_modules == {MODULE}
-
-
-def test_convert_950_shard_expands_fp8_scale_from_other_shard(tmp_path):
-    model = _bare_model(tmp_path, platform="ascend950")
-    weight_name = f"{MODULE}.weight"
-    scale_name = f"{MODULE}.scale"
-    weight = (
-        torch.arange(32 * 32, dtype=torch.float32)
-        .reshape(32, 32)
-        .to(torch.float8_e4m3fn)
-    )
-    scale = torch.ones((1, 1), dtype=torch.uint8).view(torch.float8_e8m0fnu)
-    _write_shard(model, {weight_name: weight}, "weight.safetensors")
-    scale_path = model.model_path / "scale.safetensors"
-    save_file({scale_name: scale}, str(scale_path))
-    model.safetensors_files = frozenset(
-        {
-            (model.model_path / "weight.safetensors").resolve(),
-            scale_path.resolve(),
-        }
-    )
-    weight_map = {
-        weight_name: "weight.safetensors",
-        scale_name: "scale.safetensors",
-    }
-
-    plan = model.prepare_tensor_deploy_plan(weight_map)
-    routing = {}
-    for source_file in sorted(set(weight_map.values())):
-        routing.update(
-            model.convert_tensorwise_shard(
-                source_file, model.model_path, weight_map, plan.quant_layers, {}
-            )
-        )
-    output_scale = load_file(str(model.output_dir / "scale.safetensors"))[scale_name]
-    output_weight = load_file(str(model.output_dir / "weight.safetensors"))[weight_name]
-
-    assert output_scale.shape == (32, 1)
-    assert output_scale.dtype == torch.float8_e8m0fnu
-    assert torch.equal(output_weight.view(torch.uint8), weight.view(torch.uint8))
-    assert routing == {
-        weight_name: "weight.safetensors",
-        scale_name: "scale.safetensors",
-    }
-    assert model.processed_modules == {MODULE}
+    assert result.shape == (1, 2)
+    assert torch.equal(result, torch.ones(1, 2, dtype=torch.uint8))
 
 
 def test_validate_tensorwise_result_requires_exact_processed_set(tmp_path):
@@ -753,49 +581,8 @@ def test_validate_tensorwise_result_requires_exact_processed_set(tmp_path):
         model.validate_tensorwise_result(plan)
 
 
-@pytest.mark.parametrize(
-    "fields,message",
-    [
-        ({"kv_source_layers": [1], "kv_source_layer_ids": [2]}, "Conflicting"),
-        ({"kv_source_layers": None}, "list of layer indices"),
-        ({"kv_source_layers": [True]}, "list of layer indices"),
-        ({"kv_source_layers": [-1]}, "list of layer indices"),
-    ],
-)
-def test_source_layers_rejects_conflicting_or_invalid_values(fields, message):
-    with pytest.raises(ValueError, match=message):
-        DeepseekV41._source_layers(fields, "kv_source_layers", "kv_source_layer_ids")
-
-
-def test_make_legacy_quant_config_uses_source_layers_and_memoryless_observer(
-    tmp_path,
-):
-    model = _bare_model(tmp_path, platform="ascend950")
-
-    config = model._make_legacy_quant_config()
-
-    assert config["format"] == "float-quantized"
-    assert config["weight_block_size"] == [1, 32]
-    assert config["ignore"] == [
-        "layers.2.attn.indexer.weights_proj",
-        "layers.2.attn.indexer.compressor.wgate",
-        "layers.2.attn.indexer.compressor.wkv",
-        "layers.1.attn.compressor.wgate",
-        "layers.1.attn.compressor.wkv",
-        "head",
-    ]
-    assert {
-        (group["targets"][0], group["weights"]["num_bits"])
-        for group in config["config_groups"].values()
-    } == {("Linear", 8), ("MoEGMM", 4)}
-    assert all(
-        group["input_activations"]["observer"] == "memoryless"
-        for group in config["config_groups"].values()
-    )
-
-
 @pytest.mark.parametrize("platform", ["A3", "ascend950"])
-def test_refresh_config_writes_platform_contract_without_mutating_source(
+def test_refresh_config_removes_source_quantization_config_without_mutating_source(
     tmp_path, platform
 ):
     model = _bare_model(tmp_path, platform=platform)
@@ -806,31 +593,9 @@ def test_refresh_config_writes_platform_contract_without_mutating_source(
 
     written = json.loads((model.output_dir / "config.json").read_text())
     assert model.config == original
-    if platform == "A3":
-        assert written["quantization_config"] == {
-            "quant_method": "ascend",
-            "model_quant_type": "W8A8_DYNAMIC",
-        }
-    else:
-        assert written["quantization_config"]["format"] == "float-quantized"
-
-
-def test_make_description_dispatches_by_platform(tmp_path):
-    model = _bare_model(tmp_path)
-    names = {
-        f"{MODULE}.weight",
-        f"{MODULE}.weight_scale",
-        f"{MODULE}.weight_offset",
-    }
-
-    description = model.make_description(names, frozenset({MODULE}))
-
-    assert description[f"{MODULE}.weight"] == "W8A8_DYNAMIC"
-
-    model.args.deploy_platform = "ascend950"
-    model.args.quant_dtype = "mxfp"
-    with pytest.raises(NotImplementedError, match="not implemented"):
-        model.make_description(names, frozenset({MODULE}))
+    expected = dict(original)
+    expected.pop("quantization_config")
+    assert written == expected
 
 
 @pytest.mark.parametrize("platform", ["A3", "ascend950"])
@@ -878,7 +643,7 @@ def test_cli_int_json_reaches_model_validation(
 
 @pytest.mark.parametrize("platform", ["A3", "ascend950"])
 @pytest.mark.parametrize("dtype", ["mxfp", "fp"])
-def test_model_validator_rejects_non_int_dtype(platform, dtype):
+def test_model_validator_rejects_unsupported_dtype(platform, dtype):
     with pytest.raises(
         NotImplementedError, match=f"quant_dtype '{dtype}' is temporarily unsupported"
     ):
@@ -888,25 +653,34 @@ def test_model_validator_rejects_non_int_dtype(platform, dtype):
 
 
 @pytest.mark.parametrize("platform", ["A3", "ascend950"])
-def test_int_output_metadata_on_both_platforms(tmp_path, platform):
+def test_int_refresh_config_removes_quantization_metadata_on_both_platforms(
+    tmp_path, platform
+):
     model = _bare_model(tmp_path)
     model.args.deploy_platform = platform
     model.refresh_config([])
     config = json.loads((model.output_dir / "config.json").read_text())
-    assert config["quantization_config"] == {
-        "quant_method": "ascend",
-        "model_quant_type": "W8A8_DYNAMIC",
-    }
+    assert "quantization_config" not in config
     names = {
         MODULE + suffix for suffix in (".weight", ".weight_scale", ".weight_offset")
     }
-    description = model.make_description(names, frozenset({MODULE}))
+    from amct_pytorch.common.models.llm.common.deployment.deploy_export import (
+        make_description_from_plan,
+    )
+    from amct_pytorch.common.models.llm.common.deployment.deploy_selection import (
+        QuantSpec,
+    )
+
+    plan = SimpleNamespace(
+        module_quant_specs={MODULE: QuantSpec("int", 8, 8)},
+        selected_modules=frozenset({MODULE}),
+    )
+    description = make_description_from_plan(names, plan)
     assert description[MODULE + ".weight"] == "W8A8_DYNAMIC"
 
 
-@pytest.mark.parametrize("dtype", ["mxfp", "hifp"])
 @pytest.mark.parametrize("cli_dtype", ["", "int"])
-def test_json_non_int_cannot_bypass_validation(tmp_path, dtype, cli_dtype):
+def test_json_mxfp_cannot_bypass_validation(tmp_path, cli_dtype):
     from amct_pytorch.common.models.llm.common.deployment.deploy_selection import (
         prepare_deploy_args,
     )
@@ -918,7 +692,7 @@ def test_json_non_int_cannot_bypass_validation(tmp_path, dtype, cli_dtype):
                 "quant_layers": [
                     {
                         "pattern": MODULE,
-                        "quant_dtype": dtype,
+                        "quant_dtype": "mxfp",
                         "w_bits": 8,
                         "a_bits": 8,
                     }
@@ -931,12 +705,76 @@ def test_json_non_int_cannot_bypass_validation(tmp_path, dtype, cli_dtype):
         quant_dtype=cli_dtype,
         quant_layers_config=str(config),
     )
-    error = NotImplementedError if dtype == "hifp" or not cli_dtype else ValueError
-    message = (
-        "temporarily unsupported"
-        if dtype == "hifp" or not cli_dtype
-        else "does not match"
-    )
+    error = ValueError if cli_dtype else NotImplementedError
+    message = "does not match" if cli_dtype else "temporarily unsupported"
     with pytest.raises(error, match=message):
         prepare_deploy_args(args)
         DeepseekV41.validate_deploy_args(args)
+
+
+@pytest.mark.parametrize(
+    "platform,dtype,quant_type",
+    [
+        ("A3", "int", "W8A8_DYNAMIC"),
+        ("ascend950", "int", "W8A8_DYNAMIC"),
+        ("ascend950", "hifp", "W8A8_HIFP8"),
+    ],
+)
+def test_workflow_uses_shared_description(
+    tmp_path, monkeypatch, platform, dtype, quant_type
+):
+    from amct_pytorch.common.models.llm.common.deployment.deploy_selection import (
+        QuantLayerRule,
+        QuantSpec,
+    )
+    from amct_pytorch.workflows.llm_deploy import LlmDeployWorkflow
+
+    selection = DeploySelection((QuantLayerRule(MODULE, QuantSpec(dtype, 8, 8)),))
+    model = _bare_model(tmp_path, platform=platform, selection=selection)
+    model.args.quant_dtype = dtype
+    model.config = {"quantization_config": {"quant_method": "fp8"}}
+    (model.model_path / "config.json").write_text(json.dumps(model.config))
+    tensors = {
+        MODULE + ".weight": torch.ones(2, 32, dtype=torch.bfloat16),
+        MODULE_B + ".weight": torch.ones(2, 32, dtype=torch.bfloat16),
+    }
+    _write_shard(model, tensors)
+    # Only the hardware encoder is mocked; selection, converter, description,
+    # config, index and artifact validation execute their real implementations.
+    if dtype == "hifp":
+        monkeypatch.setattr(
+            deepseek_deploy_common,
+            "hif8_pack",
+            lambda weight: (
+                torch.ones_like(weight, dtype=torch.uint8),
+                torch.ones(weight.shape[0], 1, dtype=torch.float32),
+            ),
+        )
+    assert not hasattr(model, "make_description")
+    workflow = LlmDeployWorkflow.__new__(LlmDeployWorkflow)
+    workflow.pipeline = model
+    workflow.args = model.args
+    workflow.model_path = str(model.model_path)
+    workflow.output_dir = str(model.output_dir)
+    workflow.safetensors_files = model.safetensors_files
+    workflow.deploy_plan = model.prepare_tensor_deploy_plan(
+        dict.fromkeys(tensors, SHARD)
+    )
+    result = workflow._run_tensorwise()
+    description = json.loads(Path(result["description_path"]).read_text())
+    expected = {
+        "version": "1.0.0",
+        "model_quant_type": quant_type,
+        "metadata": {},
+        "group_size": 0,
+        MODULE + ".weight": quant_type,
+        MODULE + ".weight_scale": quant_type,
+        MODULE_B + ".weight": "FLOAT",
+    }
+    if dtype == "int":
+        expected.update({"is_rot_used": False, MODULE + ".weight_offset": quant_type})
+    else:
+        expected["optional"] = {}
+    assert description == expected
+    report = json.loads(Path(result["validation_path"]).read_text())
+    assert report["status"] == "passed", report

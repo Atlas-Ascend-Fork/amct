@@ -199,16 +199,13 @@ def get_structured_quant_spec(selection, module_name):
 
 
 def _validate_quant_spec(spec, path):
-    if spec.quant_dtype == "hifp":
-        raise NotImplementedError(
-            f"{path}: Tensor deployment with quant_dtype 'hifp' is temporarily unsupported"
-        )
     if not isinstance(spec.quant_dtype, str) or spec.quant_dtype not in {
         "int",
         "mxfp",
+        "hifp",
     }:
         raise ValueError(
-            f"{path}.quant_dtype={spec.quant_dtype!r}: expected 'int' or 'mxfp'"
+            f"{path}.quant_dtype={spec.quant_dtype!r}: expected 'int', 'mxfp', or 'hifp'"
         )
     for field, value in (
         ("w_bits", spec.weight_bits),
@@ -486,13 +483,6 @@ def prepare_deploy_args(args) -> None:
     supported quantization contract, and checks the requested platform. Weight
     and model-structure checks happen later in the deploy workflow.
     """
-    if (
-        getattr(args, "granularity", None) == "tensor"
-        and getattr(args, "quant_dtype", None) == "hifp"
-    ):
-        raise NotImplementedError(
-            f"Tensor deployment with quant_dtype '{args.quant_dtype}' is temporarily unsupported"
-        )
     validate_deploy_cli_args(args)
     if getattr(args, "granularity", None) == "tensor":
         _prepare_tensor_deploy_args(args)

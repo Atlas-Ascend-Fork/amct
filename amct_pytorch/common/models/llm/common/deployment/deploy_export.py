@@ -362,6 +362,11 @@ def adapt_payload(
     scheme = get_quant_scheme(QuantSchemeKey(quant_dtype, weight_bits, activation_bits))
     weight = payload[weight_name]
     scale = payload[scale_name]
+    if scheme.quant_dtype == "hifp":
+        raise ValueError(
+            "Shared payload adapter does not support hifp; "
+            "use the adapter-specific HiFloat8 exporter"
+        )
     if scheme.quant_dtype == "mxfp":
         weight_dtype = torch.uint8 if scheme.weight_bits == 4 else torch.float8_e4m3fn
         # MXFP4 stores two E2M1 values per byte along the input dimension.
@@ -412,36 +417,56 @@ def make_description(
     quant_dtype: str = "int",
     weight_bits: int = 8,
     activation_bits: int = 8,
+    module_quant_specs=None,
 ) -> dict:
     """Describe exactly the tensors written by the shared shard exporter."""
-    scheme = get_quant_scheme(QuantSchemeKey(quant_dtype, weight_bits, activation_bits))
-    quant_type = scheme.model_quant_type
-    suffixes = scheme.tensor_suffixes
-    description = scheme.globals_dict()
-    unexpected_auxiliary = {
-        module + ".weight_offset"
-        for module in selected_modules
-        if ".weight_offset" not in suffixes
-    } & output_tensor_names
-    if unexpected_auxiliary:
+    default_key = QuantSchemeKey(quant_dtype, weight_bits, activation_bits)
+    default_scheme = get_quant_scheme(default_key)
+    if module_quant_specs is None:
+        module_quant_specs = {module: default_key for module in selected_modules}
+    missing_specs = set(selected_modules) - set(module_quant_specs)
+    if missing_specs:
         raise ValueError(
-            f"{quant_type} output must not contain weight_offset: "
-            f"{sorted(unexpected_auxiliary)}"
+            "Deployment description is missing quantization specs for modules: "
+            f"{sorted(missing_specs)}"
         )
-    dynamic_names = {
-        module + suffix for module in selected_modules for suffix in suffixes
-    }
-    missing = dynamic_names - output_tensor_names
-    if missing:
-        raise ValueError(
-            f"Deployment output is missing quantized tensors: {sorted(missing)}"
+
+    schemes = {}
+    for module in selected_modules:
+        spec = module_quant_specs[module]
+        key = (
+            spec
+            if isinstance(spec, QuantSchemeKey)
+            else QuantSchemeKey(
+                spec.quant_dtype, spec.weight_bits, spec.activation_bits
+            )
         )
-    description.update(
-        {
-            name: quant_type if name in dynamic_names else "FLOAT"
-            for name in sorted(output_tensor_names)
+        schemes[module] = get_quant_scheme(key)
+
+    # Description-level fields are shared by the existing contract. Preserve
+    # the caller-selected scheme for these legacy fields; tensor entries below
+    # carry the actual per-module schemes.
+    description = default_scheme.globals_dict()
+    for module, scheme in schemes.items():
+        unexpected_auxiliary = {module + ".weight_offset"} - {
+            module + suffix for suffix in scheme.tensor_suffixes
         }
-    )
+        unexpected_auxiliary &= output_tensor_names
+        if unexpected_auxiliary:
+            raise ValueError(
+                f"{scheme.model_quant_type} output must not contain weight_offset: "
+                f"{sorted(unexpected_auxiliary)}"
+            )
+        module_tensor_names = {module + suffix for suffix in scheme.tensor_suffixes}
+        missing = module_tensor_names - output_tensor_names
+        if missing:
+            raise ValueError(
+                f"Deployment output is missing quantized tensors: {sorted(missing)}"
+            )
+    description.update({name: "FLOAT" for name in sorted(output_tensor_names)})
+    for module, scheme in schemes.items():
+        for suffix in scheme.tensor_suffixes:
+            description[module + suffix] = scheme.model_quant_type
     return description
 
 
@@ -450,15 +475,6 @@ def make_description_from_plan(output_tensor_names: set[str], plan) -> dict:
     specs = tuple(plan.module_quant_specs.values())
     if not specs:
         raise ValueError("Deployment description requires a nonempty deployment plan")
-    scheme_keys = {
-        QuantSchemeKey(spec.quant_dtype, spec.weight_bits, spec.activation_bits)
-        for spec in specs
-    }
-    if len(scheme_keys) != 1:
-        raise ValueError(
-            "Deployment description requires one quantization scheme per model, "
-            f"got {sorted((key.quant_dtype, key.weight_bits, key.activation_bits) for key in scheme_keys)}"
-        )
     spec = specs[0]
     return make_description(
         output_tensor_names,
@@ -466,4 +482,5 @@ def make_description_from_plan(output_tensor_names: set[str], plan) -> dict:
         quant_dtype=spec.quant_dtype,
         weight_bits=spec.weight_bits,
         activation_bits=spec.activation_bits,
+        module_quant_specs=plan.module_quant_specs,
     )

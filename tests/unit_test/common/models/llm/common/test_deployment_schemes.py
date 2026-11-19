@@ -50,6 +50,7 @@ def test_missing_deploy_platform_defaults_to_a3():
     [
         (QuantSchemeKey("int", 8, 8), "W8A8_DYNAMIC"),
         (QuantSchemeKey("mxfp", 8, 8), "W8A8_MXFP8"),
+        (QuantSchemeKey("hifp", 8, 8), "W8A8_HIFP8"),
     ],
 )
 def test_supported_ascend_scheme_has_vllm_metadata(key, model_quant_type):
@@ -64,7 +65,7 @@ def test_supported_ascend_scheme_has_vllm_metadata(key, model_quant_type):
     [
         QuantSchemeKey("fp", 8, 8),
         QuantSchemeKey("int", 4, 8),
-        QuantSchemeKey("hifp", 8, 8),
+        QuantSchemeKey("hifp", 4, 8),
     ],
 )
 def test_unsupported_ascend_scheme_is_rejected(key):

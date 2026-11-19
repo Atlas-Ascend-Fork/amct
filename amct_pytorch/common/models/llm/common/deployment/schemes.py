@@ -59,6 +59,7 @@ class QuantScheme:
 _INT_W8A8 = QuantSchemeKey("int", 8, 8)
 _MXFP_W8A8 = QuantSchemeKey("mxfp", 8, 8)
 _MXFP_W4A8 = QuantSchemeKey("mxfp", 4, 8)
+_HIFP_W8A8 = QuantSchemeKey("hifp", 8, 8)
 
 QUANT_SCHEMES = {
     _INT_W8A8: QuantScheme(
@@ -106,11 +107,26 @@ QUANT_SCHEMES = {
             ("optional", {}),
         ),
     ),
+    _HIFP_W8A8: QuantScheme(
+        key=_HIFP_W8A8,
+        model_quant_type="W8A8_HIFP8",
+        group_size=0,
+        tensor_suffixes=(".weight", ".weight_scale"),
+        weight_dtype="U8",
+        scale_dtype="F32",
+        global_fields=(
+            ("version", "1.0.0"),
+            ("model_quant_type", "W8A8_HIFP8"),
+            ("metadata", {}),
+            ("group_size", 0),
+            ("optional", {}),
+        ),
+    ),
 }
 
 PLATFORM_QUANT_DTYPES = {
     "A3": frozenset({"int"}),
-    "ascend950": frozenset({"int", "mxfp"}),
+    "ascend950": frozenset({"int", "mxfp", "hifp"}),
 }
 DEFAULT_DEPLOY_PLATFORM = "A3"
 
@@ -130,7 +146,7 @@ def get_quant_scheme(key: QuantSchemeKey) -> QuantScheme:
             f"({getattr(key, 'quant_dtype', None)!r}, "
             f"{getattr(key, 'weight_bits', None)!r}, "
             f"{getattr(key, 'activation_bits', None)!r}); "
-            "supported schemes are int/W8A8, mxfp/W8A8, mxfp/W4A8"
+            "supported schemes are int/W8A8, mxfp/W8A8, mxfp/W4A8, hifp/W8A8"
         ) from exc
 
 
@@ -164,19 +180,13 @@ def validate_platform_quant_scheme(selection, deploy_platform: str) -> QuantSche
             f"Unsupported Deployment platform: {deploy_platform!r}"
         ) from exc
     scheme = validate_selection_quant_scheme(selection)
-    if scheme.quant_dtype not in allowed:
-        supported_platforms = sorted(
-            platform
-            for platform, dtypes in PLATFORM_QUANT_DTYPES.items()
-            if platform != deploy_platform and scheme.quant_dtype in dtypes
-        )
-        hint = (
-            f" Use --deploy_platform {' or '.join(supported_platforms)}."
-            if supported_platforms
-            else ""
-        )
-        raise ValueError(
-            f"Deployment platform {deploy_platform} does not support quant_dtype "
-            f"{scheme.quant_dtype!r}; supported values: {sorted(allowed)}.{hint}"
-        )
+    rules = getattr(selection, "quant_layers", None)
+    for rule in rules:
+        spec = getattr(rule, "quant_spec", None)
+        if spec is None:
+            raise ValueError("Deployment JSON requires structured quant_layers rules")
+        if spec.quant_dtype not in allowed:
+            raise ValueError(
+                f"Deployment platform {deploy_platform} does not support quant_dtype "
+            )
     return scheme

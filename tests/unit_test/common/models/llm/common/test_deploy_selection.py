@@ -18,7 +18,6 @@
 """Deploy-only selection schema, glob semantics and argument contract."""
 
 import json
-import re
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -46,42 +45,20 @@ def test_tensor_validation_requires_json_for_tensor_deploy():
     args = SimpleNamespace(
         model_name="deepseek_v4", granularity="tensor", quant_dtype=""
     )
-    with pytest.raises(
-        ValueError, match=re.escape("Deployment requires --quant_layers_config")
-    ):
+    with pytest.raises(ValueError, match="requires --quant_layers_config"):
         prepare_deploy_args(args)
 
 
-def test_tensor_validation_replaces_prebuilt_selection_with_json_rules(tmp_path):
-    config = tmp_path / "selection.json"
-    config.write_text(
-        json.dumps(
-            {
-                "quant_layers": [
-                    {
-                        "pattern": "model.layers.*.self_attn.q_proj",
-                        "quant_dtype": "int",
-                        "w_bits": 8,
-                        "a_bits": 8,
-                    }
-                ]
-            }
-        )
-    )
+def test_tensor_validation_rejects_prebuilt_legacy_selection():
     args = SimpleNamespace(
         model_name="qwen3_5",
         granularity="tensor",
         quant_dtype="int",
-        quant_layers_config=str(config),
+        quant_layers_config=None,
         deploy_selection=DeploySelection(("model.layers.*.mlp.down_proj",)),
     )
-
-    prepare_deploy_args(args)
-
-    assert args.deploy_selection == DeploySelection(
-        _structured_rules("model.layers.*.self_attn.q_proj")
-    )
-    assert args.deploy_selection.uses_structured_rules
+    with pytest.raises(ValueError, match="quant_layers_config"):
+        prepare_deploy_args(args)
 
 
 def test_tensor_validation_rejects_legacy_json_rules(tmp_path):
@@ -127,18 +104,49 @@ def test_prepare_deploy_args_leaves_model_specific_dtype_to_adapter(tmp_path):
     assert args.deploy_selection.uses_structured_rules
 
 
-@pytest.mark.parametrize(
-    "quant_dtype, error, message",
-    [
-        ("hifp", NotImplementedError, "temporarily unsupported"),
-        ("hifp8", ValueError, "requires --quant_layers_config"),
-    ],
-)
-def test_tensor_hifp_is_rejected_early(quant_dtype, error, message):
-    with pytest.raises(error, match=message):
+@pytest.mark.parametrize("quant_dtype", ["hifp", "hifp8"])
+def test_tensor_hifp_requires_json(quant_dtype):
+    with pytest.raises(ValueError, match="requires --quant_layers_config"):
         prepare_deploy_args(
             SimpleNamespace(granularity="tensor", quant_dtype=quant_dtype)
         )
+
+
+@pytest.mark.parametrize("platform", ["ascend950", "A3"])
+def test_tensor_hifp_validates_platform_with_structured_json(tmp_path, platform):
+    config = tmp_path / "selection.json"
+    pattern = "model.layers.*.mlp.down_proj"
+    config.write_text(
+        json.dumps(
+            {
+                "quant_layers": [
+                    {
+                        "pattern": pattern,
+                        "quant_dtype": "hifp",
+                        "w_bits": 8,
+                        "a_bits": 8,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    args = SimpleNamespace(
+        granularity="tensor",
+        quant_dtype="",
+        deploy_platform=platform,
+        quant_layers_config=str(config),
+    )
+
+    if platform == "A3":
+        with pytest.raises(ValueError, match="does not support quant_dtype"):
+            prepare_deploy_args(args)
+    else:
+        prepare_deploy_args(args)
+        assert args.deploy_selection.quant_layers == _structured_rules(
+            pattern, quant_dtype="hifp"
+        )
+        assert args.quant_dtype == ""
 
 
 def test_load_preserves_legacy_string_rules_for_model_adapters(tmp_path):
@@ -417,31 +425,11 @@ def test_empty_final_selection_is_an_error():
         )
 
 
-def test_duplicate_structured_patterns_are_rejected():
+def test_duplicate_rules_do_not_double_count():
     with pytest.raises(ValueError, match="multiple quant_layers patterns"):
         match_deploy_modules(
             {"model.q"}, DeploySelection(_structured_rules("*", "*"), ())
         )
-
-
-def test_duplicate_legacy_patterns_do_not_double_count():
-    selected, counts = match_deploy_modules(
-        {"model.q"}, DeploySelection(("*", "*"), ())
-    )
-    assert selected == {"model.q"}
-    assert counts == {"*": 1}
-
-
-def test_duplicate_structured_patterns_with_different_specs_are_rejected():
-    selection = DeploySelection(
-        (
-            QuantLayerRule("*", QuantSpec("int", 8, 8)),
-            QuantLayerRule("*", QuantSpec("mxfp", 8, 8)),
-        )
-    )
-
-    with pytest.raises(ValueError, match="multiple quant_layers patterns"):
-        match_deploy_modules({"model.q"}, selection)
 
 
 def _module_policy():

@@ -30,10 +30,6 @@ from amct_pytorch.quantization.dtypes.hifp_impl import (
     is_native_hifloat8_cast_available,
 )
 
-pytestmark = pytest.mark.skip(
-    reason="HiFloat8 tensor deployment was removed from the supported deployment schemes"
-)
-
 SHARD = "model.safetensors"
 GROUPS, RANK, COLUMNS = 2, 32, 64
 WO_A, PLAIN = "layers.0.attn.wo_a", "layers.0.attn.wq_a"
@@ -112,9 +108,9 @@ def _block_fp8(rows, columns=COLUMNS):
 def _hif8_model(tmp_path, selected=(PLAIN, WO_A), groups=GROUPS):
     model = DeepseekV41.__new__(DeepseekV41)
     model.args = SimpleNamespace(
+        model_name="deepseek_v4_1",
         deploy_platform="ascend950",
         quant_dtype="hifp",
-        deploy_format="legacy",
         deploy_selection=DeploySelection(selected),
     )
     model.model_path, model.output_dir = tmp_path / "model", tmp_path / "output"
@@ -136,27 +132,42 @@ def _hif8_model(tmp_path, selected=(PLAIN, WO_A), groups=GROUPS):
     return model, tensors
 
 
-def test_convert_hif8_shard_writes_codes_and_leaves_the_rest_alone(
+def test_convert_hif8_shard_writes_codes_and_decodes_unselected_weights(
     tmp_path, fake_hifloat8_cast
 ):
     model, source = _hif8_model(tmp_path)
+    source["orphan.scale"] = torch.tensor([1.25, 2.5], dtype=torch.float32)
+    save_file(source, str(model.model_path / SHARD))
     routing = model.convert_tensorwise_shard(
         SHARD, model.model_path, dict.fromkeys(source, SHARD), {PLAIN: 8, WO_A: 8}, {}
     )
 
-    assert set(routing) == set(source)
+    expected_names = {
+        f"{PLAIN}.weight",
+        f"{PLAIN}.weight_scale",
+        f"{WO_A}.weight",
+        f"{WO_A}.weight_scale",
+        f"{UNSELECTED}.weight",
+        UNTOUCHED,
+        "orphan.scale",
+    }
+    assert set(routing) == expected_names
     assert model.processed_modules == {PLAIN, WO_A}
     with safe_open(str(model.output_dir / SHARD), framework="pt") as shard:
         assert shard.get_slice(f"{PLAIN}.weight").get_dtype() == "U8"
-        assert shard.get_slice(f"{PLAIN}.scale").get_dtype() == "F32"
+        assert shard.get_slice(f"{PLAIN}.weight_scale").get_dtype() == "F32"
         assert shard.get_slice(f"{WO_A}.weight").get_shape() == [GROUPS * RANK, COLUMNS]
-        scale = shard.get_tensor(f"{WO_A}.scale")
+        scale = shard.get_tensor(f"{WO_A}.weight_scale")
         unselected = shard.get_tensor(f"{UNSELECTED}.weight")
         untouched = shard.get_tensor(UNTOUCHED)
+        orphan_scale = shard.get_tensor("orphan.scale")
     per_group = scale.view(GROUPS, RANK)
     assert torch.equal(per_group, per_group[0].expand(GROUPS, RANK))
-    assert unselected.dtype == torch.float8_e4m3fn
+    assert unselected.dtype == torch.bfloat16
+    assert torch.equal(unselected, torch.ones_like(unselected))
     assert torch.equal(untouched, source[UNTOUCHED])
+    assert orphan_scale.dtype == torch.float32
+    assert torch.equal(orphan_scale, source["orphan.scale"])
 
 
 def test_convert_hif8_reads_scale_from_another_shard(tmp_path, fake_hifloat8_cast):
@@ -183,17 +194,17 @@ def test_convert_hif8_reads_scale_from_another_shard(tmp_path, fake_hifloat8_cas
 
     assert routing == {
         f"{PLAIN}.weight": SHARD,
-        f"{PLAIN}.scale": SHARD,
+        f"{PLAIN}.weight_scale": SHARD,
         UNTOUCHED: other,
     }
     with safe_open(str(model.output_dir / SHARD), framework="pt") as shard:
         assert shard.get_slice(f"{PLAIN}.weight").get_dtype() == "U8"
-        assert shard.get_slice(f"{PLAIN}.scale").get_dtype() == "F32"
+        assert shard.get_slice(f"{PLAIN}.weight_scale").get_dtype() == "F32"
     with safe_open(str(model.output_dir / other), framework="pt") as shard:
         assert set(shard.keys()) == {UNTOUCHED}
 
 
-def test_convert_hif8_shard_rejects_missing_scale(tmp_path):
+def test_convert_hif8_shard_rejects_missing_scale(tmp_path, fake_hifloat8_cast):
     model, _ = _hif8_model(tmp_path)
     weight, _ = _block_fp8(32)
     save_file({f"{PLAIN}.weight": weight}, str(model.model_path / SHARD))
@@ -221,20 +232,24 @@ def test_prepare_hif8_plan_keeps_only_selected_modules(tmp_path):
     assert UNSELECTED in plan.unselected_weight_modules
 
 
-def test_prepare_hif8_plan_rejects_selected_non_fp8_module(tmp_path):
+def test_prepare_hif8_plan_rejects_selected_non_matrix_module(tmp_path):
     model, source = _hif8_model(tmp_path, selected=(PLAIN, "layers.0.attn.norm"))
 
-    with pytest.raises(ValueError, match="not 32x32 block FP8"):
+    with pytest.raises(ValueError, match="not nonempty 2-D weights"):
         model.prepare_tensor_deploy_plan(dict.fromkeys(source, SHARD))
 
 
 def test_refresh_config_hif8_writes_source_config_unchanged(tmp_path):
     model, _ = _hif8_model(tmp_path)
+    original = json.loads(json.dumps(model.config))
 
     model.refresh_config([], tensor_plan=None)
 
     written = json.loads((model.output_dir / "config.json").read_text())
-    assert written == model.config
+    assert model.config == original
+    expected = dict(original)
+    expected.pop("quantization_config", None)
+    assert written == expected
 
 
 @pytest.mark.parametrize("value", [None, "2"])
@@ -250,20 +265,17 @@ def test_convert_hif8_shard_rejects_invalid_o_groups(
         )
 
 
-def test_validate_platform_accepts_hifp_on_ascend950():
-    args = SimpleNamespace(deploy_platform="ascend950", quant_dtype="hifp")
-    assert DeepseekV41._validate_platform(args) == "ascend950"
-    args.quant_dtype = "int"
-    assert DeepseekV41._validate_platform(args) == "ascend950"
-
-
-def test_validate_deploy_args_rejects_hifp_tensor_deploy():
-    args = SimpleNamespace(
-        deploy_platform="ascend950",
-        quant_dtype="hifp",
-        granularity="tensor",
-        deploy_format="legacy",
-        bit_config="bits.yaml",
+def test_validate_deploy_args_accepts_hifp_tensor_deploy(tmp_path):
+    from amct_pytorch.common.models.llm.common.deployment.deploy_selection import (
+        QuantLayerRule,
+        QuantSpec,
     )
-    with pytest.raises(NotImplementedError, match="temporarily unsupported"):
-        DeepseekV41.validate_deploy_args(args)
+
+    model, _ = _hif8_model(tmp_path)
+    model.args.granularity = "tensor"
+    model.args.quant_layers_config = None
+    model.args.deploy_selection = DeploySelection(
+        (QuantLayerRule(PLAIN, QuantSpec("hifp", 8, 8)),)
+    )
+    DeepseekV41.validate_deploy_args(model.args)
+    assert model.args.quant_dtype == "hifp"

@@ -15,8 +15,10 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+import json
+from pathlib import Path
+
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from accelerate import init_empty_weights
 from accelerate.hooks import AlignDevicesHook, add_hook_to_module
@@ -24,6 +26,7 @@ from accelerate.utils import set_module_tensor_to_device
 from compressed_tensors.utils.safetensors_load import get_weight_mappings
 from loguru import logger
 from safetensors import safe_open
+from torch import nn
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM
 
@@ -36,7 +39,11 @@ from amct_pytorch.common.models.llm.common.ptq_units import (
 )
 from amct_pytorch.common.models.llm.common.quant_apply import apply_quant_to_moe_mlp
 from amct_pytorch.common.models.llm.common.weight_path_validation import (
+    collect_safetensors_files,
     resolve_safetensors_path,
+)
+from amct_pytorch.common.models.llm.deepseek.deepseek_deploy_common import (
+    DeepSeekTensorwiseDeployCommon,
 )
 from amct_pytorch.common.models.llm.deepseek.deepseek_v4.modeling.configuration_deepseek_v4 import (
     DeepseekV4Config,
@@ -61,7 +68,7 @@ class _NoMoveAlignDevicesHook(AlignDevicesHook):
     family="deepseek",
     description="DeepSeek V4 model adapter",
 )
-class DeepseekV4(BaseModel):
+class DeepseekV4(DeepSeekTensorwiseDeployCommon, BaseModel):
     attn_norm_name = "attn_norm"
     ffn_norm_name = "ffn_norm"
 
@@ -72,6 +79,10 @@ class DeepseekV4(BaseModel):
                 f"{model_name} requires --trust_remote_code. "
                 "Please rerun the command with --trust_remote_code."
             )
+        if getattr(args, "granularity", None) == "tensor":
+            self.validate_deploy_args(args)
+            self._init_tensor_deploy(args)
+            return
         super().__init__(args)
         if not isinstance(self.config, DeepseekV4Config):
             self.config = DeepseekV4Config(**self.config.to_dict())
@@ -84,18 +95,36 @@ class DeepseekV4(BaseModel):
         self.num_layers = self.config.n_layers
         self.sharded_block = False
 
-    @staticmethod
-    def block_size(weight):
-        bs = 32 if weight.dtype == torch.int8 else 128
-        return bs
+    def _init_tensor_deploy(self, args):
+        """Initialize only checkpoint metadata for tensorwise deployment."""
+        self.args = args
+        self.quant_target = getattr(args, "quant_target", [])
+        self.quant_dtype = args.quant_dtype
+        self.model_path = Path(args.model)
+        self.output_dir = Path(args.output_dir)
+        source, output = self.model_path.resolve(), self.output_dir.resolve()
+        if source == output or source in output.parents or output in source.parents:
+            raise ValueError(
+                "DeepSeek V4 deployment output and source directories must not overlap"
+            )
+        if output.exists() and (not output.is_dir() or any(output.iterdir())):
+            raise ValueError("DeepSeek V4 output directory must be new or empty")
+        with open(self.model_path / "config.json", encoding="utf-8") as stream:
+            self.config = json.load(stream)
+        self.safetensors_files = collect_safetensors_files(self.model_path)
+        self.processed_modules = set()
+        self.output_tensor_bytes = 0
 
     @staticmethod
     def _resolve_param_device(local_name, device_map):
         best_path = None
         for path in device_map:
-            if path and (local_name == path or local_name.startswith(path + ".")):
-                if best_path is None or len(path) > len(best_path):
-                    best_path = path
+            if (
+                path
+                and (local_name == path or local_name.startswith(path + "."))
+                and (best_path is None or len(path) > len(best_path))
+            ):
+                best_path = path
         if best_path is not None:
             return device_map[best_path]
         return device_map.get("", "cpu")
@@ -299,7 +328,7 @@ class DeepseekV4(BaseModel):
 
         weight_prefix = self.get_layer_weight_prefix(layer_idx)
         weight_map = self._weight_map_cached()
-        expected = set(name for name, _ in block.named_parameters())
+        expected = {name for name, _ in block.named_parameters()}
         expected.update(name for name, _ in block.named_buffers())
 
         file_to_keys = {}
@@ -372,7 +401,7 @@ class DeepseekV4(BaseModel):
         if device_map is None:
             return super()._dispatch_block(module)
         for path, dev in sorted(device_map.items(), key=lambda kv: kv[0].count(".")):
-            target = module if path == "" else module
+            target = module
             if path:
                 for part in path.split("."):
                     target = getattr(target, part)
