@@ -1328,6 +1328,57 @@ def test_qwen3_6_dense_structured_plan_exports_planned_dtype(
     assert validation["status"] == "passed"
 
 
+def test_qwen3_dense_tensorwise_reuses_generic_int_export(tmp_path):
+    from safetensors.torch import load_file
+
+    from amct_pytorch.common.models.llm.common.deployment.deploy_selection import (
+        DeploySelection,
+        QuantLayerRule,
+        QuantSpec,
+        build_tensor_deploy_plan,
+    )
+    from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
+    from amct_pytorch.quantization.dtypes import register_dtype
+
+    register_dtype()
+    src, dst = tmp_path / "src", tmp_path / "dst"
+    src.mkdir()
+    dst.mkdir()
+    selected = "model.layers.0.mlp.gate_proj"
+    untouched = "model.layers.0.self_attn.q_proj"
+    tensors = {
+        selected + ".weight": torch.arange(12, dtype=torch.bfloat16).reshape(3, 4),
+        untouched + ".weight": torch.ones(3, 4, dtype=torch.bfloat16),
+    }
+    save_file(tensors, str(src / MODEL_SAFETENSORS))
+    (src / CONFIG_JSON).write_text("{}")
+    index = {"weight_map": dict.fromkeys(tensors, MODEL_SAFETENSORS)}
+
+    selection = DeploySelection(
+        (QuantLayerRule(selected, QuantSpec("int", 8, 8)),),
+    )
+    wf = _make_workflow(str(src), str(dst), "int")
+    wf.granularity = wf.args.granularity = "tensor"
+    wf.args.deploy_platform = "A3"
+    wf.args.deploy_selection = selection
+    wf.pipeline = Qwen3.__new__(Qwen3)
+    wf.pipeline.args = wf.args
+    wf.pipeline.config = SimpleNamespace(num_hidden_layers=1)
+    wf.deploy_plan = build_tensor_deploy_plan(
+        index["weight_map"], selection, config=wf.pipeline.config
+    )
+    wf._load_weight_index = lambda: index
+
+    result = wf._run_tensorwise()
+    output = load_file(str(dst / MODEL_SAFETENSORS))
+
+    assert output[selected + ".weight"].dtype == torch.int8
+    assert output[selected + ".weight_scale"].dtype == torch.bfloat16
+    assert output[selected + ".weight_offset"].dtype == torch.bfloat16
+    assert torch.equal(output[untouched + ".weight"], tensors[untouched + ".weight"])
+    assert json.loads(Path(result["validation_path"]).read_text())["status"] == "passed"
+
+
 @pytest.mark.parametrize("relation", ["same", "child", "parent", "nonempty", "symlink"])
 def test_ascend_rejects_unsafe_output_before_setup(tmp_path, relation, monkeypatch):
     source = tmp_path / "source"

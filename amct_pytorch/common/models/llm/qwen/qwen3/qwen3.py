@@ -15,13 +15,21 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+from __future__ import annotations
+
+import re
+
 import torch
 from transformers.models.qwen3.modeling_qwen3 import (
     Qwen3Config,
     Qwen3DecoderLayer,
 )
 
+from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm.common.base import BaseModel, PtqUnit
+from amct_pytorch.common.models.llm.common.deployment.schemes import (
+    PLATFORM_QUANT_DTYPES,
+)
 from amct_pytorch.common.models.llm.common.quant_apply import (
     apply_quant_to_attn,
     apply_quant_to_moe_mlp,
@@ -30,7 +38,6 @@ from amct_pytorch.common.models.llm.qwen.qwen3.quant_module import (
     QuantQwen3Attn,
     QuantQwen3MLP,
 )
-from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.quantization.bit_policy import ensure_bit_policy
 
 
@@ -41,6 +48,8 @@ from amct_pytorch.quantization.bit_policy import ensure_bit_policy
     description="Qwen3 dense model adapter",
 )
 class Qwen3(BaseModel):
+    _LAYER_RE = re.compile(r"model\.layers\.(\d+)\.(.+)")
+
     def __init__(self, args):
         super().__init__(args)
         self.textconfig = Qwen3Config
@@ -52,6 +61,58 @@ class Qwen3(BaseModel):
     def parse_quant_mode(self):
         if "moe" in self.quant_target:
             raise ValueError("Qwen3 dense model does not support quant_target='moe'.")
+
+    @staticmethod
+    def get_deploy_capabilities():
+        return dict(PLATFORM_QUANT_DTYPES)
+
+    def _deploy_role(self, name: str) -> str | None:
+        match = self._LAYER_RE.fullmatch(name)
+        if match is None:
+            return None
+        layer_idx, suffix = int(match[1]), match[2]
+        if not 0 <= layer_idx < int(self.config.num_hidden_layers):
+            return None
+        if suffix in {"mlp.gate_proj", "mlp.up_proj", "mlp.down_proj"}:
+            return "mlp"
+        if suffix in {
+            "self_attn.q_proj",
+            "self_attn.k_proj",
+            "self_attn.v_proj",
+            "self_attn.o_proj",
+        }:
+            return "attn-linear"
+        return None
+
+    def get_deploy_candidates(self, module_names: set[str]) -> set[str]:
+        return {name for name in module_names if self._deploy_role(name) is not None}
+
+    def validate_deploy_selection(self, selected: set[str]) -> None:
+        unsupported = sorted(
+            name for name in selected if self._deploy_role(name) is None
+        )
+        if unsupported:
+            raise ValueError(f"Unsupported Deployment modules: {unsupported}")
+        for layer_idx in range(int(self.config.num_hidden_layers)):
+            layer_prefix = f"model.layers.{layer_idx}."
+            mlp = {
+                layer_prefix + "mlp." + projection
+                for projection in ("gate_proj", "up_proj", "down_proj")
+            }
+            if selected & mlp and not mlp <= selected:
+                raise ValueError(
+                    f"{type(self).__name__} MLP projections must be selected together "
+                    f"at layer {layer_idx}"
+                )
+            attn = {
+                layer_prefix + "self_attn." + projection
+                for projection in ("q_proj", "k_proj", "v_proj", "o_proj")
+            }
+            if selected & attn and not attn <= selected:
+                raise ValueError(
+                    f"{type(self).__name__} full-attention QKVO must be selected "
+                    f"together at layer {layer_idx}"
+                )
 
     def float_model(self):
         return super().float_model()

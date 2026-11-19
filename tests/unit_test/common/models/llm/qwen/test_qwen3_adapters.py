@@ -23,6 +23,7 @@ exercise the adapter-level overrides that are pure logic: `parse_quant_mode`,
 `iter_deploy_bindings` name parsing.
 """
 
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -191,6 +192,90 @@ def test_qwen3_5_uses_model_language_model_prefix():
 def test_qwen3_next_uses_model_layers_prefix():
     obj = _stub_adapter(Qwen3Next, [MOE])
     assert obj.get_layer_weight_prefix(5) == "model.layers.5."
+
+
+# ---- tensorwise deployment selection (Qwen3 dense) -----------------------
+
+
+def _qwen3_dense_deploy_stub():
+    obj = _stub_adapter(Qwen3, [MLP])
+    obj.args.deploy_platform = "A3"
+    obj.config = SimpleNamespace(num_hidden_layers=2)
+    return obj
+
+
+def test_qwen3_dense_candidates_include_mlp_and_attention():
+    obj = _qwen3_dense_deploy_stub()
+    expected = {
+        "model.layers.0.mlp.gate_proj",
+        "model.layers.0.mlp.up_proj",
+        "model.layers.0.mlp.down_proj",
+        "model.layers.0.self_attn.q_proj",
+        "model.layers.0.self_attn.k_proj",
+        "model.layers.0.self_attn.v_proj",
+        "model.layers.0.self_attn.o_proj",
+    }
+    unsupported = {
+        "model.layers.0.input_layernorm",
+        "model.layers.0.self_attn.q_norm",
+        "model.visual.blocks.0.attn.qkv",
+        "mtp.layers.0.eh_proj",
+    }
+
+    assert obj.get_deploy_candidates(expected | unsupported) == expected
+
+
+def test_qwen3_dense_requires_complete_mlp_and_qkvo_groups():
+    obj = _qwen3_dense_deploy_stub()
+    mlp_prefix = "model.layers.0.mlp."
+    attn_prefix = "model.layers.0.self_attn."
+    complete = {
+        *(mlp_prefix + name for name in ("gate_proj", "up_proj", "down_proj")),
+        *(attn_prefix + name for name in ("q_proj", "k_proj", "v_proj", "o_proj")),
+    }
+    obj.validate_deploy_selection(complete)
+
+    with pytest.raises(ValueError, match="MLP.*together"):
+        obj.validate_deploy_selection({mlp_prefix + "gate_proj"})
+    with pytest.raises(ValueError, match="QKVO.*together"):
+        obj.validate_deploy_selection({attn_prefix + "q_proj"})
+
+
+def test_qwen3_4b_deploy_config_selects_all_dense_mlp_projections():
+    from amct_pytorch.common.models.llm.common.deployment.deploy_selection import (
+        build_tensor_deploy_plan,
+        load_deploy_selection,
+        validate_tensor_deploy_plan,
+    )
+
+    config_path = (
+        Path(__file__).resolve().parents[6]
+        / "amct_pytorch/configs/deploy/qwen/qwen3/qwen3_4b_w8a8_int.json"
+    )
+    selection = load_deploy_selection(config_path)
+    names = {
+        f"model.layers.{layer}.mlp.{projection}"
+        for layer in range(36)
+        for projection in ("gate_proj", "up_proj", "down_proj")
+    }
+    weight_map = {name + ".weight": "model.safetensors" for name in names}
+    weight_map.update(
+        {
+            "model.embed_tokens.weight": "model.safetensors",
+            "model.norm.weight": "model.safetensors",
+        }
+    )
+    obj = _qwen3_dense_deploy_stub()
+    obj.config = SimpleNamespace(num_hidden_layers=36)
+    plan = build_tensor_deploy_plan(weight_map, selection, config=obj.config)
+
+    assert validate_tensor_deploy_plan(plan, weight_map, obj) is plan
+    assert plan.selected_modules == names
+    assert plan.ignored_modules == frozenset()
+    assert plan.unselected_weight_modules == {
+        "model.embed_tokens",
+        "model.norm",
+    }
 
 
 # ---- registry registration -----------------------------------------------
