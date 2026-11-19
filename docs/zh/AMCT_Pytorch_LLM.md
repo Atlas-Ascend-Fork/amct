@@ -117,7 +117,7 @@ python -m amct_pytorch.eval \
   --algos lwc lac \
   --quant_dtype int \
   --bit_config amct_pytorch/configs/example_w4a8.yaml \
-  --moe_mlp_param_dir ./outputs/qwen3_ptq_params/mlp
+  --moe_mlp_param_dir ./outputs/qwen3_ptq/ptq_params/qwen3/mlp
 ```
 
 参数详细解释请参见[参数说明](#参数说明)。
@@ -245,7 +245,7 @@ python -m amct_pytorch.deploy \
   --quant_target mlp \
   --quant_dtype mxfp \
   --bit_config amct_pytorch/configs/example_w4a8.yaml \
-  --moe_mlp_param_dir ./outputs/qwen3_ptq_params/mlp \
+  --moe_mlp_param_dir ./outputs/qwen3_ptq/ptq_params/qwen3/mlp \
   --output_dir ./outputs/qwen3_deploy
 ```
 
