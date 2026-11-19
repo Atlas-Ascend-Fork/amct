@@ -46,6 +46,8 @@ SETUP_PY = REPO_ROOT / "setup.py"
 
 # Current package that owns the graph-based resources.
 GRAPH_PACKAGE = "amct_pytorch.classic.graph_based"
+AMCT_PACKAGE = "amct_pytorch"
+DEPLOY_CONFIG_REL_DIR = "configs/deploy"
 # The retired name that must never reappear as a package_data key.
 LEGACY_PACKAGE = "amct_pytorch.classic.graph_based_compression"
 
@@ -172,6 +174,29 @@ def test_package_data_patterns_point_at_existing_dirs():
     assert not escaped_dirs, (
         f"build-artifact package_data patterns for '{GRAPH_PACKAGE}' resolve "
         f"outside the package tree (relative to {pkg_root}): {escaped_dirs}"
+    )
+
+
+def test_deploy_json_configs_are_packaged():
+    """Built packages must carry the built-in tensor deployment JSON configs."""
+    data = _package_data()
+    patterns = data.get(AMCT_PACKAGE, [])
+    pattern = f"{DEPLOY_CONFIG_REL_DIR}/**/*.json"
+    assert pattern in patterns, (
+        "setup.py must package amct_pytorch/configs/deploy/**/*.json"
+    )
+
+    package_root = REPO_ROOT / AMCT_PACKAGE.replace(".", "/")
+    matched = {
+        path.relative_to(package_root).as_posix() for path in package_root.glob(pattern)
+    }
+    expected = {
+        f"{DEPLOY_CONFIG_REL_DIR}/hyv3/hy_v3/hy_v3_w8a8_int.json",
+        f"{DEPLOY_CONFIG_REL_DIR}/hyv3/hy_v3/hy_v3_w8a8_mxfp8.json",
+    }
+    assert expected <= matched, (
+        "deployment package_data pattern did not match the expected HY3 configs: "
+        f"{sorted(expected - matched)}"
     )
 
 

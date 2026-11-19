@@ -1,0 +1,96 @@
+{
+  "quant_layers": [
+    {
+      "pattern": "model.layers.*.self_attn.q_proj",
+      "quant_dtype": "mxfp",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.layers.*.self_attn.k_proj",
+      "quant_dtype": "mxfp",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.layers.*.self_attn.v_proj",
+      "quant_dtype": "mxfp",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.layers.*.self_attn.o_proj",
+      "quant_dtype": "mxfp",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.layers.0.mlp.gate_proj",
+      "quant_dtype": "mxfp",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.layers.0.mlp.up_proj",
+      "quant_dtype": "mxfp",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.layers.0.mlp.down_proj",
+      "quant_dtype": "mxfp",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.layers.*.mlp.experts.*.gate_proj",
+      "quant_dtype": "mxfp",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.layers.*.mlp.experts.*.up_proj",
+      "quant_dtype": "mxfp",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.layers.*.mlp.experts.*.down_proj",
+      "quant_dtype": "mxfp",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.layers.*.mlp.shared_*.gate_proj",
+      "quant_dtype": "mxfp",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.layers.*.mlp.shared_*.up_proj",
+      "quant_dtype": "mxfp",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.layers.*.mlp.shared_*.down_proj",
+      "quant_dtype": "mxfp",
+      "w_bits": 8,
+      "a_bits": 8
+    }
+  ],
+  "ignore_layers": [
+    "model.layers.80.*",
+    "model.embed_tokens",
+    "model.norm",
+    "lm_head",
+    "model.layers.*.self_attn.q_norm",
+    "model.layers.*.self_attn.k_norm",
+    "model.layers.*.input_layernorm",
+    "model.layers.*.post_attention_layernorm",
+    "model.layers.*.mlp.router.gate",
+    "model.layers.*.mlp.gate",
+    "model.layers.*.mlp.expert_bias",
+    "model.layers.*.mlp.e_score_correction_bias"
+  ]
+}

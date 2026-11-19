@@ -87,6 +87,7 @@ def get_package_data():
     """get package data"""
     return {
         '': ['.version'],
+        'amct_pytorch': ['configs/deploy/**/*.json'],
         'amct_pytorch.classic.graph_based': [
             'amct_pytorch/proto/*.proto',
             'amct_pytorch/capacity/*.csv',

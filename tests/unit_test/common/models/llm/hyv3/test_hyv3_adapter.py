@@ -17,7 +17,6 @@
 # ----------------------------------------------------------------------------
 """Unit tests for the HyV3 adapter (key remap, deploy bindings, PTQ units)."""
 
-import re
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -448,6 +447,7 @@ def _stub_hyv3(**attrs):
         num_hidden_layers=2,
         num_nextn_predict_layers=1,
         num_experts=2,
+        mlp_layer_types=["dense", "sparse"],
     )
     obj.num_layers = obj.config.num_hidden_layers
     for k, v in attrs.items():
@@ -455,21 +455,112 @@ def _stub_hyv3(**attrs):
     return obj
 
 
+def _deploy_modules(include_mtp=True):
+    modules = {
+        f"model.layers.0.self_attn.{projection}"
+        for projection in ("q_proj", "k_proj", "v_proj", "o_proj")
+    }
+    modules.update(
+        f"model.layers.0.mlp.{projection}"
+        for projection in ("gate_proj", "up_proj", "down_proj")
+    )
+    modules.update(
+        f"model.layers.1.mlp.experts.{expert}.{projection}"
+        for expert in range(2)
+        for projection in ("gate_proj", "up_proj", "down_proj")
+    )
+    modules.update(
+        f"model.layers.1.mlp.shared_experts.{projection}"
+        for projection in ("gate_proj", "up_proj", "down_proj")
+    )
+    if include_mtp:
+        modules.update(
+            f"model.layers.2.self_attn.{projection}"
+            for projection in ("q_proj", "k_proj", "v_proj", "o_proj")
+        )
+        modules.add("model.layers.2.eh_proj")
+    return modules
+
+
+def test_hyv3_deploy_candidates_exclude_mtp_roles():
+    stub = _stub_hyv3()
+    modules = _deploy_modules()
+    assert stub.get_deploy_candidates(modules) == _deploy_modules(include_mtp=False)
+    mtp = {name for name in modules if name.startswith("model.layers.2.")}
+    assert not stub.get_deploy_candidates(mtp)
+
+
+def test_hyv3_deploy_capabilities_match_shared_platform_schemes():
+    from amct_pytorch.common.models.llm.common.deployment.schemes import (
+        PLATFORM_QUANT_DTYPES,
+    )
+
+    assert HyV3.get_deploy_capabilities() == PLATFORM_QUANT_DTYPES
+
+
+def test_hyv3_deploy_excludes_router_norm_and_bias():
+    stub = _stub_hyv3()
+    unsupported = {
+        "model.layers.1.mlp.gate",
+        "model.layers.1.mlp.router.gate",
+        "model.layers.1.mlp.expert_bias",
+        "model.layers.1.self_attn.q_norm",
+    }
+    assert stub.get_deploy_candidates(unsupported) == set()
+
+
+def _complete_deploy_modules(shared_name="shared_experts"):
+    modules = _deploy_modules(include_mtp=False)
+    if shared_name == "shared_mlp":
+        modules = {
+            name.replace("mlp.shared_experts.", "mlp.shared_mlp.")
+            if "mlp.shared_experts." in name
+            else name
+            for name in modules
+        }
+    return modules
+
+
+@pytest.mark.parametrize("shared_name", ["shared_mlp", "shared_experts"])
+def test_hyv3_validate_deploy_selection_accepts_complete_groups(shared_name):
+    _stub_hyv3().validate_deploy_selection(_complete_deploy_modules(shared_name))
+
+
+def test_hyv3_validate_deploy_selection_rejects_unsupported_module():
+    with pytest.raises(ValueError, match="Unsupported Deployment modules"):
+        _stub_hyv3().validate_deploy_selection({"model.layers.1.mlp.router.gate"})
+
+
+def test_hyv3_validate_deploy_selection_rejects_partial_attention():
+    selected = _complete_deploy_modules()
+    selected.remove("model.layers.0.self_attn.o_proj")
+    with pytest.raises(ValueError, match="attention projections"):
+        _stub_hyv3().validate_deploy_selection(selected)
+
+
+def test_hyv3_validate_deploy_selection_rejects_partial_dense_mlp():
+    selected = _complete_deploy_modules()
+    selected.remove("model.layers.0.mlp.down_proj")
+    with pytest.raises(ValueError, match="dense MLP projections"):
+        _stub_hyv3().validate_deploy_selection(selected)
+
+
+def test_hyv3_validate_deploy_selection_rejects_partial_shared_experts():
+    selected = _complete_deploy_modules()
+    selected.remove("model.layers.1.mlp.shared_experts.down_proj")
+    with pytest.raises(ValueError, match="shared expert projections"):
+        _stub_hyv3().validate_deploy_selection(selected)
+
+
+def test_hyv3_validate_deploy_selection_rejects_partial_routed_experts():
+    selected = _complete_deploy_modules()
+    selected.remove("model.layers.1.mlp.experts.1.down_proj")
+    with pytest.raises(ValueError, match="all routed experts"):
+        _stub_hyv3().validate_deploy_selection(selected)
+
+
 def test_hyv3_block_size_returns_1():
     assert HyV3.block_size(torch.randn(4, 4)) == 1
-
-
-def test_hyv3_generate_tensorwise_ignore_layers():
-    stub = _stub_hyv3()
-    ignore = stub.generate_tensorwise_ignore_layers()
-    assert "model.layers.0.mlp.gate_proj" in ignore
-    assert "model.layers.0.mlp.down_proj" in ignore
-    assert "model.layers.0.mlp.up_proj" in ignore
-    assert "model.layers.0.self_attn.q_proj" in ignore
-    assert "model.layers.2.self_attn.o_proj" in ignore
-    assert "model.layers.2.eh_proj" in ignore
-    assert "model.embed_tokens" in ignore
-    assert "lm_head" in ignore
 
 
 def test_hyv3_cache_scheme_int():
@@ -527,11 +618,9 @@ def test_hyv3_generate_tensorwise_quant_layers():
     assert "model.layers.1.mlp.experts.0.gate_proj" in layers
     assert "model.layers.1.mlp.experts.1.down_proj" in layers
     assert "model.layers.1.mlp.shared_mlp.gate_proj" in layers
-    # Layer 2 (nextn predict): experts follow the routed-expert bit policy.
-    assert "model.layers.2.mlp.experts.0.gate_proj" in layers
+    # MTP is intentionally excluded from the legacy generator.
+    assert not any(key.startswith("model.layers.2.") for key in layers)
     assert layers["model.layers.1.mlp.experts.0.gate_proj"] == 4
-    # Next-token prediction layers follow the routed-expert bit policy.
-    assert layers["model.layers.2.mlp.experts.0.gate_proj"] == 4
 
 
 def test_hyv3_generate_tensorwise_mlp_layers_only():
@@ -556,7 +645,7 @@ def test_hyv3_generate_tensorwise_mlp_and_moe_layers():
     assert "model.layers.0.mlp.gate_proj" in layers
     assert "model.layers.1.mlp.experts.0.gate_proj" in layers
     assert "model.layers.1.mlp.shared_mlp.gate_proj" in layers
-    assert "model.layers.2.mlp.experts.1.down_proj" in layers
+    assert not any(key.startswith("model.layers.2.") for key in layers)
     assert not any("self_attn" in key for key in layers)
 
 
@@ -566,46 +655,10 @@ def test_hyv3_generate_tensorwise_attention_layers_only():
 
     layers = stub.generate_tensorwise_quant_layers()
 
-    assert len(layers) == 12
+    assert len(layers) == 8
     assert "model.layers.0.self_attn.q_proj" in layers
-    assert "model.layers.2.self_attn.o_proj" in layers
+    assert "model.layers.2.self_attn.o_proj" not in layers
     assert not any(".mlp." in key for key in layers)
-
-
-def test_hyv3_tensorwise_mlp_layers_are_not_ignored():
-    stub = _stub_hyv3(quant_target=["mlp"])
-    stub.args.quant_target = ["mlp"]
-
-    ignore = stub.generate_tensorwise_ignore_layers()
-
-    assert "model.layers.0.mlp.gate_proj" not in ignore
-    assert "model.layers.0.mlp.down_proj" not in ignore
-    assert "model.layers.0.mlp.up_proj" not in ignore
-    assert "model.layers.0.self_attn.q_proj" in ignore
-    assert "model.layers.2.self_attn.o_proj" in ignore
-    expert_ignore = next(item for item in ignore if item.startswith("re:"))
-    expert_pattern = expert_ignore.removeprefix("re:")
-    assert re.match(expert_pattern, "model.layers.1.mlp.experts")
-    assert re.match(expert_pattern, "model.layers.1.mlp.experts.0.gate_proj")
-    assert not re.match(expert_pattern, "model.layers.1.mlp.shared_mlp.gate_proj")
-    assert "model.layers.1.mlp.shared_mlp.gate_proj" in ignore
-    assert re.match(expert_pattern, "model.layers.2.mlp.experts.1.down_proj")
-    assert "model.layers.2.mlp.shared_mlp.down_proj" in ignore
-    assert "model.layers.2.eh_proj" in ignore
-    assert "model.embed_tokens" in ignore
-    assert "lm_head" in ignore
-
-
-def test_hyv3_tensorwise_mlp_and_moe_layers_are_not_ignored():
-    stub = _stub_hyv3(quant_target=["mlp", "moe"])
-    stub.args.quant_target = ["mlp", "moe"]
-
-    ignore = stub.generate_tensorwise_ignore_layers()
-
-    assert "model.layers.0.mlp.gate_proj" not in ignore
-    assert "model.layers.0.self_attn.q_proj" in ignore
-    assert not any(item.startswith("re:") for item in ignore)
-    assert "model.layers.1.mlp.shared_mlp.gate_proj" not in ignore
 
 
 def test_hyv3_get_scale_name_uses_scale_suffix():

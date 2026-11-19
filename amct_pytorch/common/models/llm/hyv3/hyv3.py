@@ -15,6 +15,9 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+import re
+from typing import Optional
+
 from compressed_tensors.utils.safetensors_load import get_weight_mappings
 
 from transformers.models.hy_v3.modeling_hy_v3 import (
@@ -24,6 +27,9 @@ from transformers.models.hy_v3.modeling_hy_v3 import (
 
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm.common.base import BaseModel
+from amct_pytorch.common.models.llm.common.deployment.schemes import (
+    PLATFORM_QUANT_DTYPES,
+)
 from amct_pytorch.common.models.llm.common.quant_apply import apply_quant_to_attn
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from amct_pytorch.quantization.bit_policy import ensure_bit_policy
@@ -62,6 +68,7 @@ def remap_hyv3_keys(state_dict):
 class HyV3(BaseModel):
     ATTN_LINEAR_NAMES = ("q_proj", "k_proj", "v_proj", "o_proj")
     MLP_LINEAR_NAMES = ("gate_proj", "down_proj", "up_proj")
+    _LAYER_RE = re.compile(r"model\.layers\.(\d+)\.(.+)")
 
     def __init__(self, args):
         super().__init__(args)
@@ -83,6 +90,120 @@ class HyV3(BaseModel):
             raise ValueError(
                 "HyV3 supports quant_target='mlp' only for tensorwise deploy."
             )
+
+    @staticmethod
+    def get_deploy_capabilities():
+        return dict(PLATFORM_QUANT_DTYPES)
+
+    def _is_dense_layer(self, layer_idx: int) -> bool:
+        layer_types = getattr(self.config, "mlp_layer_types", ()) or ()
+        return layer_idx < len(layer_types) and layer_types[layer_idx] == "dense"
+
+    def _deploy_role(self, name: str) -> Optional[str]:
+        match = self._LAYER_RE.fullmatch(name)
+        if match is None:
+            return None
+        layer_idx, suffix = int(match[1]), match[2]
+        if not 0 <= layer_idx < int(self.config.num_hidden_layers):
+            return None
+        if suffix in {
+            "self_attn.q_proj",
+            "self_attn.k_proj",
+            "self_attn.v_proj",
+            "self_attn.o_proj",
+        }:
+            return "attn-linear"
+        if self._is_dense_layer(layer_idx):
+            return (
+                "mlp"
+                if suffix
+                in {
+                    "mlp.gate_proj",
+                    "mlp.up_proj",
+                    "mlp.down_proj",
+                }
+                else None
+            )
+        if getattr(self.config, "num_shared_experts", 1) and suffix in {
+            "mlp.shared_mlp.gate_proj",
+            "mlp.shared_mlp.up_proj",
+            "mlp.shared_mlp.down_proj",
+            "mlp.shared_experts.gate_proj",
+            "mlp.shared_experts.up_proj",
+            "mlp.shared_experts.down_proj",
+        }:
+            return "moe.shared"
+        expert = re.fullmatch(
+            r"mlp\.experts\.(\d+)\.(gate_proj|up_proj|down_proj)", suffix
+        )
+        if expert and int(expert[1]) < int(getattr(self.config, "num_experts", 0)):
+            return "moe.routed"
+        return None
+
+    def get_deploy_candidates(self, module_names: set[str]) -> set[str]:
+        return {name for name in module_names if self._deploy_role(name) is not None}
+
+    def validate_deploy_selection(self, selected: set[str]) -> None:
+        unsupported = sorted(
+            name for name in selected if self._deploy_role(name) is None
+        )
+        if unsupported:
+            raise ValueError(f"Unsupported Deployment modules: {unsupported}")
+
+        for layer_idx in range(int(self.config.num_hidden_layers)):
+            prefix = f"model.layers.{layer_idx}."
+            attn = {
+                prefix + f"self_attn.{projection}"
+                for projection in self.ATTN_LINEAR_NAMES
+            }
+            if selected & attn and not attn <= selected:
+                raise ValueError(
+                    f"{type(self).__name__} attention projections must be selected "
+                    f"together at layer {layer_idx}"
+                )
+            if self._is_dense_layer(layer_idx):
+                mlp = {
+                    prefix + f"mlp.{projection}" for projection in self.MLP_LINEAR_NAMES
+                }
+                if selected & mlp and not mlp <= selected:
+                    raise ValueError(
+                        f"{type(self).__name__} dense MLP projections must be selected "
+                        f"together at layer {layer_idx}"
+                    )
+                continue
+            shared = {
+                prefix + f"mlp.{name}.{projection}"
+                for name in ("shared_mlp", "shared_experts")
+                for projection in self.MLP_LINEAR_NAMES
+                if prefix + f"mlp.{name}.{projection}" in selected
+            }
+            if shared:
+                shared_prefix = next(
+                    prefix + f"mlp.{name}."
+                    for name in ("shared_mlp", "shared_experts")
+                    if any(
+                        prefix + f"mlp.{name}.{projection}" in selected
+                        for projection in self.MLP_LINEAR_NAMES
+                    )
+                )
+                expected_shared = {
+                    shared_prefix + projection for projection in self.MLP_LINEAR_NAMES
+                }
+                if shared != expected_shared:
+                    raise ValueError(
+                        f"{type(self).__name__} shared expert projections must be "
+                        f"selected together at layer {layer_idx}"
+                    )
+            experts = {
+                prefix + f"mlp.experts.{expert}.{projection}"
+                for expert in range(int(getattr(self.config, "num_experts", 0)))
+                for projection in self.MLP_LINEAR_NAMES
+            }
+            if selected & experts and not experts <= selected:
+                raise ValueError(
+                    f"{type(self).__name__} requires all routed experts and projections "
+                    f"at layer {layer_idx}"
+                )
 
     def get_layer_weight_prefix(self, layer_idx: int) -> str:
         return f"model.layers.{layer_idx}."
@@ -142,9 +263,7 @@ class HyV3(BaseModel):
     ):
         bit_policy = ensure_bit_policy(self.args)
         quant_targets = set(self.quant_target)
-        num_hidden_layers = self.config.num_hidden_layers
-        num_nextn_predict_layers = self.config.num_nextn_predict_layers
-        num_layers = num_hidden_layers + num_nextn_predict_layers
+        num_layers = self.config.num_hidden_layers
         num_experts = self.config.num_experts
         quant_layers = {}
         for i in range(num_layers):
@@ -167,32 +286,6 @@ class HyV3(BaseModel):
                     bit = bit_policy["moe.shared"][n].w
                     quant_layers[f"model.layers.{i}.mlp.shared_mlp.{n}"] = bit
         return quant_layers
-
-    def generate_tensorwise_ignore_layers(self):
-        quant_targets = set(self.quant_target)
-        num_layers = (
-            self.config.num_hidden_layers + self.config.num_nextn_predict_layers
-        )
-        ignore = []
-        if "mlp" not in quant_targets:
-            for n in self.MLP_LINEAR_NAMES:
-                ignore.append(f"model.layers.0.mlp.{n}")
-        if "attn-linear" not in quant_targets:
-            for i in range(num_layers):
-                for n in self.ATTN_LINEAR_NAMES:
-                    ignore.append(f"model.layers.{i}.self_attn.{n}")
-        if "moe" not in quant_targets:
-            ignore.append(
-                r"re:^model\.layers\.\d+\.mlp\.experts"
-                r"(?:\.\d+\.(?:gate_proj|up_proj|down_proj))?$"
-            )
-            for i in range(1, num_layers):
-                for n in self.MLP_LINEAR_NAMES:
-                    ignore.append(f"model.layers.{i}.mlp.shared_mlp.{n}")
-        ignore.append(f"model.layers.{self.num_layers}.eh_proj")
-        ignore.append("model.embed_tokens")
-        ignore.append("lm_head")
-        return ignore
 
     def bits_scheme(self):
         """Per-group (targets, w_bits, a_bits) for the deploy config groups."""
