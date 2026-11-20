@@ -19,6 +19,11 @@ from __future__ import annotations
 
 import torch
 from torch import Tensor
+from amct_pytorch.common.utils.quant_util import (
+    MXFP4,
+    MXFP8,
+    quant_format_supported,
+)
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY
 from amct_pytorch.quantization.dtypes.fp_impl import (
     f32_to_f4_unpacked,
@@ -26,6 +31,39 @@ from amct_pytorch.quantization.dtypes.fp_impl import (
     quantize_elewise,
     shared_exponents,
 )
+
+
+FP4_BITS = 4
+FP8_BITS = 8
+MX_SUPPORTED_BITS = (FP4_BITS, FP8_BITS)
+MX_BLOCK_SIZE = 32
+MX_AXIS = -1
+MX_INPUT_DTYPES = (torch.float16, torch.bfloat16, torch.float32)
+
+
+def npu_dynamic_mx_quant_value(tensor: torch.Tensor, bits: int):
+    if bits not in MX_SUPPORTED_BITS:
+        return None
+    if torch.is_grad_enabled() or tensor.dtype not in MX_INPUT_DTYPES:
+        return None
+    fmt = MXFP8 if bits == FP8_BITS else MXFP4
+    if not quant_format_supported(fmt, tensor.device):
+        return None
+    import torch_npu
+
+    dst_type = (
+        torch_npu.float8_e4m3fn if bits == FP8_BITS else torch_npu.float4_e2m1fn_x2
+    )
+    q, mxscale = torch_npu.npu_dynamic_mx_quant(
+        tensor, axis=MX_AXIS, dst_type=dst_type, block_size=MX_BLOCK_SIZE
+    )
+    return torch_npu.npu_anti_mx_quant(
+        q,
+        mxscale,
+        axis=MX_AXIS,
+        dst_type=tensor.dtype,
+        src_type=dst_type,
+    )
 
 
 @DTYPE_REGISTRY.register(name="mxfp", description="quant dequant for mxfp")
@@ -57,6 +95,10 @@ class QuantDequantMx(torch.nn.Module):
         }
 
     def fake_quant(self, x: Tensor, qdim: int = -1, v: Tensor = 0.0):
+        if qdim == MX_AXIS and torch.count_nonzero(torch.as_tensor(v)).item() == 0:
+            out = npu_dynamic_mx_quant_value(x, self.bits)
+            if out is not None:
+                return out
         e8m0, ex_mx = self.quant(x, qdim, v=v)
         dx = (2**e8m0) * ex_mx
         dx = dx.flatten(qdim - 1, qdim)

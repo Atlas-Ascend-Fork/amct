@@ -16,7 +16,9 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import sys
-from unittest.mock import patch
+import types
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 import pytest
 import torch
@@ -30,7 +32,11 @@ from amct_pytorch.quantization.dtypes.int_impl import (
     scale_fp32_to_u64,
     weight_quant,
 )
-from amct_pytorch.quantization.dtypes.mxfp import QuantDequantMx
+from amct_pytorch.quantization.dtypes.mxfp import (
+    MX_INPUT_DTYPES,
+    QuantDequantMx,
+    npu_dynamic_mx_quant_value,
+)
 from amct_pytorch.quantization.dtypes.fp_impl import (
     down_size,
     f4_unpacked_to_f32,
@@ -49,6 +55,7 @@ from amct_pytorch.quantization.dtypes import (
     hifp_impl,
 )
 from amct_pytorch.quantization.dtypes.hifp import QuantDequantHifp
+from amct_pytorch.quantization.modules.quant_base import ActivationQuantizer
 
 
 def _has_npu():
@@ -564,3 +571,232 @@ def test_weight_dequant_float_scale_passes_through():
     w8[0, 0] = 448.0
     out = weight_dequant(w8, torch.tensor([[2.0]]), block_size=32, is_mx=True)
     assert out[0, 0] == 896.0
+
+
+# ---------------------------------------------------------------------------
+# NPU ops: activation fake-quant routes to torch_npu fused ops by default
+# ---------------------------------------------------------------------------
+
+
+_MXFP_HELPER_PATH = "amct_pytorch.quantization.dtypes.mxfp.npu_dynamic_mx_quant_value"
+
+
+class TestMxfpNpuOps:
+    def test_helper_returns_none_on_cpu(self):
+        x = torch.randn(4, 64, dtype=torch.bfloat16)
+        with torch.no_grad():
+            assert npu_dynamic_mx_quant_value(x, 8) is None
+
+    def test_helper_raises_without_torch_npu(self):
+        from amct_pytorch.quantization.dtypes import mxfp
+
+        x = torch.randn(4, 64, dtype=torch.bfloat16)
+        with (
+            patch.dict(sys.modules, {"torch_npu": None}),
+            patch.object(mxfp, "quant_format_supported", return_value=True),
+            torch.no_grad(),
+            pytest.raises(ImportError),
+        ):
+            npu_dynamic_mx_quant_value(x, 8)
+
+    def test_fake_quant_falls_back_bitwise_on_cpu(self):
+        x = torch.randn(2, 64, dtype=torch.bfloat16)
+        # Activation always tries the fused ops now; on CPU the probe says no
+        # and the torch implementation must produce the same result as the
+        # weight path (which never calls the helper).
+        activation = QuantDequantMx(bits=8, is_act=True)(x)
+        weight_only = QuantDequantMx(bits=8, is_act=False)(x)
+        assert torch.equal(activation, weight_only)
+
+    def test_fake_quant_uses_helper_result_when_available(self):
+        x = torch.randn(2, 64, dtype=torch.bfloat16)
+        marker = torch.zeros_like(x)
+        qdq = QuantDequantMx(bits=8, is_act=True)
+        with patch(_MXFP_HELPER_PATH, return_value=marker) as helper:
+            out = qdq.fake_quant(x)
+        assert out is marker
+        helper.assert_called_once_with(x, 8)
+
+    def test_fake_quant_uses_helper_for_weights(self):
+        x = torch.randn(4, 64, dtype=torch.bfloat16)
+        marker = torch.zeros_like(x)
+        qdq = QuantDequantMx(bits=8, is_act=False)
+        with patch(_MXFP_HELPER_PATH, return_value=marker) as helper:
+            out = qdq.fake_quant(x)
+        assert out is marker
+        helper.assert_called_once_with(x, 8)
+
+    @pytest.mark.parametrize("v", [1.0])
+    def test_fake_quant_skips_helper_for_nonzero_scalar_offset(self, v):
+        x = torch.randn(2, 64, dtype=torch.bfloat16)
+        qdq = QuantDequantMx(bits=8, is_act=True)
+        with patch(_MXFP_HELPER_PATH) as helper:
+            out = qdq.fake_quant(x, v=v)
+        helper.assert_not_called()
+        assert torch.equal(out, QuantDequantMx(bits=8, is_act=True)(x, v=v))
+
+    def test_fake_quant_skips_helper_for_nonzero_offset_tensor(self):
+        x = torch.randn(2, 64, dtype=torch.bfloat16)
+        v = torch.full((2, 64), 0.5)
+        qdq = QuantDequantMx(bits=8, is_act=True)
+        with patch(_MXFP_HELPER_PATH) as helper:
+            out = qdq.fake_quant(x, v=v)
+        helper.assert_not_called()
+        assert torch.equal(out, QuantDequantMx(bits=8, is_act=True)(x, v=v))
+
+    def test_fake_quant_uses_helper_for_zero_offset_tensor(self):
+        x = torch.randn(2, 64, dtype=torch.bfloat16)
+        marker = torch.zeros_like(x)
+        qdq = QuantDequantMx(bits=8, is_act=True)
+        with patch(_MXFP_HELPER_PATH, return_value=marker) as helper:
+            out = qdq.fake_quant(x, v=torch.zeros(2, 64))
+        assert out is marker
+        helper.assert_called_once_with(x, 8)
+
+    def test_fake_quant_skips_helper_for_explicit_qdim(self):
+        # qdim=1 keeps the helper (hardcoded axis=-1) out of the path; the
+        # torch simulation below works on float32 [2, 64] -> [2, 2, 32].
+        x = torch.randn(2, 64, dtype=torch.float32)
+        qdq = QuantDequantMx(bits=8, is_act=True)
+        with patch(_MXFP_HELPER_PATH) as helper:
+            qdq.fake_quant(x, qdim=1)
+        helper.assert_not_called()
+
+
+@pytest.fixture
+def fake_a5_mx_ops():
+    """Simulate an A5 torch_npu with callable MX ops, without NPU hardware."""
+    from amct_pytorch.quantization.dtypes import mxfp
+
+    quant = MagicMock()
+    anti = MagicMock()
+    fake = types.ModuleType("torch_npu")
+    fake.float8_e4m3fn = 292
+    fake.float4_e2m1fn_x2 = 296
+    fake.npu_dynamic_mx_quant = quant
+    fake.npu_anti_mx_quant = anti
+
+    with (
+        patch.dict(sys.modules, {"torch_npu": fake}),
+        patch.object(mxfp, "quant_format_supported", return_value=True),
+    ):
+        yield SimpleNamespace(quant=quant, anti=anti)
+
+
+class TestMxfpNpuOpsWiring:
+    @pytest.mark.parametrize("bits, dst_type", [(8, 292), (4, 296)], ids=["fp8", "fp4"])
+    def test_helper_wires_ops_and_bits_to_dst_type(
+        self, fake_a5_mx_ops, bits, dst_type
+    ):
+        x = torch.randn(2, 64, dtype=torch.bfloat16)
+        quantized = torch.zeros_like(x)
+        mxscale = torch.zeros(2, 2, dtype=torch.uint8)
+        dequantized = torch.ones_like(x)
+        fake_a5_mx_ops.quant.return_value = (quantized, mxscale)
+        fake_a5_mx_ops.anti.return_value = dequantized
+
+        with torch.no_grad():
+            out = npu_dynamic_mx_quant_value(x, bits)
+
+        assert out is dequantized
+        fake_a5_mx_ops.quant.assert_called_once_with(
+            x, axis=-1, dst_type=dst_type, block_size=32
+        )
+        fake_a5_mx_ops.anti.assert_called_once_with(
+            quantized,
+            mxscale,
+            axis=-1,
+            dst_type=torch.bfloat16,
+            src_type=dst_type,
+        )
+
+    def test_fake_quant_uses_fused_ops_for_weights(self, fake_a5_mx_ops):
+        x = torch.randn(4, 64, dtype=torch.bfloat16)
+        quantized = torch.zeros_like(x)
+        mxscale = torch.zeros(4, 2, dtype=torch.uint8)
+        dequantized = torch.ones_like(x)
+        fake_a5_mx_ops.quant.return_value = (quantized, mxscale)
+        fake_a5_mx_ops.anti.return_value = dequantized
+
+        with torch.no_grad():
+            out = QuantDequantMx(bits=8, is_act=False)(x)
+
+        assert out is dequantized
+        fake_a5_mx_ops.quant.assert_called_once()
+        fake_a5_mx_ops.anti.assert_called_once()
+
+    @pytest.mark.parametrize("dtype", MX_INPUT_DTYPES, ids=["fp16", "bf16", "fp32"])
+    def test_helper_accepts_supported_input_dtypes(self, fake_a5_mx_ops, dtype):
+        x = torch.randn(2, 64, dtype=dtype)
+        fake_a5_mx_ops.quant.return_value = (x, torch.zeros(2, 2, dtype=torch.uint8))
+        fake_a5_mx_ops.anti.return_value = x
+
+        with torch.no_grad():
+            assert npu_dynamic_mx_quant_value(x, 8) is x
+
+        assert fake_a5_mx_ops.anti.call_args.kwargs["dst_type"] is dtype
+
+    def test_helper_skips_ops_when_grad_enabled(self, fake_a5_mx_ops):
+        x = torch.randn(2, 64, dtype=torch.bfloat16)
+        assert npu_dynamic_mx_quant_value(x, 8) is None
+        fake_a5_mx_ops.quant.assert_not_called()
+
+    def test_helper_skips_ops_for_unsupported_dtype(self, fake_a5_mx_ops):
+        x = torch.randn(2, 64, dtype=torch.float64)
+        with torch.no_grad():
+            assert npu_dynamic_mx_quant_value(x, 8) is None
+        fake_a5_mx_ops.quant.assert_not_called()
+
+    @pytest.mark.parametrize("bits", [2, 16])
+    def test_helper_skips_ops_for_unsupported_bits(self, fake_a5_mx_ops, bits):
+        x = torch.randn(2, 64, dtype=torch.bfloat16)
+        with torch.no_grad():
+            assert npu_dynamic_mx_quant_value(x, bits) is None
+        fake_a5_mx_ops.quant.assert_not_called()
+
+    def test_helper_raises_on_quant_runtime_error(self, fake_a5_mx_ops):
+        x = torch.randn(2, 64, dtype=torch.bfloat16)
+        fake_a5_mx_ops.quant.side_effect = RuntimeError("aclnn error 161001")
+
+        with torch.no_grad(), pytest.raises(RuntimeError, match="161001"):
+            npu_dynamic_mx_quant_value(x, 8)
+
+        fake_a5_mx_ops.anti.assert_not_called()
+
+    def test_helper_raises_on_anti_runtime_error(self, fake_a5_mx_ops):
+        x = torch.randn(2, 64, dtype=torch.bfloat16)
+        fake_a5_mx_ops.quant.return_value = (
+            torch.zeros_like(x),
+            torch.zeros(2, 2, dtype=torch.uint8),
+        )
+        fake_a5_mx_ops.anti.side_effect = RuntimeError("aclnn error 161001")
+
+        with torch.no_grad(), pytest.raises(RuntimeError, match="161001"):
+            npu_dynamic_mx_quant_value(x, 8)
+
+    @pytest.mark.parametrize(
+        "bits, fmt_name", [(8, "MXFP8"), (4, "MXFP4")], ids=["fp8", "fp4"]
+    )
+    def test_helper_checks_format_capability(self, fake_a5_mx_ops, bits, fmt_name):
+        from amct_pytorch.quantization.dtypes import mxfp
+
+        x = torch.randn(2, 64, dtype=torch.bfloat16)
+        with patch.object(mxfp, "quant_format_supported", return_value=False) as probe:
+            with torch.no_grad():
+                assert npu_dynamic_mx_quant_value(x, bits) is None
+        probe.assert_called_once_with(getattr(mxfp, fmt_name), x.device)
+
+    def test_fake_quant_raises_when_ops_fail(self, fake_a5_mx_ops):
+        x = torch.randn(2, 64, dtype=torch.bfloat16)
+        fake_a5_mx_ops.quant.side_effect = RuntimeError("aclnn error 161001")
+
+        with torch.no_grad(), pytest.raises(RuntimeError, match="161001"):
+            QuantDequantMx(bits=8, is_act=True)(x)
+
+
+class TestActivationQuantizerMxfp:
+    def test_activation_quantizer_builds_for_mxfp(self):
+        args = SimpleNamespace(quant_dtype="mxfp", algos=[])
+        quantizer = ActivationQuantizer(args, bits=8)
+        assert quantizer.quant_obj.bits == 8
+        assert quantizer.quant_obj.is_observe is False

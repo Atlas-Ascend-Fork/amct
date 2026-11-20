@@ -448,3 +448,112 @@ def test_mxfp4_scaling_retains_mixed_dtype_result(dtype):
     scaled = qu.scale_input_by_shared_exponents(tensor, shared)
     assert scaled.dtype == dtype
     assert scaled.item() == 4.0
+
+
+# ---- quant_format_supported ------------------------------------------------
+
+
+def test_quant_format_supported_unknown_raises():
+    qu._quant_format_supported.cache_clear()
+    with pytest.raises(ValueError, match="Unsupported quant format"):
+        qu.quant_format_supported("not-a-format", torch.device("cpu"))
+    qu._quant_format_supported.cache_clear()
+
+
+def test_quant_format_supported_cpu_returns_false():
+    qu._quant_format_supported.cache_clear()
+    for fmt in (qu.INT_8, qu.INT_4, qu.MXFP8, qu.MXFP4):
+        assert qu.quant_format_supported(fmt, torch.device("cpu")) is False
+    qu._quant_format_supported.cache_clear()
+
+
+def test_quant_format_supported_returns_false_without_torch_npu():
+    qu._quant_format_supported.cache_clear()
+    with patch.dict(sys.modules, {"torch_npu": None}):
+        assert qu.quant_format_supported(qu.INT_8) is False
+    qu._quant_format_supported.cache_clear()
+
+
+def _fake_quant_ops_module(calls, fail=False):
+    module = types.ModuleType("torch_npu")
+    module.float8_e4m3fn = "float8_e4m3fn"
+    module.float4_e2m1fn_x2 = "float4_e2m1fn_x2"
+
+    def dynamic_quant(x, **kwargs):
+        calls.append(("dynamic_quant", kwargs))
+        return x
+
+    def dynamic_mx_quant(x, **kwargs):
+        calls.append(("dynamic_mx_quant", kwargs))
+        if fail:
+            raise RuntimeError("aclnn error 161001")
+        scale = torch.zeros(x.shape[0], x.shape[-1] // 32, dtype=torch.uint8)
+        return x, scale
+
+    def anti_mx_quant(x, scale, **kwargs):
+        calls.append(("anti_mx_quant", kwargs))
+        return x
+
+    module.npu_dynamic_quant = dynamic_quant
+    module.npu_dynamic_mx_quant = dynamic_mx_quant
+    module.npu_anti_mx_quant = anti_mx_quant
+    return module
+
+
+def test_quant_format_supported_int8_probe_uses_dynamic_quant():
+    qu._quant_format_supported.cache_clear()
+    calls = []
+    with patch.dict(sys.modules, {"torch_npu": _fake_quant_ops_module(calls)}):
+        assert qu._quant_format_supported(qu.INT_8, torch.device("cpu")) is True
+    assert calls == [("dynamic_quant", {"dst_type": torch.int8})]
+    qu._quant_format_supported.cache_clear()
+
+
+@pytest.mark.parametrize(
+    "fmt, dtype_attr",
+    [(qu.MXFP8, "float8_e4m3fn"), (qu.MXFP4, "float4_e2m1fn_x2")],
+    ids=["mxfp8", "mxfp4"],
+)
+def test_quant_format_supported_mx_probe_uses_mx_ops(fmt, dtype_attr):
+    qu._quant_format_supported.cache_clear()
+    calls = []
+    fake = _fake_quant_ops_module(calls)
+    dst_type = getattr(fake, dtype_attr)
+    with patch.dict(sys.modules, {"torch_npu": fake}):
+        assert qu._quant_format_supported(fmt, torch.device("cpu")) is True
+    assert calls[0] == (
+        "dynamic_mx_quant",
+        {"axis": -1, "dst_type": dst_type, "block_size": 32},
+    )
+    assert calls[1] == (
+        "anti_mx_quant",
+        {"axis": -1, "dst_type": torch.float16, "src_type": dst_type},
+    )
+    qu._quant_format_supported.cache_clear()
+
+
+def test_quant_format_supported_probe_returns_false_on_op_error():
+    qu._quant_format_supported.cache_clear()
+    calls = []
+    fake = _fake_quant_ops_module(calls, fail=True)
+    with patch.dict(sys.modules, {"torch_npu": fake}):
+        assert qu._quant_format_supported(qu.MXFP8, torch.device("cpu")) is False
+    assert calls == [
+        (
+            "dynamic_mx_quant",
+            {"axis": -1, "dst_type": fake.float8_e4m3fn, "block_size": 32},
+        )
+    ]
+    qu._quant_format_supported.cache_clear()
+
+
+def test_quant_format_supported_delegates_to_probe():
+    qu._quant_format_supported.cache_clear()
+    calls = []
+    with (
+        patch.object(qu, "_resolve_device", return_value=torch.device("cpu")),
+        patch.dict(sys.modules, {"torch_npu": _fake_quant_ops_module(calls)}),
+    ):
+        assert qu.quant_format_supported(qu.INT_8, torch.device("cpu")) is True
+    assert calls == [("dynamic_quant", {"dst_type": torch.int8})]
+    qu._quant_format_supported.cache_clear()

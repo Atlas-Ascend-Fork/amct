@@ -38,6 +38,12 @@ from amct_pytorch.common.utils.data_utils import float_to_fp4e2m1
 FP4E2M1_MAX_EXP = 2
 
 
+INT_8 = torch.int8
+INT_4 = torch.quint4x2
+MXFP8 = torch.float8_e4m3fn
+MXFP4 = MXFP4_E2M1
+
+
 @functools.lru_cache(maxsize=1)
 def hifloat8_supported():
     """Probe whether the current torch_npu can really do a hifloat8 cast; cached per process.
@@ -95,6 +101,71 @@ def hifloat8_fake_quant(fp_tensor):
     )
     codes = encode_to_hifloat8(fp_tensor.to(work_dtype).npu())
     return decode_from_hifloat8(codes, work_dtype).to(fp_tensor.dtype)
+
+
+def _resolve_device(device):
+    if device is None:
+        try:
+            import torch_npu
+
+            if not torch_npu.npu.is_available():
+                return None
+            return torch.device("npu", torch_npu.npu.current_device())
+        except (AttributeError, ImportError, RuntimeError, TypeError, ValueError):
+            return None
+    device = torch.device(device)
+    if device.type != "npu":
+        return None
+    return device
+
+
+@functools.lru_cache(maxsize=None)
+def _quant_format_supported(fmt, device):
+    try:
+        import torch_npu
+
+        # test tensor
+        x = torch.zeros(4, 64, dtype=torch.float16, device=device)
+        if fmt in (INT_8, INT_4):
+            torch_npu.npu_dynamic_quant(x, dst_type=fmt)
+        else:
+            dst_type = (
+                torch_npu.float8_e4m3fn if fmt == MXFP8 else torch_npu.float4_e2m1fn_x2
+            )
+            quantized, scale = torch_npu.npu_dynamic_mx_quant(
+                x, axis=-1, dst_type=dst_type, block_size=32
+            )
+            torch_npu.npu_anti_mx_quant(
+                quantized,
+                scale,
+                axis=-1,
+                dst_type=x.dtype,
+                src_type=dst_type,
+            )
+    except (AttributeError, ImportError, RuntimeError, TypeError, ValueError):
+        return False
+    return True
+
+
+def quant_format_supported(fmt, device=None):
+    """Probe whether the NPU quantization path for a format is usable.
+
+    Args:
+        fmt: INT_8 / INT_4 / MXFP8 / MXFP4.
+        device: target NPU device; None means the current NPU.
+    Returns:
+        bool: whether the NPU quantization path for the format is usable.
+    """
+    if fmt not in (INT_8, INT_4, MXFP8, MXFP4):
+        raise ValueError(
+            "Unsupported quant format {!r}; expected one of {}, {}, {}, {}".format(
+                fmt, INT_8, INT_4, MXFP8, MXFP4
+            )
+        )
+    device = _resolve_device(device)
+    if device is None:
+        return False
+    return _quant_format_supported(fmt, device)
 
 
 def pad_zero_by_group(tensor, group_size):
