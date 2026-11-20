@@ -357,6 +357,7 @@ def _make_quant_args(quant_target=("attn-linear",), quant_dtype="int"):
         w_bits=8,
         a_bits=8,
         quant_dtype=quant_dtype,
+        k_size=128,
     )
 
 
@@ -734,9 +735,9 @@ class TestQuantGlmMoeDsaAttention:
         """Mock build_algorithms_by_target to return None for structure target."""
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.glm.glm5_2.quant_module.build_algorithms_by_target",
-            lambda args, target, *ctor_args: None
-            if target == "structure"
-            else nn.ModuleDict(),
+            lambda args, target, *ctor_args: (
+                None if target == "structure" else nn.ModuleDict()
+            ),
         )
 
     @staticmethod

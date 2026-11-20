@@ -39,7 +39,6 @@ _UNSET = object()
 # Format: (dest, flag, documented default kept on the namespace)
 _RESERVED_NOT_EFFECTIVE_ARGS = (
     ('min_lr', '--min_lr', 0.0),
-    ('k_size', '--k_size', 128),
     ('wikitext_final_out', '--wikitext_final_out', ""),
 )
 
@@ -48,6 +47,13 @@ _RESERVED_HELP = (
     'no workflow consumes it. Kept for compatibility with existing scripts; '
     'the passed value is ignored and a warning is printed.'
 )
+
+
+def _positive_int(value):
+    ivalue = int(value)
+    if ivalue <= 0:
+        raise argparse.ArgumentTypeError(f"must be a positive integer, got {value}")
+    return ivalue
 
 
 def _ignore_reserved_args(args):
@@ -205,7 +211,13 @@ def parser_gen(command=None):
         default=False,
         help='Use per-tensor statistics in activation clipping.',
     )
-    parser.add_argument('--k_size', type=int, default=_UNSET, help=_RESERVED_HELP)
+    parser.add_argument(
+        '--k_size',
+        type=_positive_int,
+        default=128,
+        help='Transform matrix size for structure-class algorithms '
+        '(e.g. learnable_had, flatquant). Default 128.',
+    )
 
     parser.add_argument("--start_block_idx", type=int, default=0)
     parser.add_argument("--end_block_idx", type=int, default=61)

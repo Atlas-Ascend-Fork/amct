@@ -90,6 +90,7 @@ def quant_block(api, config):
         a_bits=8,
         quant_dtype="int",
         algos=[],
+        k_size=128,
         bit_policy=api.get("policy").BitPolicy(config),
     )
     with torch.random.fork_rng(devices=[]):

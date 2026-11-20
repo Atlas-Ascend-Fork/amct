@@ -204,11 +204,17 @@ class QuantGatedMLP(nn.Module):
         PtqParamHandler.load_trainable_module(self, params)
 
     def _init_structure_transforms(self):
-        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)
+        ctx = AlgoBuildContext(
+            matrix_size=self.quant_args.k_size,
+            dim_size=self.hidden_size,
+        )
         self.input_transform = build_algorithms_by_target(
             self.quant_args, "structure", ctx
         )
-        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.intermediate_size)
+        ctx = AlgoBuildContext(
+            matrix_size=self.quant_args.k_size,
+            dim_size=self.intermediate_size,
+        )
         self.hidden_transform = build_algorithms_by_target(
             self.quant_args, "structure", ctx
         )

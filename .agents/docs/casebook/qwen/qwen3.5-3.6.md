@@ -28,6 +28,13 @@
 - `attn-linear` 与 `mlp` 的 Direct、LWC、LAC、LWC+LAC、OmniQuant、AutoRound、FlatQuant 均完成 Deploy 与 clean reload；无缺失键、非预期键、形状不匹配或加载错误。
 - clean reload 识别 `attn-linear` 304 个量化模块（第 0 层 5 个）、`mlp` 192 个量化模块（第 0 层 3 个）；Vision 分支和 `lm_head` 未被错误量化。
 
+### Qwen3.5-9B Dense（LHT A4W4 MXFP4）
+
+- PTQ 训练：`--algos learnable_had`，epochs=15、base_lr=1e-3、k_size=128（缺省）、校准 128 样本 seq_len 4096；`attn-linear` 32/32、`mlp` 32/32 参数落盘，导出正交误差 max 1.07e-06。
+- 全量测评（127 NPU，EvalScope，seed=42，解码 temperature=1.0/top_k=20/top_p=0.95）：MATH500（500 条）attn/mlp/attn-mlp = 0.900/0.930/0.856；MMLU-Pro（12032 题）= 0.7551/0.7823/0.7483；LiveCodeBench（1055 题）= 0.4398/0.5583/0.4275；WikiText2 PPL = 7.878/8.283/8.217。
+- 与同口径 RTN 直转对照：LHT 挽回 MATH500 +3.6/+1.0/+6.6pt、LCB +3.8/+5.8/+11.8pt、PPL −15.3%/−2.7%/−14.0%。
+- 部署：导出参数（`transform_weight` 平铺键格式）经 vllm-ascend 侧自定义加载器加载（含正交守卫）复现上述精度（非本仓 deploy 路径，仓内 `deploy_export` 尚未贯通 structure 变换——flatquant/let 同病，属框架级待补项）；AMCT 侧回载路径 PPL 复测一致。
+
 ## 关键陷阱（L3 模型/家族专属；通用见 L1/L2）
 
 - **误用 DeepSeek 的 MLA 接口**（L3，Qwen3_5/3_6 专属） —— 现象：进 quant block 构建即调到不存在的 `apply_quant_mla()` 报错。根因：`qwen3_5moe` 继承 `Qwen3_5`，应复用 Qwen 公共接口而非 DeepSeek MLA 专用入口。处理：统一收回 `apply_quant_attn()`/`apply_quant_moe_mlp()`。**教训：Qwen 分支先看 dense adapter 公共接口，勿直接用 DeepSeek MLA 入口。**
@@ -91,3 +98,15 @@
 | MXFP | A4w4: mlp | omniquant | 7.8741 |
 | MXFP | A4w4: mlp | autoround | 7.9661 |
 | MXFP | A4w4: mlp | flatquant | 7.7327 |
+
+### Qwen3.5-9B（BF16 8.171）
+
+| 数据类型 | 量化配置 | 量化算法 | ppl |
+| --- | --- | --- | --- |
+| BF16 | 无 | 无 | 8.171 |
+| MXFP | A4w4: attn-linear | rtn | 9.297 |
+| MXFP | A4w4: attn-linear | learnable_had | 7.878 |
+| MXFP | A4w4: mlp | rtn | 8.509 |
+| MXFP | A4w4: mlp | learnable_had | 8.283 |
+| MXFP | A4w4: attn-linear+mlp | rtn | 9.559 |
+| MXFP | A4w4: attn-linear+mlp | learnable_had | 8.217 |

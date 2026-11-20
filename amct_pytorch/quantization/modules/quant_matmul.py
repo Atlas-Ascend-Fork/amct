@@ -20,6 +20,7 @@ from amct_pytorch.algorithms.quant import AlgoBuildContext
 from amct_pytorch.quantization.modules.quant_base import (
     ActivationQuantizer,
     build_algorithms_by_target,
+    get_algo_names_by_target,
 )
 
 
@@ -65,13 +66,26 @@ class QuantizedMatmul(nn.Module):
     def _init_structure_transforms(self, left_dim, right_dim):
         if not self.enable_attn_cache:
             return
+        if "learnable_had" in get_algo_names_by_target(self.quant_args, "structure"):
+            raise NotImplementedError(
+                "learnable_had does not support attn-cache quantization: the "
+                "left/right matmul transforms are built independently and cannot "
+                "cancel (Q_l @ Q_r^T != I), which would silently corrupt attention "
+                "scores. Use attn-linear instead."
+            )
         if left_dim is not None:
-            ctx = AlgoBuildContext(matrix_size=128, dim_size=left_dim)
+            ctx = AlgoBuildContext(
+                matrix_size=self.quant_args.k_size,
+                dim_size=left_dim,
+            )
             self.left_transform = build_algorithms_by_target(
                 self.quant_args, "structure", ctx
             )
         if right_dim is not None:
-            ctx = AlgoBuildContext(matrix_size=128, dim_size=right_dim)
+            ctx = AlgoBuildContext(
+                matrix_size=self.quant_args.k_size,
+                dim_size=right_dim,
+            )
             self.right_transform = build_algorithms_by_target(
                 self.quant_args, "structure", ctx
             )

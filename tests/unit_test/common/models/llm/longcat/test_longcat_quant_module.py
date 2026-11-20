@@ -77,6 +77,7 @@ def _quant_args(quant_target=("attn-linear",)):
         p_bits=8,
         v_bits=8,
         quant_target=list(quant_target),
+        k_size=128,
         bit_policy=BitPolicy(
             {
                 "mlp": {
@@ -283,6 +284,7 @@ def _mla_attn_cache_args():
         p_bits=8,
         v_bits=8,
         quant_target=["attn-cache"],
+        k_size=128,
         bit_policy=BitPolicy(
             {
                 "mlp": {},
@@ -313,6 +315,7 @@ def _mla_attn_linear_args():
         p_bits=8,
         v_bits=8,
         quant_target=["attn-linear", "attn-cache"],
+        k_size=128,
         bit_policy=BitPolicy(
             {
                 "mlp": {},

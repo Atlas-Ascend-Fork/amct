@@ -98,6 +98,7 @@ _MOCK_QUANT_ARGS = SimpleNamespace(
     algos=["lac", "lwc"],
     w_size=(4, 8),
     is_per_tensor=True,
+    k_size=128,
 )
 
 
@@ -227,6 +228,7 @@ def test_apply_quant_to_moe_mlp_with_routed_expert_bits():
     layer.mlp = nn.Module()
     layer.mlp.experts = nn.ModuleList([nn.Linear(4, 4)])
     args = argparse.Namespace(
+        k_size=128,
         w_bits=8,
         a_bits=8,
         bit_policy=_MLP_BIT_POLICY,
@@ -243,6 +245,7 @@ def test_apply_quant_to_moe_mlp_with_shared_experts():
     layer = nn.Module()
     layer.shared_experts = nn.Linear(4, 4)
     args = argparse.Namespace(
+        k_size=128,
         w_bits=8,
         a_bits=8,
         bit_policy=_MLP_BIT_POLICY,
@@ -270,6 +273,7 @@ def test_quant_gated_mlp_forward_uses_input_and_hidden_transform(monkeypatch):
     cmds = []
 
     args = argparse.Namespace(
+        k_size=128,
         w_bits=8,
         a_bits=8,
         quant_dtype="int",
@@ -302,6 +306,7 @@ def test_quant_gated_mlp_forward_uses_input_and_hidden_transform(monkeypatch):
 
 def test_quant_gated_mlp_forward_passthrough_when_quant_disabled():
     args = argparse.Namespace(
+        k_size=128,
         w_bits=8,
         a_bits=8,
         quant_dtype="int",
@@ -323,6 +328,7 @@ def test_quant_gated_mlp_export_ptq_params_returns_module_params(monkeypatch):
     monkeypatch.setattr(PtqParamHandler, "export_trainable_module", lambda m: {})
 
     args = argparse.Namespace(
+        k_size=128,
         w_bits=8,
         a_bits=8,
         quant_dtype="int",
@@ -346,6 +352,7 @@ def test_quant_gated_mlp_export_ptq_params_returns_module_params(monkeypatch):
     )
 
     args = argparse.Namespace(
+        k_size=128,
         w_bits=8,
         a_bits=8,
         quant_dtype="int",
@@ -373,6 +380,7 @@ def test_quant_gated_mlp_load_ptq_params_nested_dicts(monkeypatch):
     )
 
     args = argparse.Namespace(
+        k_size=128,
         w_bits=8,
         a_bits=8,
         quant_dtype="int",
@@ -400,6 +408,7 @@ def test_quant_gated_mlp_load_ptq_params_non_nested(monkeypatch):
     )
 
     args = argparse.Namespace(
+        k_size=128,
         w_bits=8,
         a_bits=8,
         quant_dtype="int",
@@ -415,7 +424,12 @@ def test_quant_gated_mlp_load_ptq_params_non_nested(monkeypatch):
 
 def test_quant_gated_mlp_forward():
     args = SimpleNamespace(
-        algos=[], quant_dtype="int", w_bits=8, a_bits=8, quant_target=["mlp"]
+        algos=[],
+        quant_dtype="int",
+        w_bits=8,
+        a_bits=8,
+        quant_target=["mlp"],
+        k_size=128,
     )
     mlp = QuantGatedMLP(args, _FakeMLP(hidden_size=4, intermediate_size=8))
     x = torch.randn(2, 4)

@@ -333,7 +333,7 @@ def test_tensor_cli_rejects_invalid_bits_before_json_read(
 
 
 # ---------------------------------------------------------------------------
-# Reserved-but-not-effective flags (--min_lr / --k_size / --wikitext_final_out)
+# Reserved-but-not-effective flags (--min_lr / --wikitext_final_out)
 # They are documented as reserved parameters, so they stay accepted for
 # compatibility with released docs and user scripts; the current version does
 # not consume them, so the values are ignored and a warning is emitted.
@@ -341,7 +341,6 @@ def test_tensor_cli_rejects_invalid_bits_before_json_read(
 
 RESERVED_FLAGS = [
     ("--min_lr", "1e-4", 0.0),
-    ("--k_size", "64", 128),
     ("--wikitext_final_out", "/tmp/wikitext", ""),
 ]
 
@@ -396,6 +395,7 @@ def test_reserved_flags_accepted_by_every_command(monkeypatch, command):
     argv = ["amct", *REQUIRED_ARGV[command]]
     for flag, value, _ in RESERVED_FLAGS:
         argv += [flag, value]
+    argv += ["--k_size", "64"]
     monkeypatch.setattr(sys, "argv", argv)
 
     if command == "deploy":
@@ -404,7 +404,8 @@ def test_reserved_flags_accepted_by_every_command(monkeypatch, command):
     else:
         args = parser_gen(command=command)
 
-    assert (args.min_lr, args.k_size, args.wikitext_final_out) == (0.0, 128, "")
+    assert (args.min_lr, args.wikitext_final_out) == (0.0, "")
+    assert args.k_size == 64
     assert len(recorder.messages) == len(RESERVED_FLAGS)
 
 
@@ -416,3 +417,38 @@ def test_reserved_flags_still_listed_in_help(monkeypatch, capsys):
     help_text = capsys.readouterr().out
     for flag, _, _ in RESERVED_FLAGS:
         assert flag in help_text
+
+
+# ---------------------------------------------------------------------------
+# --k_size defaults to 128 in argparse and is passed directly by model
+# wrappers as the matrix size for structure transforms.
+# ---------------------------------------------------------------------------
+
+
+def test_k_size_effective_when_passed(monkeypatch):
+    recorder = _WarningRecorder()
+    monkeypatch.setattr(llm_args, "logger", recorder)
+    monkeypatch.setattr(sys, "argv", ["amct", *REQUIRED_ARGV["ptq"], "--k_size", "64"])
+
+    args = parser_gen(command="ptq")
+
+    assert args.k_size == 64
+    assert recorder.messages == []
+
+
+def test_k_size_defaults_to_128_when_absent(monkeypatch):
+    recorder = _WarningRecorder()
+    monkeypatch.setattr(llm_args, "logger", recorder)
+    monkeypatch.setattr(sys, "argv", ["amct", *REQUIRED_ARGV["ptq"]])
+
+    args = parser_gen(command="ptq")
+
+    assert args.k_size == 128
+    assert recorder.messages == []
+
+
+@pytest.mark.parametrize("bad", ["0", "-4", "x"])
+def test_k_size_invalid_rejected(monkeypatch, bad):
+    monkeypatch.setattr(sys, "argv", ["amct", *REQUIRED_ARGV["ptq"], "--k_size", bad])
+    with pytest.raises(SystemExit):
+        parser_gen(command="ptq")

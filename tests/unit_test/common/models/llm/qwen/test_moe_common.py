@@ -57,6 +57,7 @@ def _make_args(quant_target=("moe",)):
         w_bits=8,
         a_bits=8,
         quant_target=list(quant_target),
+        k_size=128,
         bit_policy=_MLP_BP,
     )
 

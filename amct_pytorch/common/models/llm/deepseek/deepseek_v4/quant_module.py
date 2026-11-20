@@ -13,6 +13,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Adapted from
+# https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash/blob/main/inference/model.py
+#
+# Copyright (c) 2023 DeepSeek.
+#
+# This file is part of DeepSeek-V4-Flash, which is released under the MIT License.
+# See the LICENSE file in the root directory of this source tree
+# or at https://opensource.org/licenses/MIT for details.
 # ----------------------------------------------------------------------------
 
 # The prefill compressor/indexer/attention tensor operations adapt the DeepSeek
@@ -454,12 +463,16 @@ class QuantV4Attention(nn.Module):
         return torch.einsum("bsgd,grd->bsgr", o, weight)
 
     def _init_structure_transforms(self):
-        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.q_lora_rank)
+        ctx = AlgoBuildContext(
+            matrix_size=self.quant_args.k_size,
+            dim_size=self.q_lora_rank,
+        )
         self.input_transform = build_algorithms_by_target(
             self.quant_args, "structure", ctx
         )
         ctx = AlgoBuildContext(
-            matrix_size=128, dim_size=self.n_local_groups * self.o_lora_rank
+            matrix_size=self.quant_args.k_size,
+            dim_size=self.n_local_groups * self.o_lora_rank,
         )
         self.out_transform = build_algorithms_by_target(
             self.quant_args, "structure", ctx

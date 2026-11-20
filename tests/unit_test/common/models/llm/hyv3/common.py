@@ -45,6 +45,7 @@ def quant_args(quant_target=(ATTN_LINEAR,)):
         p_bits=8,
         v_bits=8,
         quant_target=list(quant_target),
+        k_size=128,
         bit_policy=BitPolicy(
             {
                 ATTN_LINEAR: {

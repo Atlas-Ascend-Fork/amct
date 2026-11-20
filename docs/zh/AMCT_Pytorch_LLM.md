@@ -226,6 +226,7 @@ python -m amct_pytorch.ptq \
 
 - 模块粒度：blockwise 量化导出仅支持 `granularity=block`；`granularity=tensor` 为按张粒度转换权重（如 FP8/FP4 → BF16 权重转换，见 DeepSeek-V4-Flash 样例），两种路径互斥。
 - 自定义 hook 限制：若使用了自定义的 `quantize()` hook（用于权重量化算法），则当前版本不支持通过 `export_deploy()` 功能进行部署。
+- 结构类算法限制（如 `learnable_had`、`flatquant`）：blockwise 导出当前**不会**应用结构变换矩阵（变换矩阵不随部署件落盘/应用），因此标准 `deploy` 产物与含结构变换的 `eval` 结果**不等价**；如需部署结果与 eval 一致，需借助自定义加载器处理变换矩阵。该贯通为框架级待补项。
 
 `ptq`单卡相关启动指令也可参考[ptq_single_npu.sh](../../examples/ptq_single_npu.sh)
 `ptq`多卡相关启动指令也可参考[ptq_multi_npu.sh](../../examples/ptq_multi_npu.sh)
@@ -322,7 +323,7 @@ python -m amct_pytorch.deploy \
 | `--bit_config` | `None` | YAML 格式的配置文件路径，该文件定义了具体的位宽策略。如果不提供此参数，则使用默认的 `W16A16` 配置。 |
 | `--algos` | `[]` | 启用的量化算法列表，算法会根据其注册的 `target` 自动应用到模型的权重（weight）、激活值（activation）或结构（structure）上。 |
 | `--is_per_tensor` | `False` | 对于LAC（Learned Activation Clipping，学习式激活裁剪）算法，是否使用 per-tensor统计信息来确定裁剪范围。 |
-| `--k_size` | `128` | **【预留参数，暂不生效】** 可学习的 Hadamard 类结构变换矩阵的尺寸。当前版本该尺寸由各模型 `quant_module` 决定（固定为 128），该参数尚未接入，传入的值不会生效，仅打印告警；参数本身予以保留，后续版本按需接通。 |
+| `--k_size` | `128` | 结构类算法（如 `flatquant`、`learnable_had`）变换矩阵的尺寸（方阵边长）。默认 128；取值须为正整数。整除约束因算法而异：`learnable_had` 要求可整除所量化线性层的 hidden 维度（不整除报错）；`flatquant` 不整除时退化为单一变换（打印告警）。LHT 当前已验证 Qwen3.5-9B 的 `attn-linear` 和 `mlp` 场景；暂不支持用于 `attn-cache`。使用 `QuantizedMatmul` 的相关模型会在构造时报错。 |
 
 常用 `bit_config`：
 

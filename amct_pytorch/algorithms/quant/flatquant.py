@@ -20,6 +20,7 @@
 
 import torch
 import torch.nn as nn
+from loguru import logger
 
 from amct_pytorch.algorithms.quant.base import QuantAlgorithmBase
 from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
@@ -128,6 +129,13 @@ class FlatQuant(QuantAlgorithmBase):
             and self.dim_size > self.matrix_size
             and self.dim_size % self.matrix_size == 0
         )
+        if self.matrix_size > 1 and self.dim_size % self.matrix_size != 0:
+            logger.warning(
+                "FlatQuant: dim_size {} not divisible by matrix_size {}, "
+                "falling back to single transform.",
+                self.dim_size,
+                self.matrix_size,
+            )
 
         if use_decompose:
             left_size = self.dim_size // self.matrix_size

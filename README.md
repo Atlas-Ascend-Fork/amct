@@ -63,7 +63,7 @@ AMCT 是昇腾 NPU 原生的模型量化压缩工具。量化后模型体积减�
 | **INT4** | ✅ AWQ / GPTQ | ✅ FlatQuant | 体积 **↓75%** · 低带宽友好 |
 | **HiFloat8** | ✅ Cast / Quantile / OFMR | ✅ Cast / Quantile / OFMR | 体积 **↓50%** · 大动态范围 |
 | **MXFP8** | ✅ MXQuant | ✅ MXQuant | 体积 **↓50%** · 高精度 |
-| **MXFP4** | ✅ MXQuant | ✅ MXQuant | 体积 **↓75%** · 微缩浮点 |
+| **MXFP4** | ✅ MXQuant | ✅ MXQuant / LHT | 体积 **↓75%** · 微缩浮点 |
 
 <a id="quickstart"></a>
 ## 📦 快速开始
@@ -245,6 +245,8 @@ pip3 install build_out/amct_pytorch-${version}-py3-none-linux_${arch}.tar.gz --u
 - [GPTQ](https://github.com/IST-DASLab/gptq) - GPTQ 实现参考
 - [SmoothQuant](https://github.com/mit-han-lab/smoothquant) - 平滑激活量化
 - [FlatQuant](https://github.com/ruikangliu/FlatQuant) - 矩阵平坦量化
+- [QuaRot](https://arxiv.org/abs/2404.00456) - 正交旋转离群值摊平
+- [SpinQuant](https://arxiv.org/abs/2405.16406) - 可学习旋转量化
 
 ## 📝 许可证
 

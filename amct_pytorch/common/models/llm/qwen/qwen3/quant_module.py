@@ -158,11 +158,17 @@ class QuantQwen3Attn(Qwen3Attention):
         return attn_output, None
 
     def _init_structure_transforms(self):
-        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)
+        ctx = AlgoBuildContext(
+            matrix_size=self.quant_args.k_size,
+            dim_size=self.hidden_size,
+        )
         self.input_transform = build_algorithms_by_target(
             self.quant_args, "structure", ctx
         )
-        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.value_dim)
+        ctx = AlgoBuildContext(
+            matrix_size=self.quant_args.k_size,
+            dim_size=self.value_dim,
+        )
         self.out_transform = build_algorithms_by_target(
             self.quant_args, "structure", ctx
         )

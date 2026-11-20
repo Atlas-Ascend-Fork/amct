@@ -42,6 +42,7 @@ def _quant_args(algos=None, quant_target=("attn-linear",)):
         w_bits=8,
         a_bits=8,
         quant_target=list(quant_target),
+        k_size=128,
         device="cpu",
         base_lr=1e-3,
         optimizer="adamw",

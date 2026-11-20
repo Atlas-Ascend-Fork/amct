@@ -17,12 +17,15 @@
 # ----------------------------------------------------------------------------
 from types import SimpleNamespace
 
+import pytest
 import torch
 
+from amct_pytorch.algorithms.quant import register_algorithms
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.quantization.modules.quant_matmul import QuantizedMatmul
 
 register_dtype()
+register_algorithms()
 
 
 def _args(algos=(), quant_target=(), quant_dtype="int", w_bits=8):
@@ -95,3 +98,28 @@ def test_init_constructs_per_side_quantizers_with_specified_bits():
     qm = QuantizedMatmul(_args(), l_bits=4, r_bits=8)
     assert qm.l_node.bits == 4
     assert qm.r_node.bits == 8
+
+
+def test_learnable_had_with_attn_cache_raises_not_implemented():
+    args = SimpleNamespace(
+        algos=["learnable_had"],
+        quant_dtype="int",
+        w_bits=8,
+        quant_target=["attn-cache"],
+        k_size=128,
+    )
+    with pytest.raises(NotImplementedError, match="learnable_had"):
+        QuantizedMatmul(args, left_dim=8, right_dim=8)
+
+
+def test_learnable_had_without_attn_cache_is_allowed():
+    args = SimpleNamespace(
+        algos=["learnable_had"],
+        quant_dtype="int",
+        w_bits=8,
+        quant_target=[],
+        k_size=128,
+    )
+    qm = QuantizedMatmul(args, left_dim=8, right_dim=8)
+    assert qm.enable_attn_cache is False
+    assert qm.left_transform is None

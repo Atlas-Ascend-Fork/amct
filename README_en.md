@@ -64,7 +64,7 @@ Quantization significantly reduces deployment costs:
 | **INT4** | ✅ AWQ / GPTQ | ✅ FlatQuant | Size **↓75%** · Low bandwidth friendly |
 | **HiFloat8** | ✅ Cast / Quantile / OFMR | ✅ Cast / Quantile / OFMR | Size **↓50%** · Large dynamic range |
 | **MXFP8** | ✅ MXQuant | ✅ MXQuant | Size **↓50%** · High precision |
-| **MXFP4** | ✅ MXQuant | ✅ MXQuant | Size **↓75%** · Micro-scaling floating-point |
+| **MXFP4** | ✅ MXQuant | ✅ MXQuant / LHT | Size **↓75%** · Micro-scaling floating-point |
 
 <a id="quickstart"></a>
 ## 📦 Quick Start
@@ -247,6 +247,8 @@ This project is inspired by the following open source projects:
 - [GPTQ](https://github.com/IST-DASLab/gptq) - GPTQ implementation reference
 - [SmoothQuant](https://github.com/mit-han-lab/smoothquant) - Smooth activation quantization
 - [FlatQuant](https://github.com/ruikangliu/FlatQuant) - Matrix flat quantization
+- [QuaRot](https://arxiv.org/abs/2404.00456) - Outlier flattening via orthogonal rotation
+- [SpinQuant](https://arxiv.org/abs/2405.16406) - Learnable rotation quantization
 
 ## 📝 License
 

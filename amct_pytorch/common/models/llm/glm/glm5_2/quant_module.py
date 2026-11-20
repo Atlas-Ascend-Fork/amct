@@ -289,12 +289,16 @@ class QuantGlmMoeDsaAttention(nn.Module):
         self.indexer = QuantGlmIndexer(args, attn_module.indexer, bits, use_quant)
 
     def _init_structure_transforms(self):
-        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.q_lora_rank)
+        ctx = AlgoBuildContext(
+            matrix_size=self.quant_args.k_size,
+            dim_size=self.q_lora_rank,
+        )
         self.q_input_transform = build_algorithms_by_target(
             self.quant_args, "structure", ctx
         )
         ctx = AlgoBuildContext(
-            matrix_size=128, dim_size=self.num_heads * self.v_head_dim
+            matrix_size=self.quant_args.k_size,
+            dim_size=self.num_heads * self.v_head_dim,
         )
         self.o_output_transform = build_algorithms_by_target(
             self.quant_args, "structure", ctx

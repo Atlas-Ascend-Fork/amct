@@ -253,6 +253,12 @@ FlatQuant 是一种面向大模型的训练后量化（PTQ）方法，核心思�
 
 算法详细介绍请参见： [FlatQuant: Flatness Matters for LLM Quantization](https://arxiv.org/abs/2410.09426)。
 
+### LHT
+
+LHT（Learnable Hadamard Transform，可学习哈达玛变换）是一种面向大模型的训练后量化（PTQ）方法，核心思想是通过对线性层的激活与权重施加同一可学习的正交结构变换（Cayley 参数化正交矩阵），在保持线性层计算数学等价的同时，将激活分布中集中的异常值摊平到更多维度上，从而降低低比特量化难度。与固定的随机 Hadamard 变换相比，可学习正交矩阵可以根据模型和任务数据进行优化，有望改善量化精度。
+
+算法详细介绍请参见： [QuaRot](https://arxiv.org/abs/2404.00456)、[SpinQuant](https://arxiv.org/abs/2405.16406)。使用方式：经 `--algos learnable_had` 启用（结构类算法，同一层仅可启用一个），变换矩阵尺寸默认 128（方阵边长，可经 `--k_size` 配置）；变换矩阵初值为随机正交矩阵，训练过程中始终位于正交群上。当前已验证 Qwen3.5-9B 的 `attn-linear` 与 `mlp` 场景，暂不支持 `attn-cache`（使用 `QuantizedMatmul` 的模型构造时会报错）。详见[LLM 量化工具](./AMCT_Pytorch_LLM.md)。
+
 ### ULQ数据量化算法
 
 该算法用于量化感知训练场景。
