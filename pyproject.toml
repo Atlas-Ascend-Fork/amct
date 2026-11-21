@@ -51,4 +51,5 @@ quote-style = "preserve"
 # CopyIn/vor: AscendC intrinsic names.
 # fro: torch.norm(p="fro") Frobenius-norm literal (ada_round_optimize.py).
 # tbe: Tensor Boost Engine (op_impl/ai_core/tbe paths); alog: Ascend log library (find_package(alog)).
-ignore-words-list = "cann,nd,copyin,vor,fro,tbe,alog"
+# COO: torch sparse COO layout (mx_quantize.py).
+ignore-words-list = "cann,nd,copyin,vor,fro,tbe,alog,coo"

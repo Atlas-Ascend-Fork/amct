@@ -322,7 +322,7 @@ def _quantize_elemwise_core(
     # handle Inf/NaN
     out[tensor == float("Inf")] = float("Inf")
     out[tensor == -float("Inf")] = -float("Inf")
-    out[tensor == float("NaN")] = float("NaN")
+    out[torch.isnan(tensor)] = float("NaN")
 
     return out
 
