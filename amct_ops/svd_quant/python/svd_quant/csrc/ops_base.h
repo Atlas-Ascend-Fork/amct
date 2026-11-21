@@ -315,6 +315,7 @@ inline void *GetOpApiFuncAddr(const char *apiName) {
                     ASCEND_LOGI("%s is found in %s.", apiName, cust_opapi_lib.c_str());
                     return funcAddr;
                 }
+                dlclose(custOpApiHandler);
             }
         }
         ASCEND_LOGI("%s is not in custom lib.", apiName);
@@ -333,6 +334,7 @@ inline void *GetOpApiFuncAddr(const char *apiName) {
                     ASCEND_LOGI("%s is found in %s.", apiName, default_cust_opapi_lib.c_str());
                     return funcAddr;
                 }
+                dlclose(custOpApiHandler);
             }
         }
         ASCEND_LOGI("%s is not in default custom lib.", apiName);
