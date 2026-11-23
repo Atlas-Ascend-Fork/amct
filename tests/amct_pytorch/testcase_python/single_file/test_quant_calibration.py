@@ -43,10 +43,10 @@ class CustomizedModel(torch.nn.Module):
         self.matmul3 = torch.nn.Linear(8, 4)
 
     def forward(self, inputs):
-        y = self.matmul1(inputs)
-        y = self.matmul2(inputs)
-        y = self.matmul3(inputs)
-        return y
+        y1 = self.matmul1(inputs)
+        y2 = self.matmul2(inputs)
+        y3 = self.matmul3(inputs)
+        return (y1, y2, y3)
 
 
 class TestQuantCalibrationInterface(unittest.TestCase):
