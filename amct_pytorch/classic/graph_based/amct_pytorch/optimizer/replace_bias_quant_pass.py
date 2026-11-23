@@ -127,7 +127,6 @@ class ReplaceBiasQuantPass(BaseFusionPass):
         Return: None
         """
         # dequant bias corresponding to w and to r separately
-        bias_length = int32_bias.shape[1]
         bias_length = len(int32_bias.flatten())
         weight_bias = int32_bias.flatten()[: bias_length // 2]
         recurrence_weight_bias = int32_bias.flatten()[bias_length // 2 :]

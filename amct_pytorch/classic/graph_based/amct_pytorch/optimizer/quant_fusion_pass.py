@@ -81,7 +81,6 @@ class QuantFusionPass(BaseFusionPass):
         float_scale = np.float32(scale)
         uint32_scale = np.frombuffer(float_scale, np.uint32)
 
-        encode_result = np.uint64(0)
         encode_result = np.uint64(uint32_scale) << np.uint32(32) | np.uint64(
             uint32_offset
         )
