@@ -1,0 +1,149 @@
+{
+  "quant_layers": [
+    {
+      "pattern": "model.language_model.layers.*.mlp.gate_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.*.mlp.up_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.*.mlp.down_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.*.mlp.shared_experts.gate_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.*.mlp.shared_experts.up_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.*.mlp.shared_experts.down_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.*.mlp.experts.*.gate_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.*.mlp.experts.*.up_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.*.mlp.experts.*.down_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.*.self_attn.q_a_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.*.self_attn.q_b_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.*.self_attn.kv_a_proj_with_mqa",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.3.self_attn.o_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.7.self_attn.o_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.11.self_attn.o_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.15.self_attn.o_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.19.self_attn.o_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.23.self_attn.o_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.27.self_attn.o_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.31.self_attn.o_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.35.self_attn.o_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.39.self_attn.o_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.language_model.layers.43.self_attn.o_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    }
+  ],
+  "ignore_layers": [
+    "model.visual.*",
+    "model.language_model.embed_tokens",
+    "model.language_model.norm",
+    "lm_head",
+    "model.language_model.layers.45.*"
+  ]
+}
