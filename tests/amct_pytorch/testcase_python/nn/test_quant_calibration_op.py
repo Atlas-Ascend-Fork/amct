@@ -380,8 +380,9 @@ class TestQuantCalibrationOp(unittest.TestCase):
         with open(self.record_file) as f:
             self.assertIn('matmul1', f.read())
         with open(os.path.join(self.temp_dir, RECORD2_TXT)) as f:
-            self.assertIn(MATMUL2, f.read())
-            self.assertNotIn(MATMUL2, f.read())
+            record2_content = f.read()
+        self.assertIn(MATMUL2, record2_content)
+        self.assertEqual(record2_content.count('key: "matmul2"'), 1)
         model(input_data)
         with open(os.path.join(self.temp_dir, RECORD2_TXT)) as f:
             self.assertIn(MATMUL2, f.read())
