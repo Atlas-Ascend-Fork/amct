@@ -32,7 +32,6 @@ class BaseModuleFusionPass:
         """
         pass
 
-    @staticmethod
     def match_pattern(self, module, name):
         """
         Function: Match pattern of specific structure in module

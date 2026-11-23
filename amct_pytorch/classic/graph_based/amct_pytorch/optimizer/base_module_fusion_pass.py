@@ -33,7 +33,6 @@ class BaseModuleFusionPass:  # pylint: disable=unused-argument, no-self-use
         """
         pass  # pylint: disable=unnecessary-pass
 
-    @staticmethod
     def match_pattern(self, module, name, graph=None):
         """
         Function: Match pattern of specific structure in module
