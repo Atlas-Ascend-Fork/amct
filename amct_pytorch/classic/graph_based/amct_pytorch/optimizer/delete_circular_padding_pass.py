@@ -79,13 +79,22 @@ class DeleteCircularPaddingPass(BaseFusionPass):
 
         # find producer of the whole padding block
         padding_producer = None
-        for pad_node in self.circular_pad_op_dict.get(conv_node.name):
+        for pad_node in self.circular_pad_op_dict.get(conv_node.name, []):
             pad_node = graph.get_node_by_name(pad_node)
             producer, out_idx = pad_node.get_producer(0)
             # the producer of the whole padding block will not be saved in list
-            if producer not in self.circular_pad_op_dict.get(conv_node.name):
+            if producer.name not in self.circular_pad_op_dict.get(conv_node.name, []):
                 padding_producer = producer
                 break
+
+        if padding_producer is None:
+            LOGGER.logd(
+                "Skip: no external padding producer found for conv {} in graph.".format(
+                    object_node.name
+                ),
+                'DeleteCircularPaddingPass',
+            )
+            return None
 
         # delete link of the padding producer
         consumers, in_idxes = padding_producer.get_consumers(out_idx)
