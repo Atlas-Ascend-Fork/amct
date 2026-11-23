@@ -936,8 +936,6 @@ class DeepseekV3FlashAttention2(DeepseekV3Attention):
             kv, [self.qk_nope_head_dim, self.v_head_dim], dim=-1
         )
         kv_seq_len = value_states.shape[-2]
-
-        kv_seq_len = value_states.shape[-2]
         if past_key_value is not None:
             kv_seq_len += past_key_value.get_usable_length(kv_seq_len, self.layer_idx)
 
