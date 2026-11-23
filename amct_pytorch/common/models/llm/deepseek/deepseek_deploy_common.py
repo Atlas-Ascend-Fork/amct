@@ -369,7 +369,7 @@ class DeepSeekTensorwiseDeployCommon:
     def _dequantize_source_weight(
         weight, scale, weight_name, original_weight_map, model_dir
     ):
-        # fp8, v4_block=128, v41_block=32
+        # FP8 source: block size 128 for V4 and 32 for V4.1
         if weight.dtype == torch.float8_e4m3fn and not torch.is_floating_point(scale):
             if scale.ndim != 2 or weight.ndim != 2:
                 raise ValueError(
@@ -388,7 +388,7 @@ class DeepSeekTensorwiseDeployCommon:
                 row_block, dim=0
             ).repeat_interleave(col_block, dim=1)
             return (weight.to(torch.float32) * dense_scale).to(torch.bfloat16)
-        # mxfp4 (moe)
+        # Otherwise treat it as mxfp4 MoE weights
         return convert_state_dict(
             weight,
             weight_name,

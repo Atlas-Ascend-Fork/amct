@@ -53,13 +53,13 @@ class _LearnableTransform(nn.Module):
     def __init__(self, size: int):
         super().__init__()
         self.linear = nn.Linear(size, size, bias=False)
-        # Keep the default ``use_trivialization=True``: it stores an orthogonal
-        # ``base`` and initializes the Cayley parameter to zero, so training
+        # Keep the default use_trivialization setting: it stores an orthogonal
+        # base and initializes the Cayley parameter to zero, so training
         # starts from a random rotation instead of the near-identity matrix that
-        # a zero-initialized Cayley parameter would give.  Do not disable it to
-        # "avoid the base buffer": with ``use_trivialization=False`` the Cayley
-        # ``right_inverse`` raises NotImplementedError, which torch silently
-        # swallows, leaving the near-identity initialization in place.
+        # a zero-initialized Cayley parameter would give.  Do not disable it
+        # just to avoid the base buffer, because turning use_trivialization off
+        # makes the Cayley right_inverse raise NotImplementedError, which torch
+        # silently swallows, leaving the near-identity initialization in place.
         orthogonal(self.linear, "weight", orthogonal_map="cayley")
 
     def forward(self, x: torch.Tensor, inv_t: bool = False) -> torch.Tensor:
