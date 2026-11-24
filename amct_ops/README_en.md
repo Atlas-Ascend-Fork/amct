@@ -63,7 +63,7 @@ All operators are compiled and packaged as wheel through the unified build scrip
 | GCC / CMake | ≥ 7.3 / ≥ 3.16 (recommended 3.20) |
 | CANN (Toolkit & Ops) | ≥ 9.0.0 (requires pre-installed NPU driver / firmware) |
 
-For complete environment deployment, please refer to [Quick Installation](../docs/zh/quick_install.md)
+For complete environment deployment, please refer to [Quick Installation](../docs/en/quick_install.md)
 
 ### Build Commands
 
