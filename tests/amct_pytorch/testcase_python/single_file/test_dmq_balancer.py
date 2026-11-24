@@ -322,7 +322,6 @@ def do_calibration(model, args_shape, temp_folder):
     )
     batch_num = 2
     cfg_def = os.path.join(CUR_DIR, 'utils/test_dmq_balancer/dmq_balancer.cfg')
-    os.path.join(temp_folder, 'dmq_balancer_modified.onnx')
     fake_quant_onnx = os.path.join(temp_folder, 'dmq_balancer_fake_quant_model.onnx')
 
     amct_pytorch.classic.graph_based.amct_pytorch.create_quant_config(

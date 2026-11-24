@@ -578,7 +578,6 @@ class TestQuantRetrainQuantFusionModel(unittest.TestCase):
         model_conv1d = Net1d().to(torch.device("cpu"))
         input_data = torch.randn(1, 2, 14)
         config_file = os.path.join(self.temp_folder, 'conv1d_config.json')
-        os.path.join(self.temp_folder, 'conv1d_record.txt')
         self.assertRaises(
             ValueError,
             create_quant_retrain_config,
@@ -608,7 +607,6 @@ class TestQuantRetrainQuantFusionModel(unittest.TestCase):
         input_data = torch.randn(1, 2, 14)
         config_file = os.path.join(self.temp_folder, 'conv1d_config.json')
         record_file = os.path.join(self.temp_folder, 'conv1d_record.txt')
-        os.path.join(self.temp_folder, 'conv1d_retrain.pth')
         save_path = os.path.join(self.temp_folder, 'conv1d_retrain')
         create_quant_retrain_config(config_file, model_conv1d, input_data)
         retrain_model = create_quant_retrain_model(
