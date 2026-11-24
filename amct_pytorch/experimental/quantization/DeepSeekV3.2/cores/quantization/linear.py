@@ -88,4 +88,4 @@ class QuantLinear(nn.Module):
             return self._eval_forward(hidden_states)
 
     def _eval_forward(self, hidden_states):
-        return F.linear(hidden_states, self.weight, self.bias)
+        return F.linear(hidden_states, self.linear.weight, self.linear.bias)
