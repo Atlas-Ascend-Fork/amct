@@ -203,12 +203,17 @@ class TestShiftValueGpu(unittest.TestCase):
         self.assertEqual(value_first, value_second)
 
     def test_gpu_int8_search_deterministic(self):
-        """Two identical accelerator runs on the weight-only INT8 path."""
+        """Two identical accelerator runs on the weight-only INT8 path.
+
+        The fp16_int8 entry is weight-only: the layer's calibration_config
+        carries a wts algo and NO act algo (the activation stays
+        unquantized); the former act INT16 + wts INT8 combination is
+        activation-quantized and no longer joins the sv search."""
         cfg = (
             'batch_num: 1\nenable_shift_value: "auto"\n'
             'override_layer_configs {\n  layer_name: "conv"\n'
-            '  calibration_config {\n    ifmr_quantize { dst_type: INT16 }\n'
-            '    ada_quantize { num_iteration: 100 }\n  }\n}\ncommon_config {\n}\n'
+            '  calibration_config {\n    ada_quantize { num_iteration: 100 }\n'
+            '  }\n}\ncommon_config {\n}\n'
         )
         first = self._run_flow_on_gpu('gpu_int8_run1', cfg)
         second = self._run_flow_on_gpu('gpu_int8_run2', cfg)
@@ -219,8 +224,10 @@ class TestShiftValueGpu(unittest.TestCase):
         )
         self.assertIsNotNone(match_first)
         self.assertIsNotNone(match_second)
+        # the fp16_int8 search is disabled (board kernel pins sv=13):
+        # both runs carry the regime default directly
         value_first = int(match_first.group(1))
-        self.assertIn(value_first, range(5, 15))
+        self.assertEqual(value_first, 13)
         self.assertEqual(value_first, int(match_second.group(1)))
 
     def test_gpu_conv2d_fp16_search_flow(self):

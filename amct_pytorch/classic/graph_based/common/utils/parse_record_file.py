@@ -391,15 +391,26 @@ class RecordManager:
     @classmethod
     def check_layer_params_range(cls, layer_params, layer_name):
         '''Check the range of value in layers_params from record_file.'''
+        # weight-only records carry no activation factors, the
+        # offset_d / scale_d checks are skipped for them
+        has_act_factors = (
+            layer_params.get(DATA_OFFSET) is not None
+            or layer_params.get(DATA_SCALE) is not None
+        )
         # offset_d
-        data_offset_range = RecordManager.get_range(layer_params['act_type'])
-        if is_invalid(layer_params.get(DATA_OFFSET)) or not RecordManager.is_in_range(
-            layer_params.get(DATA_OFFSET), data_offset_range[0], data_offset_range[1]
-        ):
-            raise ValueError(
-                "offset_d's value should be in %s in layer %s."
-                % (data_offset_range, layer_name)
-            )
+        if has_act_factors:
+            data_offset_range = RecordManager.get_range(layer_params['act_type'])
+            if is_invalid(
+                layer_params.get(DATA_OFFSET)
+            ) or not RecordManager.is_in_range(
+                layer_params.get(DATA_OFFSET),
+                data_offset_range[0],
+                data_offset_range[1],
+            ):
+                raise ValueError(
+                    "offset_d's value should be in %s in layer %s."
+                    % (data_offset_range, layer_name)
+                )
         # offset_w
         if is_invalid(layer_params.get(WEIGHT_OFFSET)) or not RecordManager.is_in_range(
             layer_params.get(WEIGHT_OFFSET),
@@ -408,8 +419,14 @@ class RecordManager:
         ):
             raise ValueError("offset_w's value should be 0 in layer %s." % (layer_name))
         # scale_d
-        if is_invalid(layer_params.get(DATA_SCALE)) or not RecordManager.is_in_range(
-            layer_params.get(DATA_SCALE), SCALE_RANGE[0], SCALE_RANGE[1], included=False
+        if has_act_factors and (
+            is_invalid(layer_params.get(DATA_SCALE))
+            or not RecordManager.is_in_range(
+                layer_params.get(DATA_SCALE),
+                SCALE_RANGE[0],
+                SCALE_RANGE[1],
+                included=False,
+            )
         ):
             raise ValueError(
                 "scale_d's value should be in positivate range "
@@ -514,9 +531,17 @@ class RecordManager:
             return None
         # read value(scale,offset,shift_bit) from record
         layer_params = collections.OrderedDict()
-        # read scale_d and offset_d
-        layer_params[DATA_SCALE] = self.get_act_quant_factor('scale_d', np.float32)
-        layer_params[DATA_OFFSET] = self.get_act_quant_factor('offset_d', np.int32)
+        # weight-only (weight_compress_only=true): the activation is
+        # carried unquantized, the record carries no scale_d / offset_d
+        # (but the int8 weight factors)
+        weight_only_shift = (
+            not self.record.value.HasField('scale_d')
+            and len(self.record.value.scale_w) > 0
+        )
+        if not weight_only_shift:
+            # read scale_d and offset_d
+            layer_params[DATA_SCALE] = self.get_act_quant_factor('scale_d', np.float32)
+            layer_params[DATA_OFFSET] = self.get_act_quant_factor('offset_d', np.int32)
         layer_params['dst_type'] = self.get_dst_type()
         layer_params['act_type'] = self.get_act_type()
         layer_params['wts_type'] = self.get_wts_type()
@@ -567,10 +592,12 @@ class RecordManager:
         RecordManager.check_layer_params_range(layer_params, self.get_key())
 
         # astype to necessary type
-        if layer_params['act_type'] == 'INT16':
-            layer_params[DATA_OFFSET] = layer_params[DATA_OFFSET].astype(np.int16)
-        else:
-            layer_params[DATA_OFFSET] = layer_params[DATA_OFFSET].astype(np.int8)
+        if not weight_only_shift:
+            # the weight-only regime has no activation offset
+            if layer_params['act_type'] == 'INT16':
+                layer_params[DATA_OFFSET] = layer_params[DATA_OFFSET].astype(np.int16)
+            else:
+                layer_params[DATA_OFFSET] = layer_params[DATA_OFFSET].astype(np.int8)
         layer_params[WEIGHT_OFFSET] = layer_params[WEIGHT_OFFSET].astype(np.int8)
         layer_params[SHIFT_N] = layer_params.get(SHIFT_N).astype(np.int8)
 

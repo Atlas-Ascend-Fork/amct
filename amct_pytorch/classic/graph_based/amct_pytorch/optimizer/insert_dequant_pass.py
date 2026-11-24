@@ -56,6 +56,10 @@ class InsertDequantPass(BaseFusionPass):
             return False
         if node.type in RNN_LAYER_TYPE:
             return False
+        if self.records.get(node.name).get('data_scale') is None:
+            # weight-only (no activation quant factors): the
+            # activation is carried unquantized, no AscendDequant
+            return False
         return True
 
     def do_pass(self, graph, object_node, model=None):

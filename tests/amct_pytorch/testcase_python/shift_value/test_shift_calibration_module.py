@@ -177,8 +177,11 @@ class TestShiftCalibrationModule(unittest.TestCase):
         record_map = {item.key: item.value for item in records.record}
         self.assertEqual(record_map['fc'].fixed_shift_value, 13)
 
-    def test_fp16_int8_searched_value_written(self):
-        """fp16_int8 with weight quant factors: a really searched value."""
+    def test_fp16_int8_pinned_default_written(self):
+        """fp16_int8: the search is disabled (the board kernel pins
+        sv=13 and ignores the passed value), the regime default 13 is
+        written without running any probe -- with or without weight
+        quant factors, symmetric or asymmetric."""
 
         def _write_fc_record(offset_w=0):
             weight = self.fc.weight.detach()
@@ -195,15 +198,25 @@ class TestShiftCalibrationModule(unittest.TestCase):
                     fid.write('    offset_w: {}\n'.format(offset_w))
                 fid.write('    wts_type: "INT8"\n  }\n}\n')
 
-        _write_fc_record()
         module = self._make_module(batch_num=1, quant_regime='fp16_int8')
-        with torch.no_grad():
-            module(self.inputs)
+        self.assertTrue(module.use_default_value)
+        # the probe is never invoked: whatever the record factors look
+        # like, the pinned default is written
+        with patch.object(
+            shift_value_kernel,
+            'compute_shift_value_sse',
+            side_effect=AssertionError('fp16_int8 search must not run'),
+        ) as probe_mock:
+            _write_fc_record()
+            module = self._make_module(batch_num=1, quant_regime='fp16_int8')
+            with torch.no_grad():
+                module(self.inputs)
+        probe_mock.assert_not_called()
         records = _read_record(self.record_file)
         record_map = {item.key: item.value for item in records.record}
-        self.assertIn(record_map['fc'].fixed_shift_value, range(5, 15))
+        self.assertEqual(record_map['fc'].fixed_shift_value, 13)
 
-        # an asymmetric weight quantization falls back to the default 13
+        # an asymmetric weight quantization keeps the same pinned default
         _write_fc_record(offset_w=1)
         self.fc.weight.data = torch.randn_like(self.fc.weight.data)
         module = self._make_module(batch_num=1, quant_regime='fp16_int8')

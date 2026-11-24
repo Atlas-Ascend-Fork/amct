@@ -52,6 +52,10 @@ class InsertFakequantConvPass(BaseModuleFusionPass):
             type(module).__name__ in ["Conv1d", "Conv2d", "Conv3d"]
             and name in self.records
         ):
+            if self.records.get(name).get('data_scale') is None:
+                # weight-only (no activation quant factors): no
+                # fakequant wrapper on this layer
+                return False
             return True
         return False
 

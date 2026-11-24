@@ -57,6 +57,12 @@ class ReplaceBiasQuantPass(BaseFusionPass):
         if bias_node is None:
             return False
 
+        if self.records.get(node.name).get('data_scale') is None:
+            # weight-only (no activation quant factors): the bias
+            # stays FP16, same gate as InsertBiasQuantPass /
+            # InsertQuantPass / InsertDequantPass
+            return False
+
         return True
 
     def do_pass(self, graph, object_node, model=None):

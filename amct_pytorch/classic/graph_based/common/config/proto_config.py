@@ -305,6 +305,7 @@ class ProtoConfig:  # pylint: disable=too-many-instance-attributes, too-few-publ
             self._get_hfmg_config(config, act_params)
 
         if config.HasField('arq_quantize'):
+            weight_params['wts_algo'] = 'arq_quantize'
             arq_quantize = config.arq_quantize
             if arq_quantize.HasField(CHANNEL_WISE):
                 weight_params[CHANNEL_WISE] = arq_quantize.channel_wise

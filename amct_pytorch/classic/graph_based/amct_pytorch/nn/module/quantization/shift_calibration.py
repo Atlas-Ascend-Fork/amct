@@ -128,6 +128,18 @@ class ShiftCalibrationModule(nn.Module):
         # set True when the fp16fixed kernel is missing or kernel constraints are
         # not satisfied, the default value is written instead of searching.
         self.use_default_value = not self._check_module_supported(object_module)
+        # fp16_int8: the board kernel pins the dequant domain at sv=13
+        # (the AscendDequant parameters are compile-time constants and
+        # the passed fixed_shift_value is IGNORED -- confirmed with the
+        # fp16s8 kernel developers), so whatever sv the search writes,
+        # the deployed accuracy is the sv=13 behaviour. The search is
+        # disabled: the regime default value (13) is written directly,
+        # the probe is never invoked. Reopening the search is a one-line
+        # change once the board supports a dynamic sv. The fp16_fp16
+        # regime keeps searching (SSE argmin, its sv is the free
+        # quantity positioning the accumulator grid).
+        if quant_regime == FP16_INT8:
+            self.use_default_value = True
         # weight quant factors of this layer, lazily read from the record
         # file by the fp16_int8 regime (None = not read yet)
         self._weight_quant_info = None

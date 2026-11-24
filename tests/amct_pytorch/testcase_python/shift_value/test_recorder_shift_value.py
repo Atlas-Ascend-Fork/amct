@@ -40,6 +40,11 @@ from amct_pytorch.classic.graph_based.amct_pytorch.utils.singleton_record import
 pytestmark = pytest.mark.cpu
 
 
+FC_QUANTIZED = (
+    'record {\n  key: "fc"\n  value {\n    scale_d: 0.1\n    offset_d: 0\n'
+    '    scale_w: 0.5\n    offset_w: 0\n  }\n}\n'
+)
+
 CONV_SHIFT_ONLY = (
     'record {\n  key: "conv"\n  value {\n    fixed_shift_value: 42\n  }\n}\n'
 )
@@ -108,7 +113,7 @@ class TestRecorderShiftValue(unittest.TestCase):
         activation calibration accounting: the write of the quant factors
         still triggers when every quantized layer is calibrated."""
         with open(self.record_file, 'w') as fid:
-            fid.write(CONV_SHIFT_ONLY + FC_WITH_SCALE_W)
+            fid.write(CONV_SHIFT_ONLY + FC_QUANTIZED)
 
         # no record_quant_layer call: the layer number falls back to the
         # file content count, shift-only entries are excluded

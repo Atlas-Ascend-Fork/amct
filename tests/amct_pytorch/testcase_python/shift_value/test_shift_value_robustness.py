@@ -198,7 +198,7 @@ class TestShiftValueRobustness(unittest.TestCase):
         cfg = (
             'batch_num: 1\nenable_shift_value: "auto"\n'
             'override_layer_configs {\n  layer_name: "conv"\n'
-            '  calibration_config {\n    ifmr_quantize { dst_type: INT16 }\n'
+            '  calibration_config {\n'
             '    arq_quantize { }\n  }\n}\ncommon_config {\n}\n'
         )
         first = self._run_flow('det_int8_run1', cfg)
@@ -212,7 +212,8 @@ class TestShiftValueRobustness(unittest.TestCase):
             return int(match.group(1))
 
         first_value = conv_value(first)
-        self.assertIn(first_value, range(5, 15))
+        # fp16_int8 does not search: the pinned regime default is written
+        self.assertEqual(first_value, 13)
         self.assertEqual(conv_value(second), first_value)
         self.assertEqual(first['deploy_attrs'], second['deploy_attrs'])
 
@@ -289,19 +290,20 @@ class TestShiftValueRobustness(unittest.TestCase):
             tag,
             'batch_num: 1\nenable_shift_value: "auto"\n'
             'override_layer_configs {\n  layer_name: "fc"\n'
-            '  calibration_config {\n    ifmr_quantize { dst_type: INT16 }\n'
+            '  calibration_config {\n'
             '    ada_quantize { num_iteration: 100 }\n  }\n}\ncommon_config {\n}\n',
         )
         record_text = result['record_text']
-        self.assertIn('act_type: "INT16"', record_text)
 
         match = re.search(r'key: "fc".*?fixed_shift_value: (\d+)', record_text, re.S)
         self.assertIsNotNone(match)
         fc_shift_value = int(match.group(1))
-        self.assertIn(fc_shift_value, range(5, 15))
+        # fp16_int8 does not search: the pinned regime default is written
+        self.assertEqual(fc_shift_value, 13)
         self.assertEqual(result['deploy_attrs'], {'fc': fc_shift_value})
 
-        shift_module = result['calib_model'].fc.sub_module
+        # weight-only: the module IS the bare ShiftCalibrationModule
+        shift_module = result['calib_model'].fc
         self.assertEqual(shift_module.quant_regime, 'fp16_int8')
         weight_quant_info = shift_module._get_weight_quant_info()
         self.assertIsNotNone(weight_quant_info)

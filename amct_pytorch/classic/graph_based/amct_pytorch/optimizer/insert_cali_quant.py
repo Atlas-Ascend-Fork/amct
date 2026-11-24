@@ -24,6 +24,7 @@ from ...amct_pytorch.custom_op.cali_quant import CaliQuantHfmg
 
 from ...amct_pytorch.utils.model_util import ModuleHelper
 from ...amct_pytorch.utils.log import LOGGER
+from ...amct_pytorch.utils.vars import ACTIVATION_QUANT_PARAMS
 from ...amct_pytorch.utils.vars import QUANTIZABLE_TYPES
 from ...amct_pytorch.utils.vars import TENSOR_BALANCE_FACTOR
 from ...amct_pytorch.utils.vars import NUM_BITS
@@ -68,12 +69,20 @@ class InsertCaliQuantPass(BaseModuleFusionPass):
         """
         module_type = type(module).__name__
         if module_type == 'ShiftCalibrationModule':
-            # a shift value wrapper on a quantized (weight-only) module: the
-            # activation calibration still applies, wrap the wrapper
-            module_type = type(module.object_module).__name__
+            # a shift value wrapper on a weight-only module carries the
+            # UNQUANTIZED activation: no activation calibration wrapper
+            # on top, the shift calibration alone reproduces the deploy
+            # behavior
+            return False
         if module_type not in QUANTIZABLE_TYPES:
             return False
         if name not in self.conf.get_quant_config():
+            return False
+        if (self.conf.get_layer_config(name).get(ACTIVATION_QUANT_PARAMS) or {}).get(
+            'act_algo'
+        ) is None:
+            # weight-only (no act algo configured): the activation is
+            # carried unquantized, no activation calibration
             return False
 
         return True

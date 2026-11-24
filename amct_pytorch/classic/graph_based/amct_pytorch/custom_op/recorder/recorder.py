@@ -158,6 +158,21 @@ class Recorder(nn.Module):  # pylint: disable=R0902
                 return True
         return False
 
+    @staticmethod
+    def _is_fp16_shift_only_entry(record_value):
+        """Whether the record entry is a pure FP16 shift value layer: a
+        fixed_shift_value carrying no weight factors and no activation
+        factors (the layer runs the fp16_fp16 regime). The layers_num
+        fallback count excludes these entries and the mixed flush
+        criterion must not count them either -- both predicates share
+        this single definition, otherwise a skipped fp16_fp16 layer is
+        counted on one side only and the mixed criterion never fires."""
+        return (
+            record_value.HasField('fixed_shift_value')
+            and not record_value.scale_w
+            and not record_value.HasField('scale_d')
+        )
+
     def _read_record_file(self):
         """read record from file"""
         if not self.__read_over:
@@ -171,18 +186,14 @@ class Recorder(nn.Module):  # pylint: disable=R0902
             if self.quant_layer_num.cpu():
                 self.__counts[LAYERS_NUM] = self.quant_layer_num.cpu()
             else:
-                # count quantized entries only: records carrying only the
-                # fixed_shift_value field belong to FP16 layers and do not
-                # take part in the activation calibration accounting
+                # count quantized entries only: the pure FP16 shift value
+                # entries (skipped / fp16_fp16 regime layers) do not take
+                # part in the activation calibration accounting
                 self.__counts[LAYERS_NUM] = len(
                     [
                         item
                         for item in self.records.record
-                        if not (
-                            item.value.HasField('fixed_shift_value')
-                            and not item.value.scale_w
-                            and not item.value.HasField('scale_d')
-                        )
+                        if not self._is_fp16_shift_only_entry(item.value)
                     ]
                 )
             self.__read_over = True
@@ -190,6 +201,16 @@ class Recorder(nn.Module):  # pylint: disable=R0902
     def _write_record_file(self):
         """write record to file"""
         if self.__counts.get('act_cali_num') == self.__counts.get(LAYERS_NUM):
+            with open(self.record_file, "w") as fid:
+                fid.write(text_format.MessageToString(self.records, as_utf8=True))
+            if not self.quant_layer_num.cpu():
+                self.__write_over = True
+        elif self.__counts.get('act_cali_num') > 0 and self.__counts.get(
+            'act_cali_num'
+        ) + self._recorded_shift_value_num() == self.__counts.get(LAYERS_NUM):
+            # mixed regime: some layers carried activation factors and
+            # some layers carried fixed_shift_value, together they
+            # account for every quant layer -- flush the record
             with open(self.record_file, "w") as fid:
                 fid.write(text_format.MessageToString(self.records, as_utf8=True))
             if not self.quant_layer_num.cpu():
@@ -263,6 +284,12 @@ class Recorder(nn.Module):  # pylint: disable=R0902
                 self.records, layer_name, scale_w, offset_w, num_bits, scale_r, offset_r
             )
             self.__counts['wts_cali_num'] += 1
+        # weight factor writes also flush: a weight-only layer (no act
+        # calibration) mixed with quantized layers would otherwise never
+        # trigger the record write -- act_cali_num alone cannot reach
+        # layers_num when weight-only layers contribute weight factors
+        # but no activation factors
+        self._write_record_file()
         LOGGER.logd(
             "Record layer '{}' weight's quant factors!".format(layers_name), 'Recorder'
         )
@@ -298,6 +325,31 @@ class Recorder(nn.Module):  # pylint: disable=R0902
             'Recorder',
         )
 
+    def _recorded_shift_value_num(self):
+        """Count the weight-only record entries carrying a fixed_shift_value.
+
+        The shift value calibration writes the record file directly
+        (ShiftCalibrationModule._write_record), bypassing this Recorder
+        and its per-instance counters -- the shift layers are therefore
+        accounted by scanning the merged record content (self.records is
+        the singleton, refreshed from the file before the first add),
+        not by an in-memory counter. Only the weight-only entries
+        (fixed_shift_value + scale_w) count: the pure FP16 shift entries
+        are excluded from the layers_num fallback by the same predicate
+        (_is_fp16_shift_only_entry) and must stay excluded here as well,
+        otherwise a skipped fp16_fp16 layer is double counted and the
+        mixed criterion never fires. Entries also carrying activation
+        factors are excluded: act_cali_num already accounts for them."""
+        return len(
+            [
+                item
+                for item in self.records.record
+                if item.value.HasField('fixed_shift_value')
+                and item.value.scale_w
+                and not item.value.HasField('scale_d')
+            ]
+        )
+
     def _add_fixed_shift_value_factors(self, layers_name, quant_factors):
         """add fixed_shift_value to record, only update this field"""
         fixed_shift_value = quant_factors.get('fixed_shift_value')
@@ -305,6 +357,7 @@ class Recorder(nn.Module):  # pylint: disable=R0902
             raise ValueError("fixed_shift_value is necessary")
         for layer_name in layers_name:
             record_fixed_shift_value(self.records, layer_name, fixed_shift_value)
+        self._write_record_file()
         LOGGER.logd(
             "Record layer '{}' fixed_shift_value!".format(layers_name), 'Recorder'
         )

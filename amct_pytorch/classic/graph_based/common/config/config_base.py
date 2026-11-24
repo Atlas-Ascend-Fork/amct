@@ -88,6 +88,100 @@ FAKEQUANT_PRECISION_MODE = 'fakequant_precision_mode'
 ENABLE_SHIFT_VALUE = 'enable_shift_value'
 
 
+def _collect_weight_only_layers(config):
+    """Layers whose calibration_config carries a wts algo but NO act
+    algo: the activation is carried unquantized (weight-only), aligned
+    with the LLM config system where an unconfigured inputs means
+    enable_quant=false. fill_default must not inject the default ifmr
+    activation params for them."""
+    return [
+        layer
+        for layer, layer_config in config.items()
+        if isinstance(layer_config, dict)
+        and (layer_config.get(WEIGHT_QUANT_PARAMS) or {}).get('wts_algo')
+        and not (layer_config.get(ACTIVATION_QUANT_PARAMS) or {}).get('act_algo')
+    ]
+
+
+def _check_weight_only_layer_types(graph, config, weight_only_layers):
+    """Reject weight-only when the layer cannot reach the fp16fixed
+    weight-only deploy path. Two guards:
+
+    1. enable_shift_value must be 'auto' or 'all': without the fp16fixed
+       shift value search the layer never gets a fixed_shift_value, and
+       the int8 weight would feed the raw operator, silently producing a
+       structurally valid but numerically wrong deploy graph.
+    2. the layer type must be inside FIXED_SHIFT_VALUE_TYPES: those are
+       the only modules the shift value calibration wraps. The module
+       type comes from GraphQuerier.get_name_type_dict(graph) -- with a
+       torch model attached it returns the real torch module class names
+       (Conv1d stays Conv1d and is correctly rejected), the same source
+       config_base already uses for the fixed_shift_value_types checks.
+
+    The DMQ balancer flow is weight-only by design but deploys through
+    the tensor balance factor path, not the fp16fixed path -- its
+    layers (carrying dmq_balancer_param) are exempt from both guards.
+    Weightless modules (AvgPool2d / Upsample etc.) are exempt as well:
+    fill_default may give them a default wts_algo but they carry no
+    weight to quantize and are not weight-only targets."""
+    from ...utils.vars import FIXED_SHIFT_VALUE_TYPES
+    from ...utils.vars import QUANTIZABLE_TYPES
+    from ...configuration.check import GraphQuerier
+
+    if not weight_only_layers:
+        return
+    module_dict = (
+        dict(graph.model.named_modules())
+        if getattr(graph, 'model', None) is not None
+        else {}
+    )
+    sv_weight_only_layers = []
+    for layer in weight_only_layers:
+        if (config.get(layer) or {}).get('dmq_balancer_param'):
+            continue
+        module = module_dict.get(layer)
+        if module is not None and not hasattr(module, 'weight'):
+            continue
+        sv_weight_only_layers.append(layer)
+    if not sv_weight_only_layers:
+        return
+    if config.get(ENABLE_SHIFT_VALUE) not in ('auto', 'all'):
+        raise ValueError(
+            "weight-only layers {} require enable_shift_value 'auto' or "
+            "'all': without the fp16fixed shift value search the deploy "
+            "graph would feed the int8 weight to the raw operator and be "
+            "numerically wrong (current enable_shift_value is {!r})".format(
+                sv_weight_only_layers, config.get(ENABLE_SHIFT_VALUE)
+            )
+        )
+    supported = set(FIXED_SHIFT_VALUE_TYPES or [])
+    quant_types = set(QUANTIZABLE_TYPES or [])
+    layer_type = GraphQuerier.get_name_type_dict(graph)
+    for layer in sv_weight_only_layers:
+        module_type = layer_type.get(layer)
+        # only check quantizable layers
+        if module_type not in quant_types:
+            continue
+        if module_type not in supported:
+            raise ValueError(
+                'weight-only (no act algo) on layer {} of type {} is '
+                'not supported: the type is outside '
+                'FIXED_SHIFT_VALUE_TYPES {}'.format(
+                    layer, module_type, sorted(supported)
+                )
+            )
+
+
+def _clear_weight_only_act_defaults(config, weight_only_layers):
+    """Restore the absent activation section of the weight-only layers
+    after fill_default injected its defaults."""
+    for layer in weight_only_layers:
+        if layer in config:
+            # keep the activation section absent: the activation is
+            # carried unquantized on this layer
+            config[layer][ACTIVATION_QUANT_PARAMS] = OrderedDict()
+
+
 class ConfigBase:
     """
     Function:
@@ -146,6 +240,12 @@ class ConfigBase:
         """add global quantize parameter to each layer"""
         for item in quant_config:
             if isinstance(quant_config.get(item), dict):
+                # weight-only (no act algo configured): the activation is
+                # carried unquantized, no global act params to inject
+                if (quant_config.get(item).get(ACTIVATION_QUANT_PARAMS) or {}).get(
+                    'act_algo'
+                ) is None:
+                    continue
                 # 1. adjust act_quant_params
                 # 1.1 split search_range
                 act_config = quant_config.get(item).get(ACTIVATION_QUANT_PARAMS)
@@ -242,7 +342,10 @@ class ConfigBase:
                 config[item] = copy.deepcopy(type_config.get(layer_type.get(item)))
             else:
                 config[item] = copy.deepcopy(common_config)
+        weight_only_layers = _collect_weight_only_layers(config)
         self.root.fill_default(config)
+        _clear_weight_only_act_defaults(config, weight_only_layers)
+        _check_weight_only_layer_types(graph, config, weight_only_layers)
 
         if common_config.get('dmq_balancer_param'):
             self.check_common_config_dmq_layers(graph)
@@ -493,10 +596,13 @@ class ConfigBase:
             quant_config['activation_offset'] = activation_offset
             # set parameter
             self.root.check(None, quant_config)
+            weight_only_layers = _collect_weight_only_layers(quant_config)
             self.root.fill_default(quant_config)
             self._fill_default_activation_asymmetric(
                 graph, quant_config, supported_layers, ['any', activation_offset]
             )
+            _clear_weight_only_act_defaults(quant_config, weight_only_layers)
+            _check_weight_only_layer_types(graph, quant_config, weight_only_layers)
             if quant_config.get(FAKEQUANT_PRECISION_MODE, None) == 'DEFAULT':
                 del quant_config[FAKEQUANT_PRECISION_MODE]
             ordered_config = self.root.sort(quant_config)
@@ -597,7 +703,10 @@ class ConfigBase:
         )
         self.set_param_pool(quant_layers, graph)
         self.root.check(None, quant_config)
+        weight_only_layers = _collect_weight_only_layers(quant_config)
         self.root.fill_default(quant_config)
+        _clear_weight_only_act_defaults(quant_config, weight_only_layers)
+        _check_weight_only_layer_types(graph, quant_config, weight_only_layers)
 
         # With enable_shift_value set to 'all', the FIXED_SHIFT_VALUE_TYPES
         # layers are forced onto the FP16 path: they are dropped from the

@@ -73,7 +73,21 @@ QUANT_LAYER_CONFIG = {
     },
 }
 
+# weight-only: the calibration_config carries a wts algo but NO act
+# algo -- the activation is carried unquantized
 WEIGHT_ONLY_LAYER_CONFIG = {
+    'quant_enable': True,
+    'activation_quant_params': {},
+    'weight_quant_params': {
+        'wts_algo': 'arq',
+        'channel_wise': True,
+        'num_bits': 8,
+    },
+}
+
+# the activation-INT16 layer config: the activation IS quantized there,
+# it must NOT join the fp16_int8 search (design-misconception regression)
+ACT16_LAYER_CONFIG = {
     'quant_enable': True,
     'activation_quant_params': {
         'act_algo': 'ifmr',
@@ -187,7 +201,11 @@ class TestInsertShiftCalibrationModulePass(unittest.TestCase):
     @patch.object(Configuration, 'get_layer_config')
     @patch.object(Configuration, 'get_global_config')
     def test_auto_weight_only_layer_fp16_int8(self, mock_global, mock_layer):
-        """An act num_bits=16 layer runs the FP16*INT8 weight-only path."""
+        """A weight-only layer (a wts algo but no act algo: the
+        activation is carried unquantized) is routed to the fp16_int8
+        regime (its search is disabled -- the pinned default 13 is
+        written, the board kernel ignores the passed sv); the act-INT16
+        config that quantizes the activation must NOT be routed there."""
         mock_global.side_effect = _fake_global_config
         mock_layer.side_effect = _fake_layer_config_conv_weight_only
         model = self._run_pass()
@@ -195,6 +213,19 @@ class TestInsertShiftCalibrationModulePass(unittest.TestCase):
         self.assertIsInstance(named['conv'], ShiftCalibrationModule)
         self.assertEqual(named['conv'].quant_regime, 'fp16_int8')
         self.assertNotIsInstance(named['fc'], ShiftCalibrationModule)
+
+        # the act-INT16 config (activation quantized) never joins the
+        # fp16_int8 search
+        with patch.object(
+            Configuration,
+            'get_layer_config',
+            side_effect=lambda name: (
+                ACT16_LAYER_CONFIG if name == 'conv' else QUANT_LAYER_CONFIG
+            ),
+        ):
+            model2 = self._run_pass()
+        named2 = dict(model2.named_modules())
+        self.assertNotIsInstance(named2['conv'], ShiftCalibrationModule)
 
     @patch.object(Configuration, 'get_layer_config')
     @patch.object(Configuration, 'get_global_config')
@@ -208,13 +239,16 @@ class TestInsertShiftCalibrationModulePass(unittest.TestCase):
 
     @patch.object(Configuration, 'get_layer_config')
     @patch.object(Configuration, 'get_global_config')
-    def test_batch_num_from_layer_config(self, mock_global, mock_layer):
-        """A weight-only layer takes batch_num of its activation config."""
+    def test_batch_num_fallback_to_global_for_weight_only(
+        self, mock_global, mock_layer
+    ):
+        """A weight-only layer has no act config section any more, its
+        batch_num falls back to the global one."""
         mock_global.side_effect = _fake_global_config
         mock_layer.side_effect = _fake_layer_config_conv_weight_only
         model = self._run_pass()
         named = dict(model.named_modules())
-        self.assertEqual(named['conv'].batch_num, 7)
+        self.assertEqual(named['conv'].batch_num, 5)
 
     @patch.object(Configuration, 'get_layer_config')
     @patch.object(Configuration, 'get_global_config')

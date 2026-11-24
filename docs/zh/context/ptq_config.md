@@ -82,7 +82,7 @@ calibration\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_02401
 <td class="cellrowborder" valign="top" headers="mcps1.2.6.1.3 "><p id="p7423131310380"><a name="p7423131310380"></a><a name="p7423131310380"></a>enable_shift_value</p>
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.2.6.1.4 "><p id="p2797259134020"><a name="p2797259134020"></a><a name="p2797259134020"></a>fp16定点方案fixed_shift_value按层自动寻优开关，目标层为Linear/Conv2d/ConvTranspose2d。</p>
-<a name="ul1422161319380"></a><a name="ul1422161319380"></a><ul id="ul1422161319380"><li>off：关闭（默认），存量量化流程零行为变化。</li><li>auto：按层配置自动判定——skip掉的层、非量化层以及仅权重量化层参与搜索。</li><li>all：全部目标层走fp16定点计算路径，仅校准fixed_shift_value（目标层从量化层集合中移出）。</li></ul>
+<a name="ul1422161319380"></a><a name="ul1422161319380"></a><ul id="ul1422161319380"><li>off：关闭（默认），存量量化流程零行为变化。</li><li>auto：按层配置自动判定——skip掉的层、非量化层走fp16定点搜索；仅权重量化层（fp16_int8）暂不支持搜索，默认值为13。</li><li>all：全部目标层走fp16定点计算路径，仅校准fixed_shift_value（目标层从量化层集合中移出）。</li></ul>
 <p id="p2797259134021"><a name="p2797259134021"></a><a name="p2797259134021"></a>搜索在校准前向中逐候选计算SSE，仅向deploy模型写INT属性。当前版本不支持该参数。</p>
 </td>
 </tr>

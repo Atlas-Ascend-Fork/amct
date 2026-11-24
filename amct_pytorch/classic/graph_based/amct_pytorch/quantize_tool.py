@@ -843,8 +843,24 @@ def fetch_num_bits():
     # need to optimize, current each layer is same.
     quant_config = Configuration().get_quant_config()
     layer_name = Configuration.get_layers_name(quant_config)
-    activation_quant_params = quant_config[layer_name[0]]['activation_quant_params']
-    weight_quant_params = quant_config[layer_name[0]]['weight_quant_params']
+    # skip weight-only layers (no act algo: their act section is empty
+    # and has no NUM_BITS to read) when picking the reference layer
+    for name in layer_name:
+        act = quant_config[name].get('activation_quant_params') or {}
+        if act.get('act_algo') is not None:
+            activation_quant_params = act
+            weight_quant_params = quant_config[name]['weight_quant_params']
+            break
+    else:
+        # all layers are weight-only: take the weight num_bits of the
+        # first layer so the weight fakequant module matches the actual
+        # weight bit width (int4/int6 stay correct instead of silently
+        # falling back to 8)
+        for name in layer_name:
+            wts = quant_config[name].get('weight_quant_params') or {}
+            if wts.get('num_bits') is not None:
+                return wts['num_bits']
+        return 8
     if activation_quant_params[NUM_BITS] != weight_quant_params[NUM_BITS]:
         raise RuntimeError('Current activation and weight num bits should be same!')
     return activation_quant_params[NUM_BITS]

@@ -49,6 +49,10 @@ class InsertFakequantLinearPass(BaseModuleFusionPass):
                 False: mismatch
         """
         if type(module).__name__ == "Linear" and name in self.records:
+            if self.records.get(name).get('data_scale') is None:
+                # weight-only (no activation quant factors): no
+                # fakequant wrapper on this layer
+                return False
             return True
         return False
 

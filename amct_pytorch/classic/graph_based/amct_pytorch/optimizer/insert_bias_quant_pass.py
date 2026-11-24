@@ -91,6 +91,12 @@ class InsertBiasQuantPass(BaseFusionPass):
         if bias_node is None:
             return False
 
+        if self.records.get(node.name).get('data_scale') is None:
+            # weight-only (no activation quant factors): the bias
+            # stays FP16, no INT32 pre-scaling without an activation
+            # scale
+            return False
+
         return True
 
     @staticmethod

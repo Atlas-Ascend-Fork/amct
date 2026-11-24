@@ -26,12 +26,15 @@ Match rules (``enable_shift_value`` comes from the quant config):
 - 'all': every FIXED_SHIFT_VALUE_TYPES module is wrapped on the fp16_fp16
   regime. The target layers have already been dropped from the quant layers
   in the config parsing stage, so they run the FP16 non-quantized path;
-- 'auto': only modules explicitly skipped by the user (skip_layers /
+- 'auto': modules explicitly skipped by the user (skip_layers /
   quant_enable=false, i.e. no longer present in the quant config) are
-  wrapped on the fp16_fp16 regime, and quant-enabled target modules whose
-  activation stays on the half-precision path (activation num_bits == 16)
-  are wrapped on the fp16_int8 regime. INT8*INT8 fully quantized modules
-  are never wrapped.
+  wrapped on the fp16_fp16 regime; weight-only modules (whose
+  calibration_config carries a wts algo but no act algo: the
+  activation is carried unquantized + 8-bit weight, the same
+  semantics as the LLM config system's unconfigured inputs) are
+  wrapped on the fp16_int8 regime. Modules whose activation is
+  quantized (INT16 / INT8 fake quant) never join the fp16_int8
+  search.
 """
 
 from ...amct_pytorch.configuration.configuration import Configuration
@@ -45,9 +48,11 @@ from ...amct_pytorch.utils.model_util import ModuleHelper
 from ...amct_pytorch.utils.log import LOGGER
 from ...amct_pytorch.utils.vars import FIXED_SHIFT_VALUE_TYPES
 from ...amct_pytorch.utils.vars import ENABLE_SHIFT_VALUE
+from ...amct_pytorch.utils.vars import ACTIVATION_QUANT_PARAMS
 from ...amct_pytorch.utils.vars import NUM_BITS
 
-SHIFT_VALUE_HALF_PRECISION_ACT_BITS = 16
+WEIGHT_QUANT_PARAMS = 'weight_quant_params'
+WEIGHT_INT8_BITS = 8
 
 
 class InsertShiftCalibrationModulePass(BaseModuleFusionPass):
@@ -77,9 +82,17 @@ class InsertShiftCalibrationModulePass(BaseModuleFusionPass):
             return FP16_FP16
         if not layer_config.get('quant_enable'):
             return None
-        act_config = layer_config.get('activation_quant_params') or {}
-        if act_config.get(NUM_BITS) == SHIFT_VALUE_HALF_PRECISION_ACT_BITS:
-            # weight-only quantization: FP16 activation * INT8 weight
+        # fp16_int8 entry: the layer's calibration_config carries a wts
+        # algo but NO act algo -- the activation is carried UNQUANTIZED
+        # (the same semantics as the LLM config system, where an
+        # unconfigured inputs means enable_quant=false); it requires an
+        # 8-bit weight. The activation-quantized paths (INT16 / INT8
+        # fake quant) never join the fp16_int8 search.
+        act_config = layer_config.get(ACTIVATION_QUANT_PARAMS) or {}
+        if act_config.get('act_algo') is None and (
+            (layer_config.get(WEIGHT_QUANT_PARAMS) or {}).get(NUM_BITS)
+            == WEIGHT_INT8_BITS
+        ):
             return FP16_INT8
         return None
 
