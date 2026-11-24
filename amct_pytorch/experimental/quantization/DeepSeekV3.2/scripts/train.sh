@@ -17,9 +17,9 @@
 # ----------------------------------------------------------------------------
 
 
-model_path=“” # 模型路径
-data_path=“” # dump的数据路径
-output_path=“” # 量化系数保存路径
+model_path="" # 模型路径
+data_path="" # dump的数据路径
+output_path="" # 量化系数保存路径
 
 NUM_BLOCKS=61
 NUM_TASKS=8
