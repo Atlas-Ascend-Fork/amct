@@ -17,6 +17,7 @@
 # ----------------------------------------------------------------------------
 import os
 import unittest
+from unittest.mock import patch
 
 import torch
 
@@ -465,6 +466,94 @@ class TestRetrainConfigForPrune(unittest.TestCase):
                 ]
             ),
         )
+
+    def test_reinit_resets_skip_fusion_layers(self):
+        config_defination = os.path.join(CUR_DIR, "./utils/net_001_prune_complete.cfg")
+
+        with (
+            patch.object(RetrainConfig, "_RetrainConfig__instance", None, create=True),
+            patch.object(
+                RetrainConfig, "_RetrainConfig__initialized", False, create=True
+            ),
+            patch.object(RetrainConfig, "retrain_config", {}, create=True),
+            patch.object(RetrainConfig, "enable_retrain", False, create=True),
+            patch.object(RetrainConfig, "enable_prune", True, create=True),
+            patch.object(CONFIGURER, "enable_retrain", False, create=True),
+            patch.object(CONFIGURER, "enable_prune", True, create=True),
+        ):
+            RetrainConfig.init(self.graph, config_defination)
+            config = RetrainConfig()
+            self.assertEqual(config.get_skip_fusion_layers(), [])
+            config._RetrainConfig__skip_fusion_layers.append("layer1.0")
+
+            RetrainConfig.init(self.graph, config_defination)
+            self.assertEqual(RetrainConfig().get_skip_fusion_layers(), [])
+
+    def test_init_retrain_resets_skip_fusion_layers(self):
+        config_file = os.path.join(CUR_DIR, "./utils/net_001_prune_complete.cfg")
+        record_file = os.path.join(self.temp_folder, "net_001.txt")
+
+        with (
+            patch.object(RetrainConfig, "_RetrainConfig__instance", None, create=True),
+            patch.object(
+                RetrainConfig, "_RetrainConfig__initialized", False, create=True
+            ),
+            patch.object(RetrainConfig, "retrain_config", {}, create=True),
+            patch.object(RetrainConfig, "parse_retrain_config", return_value={}),
+        ):
+            RetrainConfig.init_retrain(config_file, record_file, self.graph)
+            config = RetrainConfig()
+            config._RetrainConfig__skip_fusion_layers.append("layer1.0")
+
+            RetrainConfig.init_retrain(config_file, record_file, self.graph)
+            self.assertEqual(RetrainConfig().get_skip_fusion_layers(), [])
+
+    def test_amc_init_resets_skip_fusion_layers(self):
+        config_defination = os.path.join(CUR_DIR, "./utils/net_001_prune_complete.cfg")
+
+        with (
+            patch.object(RetrainConfig, "_RetrainConfig__instance", None, create=True),
+            patch.object(
+                RetrainConfig, "_RetrainConfig__initialized", False, create=True
+            ),
+            patch.object(RetrainConfig, "retrain_config", {}, create=True),
+            patch.object(RetrainConfig, "enable_retrain", False, create=True),
+            patch.object(RetrainConfig, "enable_prune", True, create=True),
+            patch.object(CONFIGURER, "enable_retrain", False, create=True),
+            patch.object(CONFIGURER, "enable_prune", True, create=True),
+            patch(
+                "amct_pytorch.classic.graph_based.amct_pytorch.configuration."
+                "retrain_config.AutoChannelPruneConfigHelper"
+            ) as helper_cls,
+        ):
+            helper_cls.return_value.create_prune_config.return_value = {}
+            RetrainConfig.amc_init(self.graph, config_defination)
+            config = RetrainConfig()
+            config._RetrainConfig__skip_fusion_layers.append("layer1.0")
+
+            RetrainConfig.amc_init(self.graph, config_defination)
+            self.assertEqual(RetrainConfig().get_skip_fusion_layers(), [])
+
+    def test_un_init_resets_skip_fusion_layers(self):
+        config_defination = os.path.join(CUR_DIR, "./utils/net_001_prune_complete.cfg")
+
+        with (
+            patch.object(RetrainConfig, "_RetrainConfig__instance", None, create=True),
+            patch.object(
+                RetrainConfig, "_RetrainConfig__initialized", False, create=True
+            ),
+            patch.object(RetrainConfig, "retrain_config", {}, create=True),
+            patch.object(RetrainConfig, "enable_retrain", False, create=True),
+            patch.object(RetrainConfig, "enable_prune", True, create=True),
+            patch.object(CONFIGURER, "enable_retrain", False, create=True),
+            patch.object(CONFIGURER, "enable_prune", True, create=True),
+        ):
+            RetrainConfig.init(self.graph, config_defination)
+            config = RetrainConfig()
+            config._RetrainConfig__skip_fusion_layers.append("layer1.0")
+
+            RetrainConfig.un_init()
+            self.assertEqual(config.get_skip_fusion_layers(), [])
 
 
 if __name__ == "__main__":

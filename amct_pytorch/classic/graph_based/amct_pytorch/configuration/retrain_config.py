@@ -63,11 +63,9 @@ class RetrainConfig:
             raise RuntimeError(
                 "Classmethod RetrainConfig.init() should be called firstly."
             )
-        if self.enable_retrain:
-            self.__retrain_config = RetrainConfig.retrain_config
+        self.__retrain_config = getattr(RetrainConfig, "retrain_config", {})
+        if not hasattr(self, "_RetrainConfig__skip_fusion_layers"):
             self.__skip_fusion_layers = []
-        if self.enable_prune:
-            self.__retrain_config = RetrainConfig.retrain_config
 
     @staticmethod
     @check_params(file_name=str, graph=Graph)
@@ -132,9 +130,15 @@ class RetrainConfig:
         return retrain_config
 
     @classmethod
+    def __reset_skip_fusion_layers(cls):
+        if cls.__instance is not None:
+            cls.__instance.__skip_fusion_layers = []
+
+    @classmethod
     def un_init(cls):
         """uninitialize class"""
         cls.__initialized = False
+        cls.__reset_skip_fusion_layers()
 
     @classmethod
     @check_params(config_file=str, record_file=str, graph=Graph)
@@ -147,6 +151,7 @@ class RetrainConfig:
             graph: IR Graph
         Returns: None
         """
+        cls.__reset_skip_fusion_layers()
         cls.set_ability(enable_retrain=True, enable_prune=False)
         cls.retrain_config = cls.parse_retrain_config(
             os.path.realpath(config_file), graph
@@ -159,6 +164,7 @@ class RetrainConfig:
         """
         Function: initialize pruning based on config_defination.
         """
+        cls.__reset_skip_fusion_layers()
         cls.set_ability(enable_retrain=enable_retrain, enable_prune=enable_prune)
         cls.retrain_config = cls.create_prune_config(graph, config_defination)
         if enable_retrain and enable_prune:
@@ -173,6 +179,7 @@ class RetrainConfig:
         """
         Function: initialize pruning based on amc config.
         """
+        cls.__reset_skip_fusion_layers()
         cls.set_ability(enable_retrain=enable_retrain, enable_prune=enable_prune)
         config_helper = AutoChannelPruneConfigHelper(
             graph, config_defination, GraphQuerier, CAPACITY

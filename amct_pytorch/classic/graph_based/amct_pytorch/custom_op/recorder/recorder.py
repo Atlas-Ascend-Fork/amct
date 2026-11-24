@@ -154,7 +154,7 @@ class Recorder(nn.Module):  # pylint: disable=R0902
     def check_layer_recorded(self, layer_name, record_keyword):
         """check whether the layer has already be written in record"""
         for item in self.records.record:
-            if item.key == layer_name and hasattr(item, self.record_keyword):
+            if item.key == layer_name and item.HasField(record_keyword):
                 return True
         return False
 

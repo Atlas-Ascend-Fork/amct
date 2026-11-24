@@ -29,3 +29,17 @@ def test_forward_rejects_unknown_factors_type(tmp_path, bad_type):
     recorder = Recorder(str(tmp_path / "record.txt"))
     with pytest.raises(ValueError, match="unsupported factors_type"):
         recorder.forward("layer.0", bad_type, {"scale_d": 1.0, "offset_d": 0})
+
+
+def test_check_layer_recorded_requires_field_written(tmp_path):
+    recorder = Recorder(str(tmp_path / "record.txt"))
+    entry = recorder.records.record.add()
+    entry.key = "layer.0"
+
+    assert not recorder.check_layer_recorded("layer.0", "kv_cache_value")
+    assert not recorder.check_layer_recorded("layer.0", "value")
+
+    entry.kv_cache_value.scale.extend([1.0])
+
+    assert recorder.check_layer_recorded("layer.0", "kv_cache_value")
+    assert not recorder.check_layer_recorded("layer.0", "value")
