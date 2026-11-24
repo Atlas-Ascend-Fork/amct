@@ -74,7 +74,7 @@ bfloat16_tensor = hifloat8_cast.hifloat8_to_bfloat16(hifloat8_tensor)
 ### 3. Algorithm Registration
 
 amct_pytorch provides a flexible algorithm registration mechanism, allowing users to define custom quantization algorithms and integrate them into the quantization process.
-Through the [`algorithm_register`](../../../docs/zh/api/algorithm_register.md) function, you can register custom quantization modules into the system.
+Through the [`algorithm_register`](../../../docs/en/api/algorithm_register.md) function, you can register custom quantization modules into the system.
 
 ```python
 import torch
@@ -97,7 +97,7 @@ The test script performs the following steps:
 ### 5. Complete Usage Process
 
 #### 5.1 Prepare Environment
-1. Install amct tool, refer to [Tool Build](../../../docs/zh/build.md)
+1. Install amct tool, refer to [Tool Build](../../../docs/en/build.md)
 2. Install other dependencies
 ```bash
 pip install transformers datasets
