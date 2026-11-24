@@ -509,7 +509,8 @@ class TestManifestPublish:
         writer = _writer(tmp_path, units=('fc1',))
         _write(writer, 'fc1')
         writer.publish_if_complete()
-        raw = open(writer.manifest_path, encoding='utf-8').read()
+        with open(writer.manifest_path, encoding='utf-8') as handle:
+            raw = handle.read()
         assert raw.endswith('\n')
         assert raw.strip() == canonical_json(json.loads(raw))
 
@@ -718,7 +719,8 @@ class TestReadBack:
 
     def _repoint(self, writer, mutate):
         """Rewrite a published manifest through ``mutate`` in place."""
-        manifest = json.loads(open(writer.manifest_path, encoding='utf-8').read())
+        with open(writer.manifest_path, encoding='utf-8') as handle:
+            manifest = json.loads(handle.read())
         mutate(manifest)
         with open(writer.manifest_path, 'w', encoding='utf-8') as handle:
             handle.write(canonical_json(manifest))
@@ -983,7 +985,8 @@ class TestManifestSchemaIsEnforced:
     def test_reader_rejects_duplicate_json_keys(self, tmp_path):
         result_dir = self._published(tmp_path, name='duplicate_key')
         path = os.path.join(result_dir, MANIFEST_NAME)
-        raw = open(path, encoding='utf-8').read()
+        with open(path, encoding='utf-8') as handle:
+            raw = handle.read()
         needle = '"format":"{}"'.format(MANIFEST_FORMAT)
         assert needle in raw
         raw = raw.replace(needle, needle + ',' + needle, 1)

@@ -872,7 +872,8 @@ class TestGRUPTQA8W4A16W8(unittest.TestCase):
         # regression guard: A8W4 must record wts_type INT4 for the RNN layer too
         # (fixes _rnn_process dropping num_bits, which left RNN weights at INT8).
         if tag == 'a8w4':
-            record_text = open(record_file).read()
+            with open(record_file, encoding='utf-8') as record_handle:
+                record_text = record_handle.read()
             self.assertIn(
                 'wts_type: "INT4"',
                 record_text,
@@ -952,7 +953,8 @@ class TestLSTMPTQA8W4A16W8(unittest.TestCase):
         # regression guard: A8W4 must record wts_type INT4 for the RNN layer too
         # (fixes _rnn_process dropping num_bits, which left RNN weights at INT8).
         if tag == 'a8w4':
-            record_text = open(record_file).read()
+            with open(record_file, encoding='utf-8') as record_handle:
+                record_text = record_handle.read()
             self.assertIn(
                 'wts_type: "INT4"',
                 record_text,
