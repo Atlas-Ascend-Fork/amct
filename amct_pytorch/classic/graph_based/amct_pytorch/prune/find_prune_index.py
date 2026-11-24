@@ -42,11 +42,11 @@ class PuneIndexHelper:
         self.global_ascend_optimized = False
 
     @staticmethod
-    def do_bcp(input_tensors, prune_axises, bcp_param):
+    def do_bcp(input_tensors, prune_axes, bcp_param):
         """find cout mask by algorithm BCP"""
         cout_mask = bcp(
             input_tensors,
-            prune_axises,
+            prune_axes,
             bcp_param.get('prune_ratio'),
             bcp_param.get('prune_group'),
             bcp_param.get('ascend_optimized'),
@@ -79,6 +79,12 @@ class PuneIndexHelper:
             self.param[name] = {}
             # use min prune ration
             layer_prune_config = self.conf.get_layer_prune_config(name)
+            if layer_prune_config is None:
+                raise RuntimeError(
+                    'Node "{}" is not enabled with prune config, cannot do prune.'.format(
+                        name
+                    )
+                )
             if not layer_prune_config.get(PRUNE_RATIO):
                 layer_prune_config[PRUNE_RATIO] = 0
             if self.global_prune_ratio is None:
@@ -87,13 +93,17 @@ class PuneIndexHelper:
                 self.global_prune_ratio = min(
                     self.global_prune_ratio, layer_prune_config.get(PRUNE_RATIO)
                 )
-            if layer_prune_config.get("ascend_optimized") and layer_prune_config.get(
-                "ascend_optimized"
-            ):
+            if layer_prune_config.get("ascend_optimized"):
                 self.global_ascend_optimized = True
 
             prune_range = self.record_helper.get_range(self.record, name)
             module = get_module(name)
+            if module is None or getattr(module, "weight", None) is None:
+                raise RuntimeError(
+                    'Cannot find module or weight of node "{}", cannot do prune.'.format(
+                        name
+                    )
+                )
             weight_tensor = module.weight.data
             cout_axis, _ = ModuleInfo.get_wts_cout_cin(module)
             if cout_axis == 0:
@@ -135,10 +145,10 @@ class PuneIndexHelper:
             raise RuntimeError('no node is to calculate prune cout index.')
 
         tensors = []
-        axises = []
+        axes = []
         for name in self.param:
             tensors.append(self.param[name]['tensor'])
-            axises.append(self.param[name]['axis'])
+            axes.append(self.param[name]['axis'])
         prune_param = {
             'prune_ratio': self.global_prune_ratio,
             'ascend_optimized': self.global_ascend_optimized,
@@ -146,7 +156,7 @@ class PuneIndexHelper:
         }
 
         # tensor of 1/0
-        prune_mask = self.do_bcp(tensors, axises, prune_param)
+        prune_mask = self.do_bcp(tensors, axes, prune_param)
         # list of prune cout index
         prune_index = PuneIndexHelper.prune_cout_to_prune_index(prune_mask)
 

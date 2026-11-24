@@ -39,40 +39,83 @@ DEVICE = 'cpu'
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
 
-class TestPruneMissingModuleLog(unittest.TestCase):
-    def test_pune_index_helper_logs_missing_module_before_param_access(self):
-        model_helper = mock.Mock()
-        model_helper.get_module.side_effect = RuntimeError('missing')
+class TestFindPruneIndexHelper(unittest.TestCase):
+    @staticmethod
+    def _build_index_helper(prune_config, module=None, missing_module=False):
         record_helper = mock.Mock()
         record_helper.get_prune_group.return_value = 1
         record_helper.get_range.return_value = (0, 1)
         prune_record = mock.Mock()
         producer = mock.Mock()
-        producer.name = 'missing_layer'
+        producer.name = 'layer0'
         prune_record.producer = [producer]
 
         index_helper = object.__new__(PuneIndexHelper)
         index_helper.param = {}
-        index_helper.model_helper = model_helper
+        index_helper.model_helper = mock.Mock()
+        if missing_module:
+            index_helper.model_helper.get_module.side_effect = RuntimeError('missing')
+        else:
+            index_helper.model_helper.get_module.return_value = module
         index_helper.record = prune_record
         index_helper.record_helper = record_helper
         index_helper.global_prune_ratio = None
         index_helper.global_prune_group = None
         index_helper.global_ascend_optimized = False
         index_helper.conf = mock.Mock()
-        index_helper.conf.get_layer_prune_config.return_value = {}
+        index_helper.conf.get_layer_prune_config.return_value = prune_config
+        return index_helper
+
+    def test_pune_index_helper_logs_missing_module_before_param_access(self):
+        index_helper = self._build_index_helper({}, missing_module=True)
 
         with mock.patch(
             'amct_pytorch.classic.graph_based.amct_pytorch.prune.'
             'find_prune_index.LOGGER.logd'
         ) as logd_mock:
-            with self.assertRaises(AttributeError):
+            with self.assertRaises(RuntimeError) as ctx:
                 index_helper.prepare_param()
 
         logd_mock.assert_called_once_with(
-            'Cannot find "missing_layer" in model, cannot do prune '
+            'Cannot find "layer0" in model, cannot do prune '
+        )
+        self.assertIn('layer0', str(ctx.exception))
+        self.assertIn('cannot do prune', str(ctx.exception))
+
+    def test_pune_index_helper_raises_when_layer_prune_config_missing(self):
+        module = torch.nn.Linear(4, 3)
+        index_helper = self._build_index_helper(None, module=module)
+
+        with self.assertRaises(RuntimeError) as ctx:
+            index_helper.prepare_param()
+
+        self.assertIn('layer0', str(ctx.exception))
+        self.assertIn('cannot do prune', str(ctx.exception))
+        self.assertNotIn('prune_ratio should be', str(ctx.exception))
+
+    def test_pune_index_helper_raises_when_module_weight_missing(self):
+        module = mock.Mock()
+        module.weight = None
+        index_helper = self._build_index_helper({}, module=module)
+
+        with self.assertRaises(RuntimeError) as ctx:
+            index_helper.prepare_param()
+
+        self.assertIn('layer0', str(ctx.exception))
+        self.assertIn('cannot do prune', str(ctx.exception))
+
+    def test_pune_index_helper_sets_global_ascend_optimized(self):
+        module = torch.nn.Linear(4, 3)
+        index_helper = self._build_index_helper(
+            {'prune_ratio': 0.5, 'ascend_optimized': True}, module=module
         )
 
+        index_helper.prepare_param()
+
+        self.assertTrue(index_helper.global_ascend_optimized)
+
+
+class TestPruneMissingModuleLog(unittest.TestCase):
     def test_regular_model_pruner_get_module_returns_none_for_missing_module(self):
         pruner = object.__new__(RegularModelPruner)
         pruner.model_helper = mock.Mock()
