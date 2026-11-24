@@ -321,18 +321,34 @@ class AccuracyBasedAutoCalibrationBase:  # pylint: disable=R0902
         with open(self.config_file, 'r') as fid:
             quant_config = json.load(fid, object_pairs_hook=_detect_repeated_key_hook)
         # update the modified config to original config file
+        original_graph = getattr(self, 'original_graph', None)
+        original_quant_config = getattr(self, 'original_quant_config', None) or {}
         for key, value in self.final_config.items():
             # copy quant config when node is anonymous
             if key not in quant_config:
-                LOGGER.logi(
-                    "Node {} is an anonymous node, its quant config is copied on its type".format(
-                        key
+                anonymous_node_config = None
+                if original_graph is not None:
+                    try:
+                        node = original_graph.get_node_by_name(key)
+                    except RuntimeError:
+                        node = None
+                    if node is not None:
+                        anonymous_node_config = quant_config.get(node.type + '::common')
+                if anonymous_node_config is None:
+                    anonymous_node_config = original_quant_config.get(key)
+                if anonymous_node_config is None:
+                    LOGGER.logi(
+                        "Node {} is an anonymous node, no quant config found, use empty "
+                        "config".format(key)
                     )
-                )
-                anonymous_node_name = (
-                    self.original_graph.get_node_by_name(key).type + '::common'
-                )
-                quant_config[key] = quant_config.get(anonymous_node_name)
+                    quant_config[key] = {}
+                else:
+                    LOGGER.logi(
+                        "Node {} is an anonymous node, its quant config is copied".format(
+                            key
+                        )
+                    )
+                    quant_config[key] = copy.deepcopy(anonymous_node_config)
             quant_config[key]['quant_enable'] = value
         with open(final_config_file, 'w') as dump_file:
             json_object = json.dumps(
