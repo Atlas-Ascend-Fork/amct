@@ -270,6 +270,7 @@ class AccuracyBasedAutoCalibration(AccuracyBasedAutoCalibrationBase):  # pylint:
             model = ModuleHelper.deep_copy(self.original_model)
         except RuntimeError as exception:
             LOGGER.logw(exception, "accuracy_based_auto_calibration deep_copy model")
+            raise
         return model
 
 
