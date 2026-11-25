@@ -8,7 +8,7 @@ This example corresponds to Task 1, Task 2 and Task 8 in Issue [#182](https://gi
 
 This directory is located alongside `qwen3.6` and `deepseekv4`. The Qwen3.6 documentation is not modified.
 
-The CLI entry points are consistent with [Qwen3.6-Moe.md](../qwen3.6/Qwen3.6-Moe.md):
+The CLI entry points are consistent with [Qwen3.6-Moe.md](../qwen3.6/Qwen3.6-Moe_en.md):
 
 ```bash
 python3 -m amct_pytorch.eval

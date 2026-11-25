@@ -22,19 +22,22 @@ When compiling and installing this project from source code, you need to compile
 - When AMCT calls through [PyTorch](https://gitcode.com/Ascend/pytorch), may encounter runtime errors due to version mismatch. Please refer to [PyTorch Security Statement](https://gitcode.com/Ascend/pytorch#%E5%AE%89%E5%85%A8%E5%A3%B0%E6%98%8E).
 
 ## Public Network Address Statement
+
 The public network addresses contained in this project code are declared as follows:
 
-| Type | Open Source Code Address | File Name　　　　　　　　　　　　　 | Public Network IP Address/Public Network URL Address/Domain Name/Email Address/Compressed File Address　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　 | Usage Description　　　　　　　　　　　　　　　　　|
-| :----:| :------------:| :---------------------------------| :--------------------------------------------------------------------------------------------------------------| :------------------------------------------|
-| Dependency | Not involved　　　 | download_3rd_party.sh　　　　　 | https://cann-3rd.obs.cn-north-4.myhuaweicloud.com/protobuf/protobuf-25.1.tar.gz　　　　　　　　　　　　　　　 | Download protobuf source code from Huawei Cloud, serves as compilation dependency　 |
-| Dependency | Not involved　　　 | download_3rd_party.sh　　　　　 | https://cann-3rd.obs.cn-north-4.myhuaweicloud.com/abseil-cpp/abseil-cpp-20230802.1.tar.gz　　　　　　　　　　 | Download abseil source code from Huawei Cloud, serves as compilation dependency　　 |
-| Dependency | Not involved　　　 | download_3rd_party.sh　　　　　 | https://gitcode.com/cann-src-third-party/abseil-cpp/releases/download/20230802.1-h0/backport-CVE-2025-0838.patch | Download abseil patch from gitcode, serves as compilation dependency　 |
-| Dependency | Not involved　　　 | download_3rd_party.sh　　　　　 | https://raw.gitcode.com/cann/cmake/archive/refs/heads/master-059.tar.gz　　　　　　　　　　　　　　　　　　　　 | Download cann/cmake master-059 build configuration from gitcode, serves as compilation dependency |
-| Dependency | Not involved　　　 | cmake/fetch_cann_cmake.cmake　　 | https://gitcode.com/cann/cmake.git　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　 | Fetch cann/cmake master-059 build configuration online　 |
-| Dependency | Not involved　　　 | install_graph.sh　　　　　　　 | https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/CANN/20260902_newest/cann-amct-graph_9.2.0_linux-${ARCH}.tar.gz | Download the amct-graph package from OBS as a build dependency　　　　　　　 |
+| Type | Open Source Code Address | File Name　　　　　　　　　　　　　 | Public Network IP Address/Public Network URL Address/Domain Name/Email Address/Compressed File Address　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　 | Usage Description　　　　　　　　　　　　　　　　　 |
+| :----: | :------------: | :--------------------------------- | :-------------------------------------------------------------------------------------------------------------- | :------------------------------------------ |
+| Dependency | Not involved　　　 | download_3rd_party.sh　　　　　 | <https://cann-3rd.obs.cn-north-4.myhuaweicloud.com/protobuf/protobuf-25.1.tar.gz>　　　　　　　　　　　　　　　 | Download protobuf source code from Huawei Cloud, serves as compilation dependency　 |
+| Dependency | Not involved　　　 | download_3rd_party.sh　　　　　 | <https://cann-3rd.obs.cn-north-4.myhuaweicloud.com/abseil-cpp/abseil-cpp-20230802.1.tar.gz>　　　　　　　　　　 | Download abseil source code from Huawei Cloud, serves as compilation dependency　　 |
+| Dependency | Not involved　　　 | download_3rd_party.sh　　　　　 | <https://gitcode.com/cann-src-third-party/abseil-cpp/releases/download/20230802.1-h0/backport-CVE-2025-0838.patch> | Download abseil patch from gitcode, serves as compilation dependency　 |
+| Dependency | Not involved　　　 | download_3rd_party.sh　　　　　 | <https://raw.gitcode.com/cann/cmake/archive/refs/heads/master-059.tar.gz>　　　　　　　　　　　　　　　　　　　　 | Download cann/cmake master-059 build configuration from gitcode, serves as compilation dependency |
+| Dependency | Not involved　　　 | cmake/fetch_cann_cmake.cmake　　 | <https://gitcode.com/cann/cmake.git>　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　 | Fetch cann/cmake master-059 build configuration online　 |
+| Dependency | Not involved　　　 | install_graph.sh　　　　　　　 | <https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/CANN/20260902_newest/cann-amct-graph_9.2.0_linux-${ARCH}.tar.gz> | Download the amct-graph package from OBS as a build dependency　　　　　　　 |
+
 ---
 
 ## Vulnerability Mechanism Description
+
 [Vulnerability Management](https://gitcode.com/cann/community/blob/master/security/security.md)
 
 ## Appendix

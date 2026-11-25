@@ -2,7 +2,7 @@
 
 Corresponds to Issue [#182](https://gitcode.com/cann/amct/issues/182) **task 24** (directory `qwen3.6-35b-a3b-w4a4/`, separate from other quant configs of the same model to avoid path conflicts): run `w4a4` + `autoround` on Qwen3.6-35B-A3B for **both int4/int4 and mxfp4/mxfp4**.
 
-CLI entry points match [Qwen3.6-Moe.md](../qwen3.6/Qwen3.6-Moe.md): `python3 -m amct_pytorch.eval` / `extract_ptq_data` / `ptq`.  
+CLI entry points match [Qwen3.6-Moe.md](../qwen3.6/Qwen3.6-Moe_en.md): `python3 -m amct_pytorch.eval` / `extract_ptq_data` / `ptq`.  
 Bit-width config reuses in-repo [`amct_pytorch/configs/w4a4.yaml`](../../../amct_pytorch/configs/w4a4.yaml); choose `int` / `mxfp` via CLI `--quant_dtype`.
 
 | Format | Config | CLI `--quant_dtype` |
@@ -22,7 +22,7 @@ One-stop platform example: `source /home/developer/Ascend/cann/set_env.sh`. Set 
 - Evaluation: WikiText2 `wikitext-2-raw-v1` test; `--seq_len 4096`; `--granularity block`
 - BF16 and quantized eval must use the same weight dir and eval settings
 - Cover Attention (`attn-linear`) and MoE at eval (`--quant_target attn-linear moe`)
-- **autoround PTQ runs on Attention only**; **MoE uses direct (fake) quantization** at eval (`--quant_target attn-linear moe`, no per-expert autoround params). Matches official [Qwen3.6-Moe.md](../qwen3.6/Qwen3.6-Moe.md) and the guidance to fall back to MoE direct quant when full expert PTQ is too slow
+- **autoround PTQ runs on Attention only**; **MoE uses direct (fake) quantization** at eval (`--quant_target attn-linear moe`, no per-expert autoround params). Matches official [Qwen3.6-Moe.md](../qwen3.6/Qwen3.6-Moe_en.md) and the guidance to fall back to MoE direct quant when full expert PTQ is too slow
 - `ptq_mlp.sh` SKIPs by default; set `RUN_MOE_PTQ=1` only to force full expert autoround (not recommended as the sample default)
 - Per format: extract → PTQ(attn) → quantized eval (load attn PTQ params; MoE direct quant via bit_config)
 - Artifact paths are relative placeholders; do not commit data/weights

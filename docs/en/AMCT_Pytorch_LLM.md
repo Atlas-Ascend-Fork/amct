@@ -266,7 +266,7 @@ For parameter details, see [Parameters](#parameters).
 }
 ```
 
-`deploy_format=legacy` outputs the existing AMCT deployment format; `deploy_format=ascend` outputs vLLM-Ascend ModelSlim-compatible W8A8 dynamic quantization weights and description files. For the A3/Ascend 950 input requirements, complete commands, and artifact descriptions of DeepSeek V4.1, see [DeepSeek V4.1 Deployment Instructions](../../examples/models/deepseekv4.1/README.md).
+`deploy_format=legacy` outputs the existing AMCT deployment format; `deploy_format=ascend` outputs vLLM-Ascend ModelSlim-compatible W8A8 dynamic quantization weights and description files. For the A3/Ascend 950 input requirements, complete commands, and artifact descriptions of DeepSeek V4.1, see [DeepSeek V4.1 Deployment Instructions](../../examples/models/deepseekv4.1/README_en.md).
 
 ## Parameters
 
@@ -380,4 +380,4 @@ layer_{layer_idx}_{unit_name}.pt
 
 ## One-Stop Example
 
-This section provides a one-stop example to help developers better understand the workflow of this feature. Taking the `qwen3.6moe` model as an example, see [Qwen-3.6-MoE One-Stop Example](../../examples/models/qwen3.6/Qwen3.6-Moe.md).
+This section provides a one-stop example to help developers better understand the workflow of this feature. Taking the `qwen3.6moe` model as an example, see [Qwen-3.6-MoE One-Stop Example](../../examples/models/qwen3.6/Qwen3.6-Moe_en.md).

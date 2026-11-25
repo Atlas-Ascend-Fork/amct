@@ -1671,7 +1671,7 @@ If the model accuracy does not meet the requirements after combined compression,
 
 ## Pruning
 
-AMCT provides the structured pruning feature `amct_pytorch.pruning` in eager mode: without first converting to an ONNX graph, it directly prunes the dense FFN intermediate dimensions, CNN channels, and MoE experts of an instantiated `torch.nn.Module` in place, while rewriting the related dimensions in the model config. The pruned model can be directly saved and loaded, and can also be further quantized. For detailed configuration and usage, see [Structured Pruning Usage Guide](../amct_pytorch/pruning/README.md).
+AMCT provides the structured pruning feature `amct_pytorch.pruning` in eager mode: without first converting to an ONNX graph, it directly prunes the dense FFN intermediate dimensions, CNN channels, and MoE experts of an instantiated `torch.nn.Module` in place, while rewriting the related dimensions in the model config. The pruned model can be directly saved and loaded, and can also be further quantized. For detailed configuration and usage, see [Structured Pruning Usage Guide](../amct_pytorch/pruning/README_en.md).
 
 ### Pruning Process
 

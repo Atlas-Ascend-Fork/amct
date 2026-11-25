@@ -47,7 +47,7 @@ After creating a requirement Issue, you need to submit a SIG topic and attend th
 
 AMCT depends on the Ascend CANN software stack. Please complete environment setup and source code building first to ensure that results can be reproduced and verified locally:
 
-**Basic dependencies** (for complete environment deployment, see [Quick Installation](docs/zh/quick_install.md)):
+**Basic dependencies** (for complete environment deployment, see [Quick Installation](docs/en/quick_install.md)):
 
 | Dependency | Version Requirement |
 | ---------- | ------------------- |
@@ -95,8 +95,8 @@ bash build.sh -u    # Build and run unit tests
 
 | Scenario | Delivery Requirements | Reference |
 | -------- | --------------------- | --------- |
-| New features such as quantization / compression algorithms | Feature code + optimization documentation + README documentation | [Algorithm Introduction](docs/zh/algorithm_brief.md) |
-| NPU operators | Operator code (`op_kernel` / `op_extension`) + UT tests + README documentation | [amct_ops](amct_ops/README.md) |
+| New features such as quantization / compression algorithms | Feature code + optimization documentation + README documentation | [Algorithm Introduction](docs/en/algorithm_brief.md) |
+| NPU operators | Operator code (`op_kernel` / `op_extension`) + UT tests + README documentation | [amct_ops](amct_ops/README_en.md) |
 | New model adaptation | Adaptation code / quantization scripts + one-stop sample documentation | [examples/models](examples/models/) |
 
 README documentation is key to helping other developers get started quickly, and needs to include two parts:
@@ -106,7 +106,7 @@ README documentation is key to helping other developers get started quickly, and
 
 If your feature has not undergone strong generalization testing, it is recommended to merge the feature code into the `amct_pytorch/experimental/` directory. For directory organization, refer to existing features (such as [hifloat8](amct_pytorch/experimental/hifloat8/)). For the complete structure, see [Appendix A](#appendix-a-complete-delivery-structure).
 
-> **Note**: If feature development involves adding or modifying operators, please first merge the corresponding operator changes into the operator repository (for the `amct_ops/` process, see [amct_ops](amct_ops/README.md)), and then proceed with the compression feature integration.
+> **Note**: If feature development involves adding or modifying operators, please first merge the corresponding operator changes into the operator repository (for the `amct_ops/` process, see [amct_ops](amct_ops/README_en.md)), and then proceed with the compression feature integration.
 
 #### Compliance Checklist
 

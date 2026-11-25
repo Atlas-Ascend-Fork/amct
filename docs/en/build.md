@@ -72,4 +72,4 @@ Use the test cases in the **tests** directory for local verification:
   pip3 uninstall amct_pytorch
   ```
 
- After the installation is complete, you can run samples by referring to [Sample Running](../../examples/README.md).
+ After the installation is complete, you can run samples by referring to [Sample Running](../../examples/README_en.md).

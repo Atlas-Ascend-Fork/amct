@@ -53,7 +53,7 @@ model, changes = auto_decomposition(model, decompose_info_path=None)
 
 - The model input by the user must be an object of the **torch.nn.Module** type.
 - This function only decomposes convolutions built through **torch.nn.Conv2d\(\)**.
-- When the user calls this API, the function automatically decomposes convolutional layers that meet the decomposition conditions. For constraints, see [Decomposition Constraints](../../README.md).
+- When the user calls this API, the function automatically decomposes convolutional layers that meet the decomposition conditions. For constraints, see [Decomposition Constraints](../../README_en.md).
 
 ## Example<a name="section179052217494"></a>
 

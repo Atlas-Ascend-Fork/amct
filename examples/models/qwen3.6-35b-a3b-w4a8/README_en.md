@@ -2,7 +2,7 @@
 
 Covers **task 20** of Issue [#182](https://gitcode.com/cann/amct/issues/182): quantize Qwen3.6-35B-A3B with `w4a8` + `autoround`, running **both int4/int8 and mxfp4/mxfp8**.
 
-CLI entries match [Qwen3.6-Moe.md](../qwen3.6/Qwen3.6-Moe.md): `python3 -m amct_pytorch.eval` / `extract_ptq_data` / `ptq`.
+CLI entries match [Qwen3.6-Moe.md](../qwen3.6/Qwen3.6-Moe_en.md): `python3 -m amct_pytorch.eval` / `extract_ptq_data` / `ptq`.
 The bit-width policy reuses the in-repo [`amct_pytorch/configs/w4a8.yaml`](../../../amct_pytorch/configs/w4a8.yaml); `int` / `mxfp` is selected by the CLI `--quant_dtype`.
 
 | Format | Config file | CLI `--quant_dtype` |

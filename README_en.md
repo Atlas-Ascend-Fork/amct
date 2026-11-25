@@ -21,8 +21,8 @@ English | [简体中文](./README.md)
 - **[2026/10/20]** Added DeepSeek-V4.1 HiFloat8 deployment weight export (`--deploy_platform ascend950 --quant_dtype hifp`); see [DeepSeek V4.1 Deployment Weight Export](./examples/models/deepseekv4.1/README_en.md)
 - **[2026/09/29]** Added DeepSeekV4.1-Flash network quantization, with a [AMCT Low-Precision Quantization Agent Quantization Practice](./examples/models/deepseekv4.1/DeepSeekV4.1-Flash-Quantization-Agent_en.md) sample
 - **[2026/08/07]** Added structured pruning (`amct_pytorch.pruning`) for MoE experts / dense FFN / CNN channels, with a [Qwen3.6-MoE structured pruning](./examples/models/qwen3.6/Qwen3.6-Moe-Pruning_en.md) one-stop single-card sample
-- **[2026/05/28]** Added current mainstream LLM network quantization, PTQ algorithm support, and provided [DeepSeek-V4](./examples/models/deepseekv4/DeepSeekV4-Flash-Walkthrough.md) and [Qwen3.6-MoE](./examples/models/qwen3.6/Qwen3.6-Moe.md) one-stop samples
-- **[2026/04/24]** Added [DeepSeek-V4](./amct_pytorch/experimental/deepseek-v4/README.md) model INT8 quantization support
+- **[2026/05/28]** Added current mainstream LLM network quantization, PTQ algorithm support, and provided [DeepSeek-V4](examples/models/deepseekv4/DeepSeekV4-Flash-Walkthrough_en.md) and [Qwen3.6-MoE](examples/models/qwen3.6/Qwen3.6-Moe_en.md) one-stop samples
+- **[2026/04/24]** Added [DeepSeek-V4](amct_pytorch/experimental/deepseek-v4/README_en.md) model INT8 quantization support
 - **[2026/04/17]** Added HiFloat8 quantile quantization (Quantile) algorithm
 - **[2026/03/02]** Added HiFloat8 data direct conversion (Cast) algorithm
 - **[2026/02/02]** Added HiFloat8 / MXFP8 / MXFP4 data quantization
@@ -43,23 +43,23 @@ AMCT is an Ascend NPU native model quantization compression tool. After quantiza
 - **🚀 Large Model Ready** —— Native support for frontier models such as DeepSeek-V3.2 / V4
 
 <a id="core"></a>
+
 ## ✨ Core Features
 
 | Feature Category | Introduction |
-|----------|------|
+| ---------- | ------ |
 | **PTQ Quantization Algorithms** | Min-Max / AWQ / GPTQ / SmoothQuant and other post-training quantization algorithms, see [Algorithm Introduction](docs/en/algorithm_brief.md) |
 | **HiFloat8 Quantization** | Huawei self-developed 8-bit floating-point format, tapered precision + large dynamic range, see [HiFloat8 Introduction](docs/en/context/hifloat8_quantization.md) |
-| **NPU Custom Operators** | Self-developed operators based on NPU, Ascend C kernel implementation, see [amct_ops](amct_ops/README.md) |
-| **Large Model Quantization** | DeepSeek-V3.2 / V4 quantization solutions, see [DeepSeek-V4](./amct_pytorch/experimental/deepseek-v4/README.md) |
+| **NPU Custom Operators** | Self-developed operators based on NPU, Ascend C kernel implementation, see [amct_ops](amct_ops/README_en.md) |
+| **Large Model Quantization** | DeepSeek-V3.2 / V4 quantization solutions, see [DeepSeek-V4](amct_pytorch/experimental/deepseek-v4/README_en.md) |
 | **Structured Pruning** | Structured pruning of dense FFN intermediate dims / CNN channels / MoE experts, see [Structured Pruning](amct_pytorch/pruning/README_en.md) |
-
 
 ## 📊 Performance Benefits
 
 Quantization significantly reduces deployment costs:
 
 | Precision Format | Weight Only (W) | Full Quantization (W+A) | Benefits |
-|---------|------------|--------------|------|
+| --------- | ------------ | -------------- | ------ |
 | **INT8** | ✅ Min-Max / AWQ / GPTQ | ✅ Min-Max / SmoothQuant | Size **↓50%** · Throughput ↑ |
 | **INT4** | ✅ AWQ / GPTQ | ✅ FlatQuant | Size **↓75%** · Low bandwidth friendly |
 | **HiFloat8** | ✅ Cast / Quantile / OFMR | ✅ Cast / Quantile / OFMR | Size **↓50%** · Large dynamic range |
@@ -67,12 +67,13 @@ Quantization significantly reduces deployment costs:
 | **MXFP4** | ✅ MXQuant | ✅ MXQuant / LHT | Size **↓75%** · Micro-scaling floating-point |
 
 <a id="quickstart"></a>
+
 ## 📦 Quick Start
 
 ### Environment Requirements
 
 | Dependency | Version |
-|------|------|
+| ------ | ------ |
 | Python | >=3.9 |
 | PyTorch | 2.7.1 or 2.1.0 (NPU acceleration backend requires CPU PyTorch and matching `TorchNPU`) |
 | GCC / CMake / patch | ≥ 7.3 / ≥ 3.16 (recommended 3.20) / ≥ 2.7 |
@@ -131,15 +132,16 @@ The "One-Stop Platform" is an NPU environment provided for developers, internall
 
 | Practice                                                                           | Introduction                                                                                             |
 |------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
-| [Qwen3.6-MoE](./examples/models/qwen3.6/Qwen3.6-Moe.md)                      | Complete Qwen3.6-MoE model quantization, data extraction, and PTQ in Atlas A3 environment, providing standard launch process and related configurations for one-stop platform scenarios, helping users quickly get started to complete an end-to-end NPU inference experience. |
-| [DeepSeek-V4](examples/models/deepseekv4/DeepSeekV4-Flash-Walkthrough.md) | Complete DeepSeek-V4 Flash model single-card inference in Atlas A3 environment, providing standard launch process and related configurations for one-stop platform scenarios, helping users quickly get started to complete an end-to-end NPU inference experience.    |
+| [Qwen3.6-MoE](examples/models/qwen3.6/Qwen3.6-Moe_en.md)                      | Complete Qwen3.6-MoE model quantization, data extraction, and PTQ in Atlas A3 environment, providing standard launch process and related configurations for one-stop platform scenarios, helping users quickly get started to complete an end-to-end NPU inference experience. |
+| [DeepSeek-V4](examples/models/deepseekv4/DeepSeekV4-Flash-Walkthrough_en.md) | Complete DeepSeek-V4 Flash model single-card inference in Atlas A3 environment, providing standard launch process and related configurations for one-stop platform scenarios, helping users quickly get started to complete an end-to-end NPU inference experience.    |
 | [Qwen3.6-MoE Structured Pruning](./examples/models/qwen3.6/Qwen3.6-Moe-Pruning_en.md) | Structurally prune the MoE experts of Qwen3.6-MoE on Atlas A3, shrinking a model that does not fit one card until it does; the pruned model can still be quantized. |
 
 <a id="documentsdemo"></a>
+
 ## 📖 Documentation Samples
 
 | Topic | Content |
-|------|------|
+| ------ | ------ |
 | [Compression Concepts](docs/en/compression_concepts.md) | Quantization, sparsity, distillation and other basic concepts |
 | [LLM Quantization](docs/en/AMCT_Pytorch_LLM.md) | Quantization features for large language models (LLM) |
 | [Compression Features](docs/README_en.md) | Basic compression features supported by AMCT |
@@ -170,13 +172,14 @@ amct/
 ```
 
 <a id="faq"></a>
+
 ## ❓ FAQ
 
 <details>
 <summary><strong>Algorithm Selection: When to use AWQ / GPTQ / SmoothQuant?</strong></summary>
 
 | Algorithm | Applicable Scenario | Core Idea |
-|------|---------|---------|
+| ------ | --------- | --------- |
 | **AWQ** | Large model PTQ, pursuing low quantization error | Activation-aware weight quantization, protecting ~1% significant weights |
 | **GPTQ** | Large model PTQ, emphasizing layer-by-layer optimization | Hessian matrix-based weight fine-tuning, minimizing quantization error |
 | **SmoothQuant** | Activation distribution difficult scenarios | Migrate activation quantization difficulty to weights, smooth activation outliers |
@@ -216,19 +219,20 @@ pip3 install build_out/amct_pytorch-${version}-py3-none-linux_${arch}.tar.gz --u
 
 </details>
 
-For more questions, please check [Compression Features Documentation](docs/README.md) or ask in [Issue](https://gitcode.com/cann/amct/issues).
+For more questions, please check [Compression Features Documentation](docs/README_en.md) or ask in [Issue](https://gitcode.com/cann/amct/issues).
 
 ## 💬 Community Discussion
 
 Welcome to join the AMCT community and participate in discussion and exchange:
 
 | Platform | Usage |
-|------|------|
+| ------ | ------ |
 | [GitCode Issue](https://gitcode.com/cann/amct/issues) | Problem feedback, feature suggestions, technical discussion |
 | [GitCode Discussions](https://gitcode.com/cann/amct/discussions) | Experience sharing, best practices, community interaction |
 | [SIG Discussions](https://gitcode.com/cann/community/blob/master/CANN/sigs/tools/README.md) | Technical decisions, problem handling, project landing |
 
 <a id="contribute"></a>
+
 ## 🤝 Participate in Contribution
 
 Welcome to contribute code, algorithms, and documentation, see [Contributing Guide](CONTRIBUTING_en.md):
@@ -252,4 +256,4 @@ This project is inspired by the following open source projects:
 
 ## 📝 License
 
-This project is open source under [Apache 2.0](LICENSE) agreement. Please read [Security Statement](SECURITY.md) and [Disclaimer](DISCLAIMER.md) before use.
+This project is open source under [Apache 2.0](LICENSE) agreement. Please read [Security Statement](SECURITY_en.md) and [Disclaimer](DISCLAIMER_en.md) before use.

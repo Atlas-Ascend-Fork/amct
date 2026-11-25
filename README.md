@@ -43,6 +43,7 @@ AMCT 是昇腾 NPU 原生的模型量化压缩工具。量化后模型体积减�
 - **🚀 大模型就绪** —— 原生支持 DeepSeek-V3.2 / V4 等前沿模型
 
 <a id="core"></a>
+
 ## ✨ 核心特性
 
 | 特性类别 | 简介 |
@@ -66,6 +67,7 @@ AMCT 是昇腾 NPU 原生的模型量化压缩工具。量化后模型体积减�
 | **MXFP4** | ✅ MXQuant | ✅ MXQuant / LHT | 体积 **↓75%** · 微缩浮点 |
 
 <a id="quickstart"></a>
+
 ## 📦 快速开始
 
 ### 环境要求
@@ -134,6 +136,7 @@ bash build.sh --torch --cann_3rd_lib_path=third_party
 | [Qwen3.6-MoE 结构化剪枝](./examples/models/qwen3.6/Qwen3.6-Moe-Pruning.md) | 在 Atlas A3 环境中对 Qwen3.6-MoE 做 MoE 专家结构化剪枝，把单卡装不下的模型压到单卡以内，剪枝后可继续量化。 |
 
 <a id="documentsdemo"></a>
+
 ## 📖 文档样例
 
 | 主题 | 内容 |
@@ -168,6 +171,7 @@ amct/
 ```
 
 <a id="faq"></a>
+
 ## ❓ 常见问题
 
 <details>
@@ -227,6 +231,7 @@ pip3 install build_out/amct_pytorch-${version}-py3-none-linux_${arch}.tar.gz --u
 | [SIG Discussions](https://gitcode.com/cann/community/blob/master/CANN/sigs/tools/README.md) | 技术决策、问题处理、项目落地 |
 
 <a id="contribute"></a>
+
 ## 🤝 参与贡献
 
 欢迎贡献代码、算法与文档，详见 [贡献指南](CONTRIBUTING.md)：
