@@ -574,7 +574,8 @@ def test_weight_dequant_float_scale_passes_through():
 
 
 # ---------------------------------------------------------------------------
-# NPU ops: activation fake-quant routes to torch_npu fused ops by default
+# NPU ops: QuantDequantMx.forward routes module calls (activation/weight)
+# to torch_npu fused ops by default
 # ---------------------------------------------------------------------------
 
 
@@ -599,68 +600,68 @@ class TestMxfpNpuOps:
         ):
             npu_dynamic_mx_quant_value(x, 8)
 
-    def test_fake_quant_falls_back_bitwise_on_cpu(self):
+    def test_forward_falls_back_bitwise_on_cpu(self):
         x = torch.randn(2, 64, dtype=torch.bfloat16)
-        # Activation always tries the fused ops now; on CPU the probe says no
-        # and the torch implementation must produce the same result as the
-        # weight path (which never calls the helper).
+        # Both activation and weight forward paths try the fused ops; on CPU
+        # the probe says no and both must use the torch fallback.
         activation = QuantDequantMx(bits=8, is_act=True)(x)
         weight_only = QuantDequantMx(bits=8, is_act=False)(x)
         assert torch.equal(activation, weight_only)
 
-    def test_fake_quant_uses_helper_result_when_available(self):
+    def test_forward_uses_helper_result_when_available(self):
         x = torch.randn(2, 64, dtype=torch.bfloat16)
         marker = torch.zeros_like(x)
         qdq = QuantDequantMx(bits=8, is_act=True)
         with patch(_MXFP_HELPER_PATH, return_value=marker) as helper:
-            out = qdq.fake_quant(x)
+            out = qdq(x)
         assert out is marker
         helper.assert_called_once_with(x, 8)
 
-    def test_fake_quant_uses_helper_for_weights(self):
+    def test_forward_uses_helper_for_weights(self):
         x = torch.randn(4, 64, dtype=torch.bfloat16)
         marker = torch.zeros_like(x)
         qdq = QuantDequantMx(bits=8, is_act=False)
         with patch(_MXFP_HELPER_PATH, return_value=marker) as helper:
-            out = qdq.fake_quant(x)
+            out = qdq(x)
         assert out is marker
         helper.assert_called_once_with(x, 8)
 
     @pytest.mark.parametrize("v", [1.0])
-    def test_fake_quant_skips_helper_for_nonzero_scalar_offset(self, v):
+    def test_forward_skips_helper_for_nonzero_scalar_offset(self, v):
         x = torch.randn(2, 64, dtype=torch.bfloat16)
         qdq = QuantDequantMx(bits=8, is_act=True)
         with patch(_MXFP_HELPER_PATH) as helper:
-            out = qdq.fake_quant(x, v=v)
+            out = qdq(x, v=v)
         helper.assert_not_called()
-        assert torch.equal(out, QuantDequantMx(bits=8, is_act=True)(x, v=v))
+        assert torch.equal(out, qdq.fake_quant(x, v=v))
 
-    def test_fake_quant_skips_helper_for_nonzero_offset_tensor(self):
+    def test_forward_skips_helper_for_nonzero_offset_tensor(self):
         x = torch.randn(2, 64, dtype=torch.bfloat16)
         v = torch.full((2, 64), 0.5)
         qdq = QuantDequantMx(bits=8, is_act=True)
         with patch(_MXFP_HELPER_PATH) as helper:
-            out = qdq.fake_quant(x, v=v)
+            out = qdq(x, v=v)
         helper.assert_not_called()
-        assert torch.equal(out, QuantDequantMx(bits=8, is_act=True)(x, v=v))
+        assert torch.equal(out, qdq.fake_quant(x, v=v))
 
-    def test_fake_quant_uses_helper_for_zero_offset_tensor(self):
+    def test_forward_uses_helper_for_zero_offset_tensor(self):
         x = torch.randn(2, 64, dtype=torch.bfloat16)
         marker = torch.zeros_like(x)
         qdq = QuantDequantMx(bits=8, is_act=True)
         with patch(_MXFP_HELPER_PATH, return_value=marker) as helper:
-            out = qdq.fake_quant(x, v=torch.zeros(2, 64))
+            out = qdq(x, v=torch.zeros(2, 64))
         assert out is marker
         helper.assert_called_once_with(x, 8)
 
-    def test_fake_quant_skips_helper_for_explicit_qdim(self):
-        # qdim=1 keeps the helper (hardcoded axis=-1) out of the path; the
-        # torch simulation below works on float32 [2, 64] -> [2, 2, 32].
+    @pytest.mark.parametrize("qdim", [-1, 1])
+    def test_fake_quant_never_calls_helper(self, qdim):
         x = torch.randn(2, 64, dtype=torch.float32)
+        marker = torch.zeros_like(x)
         qdq = QuantDequantMx(bits=8, is_act=True)
-        with patch(_MXFP_HELPER_PATH) as helper:
-            qdq.fake_quant(x, qdim=1)
+        with patch(_MXFP_HELPER_PATH, return_value=marker) as helper:
+            out = qdq.fake_quant(x, qdim=qdim)
         helper.assert_not_called()
+        assert out is not marker
 
 
 @pytest.fixture
@@ -710,7 +711,7 @@ class TestMxfpNpuOpsWiring:
             src_type=dst_type,
         )
 
-    def test_fake_quant_uses_fused_ops_for_weights(self, fake_a5_mx_ops):
+    def test_forward_uses_fused_ops_for_weights(self, fake_a5_mx_ops):
         x = torch.randn(4, 64, dtype=torch.bfloat16)
         quantized = torch.zeros_like(x)
         mxscale = torch.zeros(4, 2, dtype=torch.uint8)
@@ -786,7 +787,7 @@ class TestMxfpNpuOpsWiring:
                 assert npu_dynamic_mx_quant_value(x, bits) is None
         probe.assert_called_once_with(getattr(mxfp, fmt_name), x.device)
 
-    def test_fake_quant_raises_when_ops_fail(self, fake_a5_mx_ops):
+    def test_forward_raises_when_ops_fail(self, fake_a5_mx_ops):
         x = torch.randn(2, 64, dtype=torch.bfloat16)
         fake_a5_mx_ops.quant.side_effect = RuntimeError("aclnn error 161001")
 

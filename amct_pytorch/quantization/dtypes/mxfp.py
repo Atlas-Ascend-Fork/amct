@@ -95,10 +95,6 @@ class QuantDequantMx(torch.nn.Module):
         }
 
     def fake_quant(self, x: Tensor, qdim: int = -1, v: Tensor = 0.0):
-        if qdim == MX_AXIS and torch.count_nonzero(torch.as_tensor(v)).item() == 0:
-            out = npu_dynamic_mx_quant_value(x, self.bits)
-            if out is not None:
-                return out
         e8m0, ex_mx = self.quant(x, qdim, v=v)
         dx = (2**e8m0) * ex_mx
         dx = dx.flatten(qdim - 1, qdim)
@@ -107,6 +103,10 @@ class QuantDequantMx(torch.nn.Module):
     def forward(self, x: Tensor, v: Tensor = 0.0) -> Tensor:
         if self.is_observe or self.bits == 16:
             return x
+        if torch.count_nonzero(torch.as_tensor(v)).item() == 0:
+            out = npu_dynamic_mx_quant_value(x, self.bits)
+            if out is not None:
+                return out
         return self.fake_quant(x, v=v)
 
     def quant(self, x: Tensor, qdim: int = -1, v: Tensor = 0.0):
