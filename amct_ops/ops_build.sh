@@ -118,10 +118,10 @@ SKIP_OP_LIST=()
 build_op() {
     local op_name="$1"
     local op_dir="$SCRIPT_DIR/$op_name"
-    
+
     echo "  编译 $op_name ..."
-    if [ $op_name == "svd_quant" ]; then
-        if [ ${SOC} != "ascend950" ]; then
+    if [ "$op_name" = "svd_quant" ]; then
+        if [ "${SOC}" != "ascend950" ]; then
             echo "'svd_quant' operator builds for ascend950 socket only"
             SKIP_OP_LIST+=("$op_name")
             return
