@@ -68,7 +68,7 @@ struct MmStageSpec<T, MmStage::DP> {
     }
 
     __aicore__ static inline uint32_t GetGBufElemCount(const SvdQuantTilingData &td, int32_t k, int32_t n) {
-        return td.batchSize * k * n;
+        return static_cast<uint32_t>(static_cast<int64_t>(td.batchSize) * k * n);
     }
 
     __aicore__ static inline uint32_t GetBatchA(const SvdQuantTilingData &td) { return td.batchSize; }
@@ -102,7 +102,7 @@ struct MmStageSpec<T, MmStage::UP> {
     }
 
     __aicore__ static inline uint32_t GetGBufElemCount(const SvdQuantTilingData &td, int64_t k, int64_t n) {
-        return td.batchSize * k * n;
+        return static_cast<uint32_t>(static_cast<int64_t>(td.batchSize) * k * n);
     }
 
     __aicore__ static inline uint32_t isTransA() { return false; }
@@ -133,9 +133,9 @@ public:
 
         Spec::GetDims(tilingData, m_, k_, n_);
 
-        aGlobal_.SetGlobalBuffer(reinterpret_cast<__gm__ T *>(a), batchSize_ * m_ * k_);
-        bGlobal_.SetGlobalBuffer(reinterpret_cast<__gm__ T *>(b), k_ * n_);
-        cGlobal_.SetGlobalBuffer(reinterpret_cast<__gm__ T *>(c), batchSize_ * m_ * n_);
+        aGlobal_.SetGlobalBuffer(reinterpret_cast<__gm__ T *>(a), static_cast<int64_t>(batchSize_) * m_ * k_);
+        bGlobal_.SetGlobalBuffer(reinterpret_cast<__gm__ T *>(b), static_cast<int64_t>(k_) * n_);
+        cGlobal_.SetGlobalBuffer(reinterpret_cast<__gm__ T *>(c), static_cast<int64_t>(batchSize_) * m_ * n_);
     }
 
     __aicore__ inline void Process() {
@@ -165,8 +165,8 @@ public:
             mm_.SetSingleShape(tailM, tailN, t.Ka);
 
             for (int32_t batch = 0; batch < batchSize_; batch++) {
-                Spec::BindInputs(mm_, aLocal[static_cast<size_t>(batch) * m_ * k_], bLocal);
-                mm_.IterateAll(cLocal[static_cast<size_t>(batch) * m_ * n_]);
+                Spec::BindInputs(mm_, aLocal[static_cast<int64_t>(batch) * m_ * k_], bLocal);
+                mm_.IterateAll(cLocal[static_cast<int64_t>(batch) * m_ * n_]);
             }
 
             mm_.End();
@@ -285,9 +285,9 @@ public:
             matmulObj.SetTensorB(bGlobal, true);
             matmulObj.SetTensorScaleB(bsGlobal, true);
             for (int32_t batch = 0; batch < batchSize_; batch++) {
-                matmulObj.SetTensorA(aGlobal[batch * kM * kK], false);
-                matmulObj.SetTensorScaleA(asGlobal[batch * kM * kScaleK], false);
-                matmulObj.IterateAll(cGlobal[batch * kM * kN], 1);
+                matmulObj.SetTensorA(aGlobal[static_cast<int64_t>(batch) * kM * kK], false);
+                matmulObj.SetTensorScaleA(asGlobal[static_cast<int64_t>(batch) * kM * kScaleK], false);
+                matmulObj.IterateAll(cGlobal[static_cast<int64_t>(batch) * kM * kN], 1);
             }
             matmulObj.End();
         }
@@ -335,8 +335,9 @@ extern "C" __global__ __aicore__ void svd_quant(
 
     KERNEL_TASK_TYPE_DEFAULT(KERNEL_TYPE_MIX_AIC_1_2);
 
-    int32_t inputSize = tilingData.batchSize * tilingData.M * tilingData.K;
-    GM_ADDR quantOutputPtr = userWorkspace + tilingData.batchSize * tilingData.M * tilingData.R * sizeof(bfloat16_t);
+    const int64_t inputSize = static_cast<int64_t>(tilingData.batchSize) * tilingData.M * tilingData.K;
+    GM_ADDR quantOutputPtr =
+        userWorkspace + static_cast<int64_t>(tilingData.batchSize) * tilingData.M * tilingData.R * sizeof(bfloat16_t);
     GM_ADDR scaleOutputPtr = quantOutputPtr + (inputSize / 2);
 
     // Quantization

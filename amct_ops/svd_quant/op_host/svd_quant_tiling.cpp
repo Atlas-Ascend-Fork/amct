@@ -343,9 +343,12 @@ ge::graphStatus SvdQuantTiling::GetTiling() {
     int32_t R = tilingData.get_R();
     int32_t batchSize = tilingData.get_batchSize();
 
-    const size_t downProjectionWorkspaceElem = batchSize * M * R * sizeof(float) / 2;
+    const size_t downProjectionWorkspaceElem =
+        static_cast<size_t>(batchSize) * static_cast<size_t>(M) * static_cast<size_t>(R) * sizeof(float) / 2;
     const size_t activationQuantWorkspaceElem =
-        batchSize * (M * K * sizeof(float) / 8 + ((M * K) / 32) * sizeof(float) / 4);
+        static_cast<size_t>(batchSize) *
+        (static_cast<size_t>(M) * static_cast<size_t>(K) * sizeof(float) / 8 +
+            (static_cast<size_t>(M) * static_cast<size_t>(K) / 32) * sizeof(float) / 4);
 
     const size_t userWorkspaceSize = downProjectionWorkspaceElem + activationQuantWorkspaceElem;
     size_t *currentWorkspace = context_->GetWorkspaceSizes(1);
