@@ -1,0 +1,88 @@
+{
+  "quant_layers": [
+    {
+      "pattern": "model.layers.*.self_attn.q_b_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.layers.*.self_attn.o_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.layers.*.self_attn.indexer.wq_b",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.layers.*.mlp.gate_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.layers.*.mlp.up_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.layers.*.mlp.down_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.layers.*.mlp.experts.*.gate_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.layers.*.mlp.experts.*.up_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.layers.*.mlp.experts.*.down_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.layers.*.mlp.shared_experts.gate_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.layers.*.mlp.shared_experts.up_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    },
+    {
+      "pattern": "model.layers.*.mlp.shared_experts.down_proj",
+      "quant_dtype": "int",
+      "w_bits": 8,
+      "a_bits": 8
+    }
+  ],
+  "ignore_layers": [
+    "model.layers.78.*",
+    "model.layers.*.self_attn.q_a_proj",
+    "model.layers.*.self_attn.kv_a_proj_with_mqa",
+    "model.layers.*.self_attn.kv_b_proj",
+    "model.layers.*.self_attn.indexer.wk",
+    "model.layers.*.self_attn.indexer.weights_proj",
+    "model.layers.*.mlp.gate",
+    "model.layers.*.eh_proj",
+    "model.layers.*.shared_head.head",
+    "lm_head"
+  ]
+}

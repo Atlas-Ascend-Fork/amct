@@ -204,6 +204,31 @@ def test_glm53_rejects_hifp_deployment(tmp_path):
         GLM5_3.validate_deploy_args(args)
 
 
+def test_glm53_accepts_mixed_int_mxfp_deployment(tmp_path):
+    selection = DeploySelection(
+        (
+            QuantLayerRule(DENSE, QuantSpec("int", 8, 8)),
+            QuantLayerRule(DENSE_UP, QuantSpec("mxfp", 8, 8)),
+        )
+    )
+    GLM5_3.validate_deploy_args(
+        _args(tmp_path / "model", tmp_path / "output", selection)
+    )
+
+
+def test_glm53_rejects_mixed_int_hifp_deployment(tmp_path):
+    selection = DeploySelection(
+        (
+            QuantLayerRule(DENSE, QuantSpec("int", 8, 8)),
+            QuantLayerRule(DENSE_UP, QuantSpec("hifp", 8, 8)),
+        )
+    )
+    with pytest.raises(NotImplementedError, match="does not support hifp"):
+        GLM5_3.validate_deploy_args(
+            _args(tmp_path / "model", tmp_path / "output", selection)
+        )
+
+
 def test_glm53_selection_requires_fused_attention_and_complete_experts(tmp_path):
     selection = DeploySelection((QuantLayerRule(FULL_QA, QuantSpec("int", 8, 8)),))
     model = GLM5_3(_args(*_write_model(tmp_path, {"x": torch.ones(1)}), selection))

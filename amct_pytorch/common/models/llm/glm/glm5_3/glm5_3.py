@@ -41,7 +41,8 @@ from amct_pytorch.common.models.llm.common.deployment.deploy_selection import (
     match_deploy_modules,
 )
 from amct_pytorch.common.models.llm.common.deployment.schemes import (
-    validate_selection_quant_scheme,
+    QuantSchemeKey,
+    get_quant_scheme,
 )
 from amct_pytorch.common.models.llm.common.weight_path_validation import (
     collect_safetensors_files,
@@ -106,12 +107,15 @@ class GLM5_3:
             raise ValueError(
                 "GLM5.3 tensor deployment requires structured quant_layers rules"
             )
-        scheme = validate_selection_quant_scheme(selection)
-        if scheme.quant_dtype == "hifp":
-            raise NotImplementedError(
-                "GLM5.3 tensor deployment does not support hifp yet"
+        for rule in selection.quant_layers:
+            spec = rule.quant_spec
+            scheme = get_quant_scheme(
+                QuantSchemeKey(spec.quant_dtype, spec.weight_bits, spec.activation_bits)
             )
-        args.quant_dtype = scheme.quant_dtype
+            if scheme.quant_dtype == "hifp":
+                raise NotImplementedError(
+                    "GLM5.3 tensor deployment does not support hifp yet"
+                )
 
     @classmethod
     def validate_deploy_source(cls, args):

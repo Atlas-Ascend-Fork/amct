@@ -120,6 +120,14 @@ class GLM5_2(BaseModel):
             ):
                 return "attn-linear", "wq_b"
             return None
+        if suffix == "self_attn.indexer.wk":
+            if self._is_indexer_layer(
+                layer_idx,
+                self.config.num_hidden_layers,
+                getattr(self.config, "indexer_types", None),
+            ):
+                return "attn-linear", "wk"
+            return None
         dense = layer_idx < self.config.first_k_dense_replace
         if dense and suffix in {f"mlp.{p}" for p in self.MLP_LINEAR_NAMES}:
             return "mlp", suffix.rsplit(".", 1)[1]
@@ -356,110 +364,6 @@ class GLM5_2(BaseModel):
                     continue
 
             yield f"{weight_prefix}{name}.weight", module
-
-    def generate_tensorwise_quant_layers(self):
-        """Return {weight_name_without_.weight: bit} for tensor-wise deploy."""
-        bit_policy = ensure_bit_policy(self.args)
-        num_hidden_layers = self.config.num_hidden_layers
-        num_nextn = getattr(self.config, "num_nextn_predict_layers", 0)
-        num_layers = num_hidden_layers + num_nextn
-        num_experts = self.config.n_routed_experts
-        first_k_dense_replace = getattr(self.config, "first_k_dense_replace", 0)
-        indexer_types = getattr(self.config, "indexer_types", None)
-        attn_linear = bit_policy["attn-linear"]
-
-        quant_layers = {}
-        for i in range(num_layers):
-            quant_layers.update(
-                self._mlp_tensorwise_quant_layers(
-                    i, first_k_dense_replace, num_experts, bit_policy
-                )
-            )
-            quant_layers.update(
-                self._attn_tensorwise_quant_layers(
-                    i, num_hidden_layers, indexer_types, attn_linear
-                )
-            )
-        return quant_layers
-
-    def generate_tensorwise_ignore_layers(self):
-        """Return module names written into config.json ignore list.
-
-        Aligns with infer repo glm_5_2/utils/convert_model.py generate_ignore_item.
-        """
-        num_hidden_layers = self.config.num_hidden_layers
-        num_nextn = getattr(self.config, "num_nextn_predict_layers", 0)
-        num_layers = num_hidden_layers + num_nextn
-        first_k_dense_replace = getattr(self.config, "first_k_dense_replace", 0)
-        indexer_types = getattr(self.config, "indexer_types", None)
-
-        ignore = []
-        for i in range(num_layers):
-            # indexer ignore items: only for "full" layers and MTP layers
-            if self._is_indexer_layer(i, num_hidden_layers, indexer_types):
-                # indexer.wk ignored only in non-mxfp mode
-                if self.args.quant_dtype != "mxfp":
-                    ignore.append(f"model.layers.{i}.self_attn.indexer.wk")
-                ignore.append(f"model.layers.{i}.self_attn.indexer.weights_proj")
-            # low-rank projections ignored only in non-mxfp mode
-            if self.args.quant_dtype != "mxfp":
-                ignore.append(f"model.layers.{i}.self_attn.kv_a_proj_with_mqa")
-                ignore.append(f"model.layers.{i}.self_attn.q_a_proj")
-            # kv_b_proj always ignored
-            ignore.append(f"model.layers.{i}.self_attn.kv_b_proj")
-            # mlp.gate (router) ignored for MoE layers
-            if i >= first_k_dense_replace:
-                ignore.append(f"model.layers.{i}.mlp.gate")
-            # MTP layer extra ignores
-            if i >= num_hidden_layers:
-                ignore.append(f"model.layers.{i}.eh_proj")
-                ignore.append(f"model.layers.{i}.shared_head.head")
-        ignore.append("lm_head")  # always ignored per infer repo
-        return ignore
-
-    def _mlp_tensorwise_quant_layers(
-        self, i, first_k_dense_replace, num_experts, bit_policy
-    ):
-        """Collect tensor-wise quant entries for layer ``i``'s MLP branch."""
-        layers = {}
-        if i >= first_k_dense_replace:
-            # routed experts: bit from moe.routed (4 for w4a8, else 8)
-            for j in range(num_experts):
-                for n in self.MLP_LINEAR_NAMES:
-                    layers[f"model.layers.{i}.mlp.experts.{j}.{n}"] = bit_policy[
-                        "moe.routed"
-                    ][n].w
-            # shared experts: bit from moe.shared (always 8)
-            for n in self.MLP_LINEAR_NAMES:
-                layers[f"model.layers.{i}.mlp.shared_experts.{n}"] = bit_policy[
-                    "moe.shared"
-                ][n].w
-        else:
-            # dense MLP: bit from mlp (always 8)
-            for n in self.MLP_LINEAR_NAMES:
-                layers[f"model.layers.{i}.mlp.{n}"] = bit_policy["mlp"][n].w
-        return layers
-
-    def _attn_tensorwise_quant_layers(
-        self, i, num_hidden_layers, indexer_types, attn_linear
-    ):
-        """Collect tensor-wise quant entries for layer ``i``'s attn branch."""
-        layers = {}
-        # attn low-rank projections: quantized only in mxfp mode (excluded from dict in INT mode)
-        if self.args.quant_dtype == "mxfp":
-            layers[f"model.layers.{i}.self_attn.q_a_proj"] = attn_linear["q_a_proj"].w
-            layers[f"model.layers.{i}.self_attn.kv_a_proj_with_mqa"] = attn_linear[
-                "kv_a_proj_with_mqa"
-            ].w
-        # attn main projections: quantized in all modes
-        layers[f"model.layers.{i}.self_attn.o_proj"] = attn_linear["o_proj"].w
-        layers[f"model.layers.{i}.self_attn.q_b_proj"] = attn_linear["q_b_proj"].w
-        if self._is_indexer_layer(i, num_hidden_layers, indexer_types):
-            layers[f"model.layers.{i}.self_attn.indexer.wq_b"] = attn_linear["wq_b"].w
-            # indexer.wk: quantized only in mxfp mode
-            if self.args.quant_dtype == "mxfp":
-                layers[f"model.layers.{i}.self_attn.indexer.wk"] = attn_linear["wk"].w
-        return layers
 
     def _build_block_for_forward(self, layer_idx, use_quant_block=False):
         block = super()._build_block_for_forward(
