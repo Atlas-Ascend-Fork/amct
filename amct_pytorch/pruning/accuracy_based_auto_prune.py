@@ -503,7 +503,7 @@ def _make_ppl_quality(model, eval_batches, batch_adapter) -> QualityFn:
         with torch.no_grad():
             for args, kwargs, targets in prepared:
                 logits = _model_logits(
-                    candidate, None, lambda _: (args, kwargs)
+                    candidate, None, lambda _, args=args, kwargs=kwargs: (args, kwargs)
                 ).float()
                 if logits.ndim != 3 or logits.shape[:2] != (
                     targets.shape[0],
@@ -550,7 +550,9 @@ def _make_classification_quality(model, eval_batches, batch_adapter) -> QualityF
         correct = 0
         with torch.no_grad():
             for args, kwargs, labels in prepared:
-                logits = _model_logits(candidate, None, lambda _: (args, kwargs))
+                logits = _model_logits(
+                    candidate, None, lambda _, args=args, kwargs=kwargs: (args, kwargs)
+                )
                 if logits.ndim != 2 or logits.shape[0] != labels.numel():
                     raise ValueError(
                         "classification logits must have shape [batch, classes]."
