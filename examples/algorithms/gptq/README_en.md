@@ -74,8 +74,8 @@ Where Score is the quantized model PPL. For specific values, refer to the follow
 
 | Model | Calibration Set | Dataset | Pre-quantization PPL | Post-INT4 quantization PPL | Post-MXFP4 quantization PPL |
 | :-: | :-: | :-: | :-: | :-: | :-: |
-|LLAMA2-7B|pileval|wikitext2|5.472|5.601|5.799
-|QWEN2-7B|pileval|wikitext2|7.137|7.253|7.305
+|LLAMA2-7B|pileval|wikitext2|5.472|5.601|5.799|
+|QWEN2-7B|pileval|wikitext2|7.137|7.253|7.305|
 
 
 After inference succeeds, a quantization log file ./amct_log/amct_pytorch.log is generated in the current directory

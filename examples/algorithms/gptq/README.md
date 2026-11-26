@@ -74,8 +74,8 @@ INFO Score: 5.477707
 
 | 模型 | 校准集 | 数据集 | 量化前PPL | INT4量化后PPL | MXFP4量化后PPL |
 | :-: | :-: | :-: | :-: | :-: | :-: |
-|LLAMA2-7B|pileval|wikitext2|5.472|5.601|5.799
-|QWEN2-7B|pileval|wikitext2|7.137|7.253|7.305
+|LLAMA2-7B|pileval|wikitext2|5.472|5.601|5.799|
+|QWEN2-7B|pileval|wikitext2|7.137|7.253|7.305|
 
 
 推理成功后，在当前目录会生成量化日志文件./amct_log/amct_pytorch.log
