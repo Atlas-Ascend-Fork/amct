@@ -204,10 +204,7 @@ class LayerConfig(ConfigItem):
                 else:
                     self.build_default_util(key, cls)
             else:
-                if key == 'quant_enable':
-                    self.build_util(key, cls, val.get(key), extra)
-                else:
-                    self.build_util(key, cls, val.get(key), extra)
+                self.build_util(key, cls, val.get(key), extra)
                 del val[key]
 
     def build_default(self, extra):
