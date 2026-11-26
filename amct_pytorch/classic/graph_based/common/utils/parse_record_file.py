@@ -531,9 +531,8 @@ class RecordManager:
             return None
         # read value(scale,offset,shift_bit) from record
         layer_params = collections.OrderedDict()
-        # weight-only (weight_compress_only=true): the activation is
-        # carried unquantized, the record carries no scale_d / offset_d
-        # (but the int8 weight factors)
+        # In weight-only mode the activation stays unquantized, so the
+        # record holds no scale_d or offset_d, only the int8 weight factors.
         weight_only_shift = (
             not self.record.value.HasField('scale_d')
             and len(self.record.value.scale_w) > 0
