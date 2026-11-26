@@ -335,7 +335,7 @@ def quantize_mx(
     quant_bit,
     scale_bits=8,
     shared_exp_method="max",
-    axes=[-1],
+    axes=None,
     block_size=32,
     round="nearest",
     flush_fp32_subnorms=False,
@@ -347,6 +347,8 @@ def quantize_mx(
     assert scale_bits > 0
 
     # Make sure axes is a list of non-negative numbers
+    if axes is None:
+        axes = [-1]
     axes = [axes] if isinstance(axes, int) else axes
     axes = [x + A.ndim if x < 0 else x for x in axes]
 
